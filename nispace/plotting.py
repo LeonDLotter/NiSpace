@@ -35,6 +35,7 @@ def nice_stats_labels(string, add_dollars=True):
         "mlr": "MLR",
         "slr": "SLR",
         "pls": "PLS",
+        "pcr": "PCR",
         "dominance": "Dominance Analysis",
         "individual": "Individual R^2",
         "total": "Total R^2",

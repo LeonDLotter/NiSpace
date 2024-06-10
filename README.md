@@ -1,9 +1,9 @@
 # <a name="top"></a>`NiSpace`: `N`euro`i`maging `Spa`tial `C`olocalization `E`nvironment
 <!--
 [![DOI](https://zenodo.org/badge/506986337.svg)](https://zenodo.org/badge/latestdoi/506986337)  
+-->
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey)](http://creativecommons.org/licenses/by-nc-sa/4.0/)  
 ---
--->
 
 *Spatial (alteration) patterns observed in MRI images may often reflect function and dysfunction of underlying biological systems. This applies alike to function and structure, on the surface or in the volumetric space, to typical activation patterns, or to maps of disordered brain function, for example obtained from patients compared to a reference cohort.*
 
@@ -21,22 +21,28 @@ There are of course many other tools available, of which a few are listed below:
 | [GAMBA](https://github.com/dutchconnectomelab/GAMBA-MATLAB) | Gene-Set-Enrichment-Analysis on neuroimaging data using Allen Brain Atlas | gene-set permutation, null maps | volume (surface) | Web-GUI/MATLAB-API |
 | [GCEA](https://github.com/benfulcher/GeneCategoryEnrichmentAnalysis) | Gene-Set-Enrichment-Analysis on neuroimaging data using Allen Brain Atlas | gene-set permutation, null maps | volume (surface) | MATLAB-API |
 
-`NiSpace` tries to incorporate most of the functionality of these tools in a unified framework. It took many ideas and implementations from the toolboxes listed above. Two prior tools developed by me (Leon Lotter) –  [JuSpyce](https://github.com/leondlotter/JuSpyce) and [ABAnnotate](https://github.com/leondlotter/ABAnnotate) – were discontinued in favor of `NiSpace`.
+`NiSpace` tries to incorporate most of the functionality of these tools in a unified framework. It took many ideas and implementations from the toolboxes listed above. Two prior tools developed by me (Leon Lotter) –  [JuSpyce](https://github.com/leondlotter/JuSpyce) (basis for `NiSpace`, Python) and [ABAnnotate](https://github.com/leondlotter/ABAnnotate) (easy-to-use neuroimaging gene-set enrichment based on [GCEA](https://github.com/benfulcher/GeneCategoryEnrichmentAnalysis), MATLAB) – were discontinued in favor of `NiSpace`.
 
  Name | Target Problem | Significance Testing | Volume/Surface | Interface | 
 |------|----------------|----------------------|----------------|-----------|
-| `NiSpace` | Colocalization between one or multiple brain maps in single-map, case-control, and set-enrichment settings. Incorporates advanced imaging space transformation through neuromaps. Includes a large range of reference datasets | null maps, group permutation, set permutation | volume, surface | Python-API (GUI planned) |
+| `NiSpace` | Colocalization between two or multiple brain maps in single-map, case-control, and set-enrichment settings. Generalizes set-enrichment approach to all kinds of reference maps. Incorporates advanced imaging space transformation through neuromaps. Includes a large range of reference datasets | null maps, group permutation, set permutation | volume, surface | Python-API (GUI planned) |
 
 ## Citation
 
-There is no paper for `NiSpace` yet. Please cite at least the following when you the tool in your work:
+There is no paper for `NiSpace` yet. Please cite at least the following when you use out tools in your work:
 <!-- - [Lotter & Dukart, 2024](https://doi.org/10.5281/zenodo.6884932) -->
-- [Dukart et al., 2021](https://doi.org/10.1002/hbm.25244)
-- [Markello, Hansen, et al., 2022](https://doi.org/10.1038/s41592-022-01625-w)
-- If you use the implemented "moran" null map function: [Vos de Wael et al., 2020](https://doi.org/10.1038/s42003-020-0794-7)
-- If you use the implemented "burt2020" null map function: [Burt et al., 2020](https://doi.org/10.1016/j.neuroimage.2020.117038)
-- If you use the implemented "burt2018" null map function: [Burt et al., 2018](https://doi.org/10.1038/s41593-018-0195-0)
-- When fetching included reference datasets, you will automatically get lists with references which we recommend you to cite
+- [Dukart et al., HBM 2021](https://doi.org/10.1002/hbm.25244)
+- [Markello, Hansen, et al., Nat. Methods 2022](https://doi.org/10.1038/s41592-022-01625-w)
+- If you use the implemented "moran" null map function: [Vos de Wael et al., Comm. Biol. 2020](https://doi.org/10.1038/s42003-020-0794-7)
+- If you use the implemented "burt2020" null map function: [Burt et al., NeuroImage 2020](https://doi.org/10.1016/j.neuroimage.2020.117038)
+- If you use the implemented "burt2018" null map function: [Burt et al., Nat. Neurosci. 2018](https://doi.org/10.1038/s41593-018-0195-0)
+- When fetching included reference datasets, `NiSpace` will automatically print information on references we recommend you to cite
+
+Furthermore, the preceding tools, JuSpyce and ABAnnotate, were used in the following works:
+- JuSpyce: [Lotter et al., bioRxiv 2024](https://doi.org/10.1101/2023.05.05.539537)
+- JuSpyce: [Lotter et al., Neuropsychopharm. 2024](https://doi.org/10.1038/s41386-024-01880-9)
+- JuSpyce/ABAnnotate: [Lotter et al., Neurosci. & Biobehav. Rev. 2023](https://doi.org/10.1016/j.neubiorev.2023.105042)
+- ABAnnotate: [Feng et al., Comm. Biol. 2023](https://doi.org/10.1038/s42003-023-05647-8)
 
 ## Contact
 

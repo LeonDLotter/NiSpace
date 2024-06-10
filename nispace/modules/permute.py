@@ -37,13 +37,13 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
         if not all([x in null_maps.keys() for x in data_obs.index]):
             lgr.warning("Not all X/Y variables in null maps. Will re-generate.")
             null_maps = None
-        if null_method_stored != null_method:
-            lgr.warning("Null method changed. Will re-generate.")
-            null_maps = None
         else:
             if any(np.array([null_maps[x].shape[0] for x in data_obs.index]) < n_perm):
                 lgr.warning(f"Number of null maps < n_perm ({n_perm}). Will re-generate.")
                 null_maps = None
+        if null_method_stored != null_method:
+            lgr.warning("Null method changed. Will re-generate.")
+            null_maps = None
                 
     # datatype
     if null_maps is not None:

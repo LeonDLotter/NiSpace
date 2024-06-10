@@ -143,6 +143,8 @@ def remove_nan(data, which="col"):
 def fill_nan(data, idx, idx_label=None, which="col"):
     
     data_nan = np.array(data)
+    if data_nan.dtype == int:
+        data_nan = data_nan.astype(float)
         
     if which.startswith("row"):
         for i in idx:
@@ -171,8 +173,7 @@ def fill_nan(data, idx, idx_label=None, which="col"):
                 columns[i:i] = [idx_label[i_label]]
             data_nan = pd.DataFrame(data=data_nan, index=data.index, columns=columns)
 
-    return data_nan.astype(data.dtype if not isinstance(data.dtype, int) else float)
-
+    return data_nan
 
 def print_arg_pairs(**kwargs):
     if len(kwargs) == 0:

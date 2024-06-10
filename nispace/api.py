@@ -2,7 +2,6 @@ import copy
 import gzip
 import os
 import pickle
-import pathlib
 
 import numpy as np
 import pandas as pd
@@ -291,7 +290,7 @@ class NiSpace:
 
     # REDUCE DIMENSIONS ============================================================================
     
-    def reduce_x(self, reduction_method, 
+    def reduce_x(self, reduction, 
                  mean_by_set=False, weighted_mean=False,
                  n_components=None, min_ev=None, fa_method="minres", fa_rotation="promax",
                  seed=None, store=True, verbose=None):
@@ -309,9 +308,9 @@ class NiSpace:
         _X = self._X
  
         ## case mean or median
-        if reduction_method.lower() in ["mean", "median"]:
+        if reduction.lower() in ["mean", "median"]:
             lgr.info(f"Calculating parcelwise{' weighted' if weighted_mean else ''} "
-                     f"{reduction_method}{' by set' if mean_by_set else ''} of X data.")
+                     f"{reduction}{' by set' if mean_by_set else ''} of X data.")
             
             if weighted_mean & ("weight" not in _X.index.names):
                 lgr.error("DataFrame must have 'weight' in its MultiIndex for weighted calculations")
@@ -330,16 +329,16 @@ class NiSpace:
             for name, group in grouped:
                 if weighted_mean:
                     weights = group.index.get_level_values('weight')
-                    if reduction_method == 'mean':
+                    if reduction == 'mean':
                         weighted_avg = np.average(group, axis=0, weights=weights)
                         result = pd.DataFrame(weighted_avg.reshape(1, -1), columns=group.columns)
-                    elif reduction_method == 'median':
+                    elif reduction == 'median':
                         # Weighted median is not directly supported, so we need a custom implementation
                         result = group.apply(lambda x: np.median(np.repeat(x.values, weights)), axis=0).to_frame().T
                 else:
-                    if reduction_method == 'mean':
+                    if reduction == 'mean':
                         result = group.mean(axis=0).to_frame().T
-                    elif reduction_method == 'median':
+                    elif reduction == 'median':
                         result = group.median(axis=0).to_frame().T
 
                 result.index = pd.Index([name], name="map")
@@ -353,11 +352,11 @@ class NiSpace:
             #     _X_reduced.index = _X_reduced.index.droplevel("set")
             
         ## case PCA / case ICA / case FA
-        elif reduction_method.lower() in ["pca", "ica", "fa"]:
-            lgr.info(f"Calculating {reduction_method.upper()} on X data.")
+        elif reduction.lower() in ["pca", "ica", "fa"]:
+            lgr.info(f"Calculating {reduction.upper()} on X data.")
             _X_reduced, ev, loadings = _reduce_dimensions(
                 data=_X.values[:, self._no_nan].T, 
-                method=reduction_method, 
+                method=reduction, 
                 n_components=n_components, 
                 min_ev=min_ev,
                 fa_method=fa_method, 
@@ -391,27 +390,27 @@ class NiSpace:
         
         ## case not defined
         else:
-            lgr.error(f"Dimensionality reduction method '{reduction_method}' not defined!",
+            lgr.error(f"Dimensionality reduction '{reduction}' not defined!",
                       ValueError)
             return None
                         
         ## save and return     
         if store:
-            self._X_dimred[_get_df_string(kind="xdimred", xdimred=reduction_method)] = _X_reduced            
-            if reduction_method in ["pca", "ica", "fa"]:
-                self._dimred[reduction_method] = dict(
-                    method=reduction_method, 
+            self._X_dimred[_get_df_string(kind="xdimred", xdimred=reduction)] = _X_reduced            
+            if reduction in ["pca", "ica", "fa"]:
+                self._dimred[reduction] = dict(
+                    method=reduction, 
                     n_components=_X_reduced.shape[0], 
                     min_ev=min_ev, 
                     loadings=loadings
                 )
-                if reduction_method in ["pca", "fa"]:
-                    self._dimred[reduction_method]["ev"] = ev
-                if reduction_method=="fa":
-                    self._dimred[reduction_method]["fa_method"] = fa_method
-                    self._dimred[reduction_method]["fa_rotation"] = fa_rotation
+                if reduction in ["pca", "fa"]:
+                    self._dimred[reduction]["ev"] = ev
+                if reduction=="fa":
+                    self._dimred[reduction]["fa_method"] = fa_method
+                    self._dimred[reduction]["fa_rotation"] = fa_rotation
                 
-        if reduction_method in ["pca", "ica", "fa"]:
+        if reduction in ["pca", "ica", "fa"]:
             return _X_reduced, ev, loadings
         else:
             return _X_reduced
@@ -521,8 +520,8 @@ class NiSpace:
                         lgr.warning("Not performing ComBat harmonization.")
                         combat = False
                     elif not _NEUROHARMONIZE_AVAILABLE:
-                        lgr.error("Optional dependency: neuroHarmonize. Run 'pip install neurocombat "
-                                  "neuroharmonize' in your environment to use ComBat harmonization.")
+                        lgr.critical_raise("Optional dependency: neuroHarmonize. Run 'pip install neurocombat "
+                                           "neuroharmonize' in your environment to use ComBat harmonization.")
                         combat = False
                     else:
                         # split into site covariate and other covariate arrays
@@ -813,7 +812,7 @@ class NiSpace:
             if not X_reduction:
                 X = self._X
             else:
-                X = self.get_x(reduction_method=X_reduction)
+                X = self.get_x(X_reduction=X_reduction, verbose=False)
         X_arr = np.array(X, dtype=dtype)
         if xsea:
             lgr.info("Will perform X-set enrichment analysis (XSEA).")
@@ -846,7 +845,7 @@ class NiSpace:
             if not Y_transform:
                 Y = self._Y
             else:
-                Y = self.get_y(transform=Y_transform)
+                Y = self.get_y(Y_transform=Y_transform, verbose=False)
         Y_arr = np.array(Y, dtype=dtype)
         # Z
         if not Z:
@@ -1096,7 +1095,7 @@ class NiSpace:
             _X_obs = self._X
         else:
             lgr.info(f"Loading dimensionality-reduced X data, reduction method = '{X_reduction}'.")
-            _X_obs = self.get_x(reduction_method=X_reduction)
+            _X_obs = self.get_x(X_reduction=X_reduction, verbose=False)
         _X_obs_arr = np.array(_X_obs, dtype=dtype)
         if xsea:
             if self._xsea:
@@ -1112,7 +1111,7 @@ class NiSpace:
         _Y_obs_arr = np.array(_Y_obs, dtype=dtype)
         if Y_transform:
             lgr.info(f"Loading transformed Y data, transform = '{Y_transform}'.")
-            _Y_trans_obs = self.get_y(transform=Y_transform)
+            _Y_trans_obs = self.get_y(Y_transform=Y_transform, verbose=False)
             _Y_trans_obs_arr = np.array(_Y_trans_obs, dtype=dtype)
         # Z
         _Z_obs = self._Z
@@ -1140,7 +1139,8 @@ class NiSpace:
             X_reduction=X_reduction, 
             Y_transform=Y_transform, 
             xsea=xsea,
-            force_dict=True
+            force_dict=True,
+            verbose=False
         )
         _colocs_obs = {stat: np.array(df, dtype=dtype) for stat, df in _colocs_obs.items()}
                     
@@ -1436,7 +1436,7 @@ class NiSpace:
     
     # CORRECT ======================================================================================
 
-    def correct_p(self, method=None, comparison=None,
+    def correct_p(self, method=None, 
                   mc_alpha=0.05, mc_method="fdr_bh", mc_dimension="array", store=True, verbose=None):
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.correct_p() - Correct p values for multiple comparisons. ***")
@@ -1448,8 +1448,6 @@ class NiSpace:
         p_strs = [k for k in self._p_colocs if "mc-none" in k]
         if method is not None:
             p_strs = [s for s in p_strs if f"method-{method}" in s]
-        if comparison is not None:
-            p_strs = [s for s in p_strs if f"comp-{comparison}" in s]
 
         # get dimension of array to correct along
         if mc_dimension in ["x", "X", "c", "col", "cols", "column", "columns"]:
@@ -1528,8 +1526,13 @@ class NiSpace:
         # get colocalization results
         if colocalizations_dict is None:
             self._check_colocalize(**check_kwargs)
-            coloc_dicts = self.get_colocalizations(**get_kwargs, force_dict=True,
-                                                   get_nulls=plot_nulls, nulls_permute_what=permute_what)
+            coloc_dicts = self.get_colocalizations(
+                **get_kwargs, 
+                force_dict=True,
+                get_nulls=plot_nulls, 
+                nulls_permute_what=permute_what,
+                verbose=False
+            )
             if isinstance(coloc_dicts, tuple):
                 colocalizations_dict, nulls_dict = coloc_dicts
             else:
@@ -1744,7 +1747,8 @@ class NiSpace:
                 idx = self.get_p_values(method, nulls_permute_what, _COLOC_METHODS[method][0], 
                                         xsea, norm=False,
                                         X_reduction=X_reduction,
-                                        Y_transform=Y_transform).index
+                                        Y_transform=Y_transform,
+                                        verbose=False).index
                 for stat in stats:
                    
                     if out[stat].shape[1] == 1:
@@ -1760,7 +1764,6 @@ class NiSpace:
                                 {i: nulls[i][stat][:, i_x] for i in range(n_nulls)},
                                 index=idx
                             )
-                            
         if not force_dict:
             if len(out)==1:
                 out = out[stats[0]]
@@ -1901,7 +1904,7 @@ class NiSpace:
         
     # ----------------------------------------------------------------------------------------------
     
-    def _check_colocalize(self, method, stats=None, xdimred=None, ytrans=None, xsea=False, 
+    def _check_colocalize(self, method, stats=None, xdimred=False, ytrans=False, xsea=False, 
                           raise_error=True):
         if stats is None:
             stats = _get_coloc_stats(method, drop_optional=True)
@@ -1910,6 +1913,7 @@ class NiSpace:
         colocs_strs = [_get_df_string("coloc", xdimred=xdimred, ytrans=ytrans, method=method, 
                                       stat=stat, xsea=xsea) 
                        for stat in stats]
+        lgr.debug(colocs_strs)
         if not all([coloc_str in self._colocs.keys() for coloc_str in colocs_strs]):
             if raise_error:
                 lgr.critical_raise(f"(Some) colocalizations for method = '{method}', X dimensionality "
@@ -1924,9 +1928,11 @@ class NiSpace:
     # ----------------------------------------------------------------------------------------------
     
     def _check_permute(self, method, permute_what, mc_method=None, xsea=False,
-                       stats=None, xdimred=None, ytrans=None, raise_error=True):
+                       stats=None, xdimred=False, ytrans=False, raise_error=True):
         if stats is None:
             stats = _get_coloc_stats(method, drop_optional=True)
+        elif isinstance(stats, str):
+            stats = [stats]
         p_colocs_strs = [_get_df_string("p", xdimred=xdimred, ytrans=ytrans, method=method, stat=stat,
                                         perm=permute_what, mc=mc_method, xsea=xsea).lower() 
                        for stat in stats]
@@ -1934,8 +1940,9 @@ class NiSpace:
         if not all([coloc_str in self._p_colocs.keys() for coloc_str in p_colocs_strs]):
             if raise_error:
                 lgr.critical_raise(f"(Some) p values for permute_what = '{permute_what}', method = '{method}', "
-                                   f"X dimensionality reduction = '{xdimred}', Y transform = '{ytrans}', "
-                                   f"and mc_method = '{mc_method}' not found. Did you run NiSpace.permute()?!",
+                                   f"xsea = {xsea}, X dimensionality reduction = '{xdimred}', "
+                                   f"Y transform = '{ytrans}', and mc_method = '{mc_method}' "
+                                   f"not found. Did you run NiSpace.permute()?!",
                                    KeyError)
             else:
                 return False
@@ -1992,7 +1999,7 @@ class NiSpace:
                 downsample_vol=downsample_vol,
                 centroids=centroids,
                 surf_euclidean=True if dist_mat_type=="cv" else False,
-                n_cores=self._n_proc if not n_proc else n_proc,
+                n_proc=self._n_proc if not n_proc else n_proc,
                 verbose=verbose
             )
         

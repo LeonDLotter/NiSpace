@@ -5,7 +5,6 @@ from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.decomposition import PCA
 from tqdm.auto import tqdm
-import xarray
 
 from .. import lgr
 from ..utils import _del_from_tuple
@@ -214,15 +213,12 @@ def dominance(x, y, adj_r2=False, verbose=True):
     return dom_stats
 
 
-def pls(x, y, n_components=np.inf, kwargs={}):
+def pls(x, y, n_components=np.inf, **kwargs):
     """
     """
-    
     reg = PLSRegression(
         n_components=np.min([n_components, x.shape[1]]).astype(int),
-        **dict(
-            scale=False,
-        ) | kwargs,
+        **kwargs,
     )
     reg.fit(x, y)
     
@@ -235,7 +231,7 @@ def pls(x, y, n_components=np.inf, kwargs={}):
     return out
 
 
-def pcr(x, y, adj_r2=True, n_components=np.inf, kwargs={}):
+def pcr(x, y, adj_r2=True, n_components=np.inf, **kwargs):
     """
     """
     n_components = np.min([n_components, x.shape[1]]).astype(int)
@@ -247,7 +243,7 @@ def pcr(x, y, adj_r2=True, n_components=np.inf, kwargs={}):
     return {"r2": rsq}
 
 
-def elasticnet(x, y, cv=None, seed=None, kwargs={}):
+def elasticnet(x, y, cv=None, seed=None, **kwargs):
     """
     """
     

@@ -163,7 +163,6 @@ def permute_groups(groups, strategy="proportional", paired=False, subjects=None,
         if not (np.all(group_sizes == group_sizes[0]) and n_subjects == group_sizes[0]):
             raise ValueError("All sessions must have the same number of samples")
         
-    rng = np.random.default_rng(seed)
     groups_perm = []
 
     # unpaired: permute across the whole set
@@ -175,6 +174,7 @@ def permute_groups(groups, strategy="proportional", paired=False, subjects=None,
             group_idc = {label: np.where(groups==label)[0] for label in group_labels}
                 
             def perm_fun(i):
+                rng = np.random.default_rng(None if seed is None else seed + i)
                 groups_tmp = np.full(groups.shape, np.nan)
                 group_idc_tmp = group_idc.copy()
                 for label, size in zip(group_labels, group_sizes):
@@ -202,11 +202,13 @@ def permute_groups(groups, strategy="proportional", paired=False, subjects=None,
         # shuffle: random permutation across the whole set
         elif "shuff" in strategy:
             def perm_fun(i):
+                rng = np.random.default_rng(None if seed is None else seed + i)
                 return rng.permutation(groups)
             
         # draw: random permutation across the whole set, with replacement
         elif "draw" in strategy:
             def perm_fun(i):
+                rng = np.random.default_rng(None if seed is None else seed + i)
                 return rng.choice(groups, len(groups), replace=True)
         
         # not defined
@@ -233,6 +235,7 @@ def permute_groups(groups, strategy="proportional", paired=False, subjects=None,
             n_samples = np.floor(n_subjects / len(session_combinations)).astype(int)
             
             def perm_fun(i):
+                rng = np.random.default_rng(None if seed is None else seed + i)
                 sessions_perm = np.full(n, np.nan)
                 subs_tmp = unique_subjects.copy()
                 for session_labels_perm in session_combinations:
@@ -253,6 +256,7 @@ def permute_groups(groups, strategy="proportional", paired=False, subjects=None,
         elif "shuff" in strategy:
 
             def perm_fun(i):
+                rng = np.random.default_rng(None if seed is None else seed + i)
                 sessions_perm = groups.copy()
                 for sub in np.unique(subjects):
                     sessions_perm[subjects==sub] = rng.permutation(groups[subjects==sub])
@@ -263,7 +267,7 @@ def permute_groups(groups, strategy="proportional", paired=False, subjects=None,
             raise ValueError(f"Unknown paired permutation strategy: {strategy}!")
         
     # Run
-    groups_perm = Parallel(n_jobs=-1)(
+    groups_perm = Parallel(n_jobs=n_proc)(
         [delayed(perm_fun)(i) 
          for i in tqdm(range(n_perm), 
                        desc=f"Permuting groups ({n_proc} proc)", 

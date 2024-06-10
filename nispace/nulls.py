@@ -322,7 +322,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
         lgr.critical_raise("Null method 'moran' requires brainspace! Run 'pip install brainspace'!",
                            ImportError)
     elif null_fun.__name__ == "nulls_burt2020" and not _BRAINSMASH_AVAILABLE:
-        lgr.critical_raise("Null method 'burt2020' requires brainspace! Run 'pip install brainspace'!",
+        lgr.critical_raise("Null method 'burt2020' requires brainsmash! Run 'pip install brainsmash'!",
                            ImportError)
     # input data
     if not isinstance(data, (pd.DataFrame, pd.Series, np.ndarray)):

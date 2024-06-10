@@ -28,10 +28,9 @@ def _get_coloc_stats(method, permuted_only=False, drop_optional=False):
 def _get_colocalize_fun(method, regr_z=True,
                         xsea=False, xsea_method="mean",
                         r_to_z=True, r_equal_one="raise", adj_r2=True, mlr_individual=False, 
-                        n_components=10,
                         parcel_mask_regularized=None, parcel_tr_te_splits=None, parcel_train_pct=None, 
-                        coloc_method_kwargs=None,
-                        seed=None, verbose=False, dtype=np.float32):
+                        n_components=10,
+                        seed=None, verbose=False, dtype=np.float32, **kwargs):
    
     ## case (partial) pearson / spearman
     if any(m in method for m in ["pearson", "spearman"]):
@@ -81,9 +80,10 @@ def _get_colocalize_fun(method, regr_z=True,
                         z=z[parcel_mask], # data to partial out
                         rank=rank
                     )
-                if r_equal_one == "raise" and np.isclose(_colocs, 1).any():
-                    raise ValueError(f"'{method}' colocalization equal to 1 detected! Are you "
-                                     "correlating data with itself or do you have too few parcels?")
+                if r_equal_one == "raise":
+                    if np.isclose(_colocs, 1).any():
+                        raise ValueError(f"'{method}' colocalization equal to 1 detected! Are you "
+                                         "correlating data with itself or do you have too few parcels?")
                 else:
                     _colocs[np.isclose(_colocs, 1)] = r_equal_one
                 if r_to_z:
@@ -173,7 +173,7 @@ def _get_colocalize_fun(method, regr_z=True,
                 x=X_T[parcel_mask, :], # atlases
                 y=y[parcel_mask], # subject    
                 n_components=n_components,
-                kwargs=coloc_method_kwargs
+                **kwargs
             )
             
             return _colocs
@@ -192,7 +192,7 @@ def _get_colocalize_fun(method, regr_z=True,
                 y=y[parcel_mask], # subject   
                 adj_r2=adj_r2,
                 n_components=n_components,
-                kwargs=coloc_method_kwargs
+                **kwargs
             )
             
             return _colocs
@@ -218,7 +218,7 @@ def _get_colocalize_fun(method, regr_z=True,
                 y=y[parcel_mask_regularized], # subject    
                 cv=parcel_tr_te_splits, 
                 seed=seed, 
-                kwargs=coloc_method_kwargs
+                **kwargs
             )
             
             return _colocs
@@ -321,6 +321,12 @@ def _sort_colocs(method, y_colocs_list, n_X, n_Y, xsea=False,
             coloc_arrays["beta"][y, :] = prediction["beta"]
             # for i in range(pls_n_components):
             #     coloc_arrays[f"loadings_comp{i}"][y] = prediction["loadings"][:, i]
+
+    elif method == "pcr":
+        coloc_arrays["r2"] = arr_1d.copy()
+        
+        for y, prediction in enumerate(y_colocs_list):
+            coloc_arrays["r2"][y] = prediction["r2"]
             
     # case regularized regression
     elif method in ["lasso", "ridge", "elasticnet"]:
