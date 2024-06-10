@@ -1,0 +1,15 @@
+tqdm>=4.66.4
+joblib>=1.2.0
+requests>=2.32.3
+colorlog>=6.8.2
+numba>=0.58.0
+numpy>=1.23.0
+pandas>=2.0.0
+nibabel>=3.2.0
+nilearn>=0.10.0
+neuromaps>=0.0.5
+scipy>=1.6.0
+statsmodels>=0.14.0
+scikit-learn>=1.5.0
+matplotlib>=3.6.0
+seaborn>=0.13.0
