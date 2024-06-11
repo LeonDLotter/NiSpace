@@ -11,19 +11,19 @@ Reference API
 
 .. _api_api:
 
-:mod:`nispace.NiSpace` - NiSpace class API
+:mod:`nispace.api` - NiSpace main class
 ------------------------------------------
-.. automodule:: nispace.NiSpace
+.. automodule:: nispace.api
    :no-members:
    :no-inherited-members:
 
-.. currentmodule:: nispace.NiSpace
+.. currentmodule:: nispace.api
 
 .. autosummary::
    :template: class.rst
    :toctree: generated/
 
-   nispace.NiSpace
+   nispace.api.NiSpace
 
 
 .. _api_datasets:
