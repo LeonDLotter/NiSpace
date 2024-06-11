@@ -20,7 +20,7 @@ release = nispace.__version__
 
 # -- Path setup --------------------------------------------------------------
 
-sys.path.insert(0, os.path.abspath('../nispace/'))
+sys.path.insert(0, os.path.abspath('../nispace'))
 
 # -- General configuration ---------------------------------------------------
 
@@ -28,11 +28,15 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.mathjax',
     'sphinx.ext.napoleon',
+    'autodocsumm'
 ]
 napoleon_google_docstring = False   # Turn off googledoc strings
 napoleon_numpy_docstring = True     # Turn on numpydoc strings
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+autodoc_default_options = {
+    'autosummary': True,
+}
 
 # -- Options for HTML output -------------------------------------------------
 
