@@ -50,6 +50,30 @@ def fetch_template(template: str = "mni152",
                    parcellation: str = None,
                    hemi: Union[List[str], str] = ["L", "R"],
                    nispace_data_dir: Union[str, pathlib.Path] = None):
+    """
+    Fetch a brain template.
+    
+    Parameters
+    ----------
+    template : str, optional
+        The template to fetch. Default is "mni152".
+        
+    desc : str, optional
+        The description of the template to fetch. Default is None.
+        
+    parcellation : str, optional
+        The parcellation to fetch. Default is None.
+        
+    hemi : list of str, optional
+        The hemispheres to fetch. Default is ["L", "R"].
+        
+    nispace_data_dir : str or pathlib.Path, optional
+        The directory containing the NiSpace data. Default is None.
+        
+    Returns
+    -------
+    The template.
+    """
     
     # hard-coded template type    
     if "mni" in template.lower():

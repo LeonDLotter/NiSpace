@@ -40,8 +40,8 @@ from .utils import (set_log, load_distmat,fill_nan, _get_df_string, _lower_strip
 
 class NiSpace:
     """
-    Class NiSpace
-    """   
+    The NiSpace class. Docs under construction.
+    """
 
     def __init__(self, 
                  x, 
@@ -61,7 +61,24 @@ class NiSpace:
                  n_proc=1, 
                  verbose=True,
                  dtype=np.float32):
+        """
+        Initialize the NiSpace model.
+        Parameters
+        ----------
+        x : array-like of shape (n_samples, n_features)
+            The input data to fit the model.
+            
+            y : array-like of shape (n_samples, n_features), optional
+                The target data to fit the model. Default is None.
+            
+            z : array-like of shape (n_samples, n_features), optional
+                Additional data to fit the model. Default is None.
         
+        Returns
+        -------
+        self : object
+            Returns the instance itself.
+        """
         self._x = x
         self._x_with_self = False
         self._y = y
@@ -294,6 +311,10 @@ class NiSpace:
                  mean_by_set=False, weighted_mean=False,
                  n_components=None, min_ev=None, fa_method="minres", fa_rotation="promax",
                  seed=None, store=True, verbose=None):
+        """
+        Performs dimensionality reduction on X data.
+        Under construction.
+        """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.reduce_x() - X dimensionality reduction. ***")
         

@@ -27,7 +27,18 @@ Reference API
 --------------------------------------
 .. automodule:: nispace.datasets
    :members:
-   :undoc-members:
    :show-inheritance:
 
 .. currentmodule:: nispace.datasets
+
+
+.. _api_datasets:
+
+:mod:`nispace.io` - Imaging data input management
+-------------------------------------------------
+.. automodule:: nispace.io
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. currentmodule:: nispace.io
