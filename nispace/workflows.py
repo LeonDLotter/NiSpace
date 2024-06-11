@@ -125,6 +125,7 @@ def simple_colocalization(y,
                           plot=True,
                           combat=False,
                           n_perm=10000,
+                          seed=None,
                           #x_load_nulls=True,
                           n_proc=-1,
                           verbose=True,
@@ -137,7 +138,6 @@ def simple_colocalization(y,
                           correct_p_kwargs={},
                           plot_kwargs={}):
     verbose = set_log(lgr, verbose)
-    lgr.info("*** NiSpace Workflows: Simple Colocalization ***")
     
     ## COMMON FUNCTIONS: COLOC METHOD VALIDATION, DATA LOADING, INIT,
     if isinstance(colocalization_method, str):
@@ -182,15 +182,16 @@ def simple_colocalization(y,
     if not status["permute"]:
         for method in colocalization_method:
             permute_kwargs = dict(
-                    what="maps",
-                    maps_which="X",
-                    maps_nulls=null_maps,
-                    method=method,
-                    p_from_average_y_coloc=p_from_average_y,
-                    n_perm=n_perm,
-                ) | permute_kwargs
+                what="maps",
+                maps_which="X",
+                maps_nulls=null_maps,
+                method=method,
+                p_from_average_y_coloc=p_from_average_y,
+                n_perm=n_perm,
+                seed=seed,
+            ) | permute_kwargs
             nsp.permute(**permute_kwargs)
-        permuted = f"{permute_kwargs['maps_which']}{permute_kwargs['what']}".lower()
+        permuted = nsp._get_last(perm=None)
         status["permute"] = True  
     
     ## CORRECT
@@ -214,7 +215,7 @@ def simple_colocalization(y,
               for method in colocalization_method}
     p_values = {method: nsp.get_p_values(method, permuted) 
                 for method in colocalization_method}
-    p_fdr_values = {method: nsp.get_p_values(method, permuted, mc_method="fdr_bh") 
+    p_fdr_values = {method: nsp.get_p_values(method, permuted, mc_method="fdrbh") 
                     for method in colocalization_method}
     if len(colocalization_method)==1:
         colocs, p_values, p_fdr_values = (colocs[colocalization_method[0]], 
@@ -237,6 +238,7 @@ def group_comparison(y, design,
                      combat=False,
                      plot=True,
                      n_perm=10000,
+                     seed=None,
                      n_proc=-1,
                      verbose=True,
                      nispace_object=None, 
@@ -249,7 +251,6 @@ def group_comparison(y, design,
                      correct_p_kwargs={},
                      plot_kwargs={}):
     verbose = set_log(lgr, verbose)
-    lgr.info("*** NiSpace Workflows: Group Comparison ***")
 
     ## COMMON FUNCTIONS: DATA LOADING, INIT, YCOLOC METHOD VALIDATION
     if isinstance(colocalization_method, str):
@@ -325,7 +326,6 @@ def group_comparison(y, design,
                            ValueError)
     # plot
     if plot_design:
-        print(design.head(5))
         plot_design_matrix(design)
         plt.title("Design matrix")
         plt.ylabel("Y maps")
@@ -391,6 +391,7 @@ def group_comparison(y, design,
                     groups_perm_paired=paired, 
                     groups_perm_strategy="proportional",
                     n_perm=n_perm,
+                    seed=seed,
                     verbose=verbose,
                 ) | permute_kwargs
             nsp.permute(**permute_kwargs)
@@ -422,7 +423,7 @@ def group_comparison(y, design,
     p_values = {method: nsp.get_p_values(method, permute_what, Y_transform=group_comparison) 
                 for method in colocalization_method}
     p_fdr_values = {method: nsp.get_p_values(method, permute_what, Y_transform=group_comparison, 
-                                             mc_method="fdr_bh") 
+                                             mc_method="fdrbh") 
                     for method in colocalization_method}
     if len(colocalization_method)==1:
         colocs, p_values, p_fdr_values = (colocs[colocalization_method[0]], 
@@ -432,9 +433,75 @@ def group_comparison(y, design,
     return colocs, p_values, p_fdr_values, nsp
     
 
-def simple_xsea():
-    lgr.critical_raise("X-set enrichment analysis is not yet implemented!", 
-                       NotImplementedError)
-
-
-
+def simple_xsea(y, 
+                x="mRNA", z="gm", 
+                x_collection=None,
+                x_background=None,
+                standardize="xz",
+                parcellation=_PARCS_DEFAULT,
+                parcellation_labels=None,
+                y_covariates=None,
+                colocalization_method="spearman",
+                xsea_aggregation_method="mean",
+                p_from_average_y=False,
+                plot=True,
+                combat=False,
+                n_perm=10000,
+                seed=None,
+                n_proc=-1,
+                verbose=True,
+                nispace_object=None, 
+                fetch_x_kwargs={},
+                init_kwargs={},
+                clean_y_kwargs={},
+                colocalize_kwargs={},
+                permute_kwargs={},
+                correct_p_kwargs={},
+                plot_kwargs={}):
+    verbose = set_log(lgr, verbose)
+    
+    # GET THE BACKGROUND
+    if x_background is None and isinstance(x, str):
+        lgr.info("Trying to fetch background X dataset.")
+        if x.lower() in ["mrna", "pet", "brainmap"]:
+            try:
+                x_background = fetch_reference(x.lower(), parcellation=parcellation)
+            except:
+                x_background = None
+    if x_background is None:
+        lgr.warning(f"Could not fetch background dataset for {x}!")
+    
+    ## We go the easy way and just call .simple_colocalization() with some kwargs:
+    colocs, p_values, p_fdr_values, nsp = simple_colocalization(
+        y=y, 
+        x=x, z=z, 
+        x_collection=x_collection,
+        standardize=standardize,
+        parcellation=parcellation,
+        parcellation_labels=parcellation_labels,
+        y_covariates=y_covariates,
+        colocalization_method=colocalization_method,
+        p_from_average_y=p_from_average_y,
+        plot=plot,
+        combat=combat,
+        n_perm=n_perm,
+        seed=seed,
+        n_proc=n_proc,
+        verbose=verbose,
+        nispace_object=nispace_object, 
+        fetch_x_kwargs=fetch_x_kwargs,
+        init_kwargs=init_kwargs,
+        clean_y_kwargs=clean_y_kwargs,
+        colocalize_kwargs={
+            "xsea_aggregation_method": xsea_aggregation_method,
+            "xsea": True
+        } | colocalize_kwargs,
+        permute_kwargs={
+            "what": "sets",
+            "sets_X_background": x_background
+        } | permute_kwargs,
+        correct_p_kwargs=correct_p_kwargs,
+        plot_kwargs=plot_kwargs
+    )
+    
+    return colocs, p_values, p_fdr_values, nsp
