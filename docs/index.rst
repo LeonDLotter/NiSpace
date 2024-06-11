@@ -1,8 +1,5 @@
 .. include:: ../README.rst
 
-Contents
---------
-
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
@@ -11,5 +8,5 @@ Contents
    introduction
    examples
    citation
-   api
+   api_ref
 

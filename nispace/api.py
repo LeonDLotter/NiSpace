@@ -41,6 +41,22 @@ from .utils import (set_log, load_distmat,fill_nan, _get_df_string, _lower_strip
 class NiSpace:
     """
     The NiSpace class. Docs under construction.
+
+    Initialize the NiSpace model.
+    Parameters
+    ----------
+    x : array-like of shape (n_samples, n_features)
+        The input data to fit the model.
+        
+    y : array-like of shape (n_samples, n_features), optional
+        The target data to fit the model. Default is None.
+    
+    z : array-like of shape (n_samples, n_features), optional
+        Additional data to fit the model. Default is None.
+    
+    Returns
+    -------
+    nothing
     """
 
     def __init__(self, 
@@ -61,24 +77,7 @@ class NiSpace:
                  n_proc=1, 
                  verbose=True,
                  dtype=np.float32):
-        """
-        Initialize the NiSpace model.
-        Parameters
-        ----------
-        x : array-like of shape (n_samples, n_features)
-            The input data to fit the model.
-            
-            y : array-like of shape (n_samples, n_features), optional
-                The target data to fit the model. Default is None.
-            
-            z : array-like of shape (n_samples, n_features), optional
-                Additional data to fit the model. Default is None.
         
-        Returns
-        -------
-        self : object
-            Returns the instance itself.
-        """
         self._x = x
         self._x_with_self = False
         self._y = y
@@ -143,6 +142,18 @@ class NiSpace:
     # FIT ==========================================================================================
     
     def fit(self):
+        """
+        "Fit" the NiSpace class instance.
+        
+        Parameters
+        ----------
+        None
+        
+        Returns
+        -------
+        self : object
+            Returns the instance itself.
+        """
         verbose = set_log(lgr, self._verbose)
         lgr.info("*** NiSpace.fit() - Data extraction and preparation. ***")
         
@@ -1504,7 +1515,7 @@ class NiSpace:
     def plot(self, kind="categorical",
              method=None, stats=None, 
              X_reduction=None, Y_transform=None,
-             xsea=False,
+             xsea=None,
              Y_labels=None,
              plot_nulls=True, plot_p=True, permute_what=None,
              title="auto", sort_colocs=False,
@@ -1514,11 +1525,6 @@ class NiSpace:
              verbose=None): 
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.plot() - Plot colocalization results. ***")
-        
-        # check if minimum input provided
-        if colocalizations_dict is None and method is None:
-            lgr.critical_raise("Provide either a method name or a colocalization result!",
-                               ValueError)
         
         # check fit
         self._check_fit()
@@ -1531,6 +1537,11 @@ class NiSpace:
             xsea=xsea,
             perm=permute_what
         )
+        
+        # check if minimum input provided
+        if colocalizations_dict is None and method is None:
+            lgr.critical_raise("Provide either a method name or a colocalization result!",
+                               ValueError)
         
         # check nulls/p plot
         if (plot_nulls or plot_p) and not permute_what:
@@ -1741,6 +1752,10 @@ class NiSpace:
                                        KeyError)
             out[stat] = self._colocs[coloc_str].copy()
         
+        if get_nulls and nulls_permute_what is None:
+            lgr.error("If 'get_nulls' is True, 'nulls_permute_what' must not be None!")
+            get_nulls = False
+            
         if get_nulls:
             if nulls_permute_what not in ["groups", "groupsxmaps", "groupssets", 
                                           "xmaps", "ymaps", "xymaps", "ymapssets",
@@ -1980,7 +1995,10 @@ class NiSpace:
                                    f"Available: {list(self._last_settings.keys())}")
             else:
                 if value is None:
-                    out.append(self._last_settings[arg])
+                    value_last = self._last_settings[arg]
+                    if isinstance(value_last, str):
+                        value_last = value_last.lower()
+                    out.append(value_last)
                 else:
                     out.append(value)
         return tuple(out) if len(out) > 1 else out[0]

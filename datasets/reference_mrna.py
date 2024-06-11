@@ -51,7 +51,7 @@ for parc in _PARCS_NICE:
                     f"mrna_{parc}.csv.gz")
     
 # %% Collections (= gene sets) ---------------------------------------------------------------------
-# TODO: add GO, "classic" cell types, new ABA cell types, brainspan, add weighted cell types
+# TODO: new ABA cell types, brainspan, add weighted cell types
 # TODO: add GWAS from PGC after mapping to genes ("35 kb upstream and 10 kb downstream")
 
 # All genes
@@ -78,7 +78,6 @@ for collection, save_name in zip(
     write_json(collection, nispace_data_path / "reference" / "mrna" / f"collection-{save_name}.json")
 
 # SynGO
-
 url = "https://syngoportal.org/data/SynGO_bulk_download_release_20231201.zip"
 path = download(url)
 zip_file = zipfile.ZipFile(path)
@@ -89,5 +88,15 @@ collection = {name: genes.split(", ")
 all_genes = sum([collection[k] for k in collection], [])
 print(len(collection), "sets,", len(all_genes), "genes,", len(set(all_genes)), "unique.")
 write_json(collection, nispace_data_path / "reference" / "mrna" / f"collection-SynGO.json")
+
+# Chromosome location
+# for now, get from ABAnnotate (original source: DAVID)
+df = pd.read_csv("/Users/llotter/projects/ABAnnotate/raw_datasets/DAVID/OFFICIAL_GENE_SYMBOL2CHROMOSOME.txt", sep="\t", header=None)
+df.columns = ["gene", "chrom"]
+sets = [str(i) for i in np.arange(1,23,1)] + ["X","Y"]
+collection = {k: sorted(df.query("chrom==@k").gene.unique()) for k in sets}
+all_genes = sum([collection[k] for k in collection], [])
+print(len(collection), "sets,", len(all_genes), "genes,", len(set(all_genes)), "unique.")
+write_json(collection, nispace_data_path / "reference" / "mrna" / f"collection-Chromosome.json")
 
 # %%

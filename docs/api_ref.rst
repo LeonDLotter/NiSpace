@@ -53,7 +53,13 @@ Reference API
 :mod:`nispace.io` - Imaging data input
 --------------------------------------
 .. automodule:: nispace.io
-   :members:
-   :show-inheritance:
+   :no-members:
+   :no-inherited-members:
 
 .. currentmodule:: nispace.io
+
+.. autosummary::
+   :template: function.rst
+   :toctree: generated/
+
+   nispace.io.parcellate_data

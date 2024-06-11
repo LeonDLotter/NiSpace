@@ -1,5 +1,5 @@
 
-``NiSpace``: ``N``euro``i``maging ``S``patial ``C``olocalization ``E``nvironment
+``NiSpace``: **N**euro**i**maging **Spa**tial **C**olocalization **E**nvironment
 ================================================================================
 
 .. image:: https://zenodo.org/badge/XXXXXXX.svg
@@ -9,7 +9,7 @@
    :target: http://creativecommons.org/licenses/by-nc-sa/4.0/
    :alt: License: CC BY-NC-SA 4.0
 
-*Spatial (alteration) patterns observed in MRI images may often reflect function and dysfunction of underlying biological systems. This applies alike to function and structure, on the surface or in the volumetric space, to typical activation patterns, or to maps of disordered brain function, for example obtained from patients compared to a reference cohort.*
+*Spatial (alteration) patterns observed in MRI images may often reflect function and dysfunction of underlying biological systems. This applies alike to function and structure, on the surface or in the volumetric space, and to typical as well as disordered brain-anatomical and functional patterns.*
 
 In recent years, several methods have been developed to compare spatial patterns between brain maps. In the simplest case, two brain maps are correlated with each other at the voxel- or parcel-level. The resulting correlation coefficient reflects the degree to which the two maps share a spatial pattern. We refer to this spatial correlation as "*colocalization*". The `NiSpace` toolbox aims to provide the most comprehensive, yet easy-to-use and flexible framework for colocalization estimation, significance testing, and visualization to date.
 
@@ -60,7 +60,7 @@ There are of course many other tools available, of which a few are listed below:
      - volume (surface)
      - MATLAB-API
 
-``NiSpace`` tries to incorporate most of the functionality of these tools in a unified framework. It took many ideas and implementations from the toolboxes listed above. Two prior tools developed by me (Leon Lotter) –  [JuSpyce](https://github.com/leondlotter/JuSpyce) (basis for ``NiSpace``, Python) and [ABAnnotate](https://github.com/leondlotter/ABAnnotate) (easy-to-use neuroimaging gene-set enrichment based on [GCEA](https://github.com/benfulcher/GeneCategoryEnrichmentAnalysis), MATLAB) – were discontinued in favor of ``NiSpace``.
+``NiSpace`` tries to incorporate most of the functionality of these tools in a unified framework. It took many ideas and implementations from the toolboxes listed above. Two prior tools developed by me (Leon Lotter) – `JuSpyce <https://github.com/leondlotter/JuSpyce>`_ (basis for ``NiSpace``, Python) and `ABAnnotate <https://github.com/leondlotter/ABAnnotate>`_ (easy-to-use neuroimaging gene-set enrichment based on `GCEA <https://github.com/benfulcher/GeneCategoryEnrichmentAnalysis>`_, MATLAB) – were discontinued in favor of ``NiSpace``.
 
 .. list-table::
    :widths: 15 40 15 15 15
@@ -81,36 +81,21 @@ There are of course many other tools available, of which a few are listed below:
 Installation
 ------------
 
-``NiSpace`` is not yet available on PyPI. Currently, the easiest way is to install the development version directly from the repository using pip:
+You can install ``NiSpace`` in a Python 3.9+ environment using pip:
 
 .. code-block:: bash
 
    pip install git+https://github.com/LeonDLotter/NiSpace.git@dev
-
-We recommend using Python 3.9+ in a dedicated environment (e.g., via [Anaconda](https://www.anaconda.com/)).  
-There are some optional dependencies. When calling the respective `NiSpace` functions, you are prompted to install them. However, to avoid this, you can install them directly with the other dependencies using:
-
-.. code-block:: bash
-
-   pip install "git+https://github.com/LeonDLotter/NiSpace.git@dev#egg=nispace[opt]"
 
 
 Citation
 --------
 
 There is no paper for ``NiSpace`` yet. Please cite at least the following when you use our tools in your work:
-- `Dukart et al., HBM 2021 <https://doi.org/10.1002/hbm.25244>`_
-- `Markello, Hansen, et al., Nat. Methods 2022 <https://doi.org/10.1038/s41592-022-01625-w>`_
-- If you use the implemented "moran" null map function: `Vos de Wael et al., Comm. Biol. 2020 <https://doi.org/10.1038/s42003-020-0794-7>`_
-- If you use the implemented "burt2020" null map function: `Burt et al., NeuroImage 2020 <https://doi.org/10.1016/j.neuroimage.2020.117038>`_
-- If you use the implemented "burt2018" null map function: `Burt et al., Nat. Neurosci. 2018 <https://doi.org/10.1038/s41593-018-0195-0>`_
-- When fetching included reference datasets, `NiSpace` will automatically print information on references we recommend you to cite
+* `Dukart et al., HBM 2021 <https://doi.org/10.1002/hbm.25244>`_
+* `Markello, Hansen, et al., Nat. Methods 2022 <https://doi.org/10.1038/s41592-022-01625-w>`_
 
-Furthermore, the preceding tools, JuSpyce and ABAnnotate, were used in the following works:
-- JuSpyce: `Lotter et al., bioRxiv 2024 <https://doi.org/10.1101/2023.05.05.539537>`_
-- JuSpyce: `Lotter et al., Neuropsychopharm. 2024 <https://doi.org/10.1038/s41386-024-01880-9>`_
-- JuSpyce/ABAnnotate: `Lotter et al., Neurosci. & Biobehav. Rev. 2023 <https://doi.org/10.1016/j.neubiorev.2023.105042>`_
-- ABAnnotate: `Feng et al., Comm. Biol. 2023 <https://doi.org/10.1038/s42003-023-05647-8>`_
+See the documentation's `citation <https://nispace.readthedocs.io/en/latest/citation.html>`_ section for more information.
 
 
 Contact

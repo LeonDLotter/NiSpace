@@ -3,7 +3,7 @@
 Examples
 ========
 
-Under construction.
+Some (largely) working examples rendered from Jupyter notebooks.
 
 .. nbgallery::
    :glob:
