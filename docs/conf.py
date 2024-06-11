@@ -29,7 +29,7 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx.ext.napoleon',
     'sphinx.ext.autosummary',
-    'sphinx.ext.nbsphinx',
+    'nbsphinx',
 ]
 
 napoleon_google_docstring = False   # Turn off googledoc strings
