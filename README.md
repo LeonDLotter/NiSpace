@@ -27,6 +27,18 @@ There are of course many other tools available, of which a few are listed below:
 |------|----------------|----------------------|----------------|-----------|
 | `NiSpace` | Colocalization between two or multiple brain maps in single-map, case-control, and set-enrichment settings. Generalizes set-enrichment approach to all kinds of reference maps. Incorporates advanced imaging space transformation through neuromaps. Includes a large range of reference datasets | null maps, group permutation, set permutation | volume, surface | Python-API (GUI planned) |
 
+## Installation
+
+`NiSpace` is not yet available on PyPI. Currently, the easiest way is to install the development version directly from the repository using pip:
+```
+pip install git+https://github.com/LeonDLotter/NiSpace.git@dev
+```
+We recommend using Python 3.9+ in a dedicated environment (e.g., via [Anaconda](https://www.anaconda.com/)).  
+There are some optional dependencies. When calling the respective `NiSpace` functions, you are prompted to install them. However, to avoid this, you can install them directly with the other dependencies using:
+```
+pip install "git+https://github.com/LeonDLotter/NiSpace.git@dev#egg=nispace[opt]"
+```
+
 ## Citation
 
 There is no paper for `NiSpace` yet. Please cite at least the following when you use out tools in your work:
