@@ -29,8 +29,9 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx.ext.napoleon',
     'sphinx.ext.autosummary',
-    'sphinx_gallery.gen_gallery'
+    'sphinx.ext.nbsphinx',
 ]
+
 napoleon_google_docstring = False   # Turn off googledoc strings
 napoleon_numpy_docstring = True     # Turn on numpydoc strings
 templates_path = ['_templates']
