@@ -28,17 +28,14 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.mathjax',
     'sphinx.ext.napoleon',
-    'sphinx.ext.autosummary'
+    'sphinx.ext.autosummary',
+    'sphinx_gallery.gen_gallery'
 ]
 napoleon_google_docstring = False   # Turn off googledoc strings
 napoleon_numpy_docstring = True     # Turn on numpydoc strings
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
-autodoc_default_options = {
-    'autosummary': True,
-    'members': True,
-    'inherited-members': True
-}
+autodoc_default_options = {'members': True, 'inherited-members': True}
 
 # -- Options for HTML output -------------------------------------------------
 
