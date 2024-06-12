@@ -1,6 +1,6 @@
 -r ../requirements.txt
 sphinx >=2.0, <7.0.0
-sphinx_rtd_theme
+sphinx_book_theme
 sphinx-gallery
 sphinx_copybutton
 nbsphinx
