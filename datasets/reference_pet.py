@@ -15,7 +15,8 @@ from utils_datasets import parcellate_reference_dataset
 # add nispace to path
 sys.path.append(str(pathlib.Path.cwd().parent))
 from nispace.datasets import fetch_template
-from nispace.utils import _rm_ext, write_json
+from nispace.utils import _rm_ext
+from nispace.io import write_json
 from nispace.modules.constants import _PARCS_NICE
 
 # nispace data path in home dir

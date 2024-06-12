@@ -122,6 +122,7 @@ def nulls_random(data_1d, dist_mat=None, n_nulls=1000, seed=None):
     # return
     return null_data.astype(data_1d.dtype)
 
+
 _NULL_METHODS = {
     # Random
     "random": nulls_random,

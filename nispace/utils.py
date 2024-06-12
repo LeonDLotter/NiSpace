@@ -1,4 +1,3 @@
-import pathlib
 import sys
 import numpy as np
 import pandas as pd
@@ -6,12 +5,10 @@ import re
 import copy
 import logging
 from colorlog import ColoredFormatter
-from nibabel.nifti1 import Nifti1Image
-from nibabel.gifti import GiftiImage
+
+import nibabel as nib
 from nilearn import image
 from nilearn._utils.ndimage import get_border_data
-from pathlib import Path
-import json
 from neuromaps import images
 
 
@@ -220,28 +217,6 @@ def lower(str_list):
         return [s.lower() if isinstance(s, str) else s for s in str_list]
 
 
-def read_json(json_path):
-    if isinstance(json_path, (str, Path)):
-        with open(json_path) as f:
-            json_dict = json.load(f)
-    else:
-        try:
-            json_dict = dict(json_path)
-        except ValueError:
-            print("Provide path to json-like file or dict-like object!")
-    return json_dict
-
-
-def write_json(json_dict, json_path):
-    if isinstance(json_path, (str, Path)):
-        json_path = Path(json_path)
-        with open(json_path, "w") as f:
-            json.dump(json_dict, f)
-    else:
-        print("Provide path-like object for argument 'json_path'")
-    return json_path
-
-
 def get_background_value(img, border_size=2):
     
     data = images.load_data(img).squeeze()
@@ -256,100 +231,6 @@ def get_background_value(img, border_size=2):
             background = np.median(get_border_data(data, border_size))
 
     return background
-
-
-def load_img(img):
-    # to tuple
-    if isinstance(img, (str, pathlib.Path, Nifti1Image, GiftiImage)):
-        img = (img,)
-    elif isinstance(img, list):
-        img = tuple(img)
-    elif isinstance(img, tuple):
-        pass
-    else:
-        raise ValueError("Input must be path, list, tuple or image object")
-    # load
-    img_load = []
-    for i in img:
-        # return if image, to string if path
-        if isinstance(i, (Nifti1Image, GiftiImage)):
-            img_load.append(i)
-            continue
-        elif isinstance(i, pathlib.Path):
-            i = str(i)
-        # load 
-        if i.endswith(".nii") or i.endswith(".nii.gz"):
-            i = images.load_nifti(i)
-        elif i.endswith(".gii") or i.endswith(".gii.gz"):
-            i = images.load_gifti(i)
-        else:
-            raise ValueError("File format not supported. Path must end with .nii(.gz) or .gii(.gz)")
-        img_load.append(i)
-    # return as tuple if two, or 
-    return img_load[0] if len(img_load) == 1 else tuple(img_load)
-
-
-def load_labels(labels, concat=True, header=None, index=None):
-    # to tuple
-    if isinstance(labels, (str, pathlib.Path, list, np.ndarray, pd.Series)):
-        labels = (labels,)
-    elif isinstance(labels, tuple):
-        pass
-    else:
-        raise ValueError("Input must be path, list, ndarray or Series")
-    # load
-    labels_load = []
-    for l in labels:
-        # return if array/list, to string if path
-        if isinstance(l, (list, np.ndarray, pd.Series)):
-            labels_load.append(list(l))
-            continue
-        elif isinstance(l, pathlib.Path):
-            l = str(l)
-        # load 
-        try:
-            l = pd.read_csv(l, header=header, index_col=index).iloc[:,0].to_list()
-        except:
-            raise ValueError("File format not supported. Provide path to csv-like text file.")
-        labels_load.append(l)
-    # return as tuple if two, or list of one
-    if len(labels_load) == 1:
-        labels_load = labels_load[0]
-    else:
-        if concat:
-            labels_load = labels_load[0] + labels_load[1]
-        else:
-            labels_load = tuple(labels_load)
-    return labels_load
-
-
-def load_distmat(distmat):
-    # to tuple
-    if isinstance(distmat, (str, pathlib.Path, np.ndarray, pd.DataFrame)):
-        distmat = (distmat,)
-    elif isinstance(distmat, list):
-        distmat = tuple(distmat)
-    elif isinstance(distmat, tuple):
-        pass
-    else:
-        raise ValueError("Input must be path, list, tuple, ndarray, or DataFrame")
-    # load
-    distmat_load = []
-    for d in distmat:
-        # return if array, to string if path
-        if isinstance(d, (np.ndarray, pd.DataFrame)):
-            distmat_load.append(np.array(d))
-            continue
-        elif isinstance(d, pathlib.Path):
-            d = str(d)
-        # load 
-        try:
-            d = pd.read_csv(d, header=None, index_col=None).values
-        except:
-            raise ValueError("File format not supported. Provide path to csv-like text file.")
-        distmat_load.append(d)
-    # return as tuple if two, or as array if one 
-    return distmat_load[0] if len(distmat_load) == 1 else tuple(distmat_load)
 
 
 def parc_vect_to_vol(vect, parc):
@@ -383,7 +264,7 @@ def parc_vect_to_vol(vect, parc):
 
 def relabel_gifti_parc(parc, new_labels=None):
     
-    if not isinstance(parc, GiftiImage):
+    if not isinstance(parc, nib.GiftiImage):
         raise ValueError("'parc' must be a GiftiImage!")
     
     # get data and labels excluding zero

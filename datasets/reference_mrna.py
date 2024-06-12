@@ -13,7 +13,7 @@ from utils_datasets import download
 sys.path.append(str(pathlib.Path.cwd().parent))
 from nispace.modules.constants import _PARCS_NICE
 from nispace.datasets import fetch_parcellation
-from nispace.utils import write_json
+from nispace.io import write_json
 
 # nispace data path in home dir
 nispace_data_path = pathlib.Path.home() / "nispace-data"

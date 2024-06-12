@@ -10,21 +10,6 @@ import seaborn.objects as sno
 from sklearn.preprocessing import minmax_scale
 
 
-def hide_empty_axes(axes):
-    
-    [ax.axis("off") for ax in axes.ravel() if ax.axis() == (0.0, 1.0, 0.0, 1.0)]
-
-
-def colors_from_values(values, palette_name):
-    # normalize the values to range [0, 1]
-    normalized = (values - min(values)) / (max(values) - min(values))
-    # convert to indices
-    indices = np.round(normalized * (len(values) - 1)).astype(np.int32)
-    # use the indices to get the colors
-    palette = sns.color_palette(palette_name, len(values))
-    return np.array(palette).take(indices, axis=0)
-
-
 def nice_stats_labels(string, add_dollars=True):
     replace_dict = {
         "r2": "R^2",
@@ -69,6 +54,21 @@ def nice_stats_labels(string, add_dollars=True):
             k_replace = replace_dict[k]
         string = string.replace(k, k_replace)
     return string
+
+
+def hide_empty_axes(axes):
+    
+    [ax.axis("off") for ax in axes.ravel() if ax.axis() == (0.0, 1.0, 0.0, 1.0)]
+
+
+def colors_from_values(values, palette_name):
+    # normalize the values to range [0, 1]
+    normalized = (values - min(values)) / (max(values) - min(values))
+    # convert to indices
+    indices = np.round(normalized * (len(values) - 1)).astype(np.int32)
+    # use the indices to get the colors
+    palette = sns.color_palette(palette_name, len(values))
+    return np.array(palette).take(indices, axis=0)
 
 
 def move_legend_fig_to_ax(fig, ax, loc, bbox_to_anchor=None, no_legend_error=False, **kwargs):
@@ -117,6 +117,39 @@ def move_legend_fig_to_ax(fig, ax, loc, bbox_to_anchor=None, no_legend_error=Fal
                 raise ValueError("Figure has no legend attached.")
             else:
                 pass
+            
+
+def linewidth_from_data_units(linewidth, axis, reference='x'):
+    """
+    Convert a linewidth in data units to linewidth in points.
+
+    Parameters
+    ----------
+    linewidth: float
+        Linewidth in data units of the respective reference-axis
+    axis: matplotlib axis
+        The axis which is used to extract the relevant transformation
+        data (data limits and size must not change afterwards)
+    reference: string
+        The axis that is taken as a reference for the data width.
+        Possible values: 'x' and 'y'. Defaults to 'y'.
+
+    Returns
+    -------
+    linewidth: float
+        Linewidth in points
+    """
+    fig = axis.get_figure()
+    if reference == 'x':
+        length = fig.bbox_inches.width * axis.get_position().width
+        value_range = np.diff(axis.get_xlim())
+    elif reference == 'y':
+        length = fig.bbox_inches.height * axis.get_position().height
+        value_range = np.diff(axis.get_ylim())
+    # Convert length to points
+    length *= 72
+    # Scale linewidth to value range
+    return linewidth * (length / value_range)
 
 
 def catplot(fig, ax, data_long, categorical_var="variable", continuous_var="value", group_var=None,
@@ -472,39 +505,6 @@ def nullplot(fig, ax, data_long, categorical_var="variable", continuous_var="val
         fig.legends[-1].set_visible(False)
 
     return plot
-
-
-def linewidth_from_data_units(linewidth, axis, reference='x'):
-    """
-    Convert a linewidth in data units to linewidth in points.
-
-    Parameters
-    ----------
-    linewidth: float
-        Linewidth in data units of the respective reference-axis
-    axis: matplotlib axis
-        The axis which is used to extract the relevant transformation
-        data (data limits and size must not change afterwards)
-    reference: string
-        The axis that is taken as a reference for the data width.
-        Possible values: 'x' and 'y'. Defaults to 'y'.
-
-    Returns
-    -------
-    linewidth: float
-        Linewidth in points
-    """
-    fig = axis.get_figure()
-    if reference == 'x':
-        length = fig.bbox_inches.width * axis.get_position().width
-        value_range = np.diff(axis.get_xlim())
-    elif reference == 'y':
-        length = fig.bbox_inches.height * axis.get_position().height
-        value_range = np.diff(axis.get_ylim())
-    # Convert length to points
-    length *= 72
-    # Scale linewidth to value range
-    return linewidth * (length / value_range)
 
 
 def heatmap(ax,

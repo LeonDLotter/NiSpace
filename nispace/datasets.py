@@ -1,36 +1,107 @@
-import pathlib
 from typing import Union, List, Dict, Tuple
 import requests
+import pathlib
+import os
+import io
+import zipfile
 import pandas as pd
 import numpy as np
 from nilearn import image
-from tqdm.auto import tqdm
 import gzip
 import pickle
-import json
 
 from . import lgr
-from .modules.constants import _DSETS, _DSETS_NICE, _DSETS_MAP, _DSETS_TAB, _PARCS_DEFAULT
-from nispace.stats.misc import zscore_df
-from .utils import _rm_ext, set_log, load_img, load_distmat, load_labels
+from .modules.constants import (_DSETS_VERSION, _DSETS, _DSETS_NICE, _DSETS_MAP, _DSETS_TAB,
+                                _PARCS_DEFAULT)
+from .stats.misc import zscore_df
+from .utils import _rm_ext, set_log
+from .io import read_json, load_img, load_distmat, load_labels
+
 
 # OSF HANDLING =====================================================================================
 
-def _download_file(url, path):
-    """Download a file from a URL to a given path."""
-    response = requests.get(url)
-    response.raise_for_status()
-    with open(path, "wb") as f:
-        f.write(response.content)
+def download_datasets(datasets="all", 
+                      nispace_data_dir: Union[str, pathlib.Path] = None, 
+                      osf_id: str = "derpj"):
+    """
+    Download all data associated with NiSpace.
 
+    Parameters
+    ----------
+    datasets : str or list of str, optional
+        The datasets to download. Options are "template", "parcellation", "reference", "example", or "all".
+        Default is "all".
+    nispace_data_dir : str or pathlib.Path, optional
+        The directory where the data will be downloaded. Default is `~HOME/nispace-data`.
+    osf_id : str, optional
+        The OSF project ID from which to download the data. Default is "derpj".
 
-def _ensure_data_available(local_path, remote_url):
-    """Ensure that data is available, downloading it if necessary."""
-    if not local_path.exists():
-        lgr.info(f"Downloading data to {local_path}")
-        _download_file(remote_url, local_path)
+    Raises
+    ------
+    ValueError
+        If the specified datasets are not in the list of available datasets.
+    FileNotFoundError
+        If the specified directory does not exist and cannot be created.
+    requests.exceptions.RequestException
+        If there is an issue with the HTTP request to the OSF API.
+
+    Notes
+    -----
+    This function downloads approximately 250 MB of data. This process will be updated in the future
+    by integrating downloads into the "fetch_...()" functions and only downloading necessary data.
+    """
+    
+    lgr.info("Downloading all data associated with NiSpace (~250 MB). This will take some time.\n"
+             "By default, data will be downloaded to ~HOME/nispace-data. "
+             "You can also download the data manually from https://osf.io/derpj\n"
+             "This strategy will change in the future to a more reliable, version-tracked one, "
+             "integrated into the fetch_...() functions.")
+    
+    if nispace_data_dir is None:
+        nispace_data_dir = pathlib.Path.home() / "nispace-data"
+        
+    dsets_all = ["template", "parcellation", "reference", "example"]
+    if isinstance(datasets, str):
+        datasets = [datasets]
+    if datasets in [["all"], [None]]:
+        datasets = dsets_all
     else:
-        lgr.info(f"Data already present at {local_path}")
+        if not all(dset in dsets_all for dset in datasets):
+            raise ValueError(f"Datasets must be 'all' or one or more of {dsets_all}")
+    
+    if not os.path.exists(nispace_data_dir):
+        os.makedirs(nispace_data_dir)
+    
+    # Get a list of files in the project
+    response = requests.get(f'https://api.osf.io/v2/nodes/{osf_id}/files/osfstorage/')
+    response.raise_for_status()
+    files = response.json()['data']
+    
+    for file in files:
+        if file["attributes"]["kind"] == "folder":
+            folder_name = file["attributes"]["name"]
+            if folder_name in datasets:
+                folder_id = file["attributes"]["path"]
+                local_path = pathlib.Path(nispace_data_dir, folder_name)
+                local_path.mkdir(parents=True, exist_ok=True)
+                lgr.info(f"Downloading '{folder_name}' data to '{local_path}'")
+                response = requests.get(f'https://files.osf.io/v1/resources/{osf_id}/providers/osfstorage/{folder_id}/?zip=')
+                response.raise_for_status()
+                # Open the ZIP file
+                with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+                    # Extract all files to the specified directory
+                    z.extractall(local_path)
+
+def _check_base_dir(base_dir, data_type):
+    base_dir = pathlib.Path(base_dir)
+    if not base_dir.exists():
+        lgr.critical_raise(f"{data_type} data not found. Run 'nispace.datasets.download_datasets()' "
+                           "to download it or adjust 'nispace_data_path'!",
+                           FileNotFoundError)
+    elif len(os.listdir(base_dir)) < 1:
+        lgr.critical_raise(f"{data_type} directory exists but data not found! Maybe something "
+                           "went wrong with the download?!",
+                           FileNotFoundError)
         
 # FILE HANDLING ====================================================================================
 
@@ -49,7 +120,8 @@ def fetch_template(template: str = "mni152",
                    desc: str = None,
                    parcellation: str = None,
                    hemi: Union[List[str], str] = ["L", "R"],
-                   nispace_data_dir: Union[str, pathlib.Path] = None):
+                   nispace_data_dir: Union[str, pathlib.Path] = None,
+                   dset_version: str = None):
     """
     Fetch a brain template.
     
@@ -81,24 +153,17 @@ def fetch_template(template: str = "mni152",
     elif "fsa" in template.lower():
         template = "fsaverage"
     else:
-        raise ValueError("'template' must be 'MNI152' or 'fsaverage'!")
+        raise ValueError("'template' should be 'MNI152' or 'fsaverage'!")
     
     # paths        
-    if not nispace_data_dir:
-        base_dir = pathlib.Path.home() / "nispace-data" / "template" / template
-    else:
-        base_dir = pathlib.Path(nispace_data_dir) / "template" / template
+    if nispace_data_dir is None:
+        nispace_data_dir = pathlib.Path.home() / "nispace-data"
+    base_dir = pathlib.Path(nispace_data_dir) / "template" / template
     map_dir = base_dir / "map"
     tab_dir = base_dir / "tab"
     
-    # # OSF CODE
-    # remote_base_url = "https://osf.io/path_to_your_osf_data/"  # Example OSF base URL
-
-    # # Ensure base directory exists
-    # base_dir.mkdir(parents=True, exist_ok=True)
-
-    # # Check and download parcellation data if necessary
-    # _ensure_data_available(base_dir / "your_parcellation_data_file", remote_base_url + "your_parcellation_data_file")
+    # OSF
+    _check_base_dir(base_dir, "Template")
     
     # get files
     # mni
@@ -184,15 +249,9 @@ def fetch_parcellation(parcellation: str = None,
     else:
         base_dir = pathlib.Path(nispace_data_dir) / "parcellation"
     
-    # # OSF CODE
-    # remote_base_url = "https://osf.io/path_to_your_osf_data/"  # Example OSF base URL
-
-    # # Ensure base directory exists
-    # base_dir.mkdir(parents=True, exist_ok=True)
-
-    # # Check and download parcellation data if necessary
-    # _ensure_data_available(base_dir / "your_parcellation_data_file", remote_base_url + "your_parcellation_data_file")
- 
+    # OSF
+    _check_base_dir(base_dir, "Parcellation")
+    
     # descriptors
     if parcellation not in ["", None, False, True, "*", "**", "***"]:
         parcellation = f"*{parcellation}*"
@@ -364,8 +423,7 @@ def _fetch_collection(collection_path):
             
         # if json, load into dict
         if ext == ".json":
-            with open(collection_path) as f:
-                collection = json.load(f)
+            collection = read_json(collection_path)
                 
         # else, try to directly load as table file
         else:
@@ -625,8 +683,9 @@ def fetch_reference(dataset: str,
     map_dir = base_dir / "map"
     tab_dir = base_dir / "tab"
     nulls_dir = base_dir / "null"
-    
-    # TODO: HANDLE DOWNLOAD
+
+    # OSF
+    _check_base_dir(base_dir, "Reference")
     
     # Get list of map files
     if dataset in _DSETS_MAP:
@@ -718,6 +777,9 @@ def fetch_metadata(dataset: str, maps: Union[str, list] = None, collection: str 
     base_dir = pathlib.Path.home() / "nispace-data" / "reference" / dataset
     meta = pd.read_csv(base_dir / "metadata.csv", header=0)
     
+    # OSF
+    _check_base_dir(base_dir, "Reference")
+    
     if dataset == "pet" and maps is not None:
         if isinstance(maps, str):
             maps = [maps]
@@ -747,14 +809,8 @@ def fetch_example(example: str,
     example = example.lower()
     lgr.info(f"Loading example dataset: {example}")
     
-    # # OSF CODE
-    # remote_base_url = "https://osf.io/path_to_your_osf_data/"  # Example OSF base URL
-    
-    # # Ensure base directory exists
-    # base_dir.mkdir(parents=True, exist_ok=True)
-
-    # # Check and download data if necessary
-    # _ensure_data_available(base_dir / "your_pet_data_file", remote_base_url + "your_pet_data_file")
+    # OSF
+    _check_base_dir(base_dir, "Example")
 
     # Get parcellated data
     example_file = list(base_dir.glob(f"example-{example}*.csv.gz"))
@@ -781,396 +837,3 @@ def fetch_example(example: str,
                 return example_data, example_info
         
         return example_data
-
-
-# ==================================================================================================
-# BACKUP OLD FUNCTIONS =============================================================================
-# ==================================================================================================
-
-# def fetch_pet(maps: Union[None, str, List[str], Dict[str, Union[str, list]]] = None,
-#               collection: str = None,
-#               parcellation: str = None,
-#               cortex_only: bool = False,
-#               return_nulls: bool = False,
-#               nispace_data_dir: Union[str, pathlib.Path] = None):
-#     # TODO: modularize collection filter
-    
-#     # Define the base directories
-#     if not nispace_data_dir:
-#         base_dir = pathlib.Path.home() / "nispace-data" / "reference" / "pet"
-#     else:
-#         base_dir = pathlib.Path(nispace_data_dir) / "reference" / "pet"
-#     map_dir = base_dir / "map"
-#     tab_dir = base_dir / "tab"
-#     nulls_dir = base_dir / "null"
-    
-#     lgr.info("Loading PET maps.")
-    
-#     # # OSF CODE
-#     # remote_base_url = "https://osf.io/path_to_your_osf_data/"  # Example OSF base URL
-    
-#     # # Ensure base directory exists
-#     # base_dir.mkdir(parents=True, exist_ok=True)
-
-#     # # Check and download data if necessary
-#     # _ensure_data_available(base_dir / "your_pet_data_file", remote_base_url + "your_pet_data_file")
-
-#     # Get list of PET map files
-#     pet_maps = [f for f in map_dir.glob("*.nii.gz")]
-#     pet_maps.sort()
-
-#     # Filter by 'maps'    
-#     if maps:
-#         def _filter_pet_maps(pet_maps: List[pathlib.Path],
-#                             filters: Dict[str, Union[str, List[str]]]) -> List[pathlib.Path]:
-            
-#             def matches_filters(file_path: pathlib.Path) -> bool:
-#                 for filter_name, filter_content in filters.items():
-#                     if filter_content not in [None, False, "", []]:
-#                         if isinstance(filter_content, (str, int)):
-#                             filter_content = [filter_content]
-#                         filter_content = list(map(str, filter_content))
-#                         if filter_name == "n" and filter_content[0].startswith(">"):
-#                             try:
-#                                 filter_n = int(filter_content[0].replace(">", ""))
-#                                 n_value = int(_file_desc(file_path, 2))
-#                                 if n_value <= filter_n:
-#                                     return False
-#                             except (ValueError, IndexError):
-#                                 continue  # Skip this filter if parsing fails
-#                         else:
-#                             if not any(f"{filter_name}-{content}".lower() in file_path.name.lower() for content in filter_content):
-#                                 return False
-#                 return True
-
-#             # Apply filters
-#             filtered_pet_maps = [f for f in pet_maps if matches_filters(f)]
-#             return filtered_pet_maps
-        
-#         lgr.info(f"Applying filter: {maps}")
-#         if isinstance(maps, str):
-#             maps = [maps]
-#         if isinstance(maps, list):
-#             maps = set(maps)
-#             pet_maps = [f for f in pet_maps if any(map_str in f.name for map_str in maps)]
-#         elif isinstance(maps, dict):
-#             pet_maps = _filter_pet_maps(pet_maps, maps)
-
-#     # Filter by 'collection'
-#     if collection:
-                
-#         # check if path to custom file
-#         collection_file = pathlib.Path(collection)
-#         if collection_file.exists():
-#             pass
-        
-#         # if not exists, search integrated collections
-#         else:
-#             collection_file = list(base_dir.glob(f"collection-{collection.replace('collection-','')}.*"))
-#             if len(collection_file) == 0:
-#                 lgr.warning(f"Collection '{collection}' not found! Available: "
-#                             f"{[f.name.replace('collection-','').replace(f.suffix,'') for f in base_dir.glob('collection-*.*')]}")
-#             elif len(collection_file) > 1:
-#                 lgr.warning("Found more than one collection file matching your search; using first:", collection_file)
-#             collection_file = collection_file[0]
-        
-#         # load; 1-column df (= maps) or 2-column df (= set and maps)
-#         collection_df = _fetch_collection_old(collection_file)
-
-#         # apply
-#         lgr.info(f"Applying collection filter from: {collection_file}.")
-#         pet_maps = [f for f in pet_maps if _rm_ext(f.name) in collection_df["map"].unique()]
-            
-#     # Load tabulated data if 'parcellation' is specified
-#     if parcellation:
-#         lgr.info(f"Loading parcellated data: {parcellation}")
-#         parcellation_file = tab_dir / f"pet_{parcellation}.csv"
-#         if parcellation_file.exists():
-#             pet_data = pd.read_csv(parcellation_file, index_col=0)
-
-#             # Apply filter to the dataframe index
-#             pet_data = pet_data.loc[
-#                 pet_data.index.intersection([_rm_ext(f.name) for f in pet_maps])
-#             ]     
-            
-#             # Apply collection index (-> handles maps that are present multiple times in different sets)
-#             if collection:
-#                 pet_data = pet_data.loc[collection_df["map"], :]
-#                 pet_data_index_orig = pet_data.index.to_list()
-#                 pet_data.index = pd.MultiIndex.from_frame(collection_df)
-#                 pet_data_index_new = pet_data.index.to_list()
-                
-#              # Load null maps
-#             if return_nulls:
-#                 lgr.info("Loading precomputed null maps.")
-#                 try:
-#                     with gzip.open(nulls_dir / f"pet_{parcellation}.pkl.gz", "rb") as f:
-#                         tmp = pickle.load(f)
-#                     if collection:
-#                         null_maps = {}
-#                         for name, nulls in tmp.items():
-#                             if name in pet_data_index_orig:
-#                                 null_maps[pet_data_index_new[pet_data_index_orig.index(name)]] = nulls
-#                     else:
-#                         null_maps = tmp
-#                 except FileNotFoundError:
-#                     lgr.warning("No precomputed null map data found. Did you download it?")
-#                     return_nulls = False
-                    
-#             # cortex only
-#             if cortex_only:
-#                 lgr.info("Keeping only cortical parcels.")
-#                 bool_cx = [True if "_CX_" in c else False for c in pet_data.columns]
-#                 pet_data = pet_data.loc[:, bool_cx]
-#                 if return_nulls:
-#                     null_maps = {name: null_maps[:, bool_cx] for name, null_maps in null_maps.items()}
-            
-#         else:
-#             lgr.warning(f"Parcellated PET data for {parcellation} not found!")
-            
-#     # Return the results
-#     out = pet_maps if not parcellation else pet_data
-#     if return_nulls:
-#         out = (out, null_maps)
-#     return out
-    
-
-# def fetch_mrna(genes: Union[str, List[str]] = None,
-#                collection: str = None,
-#                parcellation: str = "HCPex",
-#                cortex_only: bool = False,
-#                nispace_data_dir: Union[str, pathlib.Path] = None):
-#     # TODO: add filtering information
-#     # TODO: modularize collection filter
-    
-#     # Define the base directories
-#     if not nispace_data_dir:
-#         base_dir = pathlib.Path.home() / "nispace-data" / "reference" / "mrna"
-#     else:
-#         base_dir = pathlib.Path(nispace_data_dir) / "reference" / "mrna"
-#     tab_dir = base_dir / "tab"
-    
-#     lgr.info(f"Loading mRNA maps for parcellation {parcellation}.")
-    
-#     # # OSF CODE
-#     # remote_base_url = "https://osf.io/path_to_your_osf_data/"  # Example OSF base URL
-    
-#     # # Ensure base directory exists
-#     # base_dir.mkdir(parents=True, exist_ok=True)
-
-#     # # Check and download data if necessary
-#     # _ensure_data_available(base_dir / "your_pet_data_file", remote_base_url + "your_pet_data_file")
-
-#     # Genes
-#     if isinstance(genes, str):
-#         genes = [genes]
-    
-#     # Load tabulated data
-#     gene_file = tab_dir / f"mrna_{parcellation}.csv.gz"
-    
-#     if gene_file.exists():
-#         mrna_data = pd.read_csv(gene_file, index_col=0)
-
-#         # Apply 'genes' filter to the dataframe index
-#         if genes:
-#             lgr.info(f"Filtering to {len(genes)} gene(s).")
-#             mrna_data = mrna_data.loc[mrna_data.index.intersection(genes)]
-#     else:
-#         raise FileNotFoundError(f"Parcellated mRNA data for {parcellation} not found!")
-
-#     # Filter by 'collection'
-#     if collection:
-#         if collection.lower() != "all":
-                
-#             # check if path to custom file
-#             collection_file = pathlib.Path(collection)
-#             if collection_file.exists():
-#                 pass
-            
-#             # if not exists, search integrated collections
-#             else:
-#                 collection_file = list(base_dir.glob(f"collection-{collection.replace('collection-','')}.*"))
-#                 if len(collection_file) == 0:
-#                     lgr.warning(f"Collection '{collection}' not found! Available: "
-#                                 f"{[f.name.replace('collection-','').replace(f.suffix,'') for f in base_dir.glob('collection-*.*')]}")
-#                 elif len(collection_file) > 1:
-#                     lgr.warning("Found more than one collection file matching your search; using first:", collection_file)
-#                 collection_file = collection_file[0]
-            
-#             # load; 1-column df (= maps) or 2-column df (= set and maps) or 3-columns df (= set, maps, and weights)
-#             collection_df = _fetch_collection_old(collection_file)
-
-#             # apply
-#             lgr.info(f"Applying collection filter from: {collection_file}.")
-#             genes_intersection = mrna_data.index.intersection(collection_df["map"].unique())
-#             collection_df_intersection = collection_df.query("map in @genes_intersection")
-#             mrna_data = mrna_data.loc[collection_df_intersection["map"]]     
-#             mrna_data.index = pd.MultiIndex.from_frame(collection_df_intersection)
-            
-#     # cortex only
-#     if cortex_only:
-#         lgr.info("Keeping only cortical parcels.")
-#         mrna_data = mrna_data[[c for c in mrna_data.columns if "_CX_" in c]]
-    
-#     # return
-#     return mrna_data
-
-
-# def fetch_neuroquery(queries: Union[str, List[str]] = None,
-#                      collection: str = None,
-#                      parcellation: str = "HCPex",
-#                      cortex_only: bool = False,
-#                      return_nulls: bool = False,
-#                      n_proc: int = 1,
-#                      generated_maps_dir: Union[str, pathlib.Path] = None,
-#                      nispace_data_dir: Union[str, pathlib.Path] = None):
-    
-#     # Define the base directories
-#     if not nispace_data_dir:
-#         base_dir = pathlib.Path.home() / "nispace-data" / "reference" / "neuroquery"
-#     else:
-#         base_dir = pathlib.Path(nispace_data_dir) / "reference" / "neuroquery"
-#     model_dir = base_dir / "model"
-#     tab_dir = base_dir / "tab"
-#     nulls_dir = base_dir / "null"
-    
-#     lgr.info(f"Loading/Generating Neuroquery maps.")
-    
-#     # # OSF CODE
-#     # remote_base_url = "https://osf.io/path_to_your_osf_data/"  # Example OSF base URL
-    
-#     # # Ensure base directory exists
-#     # base_dir.mkdir(parents=True, exist_ok=True)
-
-#     # # Check and download data if necessary
-#     # _ensure_data_available(base_dir / "your_pet_data_file", remote_base_url + "your_pet_data_file")
-
-#     # Queries
-#     if not queries:
-#         with open(base_dir / f"collection-All.txt", "r") as file:
-#             queries = set(file.read().splitlines())
-#     if isinstance(queries, str):
-#         queries = [queries]
-#     nq_data = None
-    
-#     # Filter by 'collection'
-#     if collection:
-#         if collection.lower() != "all":
-                
-#             # check if path to custom file
-#             collection_file = pathlib.Path(collection)
-#             if collection_file.exists():
-#                 pass
-            
-#             # if not exists, search integrated collections
-#             else:
-#                 collection_file = list(base_dir.glob(f"collection-{collection.replace('collection-','')}.*"))
-#                 if len(collection_file) == 0:
-#                     lgr.warning(f"Collection '{collection}' not found! Available: "
-#                         f"{[f.name.replace('collection-','').replace(f.suffix,'') for f in base_dir.glob('collection-*.*')]}")
-#                 elif len(collection_file) > 1:
-#                     lgr.warning("Found more than one collection file matching your search; using first:", collection_file)
-#                 collection_file = collection_file[0]
-            
-#             # load; 1-column df (= maps) or 2-column df (= set and maps) or 3-columns df (= set, maps, and weights)
-#             collection_df = _fetch_collection(collection_file)
-
-#             # apply
-#             lgr.info(f"Applying collection filter from: {collection_file}.")
-#             queries = [q for q in queries if q in collection_df["map"].unique()]
-#             collection_df_intersection = collection_df.query("map in @queries")
-#             #mrna_data = mrna_data.loc[collection_df_intersection["map"]]     
-#             #mrna_data.index = pd.MultiIndex.from_frame(collection_df_intersection)
-        
-            
-#     # Load tabulated data if 'parcellation' is specified
-#     if parcellation:
-#         lgr.info(f"Loading parcellated data: {parcellation}")
-#         parcellation_file = tab_dir / f"neuroquery_{parcellation}.csv.gz"
-#         if parcellation_file.exists():
-#             nq_data = pd.read_csv(parcellation_file, index_col=0)
-                
-#             # Apply 'queries' and/or 'collection' filter to the dataframe index
-#             if queries:
-#                 queries_intersection = nq_data.index.intersection(queries)
-#                 if len(queries_intersection) < len(queries):
-#                     lgr.warning(f"Only {len(queries_intersection)} of {len(queries)} queries are present in the "
-#                                 "parcellated data. These will be kept. Run with 'parcellation=None' to generate "
-#                                 "new maps, but be sure to check online if Neuroquery produces meaningful output!")
-#                 nq_data = nq_data.loc[queries_intersection]
-#                 nq_data_index_orig = nq_data.index.to_list()
-#                 if "collection_df_intersection" in locals():
-#                     nq_data = nq_data.loc[collection_df_intersection["map"]]
-#                     nq_data.index = pd.MultiIndex.from_frame(collection_df_intersection)
-#                     nq_data_index_new = nq_data.index.to_list()
-
-#                 # Load null maps
-#                 if return_nulls:
-#                     lgr.info("Loading precomputed null maps.")
-#                     try:
-#                         with gzip.open(nulls_dir / f"neuroquery_{parcellation}.pkl.gz", "rb") as f:
-#                             tmp = pickle.load(f)                        
-#                         if not all([query in tmp.keys() for query in queries]):
-#                             lgr.warning("Null maps not available for all selected queries. Returning available.")
-#                         if "nq_data_index_new" in locals():
-#                             null_maps = {}
-#                             for name, nulls in tmp.items():
-#                                 if name in nq_data_index_orig:
-#                                     null_maps[nq_data_index_new[nq_data_index_orig.index(name)]] = nulls
-#                         else:
-#                             null_maps = tmp
-#                     except FileNotFoundError:
-#                         lgr.warning("No precomputed null map data found. Did you download it?")
-#                         return_nulls = False
-                          
-#             # cortex only
-#             if cortex_only:
-#                 lgr.info("Keeping only cortical parcels.")
-#                 bool_cx = [True if "_CX_" in c else False for c in nq_data.columns]
-#                 nq_data = nq_data.loc[:, bool_cx]
-#                 if return_nulls:
-#                     null_maps = {name: null_maps[:, bool_cx] for name, null_maps in null_maps.items()}
-            
-#         else:
-#             lgr.warning(f"Parcellated PET data for {parcellation} not found!")
-            
-#     # Regenerate if data not available
-#     if nq_data is None:
-#         lgr.info(f"Using the Neuroquery decoder to generate {len(queries)} brain maps.")
-        
-#         # save dir
-#         if not generated_maps_dir:
-#             # create temp dir if not provided
-#             generated_maps_dir = (pathlib.Path(tempfile.mkdtemp()) / "neuroquery_maps")
-#             generated_maps_dir.mkdir()
-        
-#         # load model
-#         nq_encoder = NeuroQueryModel.from_data_dir(model_dir)
-
-#         # parallelization function
-#         def par_fun(query):
-#             img = nq_encoder(query)["brain_map"]
-#             if not np.allclose(img.get_fdata(), 0):
-#                 img_path = generated_maps_dir / (re.sub("[!@#$%^&*()[]{};:,./<>?\|`~-=+ ]", "_", query) + ".nii.gz")
-#                 img.to_filename(img_path)
-#                 return img_path
-#             else:
-#                 pass
-        
-#         # run
-#         nq_files = Parallel(n_proc)(delayed(par_fun)(query) for query in tqdm(queries, desc=f"Generating ({n_proc}) proc"))
-#         nq_files = [f for f in nq_files if f]
-#         lgr.info(f"Generated {len(nq_files)} valid Neuroquery maps.")
-        
-#         # return
-#         return nq_files
-    
-#     # return
-#     else:
-#         out = nq_data
-#         if "null_maps" in locals():
-#             out = (out, null_maps)
-#         return out
-    
-    
-

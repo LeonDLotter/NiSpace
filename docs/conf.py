@@ -31,6 +31,8 @@ extensions = [
     'sphinx.ext.autosummary',
     'sphinx.ext.viewcode',
     'nbsphinx',
+    'sphinx_copybutton',
+    'sphinx_gallery.load_style'
 ]
 
 napoleon_google_docstring = False   # Turn off googledoc strings
@@ -38,8 +40,17 @@ napoleon_numpy_docstring = True     # Turn on numpydoc strings
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 autodoc_default_options = {'members': True, 'inherited-members': True}
+nbsphinx_execute_arguments = [
+    "--InlineBackend.figure_formats={'svg', 'pdf'}",
+]
+nbsphinx_codecell_lexer = 'ipython3'
 
 # -- Options for HTML output -------------------------------------------------
 
-html_theme = 'sphinx_rtd_theme'
+html_theme = "sphinx_book_theme"
+html_title = project + ' - version ' + release
 html_static_path = ['_static']
+html_theme_options = {
+    "repository_url": "https://github.com/leondlotter/nispace",
+    "use_repository_button": True,
+}

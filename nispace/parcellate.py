@@ -35,6 +35,7 @@ def _array_to_gifti(data):
 class Parcellater():
     """
     Class for parcellating arbitrary volumetric / surface data
+    Copied from neuromaps 0.0.4 and adapted for convenient use in NiSpace.
 
     Parameters
     ----------

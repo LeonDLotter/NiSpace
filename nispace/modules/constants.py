@@ -3,6 +3,7 @@ _PARCS = ["schaefer200melbournes1", "hcpex", "desikankilliany", "destrieux"]
 _PARCS_NICE = ["Schaefer200MelbourneS1", "HCPex", "DesikanKilliany", "Destrieux"]
 _PARCS_DEFAULT = "schaefer200melbournes1"
 
+_DSETS_VERSION = "v0"
 _DSETS = ["pet", "mrna", "brainmap"]
 _DSETS_NICE = ["PET", "mRNA", "BrainMap"]
 _DSETS_MAP = ["pet", "brainmap"]

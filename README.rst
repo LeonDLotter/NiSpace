@@ -1,5 +1,5 @@
 
-``NiSpace``: **N**euro**i**maging **Spa**tial **C**olocalization **E**nvironment
+``NiSpace``: NeuroImaging Spatial Colocalization Environment
 ================================================================================
 
 .. image:: https://zenodo.org/badge/XXXXXXX.svg
@@ -81,17 +81,25 @@ There are of course many other tools available, of which a few are listed below:
 Installation
 ------------
 
-You can install ``NiSpace`` in a Python 3.9+ environment using pip:
+You can install ``NiSpace`` in a Python 3.9+ environment via command line using pip:
 
 .. code-block:: bash
 
    pip install git+https://github.com/LeonDLotter/NiSpace.git@dev
+
+To use the integrated datasets, parcellations, and templates, run the following in Python (only needed one time):
+
+.. code-block:: python
+
+   import nispace
+   nispace.datasets.download_datasets()
 
 
 Citation
 --------
 
 There is no paper for ``NiSpace`` yet. Please cite at least the following when you use our tools in your work:
+
 * `Dukart et al., HBM 2021 <https://doi.org/10.1002/hbm.25244>`_
 * `Markello, Hansen, et al., Nat. Methods 2022 <https://doi.org/10.1038/s41592-022-01625-w>`_
 
@@ -101,7 +109,7 @@ See the documentation's `citation <https://nispace.readthedocs.io/en/latest/cita
 Contact
 -------
 
-Do you have questions, comments or suggestions, or would like to contribute to the toolbox? Feel free to open an issue here on GitHub or [contact me](mailto:leondlotter@gmail.com)! 
+Do you have questions, comments or suggestions, or would like to contribute to the toolbox? Feel free to open an issue here on GitHub or `contact me <mailto:leondlotter@gmail.com>`_! 
 
 
 

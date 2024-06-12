@@ -17,7 +17,7 @@ except ImportError:
     _NEUROHARMONIZE_AVAILABLE = False
 
 from . import lgr
-from .io import parcellate_data
+from .io import parcellate_data, load_distmat
 from .modules.reduce_x import _reduce_dimensions
 from .modules.transform_y import _dummy_code_groups, _num_code_subjects, _get_transform_fun
 from .modules.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats
@@ -30,7 +30,7 @@ from .stats.coloc import *
 from .stats.misc import mc_correction, residuals_nan, zscore_df, permute_groups
 from .cv import _get_dist_dep_splits, _get_rand_splits
 from .plotting import nice_stats_labels
-from .utils import (set_log, load_distmat,fill_nan, _get_df_string, _lower_strip_ws, 
+from .utils import (set_log, fill_nan, _get_df_string, _lower_strip_ws, 
                     get_column_names, lower, print_arg_pairs)
 
 
@@ -1062,30 +1062,30 @@ class NiSpace:
                                    ValueError)
         # case X/Y maps
         if what == ["maps"]:
-            lgr.info(f"Permuting {' & '.join(maps_which)} maps.")
+            perm_info = f"{' & '.join(maps_which)} maps"
         # case Y groups
         elif what == ["groups"]:
-            lgr.info(f"Permuting Y groups.")
+            perm_info = "Y groups"
         # case X sets
         elif what == ["sets"]:
-            lgr.info(f"Permuting X sets.")
+            perm_info = "X sets"
         # case X/Y maps and Y groups
         elif what == ["groups", "maps"]:
             if maps_which != ["X"]:
                 lgr.warning("Y map permutation not allowed in combination with Y group permutation. "
                             "Will set 'maps_which' = 'X' and permute X maps instead.")
                 maps_which = ["X"]
-            lgr.info("Permuting X maps and Y groups.")
+            perm_info = "X maps and Y groups"
         # case X/Y maps and X sets
         elif what == ["maps", "sets"]:
             if maps_which != ["Y"]:
                 lgr.warning("X set permutation not allowed in combination with X map permutation. "
                             "Will set 'maps_which' = 'Y' and permute Y maps instead.")
                 maps_which = ["Y"]
-            lgr.info("Permuting X sets and Y maps.")
+            perm_info = "X sets and Y maps"
         # case X sets and Y groups
         elif what == ["groups", "sets"]:
-            lgr.info("Permuting X sets and Y groups.")
+            perm_info = "X sets and Y groups"
         # case X/Y maps, X sets, and Y groups
         elif what == ["groups", "maps", "sets"]:
             lgr.warning("Cannot perform simultaneous permutation of sets, maps, and groups. "
@@ -1095,6 +1095,7 @@ class NiSpace:
         else:
             lgr.critical_raise(f"'what' = '{what}' not defined!",
                                ValueError)
+        lgr.info(f"Permutation of: {perm_info}.")
             
         ## settings
         method, X_reduction, Y_transform, xsea = self._get_last(
@@ -1314,26 +1315,36 @@ class NiSpace:
             lgr.info("Generating permuted X sets.")
             if sets_X_background is None:
                 sets_X_background = _X_obs.drop_duplicates(ignore_index=True).values
-                lgr.warning(f"No background X sets provided. Will use {sets_X_background.shape[0]} "
-                            "unique X maps as background.")
+                lgr.warning(f"No X background dataset provided. Will use "
+                            f"{sets_X_background.shape[0]} unique X maps as background.")
             else:
                 if not isinstance(sets_X_background, (np.ndarray, pd.DataFrame)):
-                    lgr.critical_raise(f"Background X sets must be of type np.ndarray or pd.DataFrame, "
-                                       f"not {type(sets_X_background)}!",
+                    lgr.critical_raise(f"X background maps must be of type np.ndarray or "
+                                       f"pd.DataFrame, not {type(sets_X_background)}!",
                                        TypeError)
                 if sets_X_background.shape[1] != _X_obs.shape[1]:
-                    lgr.critical_raise(f"Background X sets of wrong shape {sets_X_background.shape}!",
+                    lgr.critical_raise(f"X background maps of wrong shape {sets_X_background.shape}!",
                                        ValueError)
-                sets_X_background = np.array(sets_X_background, dtype=dtype)
                 lgr.info(f"Will use {sets_X_background.shape[0]} provided background maps.")
+                sets_X_background = np.array(sets_X_background, dtype=dtype)
+                if "x" in self._zscore:
+                    lgr.info("Z-standardizing X background maps.")
+                    sets_X_background = zscore_df(sets_X_background, along="rows", force_df=False)
+                
+            # get permuted X sets
+            set_sizes = [set_X.shape[0] for set_X in _X_obs_arr.values()]
+            set_names = list(_X_obs_arr.keys())
+            bg_size = sets_X_background.shape[0]
+            # get permuted indices
             rng = np.random.default_rng(seed)
-            _X_null = []
-            for _ in tqdm(range(n_perm), desc="Permuting X sets", disable=not verbose):
-                temp = {}
-                for set_name, set_X in _X_obs_arr.items():
-                    idc = rng.choice(sets_X_background.shape[0], size=set_X.shape[0], replace=False)
-                    temp[set_name] = sets_X_background[idc, :]
-                _X_null.append(temp)
+            _X_null = [
+                {name: rng.choice(bg_size, size=size, replace=False) 
+                 for name, size in zip(set_names, set_sizes)} 
+                for _ in tqdm(range(n_perm), desc="Permuting X set indices", disable=not verbose)
+            ] 
+            # function to get permuted data from indices
+            def _xsea_perm_data(i):
+                return {name: sets_X_background[idc, :] for name, idc in _X_null[i].items()}
             
         ## check what permuted dataframes we have, if we dont have them, copy observed data (!)
         if (not _X_null) & (not _Y_null) & (not _Z_null):
@@ -1352,6 +1363,8 @@ class NiSpace:
                     lgr.critical_raise(f"Z data of wrong shape ({_Z_obs_arr.shape})!",
                                        ValueError)
                 _Z_null = [_Z_obs_arr] * n_perm
+            else:
+                _Z_null = [None] * n_perm
                 
         ## run null colocalizations
         # function to perform colocalization for one y vector (= per subject); see NiSpace.colocalize()
@@ -1363,10 +1376,16 @@ class NiSpace:
         #n_components = self._coloc_kwargs["n_components"]
         def par_fun(X_null, Y_null, Z_null=None):
             # run colocalization
-            null_colocs_list = [
-                _y_colocalize(X_null, Y_null[i_y, :], Z_null[i_y, :] if Z_null is not None else None)
-                for i_y in range(Y_null.shape[0])
-            ]
+            if Z_null is None:
+                null_colocs_list = [
+                    _y_colocalize(X_null, Y_null[i_y, :], None)
+                    for i_y in range(Y_null.shape[0])
+                ]
+            else:
+                null_colocs_list = [
+                    _y_colocalize(X_null, Y_null[i_y, :], Z_null[i_y, :])
+                    for i_y in range(Y_null.shape[0])
+                ]
             # sort output with helper function, return as array
             null_colocs = _sort_colocs(
                 method=method, 
@@ -1384,19 +1403,28 @@ class NiSpace:
                     if p_from_average_y_coloc == "median":
                         null_colocs[stat] = np.nanmedian(null_colocs[stat], axis=0)[np.newaxis, :]
                     else:
-                        null_colocs[stat] = np.nanmean(null_colocs[stat], axis=0)[np.newaxis,:]
+                        null_colocs[stat] = np.nanmean(null_colocs[stat], axis=0)[np.newaxis, :]
             # return            
             return null_colocs
         
         # run in parallel
-        _colocs_null = Parallel(n_jobs=n_proc)(
-            delayed(par_fun)(_X_null[i], _Y_null[i], _Z_null[i] if _Z_null is not None else None) 
-            for i in tqdm(
-                range(n_perm), 
-                desc=f"Null colocalizations ({method}, {n_proc} proc)", disable=not verbose
+        if not xsea:
+            _colocs_null = Parallel(n_jobs=n_proc)(
+                delayed(par_fun)(_X_null[i], _Y_null[i], _Z_null[i]) 
+                for i in tqdm(
+                    range(n_perm), 
+                    desc=f"Null colocalizations ({method}, {n_proc} proc)", disable=not verbose
+                )
             )
-        )
-
+        else:
+            _colocs_null = Parallel(n_jobs=n_proc)(
+                delayed(par_fun)(_xsea_perm_data(i), _Y_null[i], _Z_null[i]) 
+                for i in tqdm(
+                    range(n_perm), 
+                    desc=f"Null colocalizations ({method}, {n_proc} proc)", disable=not verbose
+                )
+            )
+            
         ## calculate exact p values
         # get values
         p_data, p_data_norm = _get_exact_p_values(
@@ -1656,6 +1684,7 @@ class NiSpace:
     # GET ==========================================================================================
     
     def get_x(self, X_reduction=None, verbose=None):
+        loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         
         X_reduction = self._get_last(X_reduction=X_reduction)
@@ -1671,11 +1700,13 @@ class NiSpace:
                                    KeyError)
                 
         lgr.info(f"Returning X dataframe: \n{print_arg_pairs(X_reduction=X_reduction)}")
+        lgr.setLevel(loglevel)
         return out      
     
     # ----------------------------------------------------------------------------------------------
     
     def get_y(self, Y_transform=None, verbose=None):
+        loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         
         Y_transform = self._get_last(Y_transform=Y_transform)
@@ -1691,11 +1722,13 @@ class NiSpace:
                                    KeyError)
                 
         lgr.info(f"Returning Y dataframe: \n{print_arg_pairs(Y_transform=Y_transform)}")
+        lgr.setLevel(loglevel)
         return out      
     
     # ----------------------------------------------------------------------------------------------
          
     def get_z(self, verbose=None):
+        loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         
         out = self._Z
@@ -1704,6 +1737,7 @@ class NiSpace:
                                ValueError)
             
         lgr.info("Returning Z dataframe.")
+        lgr.setLevel(loglevel)
         return out  
     
     # ----------------------------------------------------------------------------------------------
@@ -1712,6 +1746,7 @@ class NiSpace:
                             X_reduction=None, Y_transform=None, xsea=None,
                             get_nulls=False, nulls_permute_what=None, force_dict=False,
                             verbose=None): 
+        loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         
         method, X_reduction, Y_transform, xsea = self._get_last(
@@ -1810,6 +1845,7 @@ class NiSpace:
         string = print_arg_pairs(method=method, xsea=xsea, X_reduction=X_reduction, 
                                  Y_transform=Y_transform)
         lgr.info(f"Returning colocalizations: \n{string}")
+        lgr.setLevel(loglevel)
         return (out, out_null) if get_nulls else out  
     
     # ----------------------------------------------------------------------------------------------
@@ -1817,6 +1853,7 @@ class NiSpace:
     def get_p_values(self, method=None, permute_what=None, stats=None, xsea=None, 
                      norm=False, mc_method=None, 
                      X_reduction=None, Y_transform=None, force_dict=False, verbose=None): 
+        loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         
         method, X_reduction, Y_transform, xsea, permute_what = self._get_last(
@@ -1865,12 +1902,14 @@ class NiSpace:
                                  mc_method=mc_method, norm=norm, 
                                  X_reduction=X_reduction, Y_transform=Y_transform)
         lgr.info(f"Returning p values: \n{string}")
+        lgr.setLevel(loglevel)
         return out
         
         
     # SAVE, LOAD, COPY =============================================================================
 
     def to_pickle(self, filepath, save_nulls=True, verbose=None):
+        loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         
         ext = os.path.splitext(filepath)[1]
@@ -1891,6 +1930,7 @@ class NiSpace:
         with open_fun(filepath, "wb") as f:
             pickle.dump(self_save, f, pickle.HIGHEST_PROTOCOL)
         lgr.debug(f"Saved NiSpace object to {filepath}.")  
+        lgr.setLevel(loglevel)
 
     # ----------------------------------------------------------------------------------------------
 
@@ -1906,6 +1946,7 @@ class NiSpace:
 
     @staticmethod 
     def from_pickle(filepath, verbose=True):
+        loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, verbose)
         
         ext = os.path.splitext(filepath)[1]
@@ -1923,6 +1964,7 @@ class NiSpace:
         lgr.debug(f"Loaded NiSpace object from {filepath}.")
 
         # return
+        lgr.setLevel(loglevel)
         return juspyce_object
 
 
@@ -2013,6 +2055,7 @@ class NiSpace:
         
     def _get_dist_mat(self, dist_mat_type, centroids=False, downsample_vol=3, 
                       n_proc=None, store=True, verbose=None):
+        loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         
         if dist_mat_type not in ["cv", "null_maps"]:
@@ -2045,6 +2088,7 @@ class NiSpace:
         if store:
             self._parc_dist_mat[dist_mat_type] = dist_mat
             
+        lgr.setLevel(loglevel)
         return dist_mat
     
     # ----------------------------------------------------------------------------------------------

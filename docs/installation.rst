@@ -42,3 +42,17 @@ Alternatively, you can clone the repository and install ``NiSpace`` manually:
    cd NiSpace
    pip install .
 
+
+.. _installation_datasets:
+
+Downloading datasets
+--------------------
+
+To use the integrated datasets, parcellations, and templates, run the following in Python:
+
+.. code-block:: python
+
+   import nispace
+   nispace.datasets.download_datasets()
+
+This will download about 250 MB of data to ``~HOME/nispace-data``. You can adjust the path with the ``nispace_data_path`` keyword argument.

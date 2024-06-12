@@ -1,13 +1,13 @@
 import os
-
+import json
 from pathlib import Path
-import nibabel as nib
+from joblib import Parallel, delayed
+from tqdm.auto import tqdm
 import numpy as np
 import pandas as pd
-from joblib import Parallel, delayed
-from neuromaps import images 
 
-from tqdm.auto import tqdm
+import nibabel as nib
+from neuromaps import images 
 
 from . import lgr
 from .utils import set_log
@@ -29,6 +29,55 @@ def parcellate_data(data,
                     dtype=None,
                     n_proc=1,
                     verbose=True):
+    """
+    Parcellates given imaging data using a specified parcellation.
+
+    Parameters
+    ----------
+    parcellation : str, os.PathLike, nib.Nifti1Image, nib.GiftiImage, or tuple
+        The parcellation image or surfaces, where each region is identified by a unique integer ID.
+    parc_labels : list
+        Labels for the parcellation regions.
+    parc_space : str
+        The space in which the parcellation is defined.
+    parc_hemi : list of str
+        Hemispheres to consider for parcellation, e.g., ["L", "R"].
+    resampling_target : {'data', 'parcellation'}
+        Specifies which image gives the final shape/size.
+    data : list, pd.DataFrame, pd.Series, or np.ndarray
+        The imaging data to be parcellated.
+    data_labels : list
+        Labels for the input data.
+    data_space : str
+        The space in which the input data is defined.
+    drop_background_parcels : bool
+        Whether to drop parcels that contain only background intensity.
+    min_num_valid_datapoints : int, optional
+        Minimum number of valid datapoints required per parcel.
+    min_fraction_valid_datapoints : float, optional
+        Minimum fraction of valid datapoints required per parcel.
+    n_proc : int
+        Number of processors to use for parallel processing.
+    dtype : data-type
+        Desired data type of the output.
+
+    Returns
+    -------
+    pd.DataFrame
+        Parcellated data in a DataFrame.
+
+    Raises
+    ------
+    TypeError
+        If the input data type is not recognized.
+    ValueError
+        If the resampling target is invalid.
+
+    Notes
+    -----
+    This function handles different types of input data, including lists, DataFrames, Series, and ndarrays.
+    It also manages different parcellation formats and resampling targets.
+    """
     verbose = set_log(lgr, verbose)
     
     ## put data into list
@@ -218,3 +267,119 @@ def parcellate_data(data,
         return df_parc.astype(dtype), parcellation
     else:
         return df_parc.astype(dtype)
+
+
+def read_json(json_path):
+    if isinstance(json_path, (str, Path)):
+        with open(json_path) as f:
+            json_dict = json.load(f)
+    else:
+        try:
+            json_dict = dict(json_path)
+        except ValueError:
+            print("Provide path to json-like file or dict-like object!")
+    return json_dict
+
+
+def write_json(json_dict, json_path):
+    if isinstance(json_path, (str, Path)):
+        json_path = Path(json_path)
+        with open(json_path, "w") as f:
+            json.dump(json_dict, f)
+    else:
+        print("Provide path-like object for argument 'json_path'")
+    return json_path
+
+
+def load_img(img):
+    # to tuple
+    if isinstance(img, (str, Path, nib.Nifti1Image, nib.GiftiImage)):
+        img = (img,)
+    elif isinstance(img, list):
+        img = tuple(img)
+    elif isinstance(img, tuple):
+        pass
+    else:
+        raise ValueError("Input must be path, list, tuple or image object")
+    # load
+    img_load = []
+    for i in img:
+        # return if image, to string if path
+        if isinstance(i, (nib.Nifti1Image, nib.GiftiImage)):
+            img_load.append(i)
+            continue
+        elif isinstance(i, Path):
+            i = str(i)
+        # load 
+        if i.endswith(".nii") or i.endswith(".nii.gz"):
+            i = images.load_nifti(i)
+        elif i.endswith(".gii") or i.endswith(".gii.gz"):
+            i = images.load_gifti(i)
+        else:
+            raise ValueError("File format not supported. Path must end with .nii(.gz) or .gii(.gz)")
+        img_load.append(i)
+    # return as tuple if two, or 
+    return img_load[0] if len(img_load) == 1 else tuple(img_load)
+
+
+def load_labels(labels, concat=True, header=None, index=None):
+    # to tuple
+    if isinstance(labels, (str, Path, list, np.ndarray, pd.Series)):
+        labels = (labels,)
+    elif isinstance(labels, tuple):
+        pass
+    else:
+        raise ValueError("Input must be path, list, ndarray or Series")
+    # load
+    labels_load = []
+    for l in labels:
+        # return if array/list, to string if path
+        if isinstance(l, (list, np.ndarray, pd.Series)):
+            labels_load.append(list(l))
+            continue
+        elif isinstance(l, Path):
+            l = str(l)
+        # load 
+        try:
+            l = pd.read_csv(l, header=header, index_col=index).iloc[:,0].to_list()
+        except:
+            raise ValueError("File format not supported. Provide path to csv-like text file.")
+        labels_load.append(l)
+    # return as tuple if two, or list of one
+    if len(labels_load) == 1:
+        labels_load = labels_load[0]
+    else:
+        if concat:
+            labels_load = labels_load[0] + labels_load[1]
+        else:
+            labels_load = tuple(labels_load)
+    return labels_load
+
+
+def load_distmat(distmat):
+    # to tuple
+    if isinstance(distmat, (str, Path, np.ndarray, pd.DataFrame)):
+        distmat = (distmat,)
+    elif isinstance(distmat, list):
+        distmat = tuple(distmat)
+    elif isinstance(distmat, tuple):
+        pass
+    else:
+        raise ValueError("Input must be path, list, tuple, ndarray, or DataFrame")
+    # load
+    distmat_load = []
+    for d in distmat:
+        # return if array, to string if path
+        if isinstance(d, (np.ndarray, pd.DataFrame)):
+            distmat_load.append(np.array(d))
+            continue
+        elif isinstance(d, Path):
+            d = str(d)
+        # load 
+        try:
+            d = pd.read_csv(d, header=None, index_col=None).values
+        except:
+            raise ValueError("File format not supported. Provide path to csv-like text file.")
+        distmat_load.append(d)
+    # return as tuple if two, or as array if one 
+    return distmat_load[0] if len(distmat_load) == 1 else tuple(distmat_load)
