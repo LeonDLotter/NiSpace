@@ -184,6 +184,47 @@ def print_arg_pairs(**kwargs):
         return label_row + "\n" + value_row
 
 
+def mean_by_set_df(df, mean_by_set=True, weighted=True, mean_median="mean"):
+    if not isinstance(df, pd.DataFrame):
+        raise ValueError("df must be a pandas DataFrame")
+    if "set" not in df.index.names:
+        mean_by_set = False
+        
+    if weighted == True:
+        if "weight" not in df.index.names:
+            weighted = False
+             
+    # grouping by set
+    if mean_by_set:
+        grouped = df.groupby(level="set", sort=False) 
+    else:
+        grouped = [("", df)]
+
+    df_mean = []
+    for name, group in grouped:
+        if weighted:
+            weights = group.index.get_level_values('weight')
+            if mean_median == 'mean':
+                weighted_avg = np.ma.average(np.ma.array(group.values, mask=np.isnan(group)), 
+                                             weights=weights, axis=0)
+                result = pd.DataFrame(weighted_avg.reshape(1, -1), columns=group.columns)
+            elif mean_median == 'median':
+                # Weighted median is not directly supported, so we need a custom implementation
+                result = group.apply(lambda x: np.nanmedian(np.repeat(x.values, weights)), axis=0).to_frame().T
+        else:
+            if mean_median == 'mean':
+                result = group.mean(axis=0).to_frame().T
+            elif mean_median == 'median':
+                result = group.median(axis=0).to_frame().T
+        result.index = pd.Index([name], name="map")
+        df_mean.append(result)
+
+    # Concatenate all results
+    df_mean = pd.concat(df_mean)
+
+    return df_mean
+
+
 def get_column_names(df_or_series, force_list=False):
     """
     Get column names from a DataFrame, the name from a Series, or None if input is a numpy array.

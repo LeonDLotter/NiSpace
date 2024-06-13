@@ -13,14 +13,13 @@ from sklearn.preprocessing import minmax_scale
 from utils_datasets import parcellate_reference_dataset
 
 # add nispace to path
-sys.path.append(str(pathlib.Path.cwd().parent))
 from nispace.datasets import fetch_template
 from nispace.utils import _rm_ext
 from nispace.io import write_json
 from nispace.modules.constants import _PARCS_NICE
 
 # nispace data path in home dir
-nispace_data_path = pathlib.Path.home() / "nispace-data"
+nispace_data_path = pathlib.Path.cwd() / "nispace-data"
 
 
 # %% PET image data --------------------------------------------------------------------------------
@@ -99,6 +98,7 @@ for f in pet_local_info.atlas_file[:]:
     pet_img = image.new_img_like(pet_img, pet_img.get_fdata().astype(np.float32), copy_header=True)
     
     # save
+    print(f"Saving to {f_dest}.")
     pet_img.to_filename(f_dest)
 
 # file info to be stored with nispace data
@@ -111,7 +111,9 @@ pet_files_info = pet_files_info.rename(columns={
 })
 pet_files_info["atlas"] = [f.name for f in pet_files]
 pet_files_info = pet_files_info.sort_values("atlas").reset_index(drop=True)
-pet_files_info.to_csv(nispace_data_path / "reference" / "pet" / "metadata.csv", index=None)
+f_dest = nispace_data_path / "reference" / "pet" / "metadata.csv"
+pet_files_info.to_csv(f_dest, index=None)
+print(f"Saved metadata to {f_dest}.")
 
 
 # %% PET tabulated data ----------------------------------------------------------------------------
@@ -146,6 +148,7 @@ pd.DataFrame({
 # UniqueTracers
 collection = {
     "General": [
+        'target-CMRglu_tracer-fdg_n-20_dx-hc_pub-castrillon2023',
         'target-CBF_tracer-asl_n-31_dx-hc_pub-holiga2018', 
         'target-SV2A_tracer-ucbj_n-10_dx-hc_pub-finnema2016', 
         'target-HDAC_tracer-martinostat_n-8_dx-hc_pub-wey2016'],
@@ -184,11 +187,12 @@ collection = {
         'target-VAChT_tracer-feobv_n-18_dx-hc_pub-aghourian2017',
     ],
     "Opiods/Endocannabinoids": [
-        'target-MU_tracer-carfentanil_n-204_dx-hc_pub-kantonen2020',
+        'target-MOR_tracer-carfentanil_n-204_dx-hc_pub-kantonen2020',
+        'target-KOR_tracer-ly2795050_n-28_dx-hc_pub-vijay2018',
         'target-CB1_tracer-omar_n-77_dx-hc_pub-normandin2015',
     ],
     "Histamine": [
-            'target-H3_tracer-gsk189254_n-8_dx-hc_pub-gallezot2017',
+        'target-H3_tracer-gsk189254_n-8_dx-hc_pub-gallezot2017',
     ]
 }
 write_json(
@@ -209,6 +213,7 @@ collection = [
     'target-A4B2_tracer-flubatine_n-30_dx-hc_pub-hillmer2016',
     'target-CB1_tracer-omar_n-77_dx-hc_pub-normandin2015',
     'target-CBF_tracer-asl_n-31_dx-hc_pub-holiga2018',
+    'target-CMRglu_tracer-fdg_n-20_dx-hc_pub-castrillon2023',
     'target-COX1_tracer-ps13_n-11_dx-hc_pub-kim2020',
     'target-D1_tracer-sch23390_n-13_dx-hc_pub-kaller2017',
     'target-D2_tracer-flb457_n-37_dx-hc_pub-smith2019',
@@ -221,9 +226,13 @@ collection = [
     'target-GABAa5_tracer-ro154513_n-10_dx-hc_pub-lukow2022',
     'target-H3_tracer-gsk189254_n-8_dx-hc_pub-gallezot2017',
     'target-HDAC_tracer-martinostat_n-8_dx-hc_pub-wey2016',
+    'target-KOR_tracer-ly2795050_n-28_dx-hc_pub-vijay2018',
     'target-M1_tracer-lsn3172176_n-24_dx-hc_pub-naganawa2021',
-    'target-MU_tracer-carfentanil_n-204_dx-hc_pub-kantonen2020',
-    'target-MU_tracer-carfentanil_n-39_dx-hc_pub-turtonen2021',
+    'target-mGluR5_tracer-abp688_n-22_dx-hc_pub-rosaneto',
+    'target-mGluR5_tracer-abp688_n-28_dx-hc_pub-dubois2015',
+    'target-mGluR5_tracer-abp688_n-73_dx-hc_pub-smart2019'
+    'target-MOR_tracer-carfentanil_n-204_dx-hc_pub-kantonen2020',
+    'target-MOR_tracer-carfentanil_n-39_dx-hc_pub-turtonen2021',
     'target-NET_tracer-mrb_n-10_dx-hc_pub-hesse2017',
     'target-NET_tracer-mrb_n-77_dx-hc_pub-ding2010',
     'target-NMDA_tracer-ge179_n-29_dx-hc_pub-galovic2021',
@@ -232,9 +241,6 @@ collection = [
     'target-VAChT_tracer-feobv_n-18_dx-hc_pub-aghourian2017',
     'target-VAChT_tracer-feobv_n-4_dx-hc_pub-tuominen',
     'target-VAChT_tracer-feobv_n-5_dx-hc_pub-bedard2019',
-    'target-mGluR5_tracer-abp688_n-22_dx-hc_pub-rosaneto',
-    'target-mGluR5_tracer-abp688_n-28_dx-hc_pub-dubois2015',
-    'target-mGluR5_tracer-abp688_n-73_dx-hc_pub-smart2019'
  ]
 pd.DataFrame({
     "set": [f.split("_")[0].split("-")[1] for f in collection],

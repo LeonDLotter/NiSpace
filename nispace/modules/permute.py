@@ -13,7 +13,7 @@ from ..modules.constants import _P_TAILS
 def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=True, standardize=True,
                    n_perm=1000, null_method="moran",
                    dist_mat=None, parc=None, parc_kwargs=None, centroids=False,
-                   seed=None, n_proc=-1, dtype=np.float32):
+                   seed=None, n_proc=-1, dtype=np.float32, verbose=True):
     
     # case null maps given
     if null_maps is not None:
@@ -67,6 +67,7 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
             dist_mat=dist_mat, 
             n_proc=n_proc, 
             seed=seed, 
+            verbose=verbose
         )
             
     # standardize

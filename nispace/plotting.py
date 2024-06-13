@@ -152,6 +152,59 @@ def linewidth_from_data_units(linewidth, axis, reference='x'):
     return linewidth * (length / value_range)
 
 
+def print_significance(ax, p_values, q_values=None, coloc_values=None, 
+                       bold_labels=True,
+                       pq_symbols=["☆", "★"],
+                       pq_size=12,
+                       pq_positions=None,
+                       pq_positions_pad=0,
+                       categorical_axis="y"):
+    
+    p_values = np.array(p_values).flatten()
+    if q_values is not None:
+        q_values = np.array(q_values).flatten()
+    else:
+        q_values = p_values
+    
+    if coloc_values is None and pq_positions is None:
+        pq_symbols = None
+    if pq_symbols is not None:
+        if pq_positions is None:
+            pq_pos_min = np.array(coloc_values).min(axis=0)
+            pq_pos_max = np.array(coloc_values).max(axis=0)
+            pq_pos_mean = np.array(coloc_values).mean(axis=0)
+            pq_positions = [mi - pq_positions_pad if mu < 0 else ma + pq_positions_pad 
+                            for mu, mi, ma in zip(pq_pos_mean, pq_pos_min, pq_pos_max)]
+        else:
+            pq_positions += pq_positions_pad
+    else:
+        pq_positions = [None] * len(p_values)
+            
+    if categorical_axis=="y":
+        labs = ax.get_yticklabels()
+    else:
+        labs = ax.get_xticklabels()
+    lab_positions = np.array([lab.get_position() for lab in labs])
+    
+    for l, l_pos, pq_pos, p, q in zip(labs, lab_positions, pq_positions, p_values, q_values):
+        
+        if bold_labels:
+            if q < 0.05:
+                l.set_weight("bold")
+            elif p < 0.05:
+                l.set_weight("semibold")
+            else:
+                l.set_weight("normal")
+        
+        if pq_pos is not None:
+            kwargs = {"x": l_pos[0], "y": pq_pos} if categorical_axis=="x" else {"x": pq_pos, "y": l_pos[1]}
+            kwargs |= {"ha": "center", "va": "center", "size": pq_size}
+            if q < 0.05:
+                ax.text(s=pq_symbols[1], **kwargs)
+            elif p < 0.05:
+                ax.text(s=pq_symbols[0], **kwargs)
+                
+
 def catplot(fig, ax, data_long, categorical_var="variable", continuous_var="value", group_var=None,
             categorical_axis="x", sort_categories=False, category_order=None,
             color_how="continuous", color_which="auto", color_center=None,
@@ -625,7 +678,7 @@ def heatmap(ax,
         if mapping_shapes is None:
             mapping_shapes = {val: shape for val, shape in zip(data_shapes_unique, ["s", "o", "D"])}
         if not all([shape in ["circle", "o", "square", "s", "diamond", "D", ""] for shape in mapping_shapes.values()]):
-            raise ValueError("mapping_shapes keys must be 'circle'/'o', 'square'/'s', or 'diamond'/'D'")
+            raise ValueError("mapping_shapes values must be 'circle'/'o', 'square'/'s', or 'diamond'/'D'")
         data_shapes = [mapping_shapes[val] if ~pd.isnull(val) else "" for val in data_shapes]
     else:
         data_shapes = [shape] * len(data_x)
@@ -714,10 +767,14 @@ def heatmap(ax,
     # legends
     # colors
     if legend_colors and np.unique(data_colors).shape[0] > 1:
+        cax = legend_colors_kwargs.pop(
+            "cax", 
+            ax.inset_axes((0, 1.1, 1/3, 0.05) if legend_orientation == "horizontal" else (1.05, 2/3, 0.05, 1/3))   
+        )
         legend_colors_kwargs = {
             "label": "Colors",
             "orientation": legend_orientation,
-            "cax": ax.inset_axes((0, 1.1, 1/3, 0.05) if legend_orientation == "horizontal" else (1.05, 2/3, 0.05, 1/3))
+            "cax": cax
         } | legend_colors_kwargs
         plt.colorbar(collection, **legend_colors_kwargs)
     # sizes

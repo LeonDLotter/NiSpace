@@ -30,7 +30,7 @@ from .stats.coloc import *
 from .stats.misc import mc_correction, residuals_nan, zscore_df, permute_groups
 from .cv import _get_dist_dep_splits, _get_rand_splits
 from .plotting import nice_stats_labels
-from .utils import (set_log, fill_nan, _get_df_string, _lower_strip_ws, 
+from .utils import (set_log, fill_nan, _get_df_string, _lower_strip_ws, mean_by_set_df,
                     get_column_names, lower, print_arg_pairs)
 
 
@@ -351,37 +351,7 @@ class NiSpace:
                 lgr.error("DataFrame must have 'set' in its MultiIndex for set-wise calculations")
                 mean_by_set = False
 
-            # Handle grouping by set if required
-            if mean_by_set:
-                grouped = _X.groupby(level="set", sort=False)
-            else:
-                grouped = [("", _X)]  # Wrapping df in a list to use a unified approach below
-
-            _X_reduced = []
-            for name, group in grouped:
-                if weighted_mean:
-                    weights = group.index.get_level_values('weight')
-                    if reduction == 'mean':
-                        weighted_avg = np.average(group, axis=0, weights=weights)
-                        result = pd.DataFrame(weighted_avg.reshape(1, -1), columns=group.columns)
-                    elif reduction == 'median':
-                        # Weighted median is not directly supported, so we need a custom implementation
-                        result = group.apply(lambda x: np.median(np.repeat(x.values, weights)), axis=0).to_frame().T
-                else:
-                    if reduction == 'mean':
-                        result = group.mean(axis=0).to_frame().T
-                    elif reduction == 'median':
-                        result = group.median(axis=0).to_frame().T
-
-                result.index = pd.Index([name], name="map")
-                _X_reduced.append(result)
-
-            # Concatenate all results
-            _X_reduced = pd.concat(_X_reduced)
-            # if mean_by_set:
-            #     _X_reduced.index = pd.Index(_X_reduced.index.get_level_values("set"), name="map")
-            # else:
-            #     _X_reduced.index = _X_reduced.index.droplevel("set")
+            _X_reduced = mean_by_set_df(_X, mean_by_set, weighted_mean, reduction)
             
         ## case PCA / case ICA / case FA
         elif reduction.lower() in ["pca", "ica", "fa"]:
@@ -873,12 +843,19 @@ class NiSpace:
             self._xsea_aggregation_method = xsea_aggregation_method
             
         # Y
+        groups = kwargs.pop("groups", None)
+        subjects = kwargs.pop("subjects", None)
         if not Y:
             if not Y_transform:
                 Y = self._Y
             else:
-                Y = self.get_y(Y_transform=Y_transform, verbose=False)
+                if not self._check_transform(y_trans=Y_transform, raise_error=True):
+                    lgr.warning(f"Y transform '{Y_transform}' was not run before. Running now.")
+                    self.transform_y(Y_transform, groups, subjects)
+                else:
+                    Y = self.get_y(Y_transform=Y_transform, verbose=False)        
         Y_arr = np.array(Y, dtype=dtype)
+        
         # Z
         if not Z:
             Z = self._Z
@@ -1226,7 +1203,8 @@ class NiSpace:
                     n_perm=n_perm, 
                     seed=seed, 
                     n_proc=n_proc, 
-                    dtype=dtype
+                    dtype=dtype,
+                    verbose=verbose
                 )
                 
                 # store null maps
@@ -1979,7 +1957,22 @@ class NiSpace:
                 return False
         else:
             return True
-        
+    
+    # ----------------------------------------------------------------------------------------------
+    
+    def _check_transform(self, ytrans=False, raise_error=True):
+        y_str = _get_df_string("ytrans", ytrans=ytrans)
+        lgr.debug(y_str)
+        if y_str not in self._Y_trans.keys():
+            if raise_error:
+                lgr.critical_raise(f"Y transform = '{ytrans}' not found. Did you run "
+                                   f"NiSpace.transform_y()?!",
+                                   KeyError)
+            else:
+                return False
+        else:
+            return True
+         
     # ----------------------------------------------------------------------------------------------
     
     def _check_colocalize(self, method, stats=None, xdimred=False, ytrans=False, xsea=False, 
