@@ -849,7 +849,7 @@ class NiSpace:
             if not Y_transform:
                 Y = self._Y
             else:
-                if not self._check_transform(y_trans=Y_transform, raise_error=True):
+                if not self._check_transform(ytrans=Y_transform, raise_error=True):
                     lgr.warning(f"Y transform '{Y_transform}' was not run before. Running now.")
                     self.transform_y(Y_transform, groups, subjects)
                 else:
