@@ -1,6 +1,5 @@
 # %% Init
 
-import sys
 import pathlib
 import numpy as np
 import pandas as pd
@@ -10,7 +9,7 @@ from neuromaps.resampling import resample_images
 from nilearn.masking import compute_background_mask
 from sklearn.preprocessing import minmax_scale
 
-from utils_datasets import parcellate_reference_dataset
+from utils_datasets import parcellate_reference_dataset 
 
 # add nispace to path
 from nispace.datasets import fetch_template
@@ -18,7 +17,7 @@ from nispace.utils import _rm_ext
 from nispace.io import write_json
 from nispace.modules.constants import _PARCS_NICE
 
-# nispace data path in home dir
+# nispace data path
 nispace_data_path = pathlib.Path.cwd() / "nispace-data"
 
 
@@ -124,6 +123,7 @@ files.sort()
 parcellate_reference_dataset(
     reference_name="pet",
     reference_files=files,
+    nispace_data_path=nispace_data_path,
     parcs=_PARCS_NICE,
 )
 
@@ -151,7 +151,8 @@ collection = {
         'target-CMRglu_tracer-fdg_n-20_dx-hc_pub-castrillon2023',
         'target-CBF_tracer-asl_n-31_dx-hc_pub-holiga2018', 
         'target-SV2A_tracer-ucbj_n-10_dx-hc_pub-finnema2016', 
-        'target-HDAC_tracer-martinostat_n-8_dx-hc_pub-wey2016'],
+        'target-HDAC_tracer-martinostat_n-8_dx-hc_pub-wey2016'
+    ],
     "Immunity": [
         'target-TSPO_tracer-pbr28_n-6_dx-hc_pub-lois2018', 
         'target-COX1_tracer-ps13_n-11_dx-hc_pub-kim2020'
@@ -230,7 +231,7 @@ collection = [
     'target-M1_tracer-lsn3172176_n-24_dx-hc_pub-naganawa2021',
     'target-mGluR5_tracer-abp688_n-22_dx-hc_pub-rosaneto',
     'target-mGluR5_tracer-abp688_n-28_dx-hc_pub-dubois2015',
-    'target-mGluR5_tracer-abp688_n-73_dx-hc_pub-smart2019'
+    'target-mGluR5_tracer-abp688_n-73_dx-hc_pub-smart2019',
     'target-MOR_tracer-carfentanil_n-204_dx-hc_pub-kantonen2020',
     'target-MOR_tracer-carfentanil_n-39_dx-hc_pub-turtonen2021',
     'target-NET_tracer-mrb_n-10_dx-hc_pub-hesse2017',

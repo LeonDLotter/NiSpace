@@ -120,8 +120,7 @@ def fetch_template(template: str = "mni152",
                    desc: str = None,
                    parcellation: str = None,
                    hemi: Union[List[str], str] = ["L", "R"],
-                   nispace_data_dir: Union[str, pathlib.Path] = None,
-                   dset_version: str = None):
+                   nispace_data_dir: Union[str, pathlib.Path] = None):
     """
     Fetch a brain template.
     
@@ -238,6 +237,7 @@ def fetch_parcellation(parcellation: str = None,
                        resolution: str = None,
                        hemi: Union[List[str], str] = ["L", "R"],
                        cortex_only: bool = False,
+                       subcortex_only: bool = False,
                        return_space: bool = False,
                        return_resolution: bool = False,
                        return_dist_mat: bool = False,
@@ -284,12 +284,14 @@ def fetch_parcellation(parcellation: str = None,
         return string
     
     if not parcellation_files:
-        raise FileNotFoundError("No matching parcellation found. Available: "
-                                f"{''.join([parc_info_str(f, True) for f in base_dir.glob('parc-*[!.txt]')])}")
+        lgr.critical_raise("No matching parcellation found. Available: "
+                           f"{''.join([parc_info_str(f, True) for f in base_dir.glob('parc-*[!.txt]')])}",
+                           FileNotFoundError)
         
     elif len(parcellation_files) > 1:
-        raise FileNotFoundError("Multiple files match your criteria: "
-                                f"{''.join([parc_info_str(f, True) for f in parcellation_files])}")
+        lgr.critical_raise("Multiple files match your criteria: "
+                           f"{''.join([parc_info_str(f, True) for f in parcellation_files])}",
+                           FileNotFoundError)
 
     # Select the first matching file (assuming unique naming)
     parcellation_file = parcellation_files[0]
@@ -341,27 +343,33 @@ def fetch_parcellation(parcellation: str = None,
         density = parcellation_file.name.split(".")[0].split("_")[3].split("-")[1]
         
         # cortex only:
-        if cortex_only:
-            # subcortical indices
+        if cortex_only and subcortex_only:
+            lgr.error("Cannot set both 'cortex_only' and 'subcortex_only' to True. Returning all!")
+            cortex_only = False
+            subcortex_only = False
+            
+        if cortex_only or subcortex_only:
+            # specify the indices * we want to remove *
             labels = load_labels(labels)
-            idc_sc = [int(l.split("_")[0]) for l in labels if "_SC_" in l]
-            lgr.info(f"Removing {len(idc_sc)} subcortical parcels. Will return Nifti1 object instead of path!")
+            str_rm = "_SC_" if cortex_only else "_CX_"
+            idc_rm = [int(l.split("_")[0]) for l in labels if str_rm in l]
+            lgr.info(f"Removing {len(idc_rm)} {'subcortical' if str_rm=='_SC_' else 'cortical'} "
+                     "parcels. Will return Nifti1 object instead of path!")
             # drop from parcellation
             parc = load_img(parcellation_file)
             parc_array = parc.get_fdata()
-            for idx in idc_sc:
+            for idx in idc_rm:
                 parc_array[parc_array==idx] = 0
             parc = image.new_img_like(parc, parc_array, copy_header=True)
             parcellation_file = parc
             # drop from labels
-            labels = [l for l in labels if "_CX_" in l]
+            labels = [l for l in labels if str_rm not in l]
             # drop from dist mat
-            bool_sc = np.array([True if "_SC_" in l else False for l in labels])
+            bool_keep = np.array([False if str_rm in l else True for l in labels])
             dist_mat = load_distmat(dist_mat)
-            dist_mat = dist_mat[np.ix_(~bool_sc, ~bool_sc)]
+            dist_mat = dist_mat[np.ix_(bool_keep, bool_keep)]
             
     # return
-   
     if return_loaded:
         parcellation_file = load_img(parcellation_file)
         if labels is not None:
@@ -524,6 +532,7 @@ def _load_parcellated_data(dataset: str,
                            return_nulls: bool, 
                            nulls_dir: pathlib.Path, 
                            cortex_only: bool,
+                           subcortex_only: bool,
                            standardize: bool) -> Union[pd.DataFrame, Tuple[pd.DataFrame, Dict]]:
     lgr.info(f"Loading parcellated data: {parcellation}")
     parcellation_file = tab_dir / f"{dataset}_{parcellation}.csv.gz"
@@ -569,12 +578,18 @@ def _load_parcellated_data(dataset: str,
             return_nulls = False
 
     # Filter to keep only cortical parcels if requested
-    if cortex_only:
-        lgr.info("Keeping only cortical parcels.")
-        bool_cx = [True if "_CX_" in c else False for c in data.columns]
-        data = data.loc[:, bool_cx]
+    if cortex_only and subcortex_only:
+        lgr.error("Cannot set both 'cortex_only' and 'subcortex_only' to True. Returning all!")
+        cortex_only = False
+        subcortex_only = False
+    
+    if cortex_only or subcortex_only:
+        str_rm = "_SC_" if cortex_only else "_CX_"
+        lgr.info(f"Removing {'subcortical' if str_rm=='_SC_' else 'cortical'} parcels.")
+        bool_keep = np.array([False if str_rm in c else True for c in data.columns])
+        data = data.loc[:, bool_keep]
         if return_nulls:
-            null_maps = {name: null_maps[:, bool_cx] 
+            null_maps = {name: null_maps[:, bool_keep] 
                          for name, null_maps in null_maps.items()}
             
     # Standardize
@@ -658,6 +673,7 @@ def fetch_reference(dataset: str,
                     parcellation: str = None,
                     standardize_parcellated: bool = True,
                     cortex_only: bool = False,
+                    subcortex_only: bool = False,
                     return_nulls: bool = False,
                     return_metadata: bool = False,
                     print_references: bool = True,
@@ -693,7 +709,7 @@ def fetch_reference(dataset: str,
         map_files.sort()
     elif dataset in _DSETS_TAB:
         if parcellation is None:
-            lgr.warning("mRNA data requires a parcellation. Defaulting to: 'Schaefer200MelbourneS1'.")
+            lgr.warning(f"mRNA data requires a parcellation. Defaulting to: '{_PARCS_DEFAULT}'.")
             parcellation = _PARCS_DEFAULT
         if return_nulls:
             lgr.warning("Precomputed null maps are not available for mRNA data. Will not return any.")
@@ -741,6 +757,7 @@ def fetch_reference(dataset: str,
             return_nulls=return_nulls, 
             nulls_dir=nulls_dir, 
             cortex_only=cortex_only,
+            subcortex_only=subcortex_only,
             standardize=standardize_parcellated
         )
     else:

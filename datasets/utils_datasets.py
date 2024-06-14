@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import tempfile
 
-sys.path.append(str(pathlib.Path(__file__).resolve().parent.parent))
 from nispace.modules.constants import _PARCS_NICE
 from nispace.io import parcellate_data
 from nispace.nulls import generate_null_maps
@@ -25,8 +24,8 @@ def download(url, path=None):
     return path
 
 
-def parcellate_reference_dataset(reference_name, reference_files, parcs=_PARCS_NICE, nulls=False):
-    nispace_data_path = pathlib.Path.home() / "nispace-data"
+def parcellate_reference_dataset(reference_name, reference_files, nispace_data_path, parcs=_PARCS_NICE, nulls=False):
+    nispace_data_path = pathlib.Path(nispace_data_path)
     reference_data_path = nispace_data_path / "reference" / reference_name
 
     for parc in parcs:

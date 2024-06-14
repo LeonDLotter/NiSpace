@@ -2,6 +2,7 @@
 
 import sys
 import os
+import shutil
 import pathlib
 import numpy as np
 import pandas as pd
@@ -12,49 +13,64 @@ import abagen
 from utils_datasets import download
 
 # import NiSpace functions
-wd = pathlib.Path().resolve().parent
-sys.path.append(os.path.dirname(os.path.join(wd, "nispace")))
 from nispace.nulls import get_distance_matrix
 
 # nispace data path in home dir
-nispace_data_path = pathlib.Path.home() / "nispace-data"
+nispace_data_path = pathlib.Path.cwd() / "nispace-data"
+
+
+# %% Get parcellations
 
 # parcellation info
 parc_info = pd.DataFrame(columns=["parcellation", "n_parcels", "space", "resolution", "publication"])
 
-
-# %% Volumetric Parcellations
-
 # ==================================================================================================
-# Schaefer 200 parcels 7 networks + Melbourne S1
-info = {
-    "parcellation": "parc-Schaefer200MelbourneS1_n-216_space-mni152_res-1mm.nii.gz", 
-    "n_parcels": 216, 
-    "space": "MNI152", # "FSL" (schaefer), "MNI152NLin2009cAsym" (Melbourne)
-    "resolution": "1mm", 
-    "publication": "10.1093/cercor/bhx179; 0.1038/s41593-020-00711-6",
-    "license": "MIT"
-}
-parc_path = download(
-    "https://github.com/yetianmed/subcortex/raw/master/Group-Parcellation/3T/Cortex-Subcortex/MNIvolumetric/Schaefer2018_200Parcels_7Networks_order_Tian_Subcortex_S1_3T_MNI152NLin2009cAsym_1mm.nii.gz",
-    nispace_data_path / "parcellation" / info["parcellation"]
-)
-labs_tian = pd.read_csv("https://github.com/yetianmed/subcortex/raw/master/Group-Parcellation/3T/Subcortex-Only/Tian_Subcortex_S1_3T_label.txt", header=None)[0].to_list()
-labs_schaefer = pd.read_csv("https://github.com/ThomasYeoLab/CBIG/raw/master/stable_projects/brain_parcellation/Schaefer2018_LocalGlobal/Parcellations/MNI/Centroid_coordinates/Schaefer2018_200Parcels_7Networks_order_FSLMNI152_1mm.Centroid_RAS.csv")["ROI Name"].to_list()
-labs = []
-for l in labs_tian:
-    labs.append(f"{l.split('-')[1].upper()}_SC_{l.split('-')[0]}")
-for l in labs_schaefer:
-    labs.append(f"{l.split('_')[1]}_CX_{l.split('_')[2]}")
-labs = [f"{i}_{l}" for i, l in enumerate(labs, start=1)]
-with open(nispace_data_path / "parcellation" / (info["parcellation"]).replace("nii.gz", "txt"), "w") as f:
-    f.write("\n".join(labs))
-parc_info.loc[len(parc_info)] = info
-os.remove(parc_path)
+# Schaefer + Melbourne
+for schaefer, tian in [(100, "S1"), (200, "S2"), (300, "S3")]:
+    print(f"Schaefer {schaefer} + Melbourne {tian}")
+    parc_path = download(
+        f"https://github.com/yetianmed/subcortex/raw/master/Group-Parcellation/3T/Cortex-Subcortex/"
+        f"MNIvolumetric/Schaefer2018_{schaefer}Parcels_7Networks_order_Tian_Subcortex_{tian}_3T_"
+        "MNI152NLin2009cAsym_1mm.nii.gz"
+    )
+    labs_tian = pd.read_csv(
+        f"https://github.com/yetianmed/subcortex/raw/master/Group-Parcellation/3T/Subcortex-Only/"
+        f"Tian_Subcortex_{tian}_3T_label.txt", 
+        header=None
+    )[0].to_list()
+    labs_schaefer = pd.read_csv(
+        f"https://github.com/ThomasYeoLab/CBIG/raw/master/stable_projects/brain_parcellation/"
+        f"Schaefer2018_LocalGlobal/Parcellations/MNI/Centroid_coordinates/"
+        f"Schaefer2018_{schaefer}Parcels_7Networks_order_FSLMNI152_1mm.Centroid_RAS.csv"
+    )["ROI Name"].to_list()
+    labs = []
+    for l in labs_tian:
+        l = l.split("-")
+        labs.append(l[-1].upper() + "_SC_" + "-".join(l[:-1]))
+    for l in labs_schaefer:
+        l = l.split("_")
+        labs.append(l[1] + "_CX_" + "_".join(l[2:]))
+    labs = [f"{i}_{l}" for i, l in enumerate(labs, start=1)]
+    parc_name = f"parc-Schaefer{schaefer}Melbourne{tian}_n-{len(labs)}_space-mni152_res-1mm.nii.gz"
+    info = {
+        "parcellation": parc_name, 
+        "n_parcels": len(labs), 
+        "space": "MNI152", # "FSL" (schaefer), "MNI152NLin2009cAsym" (Melbourne)
+        "resolution": "1mm", 
+        "publication": "10.1093/cercor/bhx179; 0.1038/s41593-020-00711-6",
+        "license": "MIT"
+    }
+    # Move the downloaded parcellation file to the desired directory
+    destination_path = nispace_data_path / "parcellation" / parc_name
+    shutil.move(parc_path, destination_path)
+    with open(nispace_data_path / "parcellation" / (info["parcellation"]).replace("nii.gz", "txt"), "w") as f:
+        f.write("\n".join(labs))
+    parc_info.loc[len(parc_info)] = info
 # ==================================================================================================
 
 # ==================================================================================================
 # HCPex
+print("HCPex")
 info = {
     "parcellation": "parc-HCPex_n-426_space-mni152_res-1mm.nii.gz", 
     "n_parcels": 426, 
@@ -78,11 +94,9 @@ with open(lab_path, "w") as f:
 parc_info.loc[len(parc_info)] = info
 # ==================================================================================================
 
-
-# %% Surface Parcellations
-
 # ==================================================================================================
 # DesikanKilliany
+print("DesikanKilliany")
 info = {
     "parcellation": "parc-DesikanKilliany_n-68_space-fsaverage_res-10k", 
     "n_parcels": 68, 
@@ -102,8 +116,8 @@ parc = images.relabel_gifti(
      images.construct_shape_gii(images.load_data(desikan["image"][1]), labels=labs, intent='NIFTI_INTENT_LABEL')), 
      background=["Unknown"]
 )
-parc[0].to_filename(nispace_data_path / "parcellation" / info["parcellation"] / (info["parcellation"] + "_hemi-L.gii.gz"))
-parc[1].to_filename(nispace_data_path / "parcellation" / info["parcellation"] / (info["parcellation"] + "_hemi-R.gii.gz"))
+parc[0].to_filename(str(parc_path / (info["parcellation"] + "_hemi-L.gii.gz")))
+parc[1].to_filename(str(parc_path / (info["parcellation"] + "_hemi-R.gii.gz")))
 labs = [l for l in labs if l.lower() not in ["unknown", "medial_wall"]]
 labs_left = [f"{i}_LH_CX_{l}" for i,l in enumerate(labs, start=1)]
 labs_right = [f"{i}_RH_CX_{l}" for i,l in enumerate(labs, start=35)]
@@ -116,6 +130,7 @@ parc_info.loc[len(parc_info)] = info
 
 # ==================================================================================================
 # Destrieux
+print("Destrieux")
 info = {
     "parcellation": "parc-Destrieux_n-148_space-fsaverage_res-10k", 
     "n_parcels": 148, 
@@ -142,8 +157,7 @@ with open(nispace_data_path / "parcellation" / info["parcellation"] / (info["par
 parc_info.loc[len(parc_info)] = info
 # ==================================================================================================
 
-
-# %% Save info
+# Save info
 
 parc_info = parc_info.sort_values("parcellation").reset_index(drop=True)
 parc_info.to_csv(nispace_data_path / "parcellation" / "metadata.csv", index=None)
@@ -172,7 +186,7 @@ for parc in parc_info.parcellation:
         downsample_vol=False,
         centroids=False,
         surf_euclidean=False,
-        n_cores=-1,
+        n_proc=-1,
         dtype=np.float32
     )
     if not isinstance(dist_mat, tuple):
@@ -180,141 +194,6 @@ for parc in parc_info.parcellation:
     else:
         for mat, hemi in zip(dist_mat, ["L", "R"]):
             pd.DataFrame(mat).to_csv(parc_path / f"{parc}_hemi-{hemi}.csv.gz", header=None, index=None)
-
-
-#%% Backup
-
-# # Schaefer 100 parcels 7 networks
-# info = {
-#     "parcellation": "parc-Schaefer100_n-100_space-mni152_res-1mm.nii.gz", 
-#     "n_parcels": 100, 
-#     "space": "MNI152", # "FSL"
-#     "resolution": "1mm", 
-#     "publication": "10.1093/cercor/bhx179",
-#     "license": "MIT"
-# }
-# parc_path = download(
-#     "https://raw.githubusercontent.com/ThomasYeoLab/CBIG/master/stable_projects/brain_parcellation/Schaefer2018_LocalGlobal/Parcellations/MNI/Schaefer2018_100Parcels_7Networks_order_FSLMNI152_1mm.nii.gz",
-#     nispace_data_path / "parcellation" / info["parcellation"]
-# )
-# lab_path = download(
-#     "https://github.com/ThomasYeoLab/CBIG/raw/master/stable_projects/brain_parcellation/Schaefer2018_LocalGlobal/Parcellations/MNI/Centroid_coordinates/Schaefer2018_100Parcels_7Networks_order_FSLMNI152_1mm.Centroid_RAS.csv",
-#     str(nispace_data_path / "parcellation" / info["parcellation"]).replace(".nii.gz", ".txt")
-# )
-# labs = pd.read_csv(lab_path)
-# labs = [f"{l[1]['ROI Label']}_{l[1]['ROI Name'].replace('7Networks_', '')}" for l in labs.iterrows()]
-# with open(lab_path, "w") as f:
-#     f.write("\n".join(labs))
-# parc_info.loc[len(parc_info)] = info
-
-
-# # Schaefer 200 parcels 7 networks
-# info = {
-#     "parcellation": "parc-Schaefer200_n-200_space-mni152_res-1mm.nii.gz", 
-#     "n_parcels": 200, 
-#     "space": "MNI152", # "FSL"
-#     "resolution": "1mm", 
-#     "publication": "10.1093/cercor/bhx179",
-#     "license": "MIT"
-# }
-# parc_path = download(
-#     "https://raw.githubusercontent.com/ThomasYeoLab/CBIG/master/stable_projects/brain_parcellation/Schaefer2018_LocalGlobal/Parcellations/MNI/Schaefer2018_200Parcels_7Networks_order_FSLMNI152_1mm.nii.gz",
-#     nispace_data_path / "parcellation" / info["parcellation"]
-# )
-# lab_path = download(
-#     "https://github.com/ThomasYeoLab/CBIG/raw/master/stable_projects/brain_parcellation/Schaefer2018_LocalGlobal/Parcellations/MNI/Centroid_coordinates/Schaefer2018_200Parcels_7Networks_order_FSLMNI152_1mm.Centroid_RAS.csv",
-#     str(nispace_data_path / "parcellation" / info["parcellation"]).replace(".nii.gz", ".txt")
-# )
-# labs = pd.read_csv(lab_path)
-# labs = [f"{l[1]['ROI Label']}_{l[1]['ROI Name'].replace('7Networks_', '')}" for l in labs.iterrows()]
-# with open(lab_path, "w") as f:
-#     f.write("\n".join(labs))
-# parc_info.loc[len(parc_info)] = info
-
-
-# # Schaefer 300 parcels 7 networks
-# info = {
-#     "parcellation": "parc-Schaefer300_n-300_space-mni152_res-1mm.nii.gz", 
-#     "n_parcels": 300, 
-#     "space": "MNI152", # "FSL"
-#     "resolution": "1mm", 
-#     "publication": "10.1093/cercor/bhx179",
-#     "license": "MIT"
-# }
-# parc_path = download(
-#     "https://raw.githubusercontent.com/ThomasYeoLab/CBIG/master/stable_projects/brain_parcellation/Schaefer2018_LocalGlobal/Parcellations/MNI/Schaefer2018_300Parcels_7Networks_order_FSLMNI152_1mm.nii.gz",
-#     nispace_data_path / "parcellation" / info["parcellation"]
-# )
-# lab_path = download(
-#     "https://github.com/ThomasYeoLab/CBIG/raw/master/stable_projects/brain_parcellation/Schaefer2018_LocalGlobal/Parcellations/MNI/Centroid_coordinates/Schaefer2018_300Parcels_7Networks_order_FSLMNI152_1mm.Centroid_RAS.csv",
-#     str(nispace_data_path / "parcellation" / info["parcellation"]).replace(".nii.gz", ".txt")
-# )
-# labs = pd.read_csv(lab_path)
-# labs = [f"{l[1]['ROI Label']}_{l[1]['ROI Name'].replace('7Networks_', '')}" for l in labs.iterrows()]
-# with open(lab_path, "w") as f:
-#     f.write("\n".join(labs))
-# parc_info.loc[len(parc_info)] = info
-
-
-# # Schaefer 100 parcels 7 networks + Melbourne S1
-# info = {
-#     "parcellation": "parc-Schaefer100MelbourneS1_n-116_space-mni152_res-1mm.nii.gz", 
-#     "n_parcels": 116, 
-#     "space": "MNI152", # "FSL" (schaefer), "MNI152NLin2009cAsym" (Melbourne)
-#     "resolution": "1mm", 
-#     "publication": "10.1093/cercor/bhx179; 0.1038/s41593-020-00711-6",
-#     "license": "MIT"
-# }
-# parc_path = download(
-#     "https://github.com/yetianmed/subcortex/raw/master/Group-Parcellation/3T/Cortex-Subcortex/MNIvolumetric/Schaefer2018_100Parcels_7Networks_order_Tian_Subcortex_S1_3T_MNI152NLin2009cAsym_1mm.nii.gz",
-#     nispace_data_path / "parcellation" / info["parcellation"]
-# )
-# lab_path = download(
-#     "https://github.com/yetianmed/subcortex/raw/master/Group-Parcellation/3T/Subcortex-Only/Tian_Subcortex_S1_3T_label.txt",
-#     str(nispace_data_path / "parcellation" / info["parcellation"]).replace(".nii.gz", ".txt")
-# )
-# labs_tian = np.loadtxt(lab_path, "str").tolist()
-# labs_schaefer = np.loadtxt(nispace_data_path / "parcellation" / "parc-Schaefer100_n-100_space-mni152_res-1mm.txt", str).tolist()
-# labs = []
-# for l in labs_tian:
-#     labs.append(f"{l.split('-')[1].upper()}_{l.split('-')[0]}")
-# for l in labs_schaefer:
-#     labs.append("_".join(l.split("_")[1:]))
-# labs = [f"{i}_{l}" for i, l in enumerate(labs, start=1)]
-# with open(lab_path, "w") as f:
-#     f.write("\n".join(labs))
-# parc_info.loc[len(parc_info)] = info
-
-
-# # Schaefer 300 parcels 7 networks + Melbourne S2
-# info = {
-#     "parcellation": "parc-Schaefer300MelbourneS2_n-332_space-mni152_res-1mm.nii.gz", 
-#     "n_parcels": 332, 
-#     "space": "MNI152", # "FSL" (schaefer), "MNI152NLin2009cAsym" (Melbourne)
-#     "resolution": "1mm", 
-#     "publication": "10.1093/cercor/bhx179; 0.1038/s41593-020-00711-6",
-#     "license": "MIT"
-# }
-# parc_path = download(
-#     "https://github.com/yetianmed/subcortex/raw/master/Group-Parcellation/3T/Cortex-Subcortex/MNIvolumetric/Schaefer2018_300Parcels_7Networks_order_Tian_Subcortex_S2_3T_MNI152NLin2009cAsym_1mm.nii.gz",
-#     nispace_data_path / "parcellation" / info["parcellation"]
-# )
-# lab_path = download(
-#     "https://github.com/yetianmed/subcortex/raw/master/Group-Parcellation/3T/Subcortex-Only/Tian_Subcortex_S2_3T_label.txt",
-#     str(nispace_data_path / "parcellation" / info["parcellation"]).replace(".nii.gz", ".txt")
-# )
-# labs_tian = np.loadtxt(lab_path, "str").tolist()
-# labs_schaefer = np.loadtxt(nispace_data_path / "parcellation" / "parc-Schaefer300_n-300_space-mni152_res-1mm.txt", str).tolist()
-# labs = []
-# for l in labs_tian:
-#     labs.append(f"{l.split('-')[1].upper()}_{l.split('-')[0]}")
-# for l in labs_schaefer:
-#     labs.append("_".join(l.split("_")[1:]))
-# labs = [f"{i}_{l}" for i, l in enumerate(labs, start=1)]
-# with open(lab_path, "w") as f:
-#     f.write("\n".join(labs))
-# parc_info.loc[len(parc_info)] = info
-
 
 
 # %%

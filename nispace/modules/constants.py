@@ -1,7 +1,9 @@
 
-_PARCS = ["schaefer200melbournes1", "hcpex", "desikankilliany", "destrieux"]
-_PARCS_NICE = ["Schaefer200MelbourneS1", "HCPex", "DesikanKilliany", "Destrieux"]
-_PARCS_DEFAULT = "schaefer200melbournes1"
+_PARCS = ["schaefer100melbournes1", "schaefer200melbournes2", "schaefer300melbournes3", "hcpex", 
+          "desikankilliany", "destrieux"]
+_PARCS_NICE = ["Schaefer100MelbourneS1", "Schaefer200MelbourneS2", "Schaefer300MelbourneS3", "HCPex", 
+               "DesikanKilliany", "Destrieux"]
+_PARCS_DEFAULT = "schaefer200melbournes2"
 
 _DSETS_VERSION = "v0"
 _DSETS = ["pet", "mrna", "brainmap"]

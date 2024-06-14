@@ -9,14 +9,12 @@ from abagen import get_expression_data
 
 from utils_datasets import download
 
-# add nispace to path
-sys.path.append(str(pathlib.Path.cwd().parent))
 from nispace.modules.constants import _PARCS_NICE
 from nispace.datasets import fetch_parcellation
 from nispace.io import write_json
 
-# nispace data path in home dir
-nispace_data_path = pathlib.Path.home() / "nispace-data"
+# nispace data path
+nispace_data_path = pathlib.Path.cwd() / "nispace-data"
 
 
 # %% mRNA tabulated data ---------------------------------------------------------------------------
@@ -61,7 +59,7 @@ for f in mRNA_tab_files:
     all_genes.update(pd.read_csv(f, index_col=0).index.unique())
 all_genes = pd.Series(sorted(list(all_genes)), name="map")
 all_genes.to_csv(nispace_data_path / "reference" / "mrna" / "collection-All.txt", index=False)
-
+ 
 # PsychEncode cell types: Darmanis 2015 / Lake 2016 vs.  Lake 2018
 for collection, save_name in zip(
     [pd.read_excel("http://resource.psychencode.org/Datasets/Derived/SC_Decomp/DER-19_Single_cell_markergenes_TPM.xlsx") \

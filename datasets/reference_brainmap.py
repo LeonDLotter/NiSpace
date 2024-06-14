@@ -9,14 +9,12 @@ from nimare.dataset import Dataset
 
 from utils_datasets import parcellate_reference_dataset
 
-# add nispace to path
-sys.path.append(str(pathlib.Path.cwd().parent))
 from nispace.utils import _rm_ext
 from nispace.io import write_json
 from nispace.modules.constants import _PARCS_NICE
 
 # nispace data path in home dir
-nispace_data_path = pathlib.Path.home() / "nispace-data"
+nispace_data_path = pathlib.Path.cwd() / "nispace-data"
 nispace_brainmap_map_path = nispace_data_path / "reference" / "brainmap" / "map"
 nispace_brainmap_tab_path = nispace_data_path / "reference" / "brainmap" / "tab"
 
@@ -160,6 +158,7 @@ files.sort()
 parcellate_reference_dataset(
     reference_name="brainmap",
     reference_files=files,
+    nispace_data_path=nispace_data_path,
     parcs=_PARCS_NICE,
 )
 
