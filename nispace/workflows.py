@@ -171,17 +171,17 @@ def simple_colocalization(y,
     ## COLOCALIZE
     if not status["colocalize"]:
         for method in colocalization_method:
-            colocalize_kwargs = dict(
+            colocalize_kwargs_curr = dict(
                 method=method,
                 Z_regression=True,
             ) | colocalize_kwargs
-            nsp.colocalize(**colocalize_kwargs)
+            nsp.colocalize(**colocalize_kwargs_curr)
         status["colocalize"] = True
         
     ## PERMUTE
     if not status["permute"]:
         for method in colocalization_method:
-            permute_kwargs = dict(
+            permute_kwargs_curr = dict(
                 what="maps",
                 maps_which="X",
                 maps_nulls=null_maps,
@@ -190,7 +190,7 @@ def simple_colocalization(y,
                 n_perm=n_perm,
                 seed=seed,
             ) | permute_kwargs
-            nsp.permute(**permute_kwargs)
+            nsp.permute(**permute_kwargs_curr)
         permuted = nsp._get_last(perm=None)
         status["permute"] = True  
     
@@ -204,11 +204,11 @@ def simple_colocalization(y,
     ## VIZ
     if plot:
         for method in colocalization_method:
-            plot_kwargs = dict(
+            plot_kwargs_curr = dict(
                 method=method,
                 permute_what=permuted,
             ) | plot_kwargs
-            nsp.plot(**plot_kwargs)
+            nsp.plot(**plot_kwargs_curr)
         
     ## RETURN
     colocs = {method: nsp.get_colocalizations(method) 
@@ -372,19 +372,19 @@ def group_comparison(y, design,
     ## COLOCALIZE
     if not status["colocalize"]:
         for method in colocalization_method:
-            colocalize_kwargs = dict(
+            colocalize_kwargs_curr = dict(
                 method=method,
                 Y_transform=group_comparison,
                 Z_regression=True,
                 verbose=verbose,
             ) | colocalize_kwargs
-            nsp.colocalize(**colocalize_kwargs)
+            nsp.colocalize(**colocalize_kwargs_curr)
         status["colocalize"] = True
         
     ## PERMUTE
     if not status["permute"]:
         for method in colocalization_method:
-            permute_kwargs = dict(
+            permute_kwargs_curr = dict(
                     what="groups",
                     method=method,
                     Y_transform=group_comparison,
@@ -394,7 +394,7 @@ def group_comparison(y, design,
                     seed=seed,
                     verbose=verbose,
                 ) | permute_kwargs
-            nsp.permute(**permute_kwargs)
+            nsp.permute(**permute_kwargs_curr)
         permute_what = "groups"
         status["permute"] = True  
     
@@ -409,13 +409,13 @@ def group_comparison(y, design,
     ## VIZ
     if plot:
         for method in colocalization_method:
-            plot_kwargs = dict(
+            plot_kwargs_curr = dict(
                 method=method,
                 permute_what=permute_what,
                 Y_transform=group_comparison,
                 verbose=verbose,
             ) | plot_kwargs
-            nsp.plot(**plot_kwargs)
+            nsp.plot(**plot_kwargs_curr)
         
     ## RETURN
     colocs = {method: nsp.get_colocalizations(method, Y_transform=group_comparison) 
@@ -469,7 +469,7 @@ def simple_xsea(y,
             except:
                 x_background = None
     if x_background is None:
-        lgr.warning(f"Could not fetch background dataset for {x}!")
+        lgr.warning(f"Could not fetch background dataset for input x!")
     
     ## We go the easy way and just call .simple_colocalization() with some kwargs:
     colocs, p_values, p_fdr_values, nsp = simple_colocalization(

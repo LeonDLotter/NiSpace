@@ -265,18 +265,19 @@ def find_surf_parc_centroids(parc, parc_hemi, parc_density="10k"):
     if isinstance(parc, (tuple, list)) & (len(parc)==2):
         parc = (load_gifti(parc[0]), load_gifti(parc[1]))
         parc_hemi = ["L", "R"]
-        print("Two-hemispheric parcellation provided, assuming order ['L', 'R'].")
+        lgr.info("Two-hemispheric parcellation provided, assuming order ['L', 'R'].")
     elif isinstance(parc, (str, nib.GiftiImage)):
         parc = (load_gifti(parc),)
         if len(parc_hemi)>1:
-            print("Provided parcellation is one hemisphere but parc_label indicated both hemispheres. "
-                  "Setting parc_hemi to ['L']!")
+            lgr.warning("Provided parcellation is one hemisphere but parc_label indicated both hemispheres. "
+                        "Setting parc_hemi to ['L']!")
             parc_hemi = ["L"]
         else:
-            print(f"One-hemispheric parcellation provided (hemisphere: {parc_hemi})")
+            lgr.info(f"One-hemispheric parcellation provided (hemisphere: {parc_hemi})")
     else:
-        print(f"Parcellation must be provided as (tuple/list of) path(s) or Gifti image(s), "
-            f"not {type(parc)}!")
+        lgr.critical_raise(f"Parcellation must be provided as (tuple/list of) path(s) or Gifti image(s), "
+                           f"not {type(parc)}!",
+                           TypeError)
 
     # get standard surface
     surfaces = fetch_fsaverage(parc_density)["pial"]
@@ -287,7 +288,8 @@ def find_surf_parc_centroids(parc, parc_hemi, parc_density="10k"):
     elif len(parc_hemi)==2:
         surfaces = (load_gifti(surfaces[0]), load_gifti(surfaces[1]))
     else:
-        print("Problem with 'parc_hemi'. Provide ['L'], ['R'], or ['L', 'R']")
+        lgr.critical_raise("Problem with 'parc_hemi'. Provide ['L'], ['R'], or ['L', 'R']",
+                           ValueError)
     
     centroids = []
     # iterate hemispheres

@@ -27,7 +27,7 @@ def _get_coloc_stats(method, permuted_only=False, drop_optional=False):
 
 def _get_colocalize_fun(method, regr_z=True,
                         xsea=False, xsea_method="mean",
-                        r_to_z=True, r_equal_one="raise", adj_r2=True, mlr_individual=False, 
+                        r_to_z=True, r_equal_one="raise", adj_r2=True, mlr_individual=True, 
                         parcel_mask_regularized=None, parcel_tr_te_splits=None, parcel_train_pct=None, 
                         n_components=10,
                         seed=None, verbose=False, dtype=np.float32, **kwargs):

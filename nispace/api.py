@@ -1322,9 +1322,17 @@ class NiSpace:
                  for name, size in zip(set_names, set_sizes)} 
                 for _ in tqdm(range(n_perm), desc="Permuting X set indices", disable=not verbose)
             ] 
-            # function to get permuted data from indices
+            # function to get permuted data from indices. necessary to handle large X set arrays
             def _xsea_perm_data(i):
                 return {name: sets_X_background[idc, :] for name, idc in _X_null[i].items()}
+            
+        # catch case in which xsea is performed (i.e., x array is dict) but sets are not permuted
+        elif "sets" not in what and isinstance(_X_obs_arr, dict):
+            lgr.info("Running X Set Enrichment Analysis (XSEA) without set permutation.")
+            # function to get _X_null data, only necessary for compatibility with the above
+            def _xsea_perm_data(i):
+                return _X_null[i]
+            
             
         ## check what permuted dataframes we have, if we dont have them, copy observed data (!)
         if (not _X_null) & (not _Y_null) & (not _Z_null):
@@ -1867,7 +1875,7 @@ class NiSpace:
                 norm=norm,
                 mc=mc_method,
             )
-            if p_str not in self._p_colocs.keys() and "individual" not in p_str:
+            if p_str not in self._p_colocs.keys() and "coloc-mlr_stat-individual" not in p_str:
                 available = "\n".join(list(self._p_colocs.keys()))
                 lgr.critical_raise(f"Colocalization p values for '{p_str}' not found. "
                                    f"Available: {available}",
@@ -1983,44 +1991,50 @@ class NiSpace:
             stats = _get_coloc_stats(method, drop_optional=True)
         elif isinstance(stats, str):
             stats = [stats]
-        colocs_strs = [_get_df_string("coloc", xdimred=xdimred, ytrans=ytrans, method=method, 
-                                      stat=stat, xsea=xsea) 
-                       for stat in stats]
-        lgr.debug(colocs_strs)
-        if not all([coloc_str in self._colocs.keys() for coloc_str in colocs_strs]):
-            if raise_error:
-                lgr.critical_raise(f"(Some) colocalizations for method = '{method}', X dimensionality "
-                                   f"reduction = '{xdimred}', and Y transform = '{ytrans}' not found. "
-                                   f"Did you run NiSpace.colocalize()?!",
-                                   KeyError)
-            else:
-                return False
-        else:
-            return True
+            
+        for stat in stats:
+            coloc_str = _get_df_string("coloc", xdimred=xdimred, ytrans=ytrans, method=method, 
+                                       stat=stat, xsea=xsea) 
+            lgr.debug(coloc_str)
+            if coloc_str not in self._colocs.keys():
+                if raise_error:
+                    lgr.critical_raise(
+                        f"Colocalizations for method = '{method}', stat = '{stat}', "
+                        f"X dimensionality reduction = '{xdimred}', and Y transform = '{ytrans}' "
+                        f"not found. Did you run NiSpace.colocalize()?!",
+                        KeyError
+                    )
+                else:
+                    return False
+                
+        return True
     
     # ----------------------------------------------------------------------------------------------
     
     def _check_permute(self, method, permute_what, mc_method=None, xsea=False,
                        stats=None, xdimred=False, ytrans=False, raise_error=True):
         if stats is None:
-            stats = _get_coloc_stats(method, drop_optional=True)
+            stats = _get_coloc_stats(method, drop_optional=True, permuted_only=True)
         elif isinstance(stats, str):
             stats = [stats]
-        p_colocs_strs = [_get_df_string("p", xdimred=xdimred, ytrans=ytrans, method=method, stat=stat,
-                                        perm=permute_what, mc=mc_method, xsea=xsea).lower() 
-                       for stat in stats]
-        lgr.debug(p_colocs_strs)
-        if not all([coloc_str in self._p_colocs.keys() for coloc_str in p_colocs_strs]):
-            if raise_error:
-                lgr.critical_raise(f"(Some) p values for permute_what = '{permute_what}', method = '{method}', "
-                                   f"xsea = {xsea}, X dimensionality reduction = '{xdimred}', "
-                                   f"Y transform = '{ytrans}', and mc_method = '{mc_method}' "
-                                   f"not found. Did you run NiSpace.permute()?!",
-                                   KeyError)
-            else:
-                return False
-        else:
-            return True
+ 
+        for stat in stats:
+            p_str = _get_df_string("p", xdimred=xdimred, ytrans=ytrans, method=method, stat=stat,
+                                    perm=permute_what, mc=mc_method, xsea=xsea).lower()
+            lgr.debug(p_str)
+            if p_str not in self._p_colocs:
+                if raise_error:
+                    lgr.critical_raise(
+                        f"P values for permute_what = '{permute_what}', method = '{method}', "
+                        f"stat = '{stat}', xsea = {xsea}, X dimensionality reduction = '{xdimred}', "
+                        f"Y transform = '{ytrans}', and mc_method = '{mc_method}' not found. "
+                        "Did you run NiSpace.permute()?!",
+                        KeyError
+                    )
+                else:
+                    return False
+                
+        return True
         
     # ----------------------------------------------------------------------------------------------
     

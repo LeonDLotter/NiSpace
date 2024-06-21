@@ -767,10 +767,10 @@ def heatmap(ax,
     # legends
     # colors
     if legend_colors and np.unique(data_colors).shape[0] > 1:
-        cax = legend_colors_kwargs.pop(
-            "cax", 
-            ax.inset_axes((0, 1.1, 1/3, 0.05) if legend_orientation == "horizontal" else (1.05, 2/3, 0.05, 1/3))   
-        )
+        if "cax" in legend_colors_kwargs:
+            cax = legend_colors_kwargs.pop("cax")
+        else:
+            cax = ax.inset_axes((0, 1.1, 1/3, 0.05) if legend_orientation == "horizontal" else (1.05, 2/3, 0.05, 1/3))   
         legend_colors_kwargs = {
             "label": "Colors",
             "orientation": legend_orientation,
