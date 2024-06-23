@@ -10,12 +10,13 @@ from nilearn import image
 from nilearn import datasets 
 import matplotlib.pyplot as plt
 
-# add nispace to path
-sys.path.append(str(pathlib.Path.cwd().parent))
 from nispace.io import parcellate_data
+from nispace.modules.constants import _PARCS_NICE
+
+from utils_datasets import parcellate_reference_dataset
 
 # nispace data path in home dir
-nispace_data_path = pathlib.Path.home() / "nispace-data"
+nispace_data_path = pathlib.Path.cwd() / "nispace-data"
 
 
 # %% MNI152 - We use: MNI152NLin2009cAsym as does fMRIprep by default!
@@ -50,42 +51,14 @@ for f in mni152:
 
 # %% GM parcellated tissue probability data
 
-for parc in (nispace_data_path / "parcellation").glob("parc*[!txt]"): 
-    print(parc)
-    
-    if not parc.is_dir():
-        gmprob_tab = parcellate_data(
-            data=nispace_data_path / "template" / "mni152" / "map" / f"MNI152NLin2009cAsym_desc-gmprob_res-1mm.nii.gz",
-            data_labels=["GM_prob"],
-            data_space="MNI152",
-            parcellation=parc,
-            parc_space="MNI152",
-            parc_labels=np.loadtxt(str(parc).replace("nii.gz", "txt"), str).tolist(), 
-            resampling_target="data",
-            n_proc=-1,
-            dtype=np.float32
-        )
-    else:
-        gmprob_tab = parcellate_data(
-            data=nispace_data_path / "template" / "mni152" / "map" / f"MNI152NLin2009cAsym_desc-gmprob_res-1mm.nii.gz",
-            data_labels=["GM_prob"],
-            data_space="MNI152",
-            parcellation=(
-                parc / (parc.name + "_hemi-L.gii.gz"),
-                parc / (parc.name + "_hemi-R.gii.gz")
-            ),
-            parc_space="fsaverage",
-            parc_hemi=["L", "R"],
-            parc_labels= \
-                np.loadtxt(str(parc / (parc.name + "_hemi-L.txt")), str).tolist() + \
-                np.loadtxt(str(parc / (parc.name + "_hemi-R.txt")), str).tolist(),
-            resampling_target="parcellation",
-            n_proc=-1,
-            dtype=np.float32
-        )
-    
-    gmprob_tab.to_csv(nispace_data_path / "template" / "mni152" / "tab" / f"gmprob_{parc.name.split('_')[0].split('-')[1]}.csv")
-
+parcellate_reference_dataset(
+    reference_name="gmprob",
+    reference_files=[nispace_data_path / "template" / "mni152" / "map" / f"MNI152NLin2009cAsym_desc-gmprob_res-1mm.nii.gz"],
+    reference_data_path=nispace_data_path / "template" / "mni152",
+    nispace_data_path=nispace_data_path,
+    data_labels=["gmprob"],
+    parcs=_PARCS_NICE,
+)
 
 # %% FSAVERAGE - We use: fsaverage5 as does nilearn by default!
 
@@ -114,35 +87,16 @@ for f in fsa:
 
 # %% parcellated thickness data
 
-for parc in (nispace_data_path / "parcellation").glob("parc*[!txt]"): 
-    print(parc)
-    
-    if parc.is_dir():
-        thick_tab = parcellate_data(
-            data=(
-                nispace_data_path / "template" / "fsaverage" / "map" / f"fsaverage_desc-thick_hemi-L_res-10k.gii.gz",
-                nispace_data_path / "template" / "fsaverage" / "map" / f"fsaverage_desc-thick_hemi-R_res-10k.gii.gz"
-            ),
-            data_labels=["thick"],
-            data_space="fsaverage",
-            parcellation=(
-                parc / (parc.name + "_hemi-L.gii.gz"),
-                parc / (parc.name + "_hemi-R.gii.gz")
-            ),
-            parc_space="fsaverage",
-            parc_hemi=["L", "R"],
-            parc_labels= \
-                np.loadtxt(str(parc / (parc.name + "_hemi-L.txt")), str).tolist() + \
-                np.loadtxt(str(parc / (parc.name + "_hemi-R.txt")), str).tolist(),
-            resampling_target="parcellation",
-            n_proc=-1,
-            dtype=np.float32
-        )
-    else:
-        print("skip")
-        continue
-    
-    thick_tab.to_csv(nispace_data_path / "template" / "fsaverage" / "tab" / f"thick_{parc.name.split('_')[0].split('-')[1]}.csv")
-
+# parcellate_reference_dataset(
+#     reference_name="thick",
+#     reference_files=[
+#         (nispace_data_path / "template" / "fsaverage" / "map" / f"fsaverage_desc-thick_hemi-L_res-10k.gii.gz",
+#          nispace_data_path / "template" / "fsaverage" / "map" / f"fsaverage_desc-thick_hemi-R_res-10k.gii.gz")
+#     ],
+#     reference_data_path=nispace_data_path / "template" / "fsaverage",
+#     nispace_data_path=nispace_data_path,
+#     data_labels=["thick"],
+#     parcs=["Destrieux", "DesikanKilliany"],
+# )
 
 # %%

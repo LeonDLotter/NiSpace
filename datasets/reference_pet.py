@@ -179,10 +179,8 @@ collection = {
         'target-5HT6_tracer-gsk215083_n-30_dx-hc_pub-radhakrishnan2018',
         'target-5HTT_tracer-dasb_n-100_dx-hc_pub-beliveau2017'
     ],
-    "Noradrenaline": [
+    "Noradrenaline/Acetylcholine": [
         'target-NET_tracer-mrb_n-77_dx-hc_pub-ding2010',
-    ],
-    "Actylcholine": [
         'target-A4B2_tracer-flubatine_n-30_dx-hc_pub-hillmer2016',
         'target-M1_tracer-lsn3172176_n-24_dx-hc_pub-naganawa2021',
         'target-VAChT_tracer-feobv_n-18_dx-hc_pub-aghourian2017',
