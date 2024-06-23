@@ -9,13 +9,11 @@ from tqdm.auto import tqdm
 from nilearn.datasets import fetch_abide_pcp
 
 # add nispace to path
-sys.path.append(str(pathlib.Path.cwd().parent))
 from nispace.datasets import fetch_parcellation
 from nispace.io import parcellate_data
-from nispace import NiSpace
 
 # nispace data path in home dir
-nispace_data_path = pathlib.Path.home() / "nispace-data"
+nispace_data_path = pathlib.Path.cwd() / "nispace-data"
 
 
 # %% Download ABIDE data from Nilearn
@@ -70,10 +68,14 @@ data_pheno = data_pheno[["subject", "site", "site_num", "dx", "dx_num", "dsm_iv_
 data_pheno = data_pheno.replace(-9999, np.nan)
 print(data_pheno.head(5))
 
+
 # %% Parcellate
 
-# parcellation
-parc, parc_labels = fetch_parcellation("Schaefer200MelbourneS1")
+# parcellation to use
+parc_name = "Schaefer200MelbourneS2"
+
+# get parcellation
+parc, parc_labels = fetch_parcellation(parc_name, return_loaded=True)
 
  # parcellate  
 abide_tab = parcellate_data(
@@ -85,16 +87,17 @@ abide_tab = parcellate_data(
     parc_space="MNI152",
     resampling_target="data",
     drop_background_parcels=True,
-    min_num_valid_datapoints=10,
+    min_num_valid_datapoints=5,
     min_fraction_valid_datapoints=0.1,
     n_proc=-1,
     dtype=np.float32,
 )
 
+
 # %% Save
 
 # save parcellated data
-abide_tab.to_csv(nispace_data_path / "example" / "example-abide_parc-Schaefer200MelbourneS1.csv.gz")
+abide_tab.to_csv(nispace_data_path / "example" / f"example-abide_parc-{parc_name}.csv.gz")
 # save phenotypic data
 data_pheno.to_csv(nispace_data_path / "example" / "example-abide_info.csv", index=False)
     

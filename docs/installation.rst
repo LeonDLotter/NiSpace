@@ -56,3 +56,4 @@ To use the integrated datasets, parcellations, and templates, run the following 
    nispace.datasets.download_datasets()
 
 This will download about 250 MB of data to ``~HOME/nispace-data``. You can adjust the path with the ``nispace_data_path`` keyword argument.
+In the future, we will adjust the ``fetch_...`` functions to automatically download requested datasets.

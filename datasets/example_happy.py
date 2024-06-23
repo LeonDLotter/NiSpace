@@ -14,13 +14,13 @@ from nispace.stats.misc import zscore_df
 from nispace import NiSpace
 
 # nispace data path in home dir
-nispace_data_path = pathlib.Path.home() / "nispace-data"
+nispace_data_path = pathlib.Path.cwd() / "nispace-data"
 
 
 # %% Create fake tabulated dataset for testing: The "Happy Data"
 
 # parcellation we will use
-parc = "Schaefer200MelbourneS1"
+parc = "Schaefer200MelbourneS2"
 
 # number of subjects for each group (happy vs normal)
 n_subs = 50
@@ -28,7 +28,7 @@ n_subs = 50
 # get happy source data
 tab_happy = fetch_reference(
     "pet",
-    maps=["MU", "CB1"],
+    maps=["MOR", "KOR", "CB1"],
     parcellation=parc
 )
 
@@ -60,7 +60,7 @@ for i in range(n_subs):
     data_happy.iloc[i + n_subs, :] = data
 
 # save
-data_happy.to_csv(nispace_data_path / "example" / "example-happy_parc-Schaefer200MelbourneS1.csv.gz")
+data_happy.to_csv(nispace_data_path / "example" / f"example-happy_parc-{parc}.csv.gz")
 
 
 # %% Test Happy Data
