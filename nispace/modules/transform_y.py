@@ -1,4 +1,5 @@
 import re
+import warnings
 import numpy as np
 import pandas as pd
 
@@ -106,7 +107,8 @@ def _args_to_tuple(expression):
     return ("unrecognized", None)
 
 
-def _get_transform_fun(formula, return_df=True, return_paired=False, dtype=np.float32):
+def _get_transform_fun(formula, return_df=True, return_paired=False, 
+                       dtype=np.float32, ignore_nan_warnings=False):
     # normalize the formula
     formula, formula_wildcard = _normalize_formula(formula)
     
@@ -150,6 +152,7 @@ def _get_transform_fun(formula, return_df=True, return_paired=False, dtype=np.fl
             raise ValueError("y must not be None!")
         
         arrays = {"y": np.array(y, dtype=dtype)}
+        
         if groups is not None:
             arrays["a"] = arrays["y"][groups==0, :]
             arrays["b"] = arrays["y"][groups==1, :]
@@ -160,9 +163,15 @@ def _get_transform_fun(formula, return_df=True, return_paired=False, dtype=np.fl
                 }
                 arrays["a"] = arrays["a"][arrays_order["a"]]
                 arrays["b"] = arrays["b"][arrays_order["b"]]
-                
-        res = trans_fun(*[arrays[arg] for arg in args if arg is not None]).astype(dtype)
         
+        if ignore_nan_warnings:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", "Mean of empty slice", RuntimeWarning)
+                warnings.filterwarnings("ignore", "Degrees of freedom <= 0 for slice", RuntimeWarning)
+                res = trans_fun(*[arrays[arg] for arg in args if arg is not None]).astype(dtype)
+        else:
+            res = trans_fun(*[arrays[arg] for arg in args if arg is not None]).astype(dtype)
+  
         # ensure orientation and 2-dimensionality of output
         res = np.atleast_2d(res)
         

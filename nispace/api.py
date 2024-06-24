@@ -707,7 +707,7 @@ class NiSpace:
         lgr.info(f"Applying {Y_name} transform '{transform}'.")
         # get formula interpreter to evaluate string formulas and output dataframes
         apply_transform, paired = _get_transform_fun(transform, return_df=True, return_paired=True,
-                                                     dtype=self._dtype)
+                                                     dtype=self._dtype, ignore_nan_warnings=True)
         # paired comparison but no subjects vector
         if paired and subjects is None:
             lgr.warning("The transform performs a paired comparison but argument 'subjects' was not "
@@ -1245,9 +1245,11 @@ class NiSpace:
             _Y_obs_arr_nonan = _Y_obs_arr[~self._groups_nan_idc, :]
             
             ## prepare formula & transform function
+            # TODO: get stored transform function
             Y_transform = _lower_strip_ws(Y_transform)
             apply_transform, paired = _get_transform_fun(Y_transform, return_df=False, 
-                                                         return_paired=True, dtype=dtype)
+                                                         return_paired=True, dtype=dtype,
+                                                         ignore_nan_warnings=True)
             
             # paired permutations?
             if groups_perm_paired not in ["auto", True, False]:

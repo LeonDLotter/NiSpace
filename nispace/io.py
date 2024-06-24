@@ -1,4 +1,5 @@
 import os
+import warnings
 import json
 from pathlib import Path
 from joblib import Parallel, delayed
@@ -28,7 +29,8 @@ def parcellate_data(data,
                     return_parc=False,
                     dtype=None,
                     n_proc=1,
-                    verbose=True):
+                    verbose=True,
+                    ignore_zero_division_warning=True):
     """
     Parcellates given imaging data using a specified parcellation.
 
@@ -149,7 +151,7 @@ def parcellate_data(data,
         def extract_data(file):
             
             # apply parcellater
-            file_parc = parcellater.transform(
+            kwargs = dict(
                 data=file, 
                 space=data_space,
                 ignore_background_data=True,
@@ -158,8 +160,15 @@ def parcellate_data(data,
                 background_parcels_to_nan=drop_background_parcels,
                 min_num_valid_datapoints=min_num_valid_datapoints,
                 min_fraction_valid_datapoints=min_fraction_valid_datapoints
-            ).squeeze()
-            
+            )
+            # apply parcellater
+            if ignore_zero_division_warning:
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", "invalid value encountered in divide", RuntimeWarning)
+                    file_parc = parcellater.transform(**kwargs).squeeze()
+            else:
+                file_parc = parcellater.transform(**kwargs).squeeze()
+                
             # return data and dropped parcels
             return (file_parc, parcellater._parc_idc_dropped, parcellater._parc_idc_bg, 
                     parcellater._parc_idc_excl)
@@ -183,25 +192,28 @@ def parcellate_data(data,
             
         # dropped parcels
         if len(nan_parcels["drop"]) > 0:
-            lgr.warning(f"Combined across images, up to {len(nan_parcels['drop'])} parcels were dropped "
-                        "after resampling of the parcellation! Data was replaced with nan values. "
+            lgr.warning(f"Combined across images, up to {len(nan_parcels['drop'])} parcel(s) were dropped "
+                        "after resampling of the parcellation! Data was replaced with nan values."
                         "Try a coarser parcellation or set 'resampling_target' = 'parcellation' to "
-                        f"avoid this behavior (indices: {[int(i) for i in nan_parcels['drop']]}).")
+                        f"avoid this behavior ({[int(i) for i in nan_parcels['drop']]}).")
             
         # background intensity parcels
         if drop_background_parcels:
-            lgr.info(f"Combined across images, {len(nan_parcels['bg'])} parcels had only background "
-                     f"intensity and were set to nan (indices: {[int(i) for i in nan_parcels['bg']]}).")
+            lgr.info(f"Combined across images, {len(nan_parcels['bg'])} parcel(s) had only background "
+                     f"intensity and were set to nan ({[int(i) for i in nan_parcels['bg']]}).")
         
         # below parcel threshold parcels
         if min_num_valid_datapoints or min_fraction_valid_datapoints:
-            msg = (f"Combined across images, {len(nan_parcels['excl'])} parcels were dropped due to "
-                   f"exclusion criteria.")
-            if min_num_valid_datapoints:
-                msg += f" Minimum {min_num_valid_datapoints} non-background datapoints."
-            if min_fraction_valid_datapoints:
-                msg += f" Minimum {min_fraction_valid_datapoints * 100}% non-background datapoints."
-            msg += f" (Indices: {[int(i) for i in nan_parcels['excl']]})."
+            msg = (f"Combined across images, {len(nan_parcels['excl'])} parcels were dropped "
+                   f"due to exclusion criteria: ")
+            if min_num_valid_datapoints and min_fraction_valid_datapoints:
+                msg += (f"min. n = {min_num_valid_datapoints} and "
+                        f"{min_fraction_valid_datapoints * 100}% non-background datapoints.")
+            elif min_num_valid_datapoints:
+                msg += f"min. n = {min_num_valid_datapoints} non-background datapoints."
+            elif min_fraction_valid_datapoints:
+                msg += f"min. {min_fraction_valid_datapoints * 100}% non-background datapoints."
+            msg += f" ({[int(i) for i in nan_parcels['excl']]})."
             lgr.info(msg)
                      
         # output dataframe

@@ -187,8 +187,7 @@ class Parcellater():
                     background_value = get_background_value(data)
                     mask_img = math_img(f"data != {background_value}", data=data)
                 else:
-                    mask_img = new_img_like(
-                        data, data.get_fdata() != background_value)
+                    mask_img = new_img_like(data, data.get_fdata() != background_value)
             else:
                 mask_img = None
                 
@@ -226,11 +225,9 @@ class Parcellater():
                     mask_space = space
                 elif self.resampling_target == 'parcellation':
                     mask_space = self.space
-                nomedialwall = load_data(
-                    fetch_atlas(mask_space, density)['medial'])
+                nomedialwall = load_data(fetch_atlas(mask_space, density)['medial'])
                 background_value = np.median(darr[nomedialwall == 0])
-            parcellated = vertices_to_parcels(
-                darr, parc, background=background_value)
+            parcellated = vertices_to_parcels(darr, parc, background=background_value)
 
         # fill parcels with background intensity with nan, works only if background_value exists
         if background_parcels_to_nan and background_value is not None:
@@ -266,7 +263,8 @@ class Parcellater():
             if min_fraction_valid_datapoints:
                 data_frac_nobg = np.divide(
                     data_n_nobg, parc_n_datapoints, 
-                    out=np.zeros_like(data_n_nobg, dtype=np.float64), where=parc_n_datapoints!=0
+                    out=np.zeros_like(data_n_nobg, dtype=np.float64), 
+                    where=parc_n_datapoints!=0
                 )
                 excl_filter = excl_filter | (data_frac_nobg < min_fraction_valid_datapoints)
             

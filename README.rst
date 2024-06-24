@@ -12,7 +12,8 @@
 *Spatial (alteration) patterns observed in MRI images may often reflect function and dysfunction of underlying biological systems. This applies alike to function and structure, on the surface or in the volumetric space, and to typical as well as disordered brain-anatomical and functional patterns.*
 
 In recent years, several methods have been developed to compare spatial patterns between brain maps. In the simplest case, two brain maps are correlated with each other at the voxel- or parcel-level. The resulting correlation coefficient reflects the degree to which the two maps share a spatial pattern. We refer to this spatial correlation as "*colocalization*". The `NiSpace` toolbox aims to provide the most comprehensive, yet easy-to-use and flexible framework for colocalization estimation, significance testing, and visualization to date.
-``NiSpace`` is under development and it's `documentation <https://nispace.readthedocs.io/>`_ is currently incomplete. We are very happy about anyone who would like to try it. If you encounter bugs or have a question, feel free to open a GitHub issue or contact us via `email <mailto:leondlotter@gmail.com>`_! 
+
+``NiSpace`` is under development and its `documentation <https://nispace.readthedocs.io/>`_ is currently incomplete. We are very happy about anyone who already likes to try it. If you encounter bugs or have a question, feel free to open a GitHub issue or contact us via `email <mailto:leondlotter@gmail.com>`_! 
 
 There are of course many other tools available, of which a few are listed below:
 
