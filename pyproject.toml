@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nispace"
-dynamic=["version"]
+version = "0.0.1-beta.1"
 authors = [
     {name = "Leon D. Lotter", email = "leondlotter@gmail.com"},
 ]
@@ -44,7 +44,7 @@ dependencies = [
 [project.optional-dependencies]
 opt = [
     "brainspace",
-    "brainsmash",
+    "brainsmash >=0.10.0",
     "factor-analyzer",
     "neuroCombat",
     "neuroHarmonize",
