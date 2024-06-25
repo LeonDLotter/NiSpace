@@ -4,6 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nispace"
+dynamic=["version"]
 authors = [
     {name = "Leon D. Lotter", email = "leondlotter@gmail.com"},
 ]
