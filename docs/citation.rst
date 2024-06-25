@@ -5,7 +5,7 @@ Citation
 
 There is no paper for ``NiSpace`` yet. Please cite at least the following when you use our tools in your work:
 
-* `Lotter & Dukart, Zenodo 2024 <https://DOI.org/10.5281/zenodo.12514623>`_
+* `Lotter & Dukart, Zenodo 2024 <https://doi.org/10.5281/zenodo.12514623>`_
 * `Dukart et al., HBM 2021 <https://doi.org/10.1002/hbm.25244>`_
 * `Markello, Hansen, et al., Nat. Methods 2022 <https://doi.org/10.1038/s41592-022-01625-w>`_
 * If you use the implemented "moran" null map function: `Vos de Wael et al., Comm. Biol. 2020 <https://doi.org/10.1038/s42003-020-0794-7>`_

@@ -13,7 +13,7 @@
 
 In recent years, several methods have been developed to compare spatial patterns between brain maps. In the simplest case, two brain maps are correlated with each other at the voxel- or parcel-level. The resulting correlation coefficient reflects the degree to which the two maps share a spatial pattern. We refer to this spatial correlation as "*colocalization*". The `NiSpace` toolbox aims to provide the most comprehensive, yet easy-to-use and flexible framework for colocalization estimation, significance testing, and visualization to date.
 
-``NiSpace`` is under development and its `documentation <https://nispace.readthedocs.io/>`_ is currently incomplete. We are very happy about anyone who already likes to try it. If you encounter bugs or have a question, feel free to open a GitHub issue or contact us via `email <mailto:leondlotter@gmail.com>`_! 
+``NiSpace`` is under development and its `documentation <https://nispace.readthedocs.io/>`_ is currently incomplete. We welcome anyone who would like to give it a try! If you encounter bugs or have a question, feel free to open a GitHub issue or contact us via `email <mailto:leondlotter@gmail.com>`_! 
 
 There are of course many other tools available, of which a few are listed below:
 
@@ -102,6 +102,7 @@ Citation
 
 There is no paper for ``NiSpace`` yet. Please cite at least the following when you use our tools in your work:
 
+* `Lotter & Dukart, Zenodo 2024 <https://doi.org/10.5281/zenodo.12514623>`_
 * `Dukart et al., HBM 2021 <https://doi.org/10.1002/hbm.25244>`_
 * `Markello, Hansen, et al., Nat. Methods 2022 <https://doi.org/10.1038/s41592-022-01625-w>`_
 
