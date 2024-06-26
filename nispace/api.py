@@ -2,9 +2,12 @@ import copy
 import gzip
 import os
 import pickle
+from typing import List, Union, Sequence, Literal
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import nibabel as nib
 import matplotlib.pyplot as plt
 from joblib import Parallel, delayed
 from tqdm import tqdm
@@ -41,42 +44,125 @@ from .utils import (set_log, fill_nan, _get_df_string, _lower_strip_ws, mean_by_
 class NiSpace:
     """
     The NiSpace class. Docs under construction.
-
-    Initialize the NiSpace model.
-    Parameters
-    ----------
-    x : array-like of shape (n_samples, n_features)
-        The input data to fit the model.
-        
-    y : array-like of shape (n_samples, n_features), optional
-        The target data to fit the model. Default is None.
-    
-    z : array-like of shape (n_samples, n_features), optional
-        Additional data to fit the model. Default is None.
-    
-    Returns
-    -------
-    nothing
     """
 
     def __init__(self, 
-                 x, 
-                 y=None, 
-                 z=None, 
-                 x_labels=None, y_labels=None, z_labels=None, 
-                 data_space="MNI152", 
-                 standardize="xz", 
-                 drop_nan=False,    
-                 parcellation=None, 
-                 parcellation_labels=None, 
-                 parcellation_space="MNI152", 
-                 parcellation_hemi=["L", "R"], 
-                 #parcellation_density="10k",
-                 parcellation_dist_mat=None,
-                 resampling_target="data",
-                 n_proc=1, 
-                 verbose=True,
-                 dtype=np.float32):
+                 x: Union[np.ndarray, pd.DataFrame, pd.Series, 
+                          List[Union[str, Path, nib.Nifti1Image, nib.GiftiImage]]], 
+                 y: Union[np.ndarray, pd.DataFrame, pd.Series, 
+                          List[Union[str, Path, nib.Nifti1Image, nib.GiftiImage]]] = None, 
+                 z: Union[Literal["gm"], np.ndarray, pd.DataFrame, pd.Series, 
+                          List[Union[str, Path, nib.Nifti1Image, nib.GiftiImage]]] = None, 
+                 x_labels: Sequence[str] = None, 
+                 y_labels: Sequence[str] = None, 
+                 z_labels: Sequence[str] = None, 
+                 data_space: Literal["mni152", "fsaverage", "fslr"] = "mni152", 
+                 standardize: Union[Literal["x", "y", "z", "xy", "xz", "yz"], bool] = "xz", 
+                 drop_nan: bool = False,    
+                 parcellation: Union[str, Path, nib.Nifti1Image, nib.GiftiImage] = None, 
+                 parcellation_labels: Sequence[str] = None, 
+                 parcellation_space: Literal["mni152", "fsaverage", "fslr"] = "mni152", 
+                 parcellation_hemi: Union[Literal["R", "L"], Sequence[Literal["L", "R"]]] = ["L", "R"], 
+                 parcellation_dist_mat: Union[np.ndarray, pd.DataFrame] = None,
+                 resampling_target: Literal["data", "parcellation"] = "data",
+                 n_proc: int = 1, 
+                 verbose: bool = True,
+                 dtype: Union[type, str] = np.float32):
+        """
+        Initialize the NiSpace model. 
+        On initialization, the parameters are only stored. Processing is done with NiSpace.fit().
+        
+        Parameters
+        ----------
+        x : array-like of shape(n_reference, n_parcels) or shape(n_parcels) or 
+            len(n_reference) list-like of image data
+            The reference maps (e.g., pet or mRNA data). Can be a numpy array, pandas DataFrame, 
+            pandas Series, or a list containing (paths to) image objects.
+            
+        y : array-like of shape(n_target, n_parcels) or shape(n_parcels) or 
+            len(n_target) list-like of image data, optional
+            The target data (i.e., usually your maps of interest). Can be a numpy array, pandas 
+            DataFrame, pandas Series, or a list containing (paths to) image objects. Default is 
+            None. If None, NiSpace will create a copy of the reference maps to evaluate reference 
+            map-to-map intercorrelations.
+
+        z : array-like of shape(1, n_parcels) or (n_parcels) or (n_target, n_parcels) or 
+            len(n_target) list-like of image data, optional
+            Maps to regress from reference/target maps across parcels. Can be "gm", a numpy array, 
+            pandas DataFrame, pandas Series, or a list containing (paths to) image objects. 
+            Default is None. If only one map, this one is regressed from every map. This also 
+            applies to the special case of "gm", which will load and parcellate the 
+            MNI152NLin2009cAsym grey matter probability map. If one map for each target is provided, 
+            these are regressed 1-to-1 from the corresponding target maps.
+
+        x_labels : sequence of str, optional
+            Labels for the x data. Default is None. If None and x is DataFrame or Series, the 
+            labels are taken from x's index (DataFrame) or name (Series).
+
+        y_labels : sequence of str, optional
+            Labels for the y data. Default is None. If None and y is DataFrame or Series, the 
+            labels are taken from y's index (DataFrame) or name (Series).
+
+        z_labels : sequence of str, optional
+            Labels for the z data. Default is None. If None and len(z) == len(y) any y is DataFrame 
+            or Series, the labels are taken from y's (not z's) index (DataFrame) or name (Series).
+
+        data_space : str, optional
+            The space in which the (x,y,z) data is defined; passed to neuromaps. Can be "mni152" 
+            (default), "fsaverage" or "fslr". Support for "fslr" is currently limited.
+
+        standardize : str or bool, optional
+            Whether to standardize the parcellated (x,y,z) data within each map across parcels. 
+            Default is "xz". If True, will standardize all data. If (combination of) "x", "y", 
+            or "z", will standardize only the respective data array.
+
+        drop_nan : bool, optional
+            Whether to drop NaN values. Default is False. NaN values should be handled case-by-case 
+            in all following analyses, so False is a good choice. 
+
+        parcellation : str, Path, Nifti1Image, or GiftiImage, optional
+            The parcellation image to use. Default is None. Required in following cases: 
+            1) if image (paths) are passed to x, y, or z; 2) if z is "gm"; 3) if "map" permutation 
+            is used in NiSpace.permute(); 4) if distance-based cross-validation is used. Cases 3/4
+            apply even if initial data is passed pre-parcellated in arrays.
+
+        parcellation_labels : sequence of str, optional
+            Labels for the parcellation. Default is None. If None and input (x,y) data is DataFrame or 
+            Series, 
+
+        parcellation_space : str, optional
+            The space in which the parcellation is defined. See data_space for details.
+
+        parcellation_hemi : sequence of str, optional
+            The hemispheres in which the parcellation if defined if parcellation_space is 
+            "fsaverage" or "fslr". Default is ["L", "R"].
+
+        parcellation_dist_mat : array-like of shape(n_parcels, n_parcels), optional
+            The distance matrix for the parcellation. Default is None. Required as described in 
+            cases 3) and 4) for parcellation.
+
+        resampling_target : str, optional
+            The target for resampling. Options: "data" (default) or "parcellation". If "data", the
+            parcellation is resampled to the data space before application (nearest neighbor). 
+            If "parcellation", the data is resampled to the parcellation space (linear). 
+            Resampling only works in MNI -> MNI and MNI -> mni/fsaverage/fslr direction; if, e.g., 
+            input data is in MNI space and parcellation is in fsaverage, resampling_target will be
+            forced to "parcellation", as MNI -> fsaverage transformation is not supported.
+
+        n_proc : int, optional
+            The number of processes to use in joblib parallelization. Default is 1. -1 will use as 
+            many processes as cores are detected.
+
+        verbose : bool, optional
+            Whether to print (a lot of) verbose output. Default is True.
+
+        dtype : data-type, optional
+            The data type to use for the arrays. Default is np.float32 to save memory.
+
+        Returns
+        -------
+        None
+        """
         
         self._x = x
         self._x_with_self = False
@@ -143,7 +229,8 @@ class NiSpace:
     
     def fit(self):
         """
-        "Fit" the NiSpace class instance.
+        "Fit" the NiSpace class instance, i.e., check input and apply parcellation if necessary. 
+        Input and parameters are set on initialization.
         
         Parameters
         ----------

@@ -21,7 +21,7 @@ If you use this functionality, make sure that you have Workbench installed (see 
 Installation from GitHub
 ------------------------
 
-Most convenient is the installation from GitHub using pip:
+The current development version is most conveniently installed from GitHub using pip:
 
 .. code-block:: bash
 
