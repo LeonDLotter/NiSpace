@@ -37,6 +37,8 @@ extensions = [
 
 napoleon_google_docstring = False   # Turn off googledoc strings
 napoleon_numpy_docstring = True     # Turn on numpydoc strings
+napoleon_use_param = True
+napoleon_use_rtype = True
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 autodoc_default_options = {
@@ -44,6 +46,8 @@ autodoc_default_options = {
     'inherited-members': True,
     'special-members': '__init__'
 }
+autodoc_typehints = 'description'
+
 nbsphinx_execute_arguments = [
     "--InlineBackend.figure_formats={'svg', 'pdf'}",
 ]
