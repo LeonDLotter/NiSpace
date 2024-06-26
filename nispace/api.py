@@ -43,7 +43,9 @@ from .utils import (set_log, fill_nan, _get_df_string, _lower_strip_ws, mean_by_
 
 class NiSpace:
     """
-    The NiSpace class. Docs under construction.
+    The NiSpace class. To be imported via `from nispace import NiSpace`.
+    Docs under construction.
+    
     """
 
     def __init__(self, 

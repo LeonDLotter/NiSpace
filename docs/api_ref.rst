@@ -13,11 +13,11 @@ Reference API
 
 :mod:`nispace.api` - NiSpace main class
 ------------------------------------------
-.. automodule:: nispace.api
+.. autoclass:: nispace.api
    :no-members:
    :no-inherited-members:
 
-.. currentmodule:: nispace.api
+.. currentclass:: nispace.api
 
 .. autosummary::
    :template: class.rst
