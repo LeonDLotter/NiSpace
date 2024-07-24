@@ -686,6 +686,10 @@ def fetch_reference(dataset: str,
         if dataset not in _DSETS:
             lgr.critical_raise(f"Dataset '{dataset}' not found! Available datasets: {_DSETS_NICE}",
                                ValueError)
+        if "brainmap" in dataset.lower():
+            lgr.critical_raise("The 'BrainMap' dataset is currently not available. "
+                               "It will be available in the future!",
+                               NotImplementedError)
     else:
         lgr.critical_raise(f"Invalid dataset type; expecting string. Available datasets: {_DSETS_NICE}",
                            TypeError)
