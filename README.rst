@@ -89,13 +89,6 @@ You can install the development version of ``NiSpace`` in a Python 3.9+ environm
 
    pip install git+https://github.com/LeonDLotter/NiSpace.git@dev
 
-To use the integrated datasets, parcellations, and templates, run the following in Python (only needed one time):
-
-.. code-block:: python
-
-   import nispace
-   nispace.datasets.download_datasets()
-
 
 Citation
 --------
@@ -113,6 +106,7 @@ Contact
 -------
 
 Do you have questions, comments or suggestions, or would like to contribute to the toolbox? Feel free to open an issue on GitHub or `contact me <mailto:leondlotter@gmail.com>`_! 
+If you would like to have a new parcellation, reference dataset, or reference collection added to the toolbox, please open a GitHub issue using the "New Dataset" template.
 
 
 

@@ -11,7 +11,7 @@ import nibabel as nib
 from neuromaps import images 
 
 from . import lgr
-from .utils import set_log
+from .utils.utils import set_log
 from .parcellate import Parcellater
 
 
@@ -297,13 +297,13 @@ def write_json(json_dict, json_path):
     if isinstance(json_path, (str, Path)):
         json_path = Path(json_path)
         with open(json_path, "w") as f:
-            json.dump(json_dict, f)
+            json.dump(json_dict, f, indent=4)
     else:
         print("Provide path-like object for argument 'json_path'")
     return json_path
 
 
-def load_img(img):
+def load_img(img, override_file_format=False):
     # to tuple
     if isinstance(img, (str, Path, nib.Nifti1Image, nib.GiftiImage)):
         img = (img,)
@@ -316,19 +316,20 @@ def load_img(img):
     # load
     img_load = []
     for i in img:
-        # return if image, to string if path
+        # if preloaded image, continue
         if isinstance(i, (nib.Nifti1Image, nib.GiftiImage)):
-            img_load.append(i)
-            continue
-        elif isinstance(i, Path):
+            pass
+        # if string, load
+        elif isinstance(i, (str, Path)):
             i = str(i)
-        # load 
-        if i.endswith(".nii") or i.endswith(".nii.gz"):
-            i = images.load_nifti(i)
-        elif i.endswith(".gii") or i.endswith(".gii.gz"):
-            i = images.load_gifti(i)
+            if i.endswith(".nii") or i.endswith(".nii.gz") or override_file_format=="nifti":
+                i = images.load_nifti(i)
+            elif i.endswith(".gii") or i.endswith(".gii.gz") or override_file_format=="gifti":
+                i = images.load_gifti(i)
+            else:
+                raise ValueError(f"File format of '{i}' not supported. Path must end with .nii(.gz) or .gii(.gz)")
         else:
-            raise ValueError("File format not supported. Path must end with .nii(.gz) or .gii(.gz)")
+            raise ValueError(f"Type {type(i)} not supported! Provide nifti, gifti or path to image file.")
         img_load.append(i)
     # return as tuple if two, or 
     return img_load[0] if len(img_load) == 1 else tuple(img_load)

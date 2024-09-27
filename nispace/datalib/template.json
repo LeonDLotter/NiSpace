@@ -1,0 +1,108 @@
+{
+    "mni152": {
+        "1mm": {
+            "T1": {
+                "host": "url",
+                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_desc-brain_T1w.nii.gz"
+            },
+            "mask": {
+                "host": "url",
+                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_desc-brain_mask.nii.gz"
+            },
+            "gmprob": {
+                "host": "url",
+                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_label-GM_probseg.nii.gz"
+            }
+        },
+        "2mm": {
+            "T1": {
+                "host": "url",
+                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_desc-brain_T1w.nii.gz"
+            },
+            "mask": {
+                "host": "url",
+                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_desc-brain_mask.nii.gz"
+            },
+            "gmprob": {
+                "host": "url",
+                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_label-GM_probseg.nii.gz"
+            }
+        },
+        "3mm": {
+            "T1": {
+                "host": "osf",
+                "remote": ["derpj", "66ab5e1f827ec8e3919330eb"]
+            },
+            "mask": {
+                "host": "osf",
+                "remote": ["derpj", "66ab5e1d35130561f39b3746"]
+            },
+            "gmprob": {
+                "host": "osf",
+                "remote": ["derpj", "66ab5e21f9cf3ca1559b3c98"]
+            }
+        },
+        "4mm": {
+            "T1": {
+                "host": "osf",
+                "remote": ["derpj", "66ab5e20e75f83de049b3a6a"]
+            },
+            "mask": {
+                "host": "osf",
+                "remote": ["derpj", "66ab5e1edb006681a72ee280"]
+            },
+            "gmprob": {
+                "host": "osf",
+                "remote": ["derpj", "66ab5e1f0aa42bda57519d84"]
+            }
+        }
+    },
+
+    "fsaverage": {
+        "10k": {
+            "pial": {
+                "L": {
+                    "host": "url",
+                    "remote": "https://templateflow.s3.amazonaws.com/tpl-fsaverage/tpl-fsaverage_hemi-L_den-10k_pial.surf.gii"
+                },
+                "R": {
+                    "host": "url",
+                    "remote": "https://templateflow.s3.amazonaws.com/tpl-fsaverage/tpl-fsaverage_hemi-R_den-10k_pial.surf.gii"
+                }
+            },
+            "sphere": {
+                "L": {
+                    "host": "url",
+                    "remote": "https://templateflow.s3.amazonaws.com/tpl-fsaverage/tpl-fsaverage_hemi-L_den-10k_sphere.surf.gii"
+                },
+                "R": {
+                    "host": "url",
+                    "remote": "https://templateflow.s3.amazonaws.com/tpl-fsaverage/tpl-fsaverage_hemi-R_den-10k_sphere.surf.gii"
+                }
+            }
+        },
+        "41k": {
+            "pial": {
+                "L": {
+                    "host": "url",
+                    "remote": "https://templateflow.s3.amazonaws.com/tpl-fsaverage/tpl-fsaverage_hemi-L_den-41k_pial.surf.gii"
+                },
+                "R": {
+                    "host": "url",
+                    "remote": "https://templateflow.s3.amazonaws.com/tpl-fsaverage/tpl-fsaverage_hemi-R_den-41k_pial.surf.gii"
+                }
+            },
+            "sphere": {
+                "L": {
+                    "host": "url",
+                    "remote": "https://templateflow.s3.amazonaws.com/tpl-fsaverage/tpl-fsaverage_hemi-L_den-41k_sphere.surf.gii"
+                },
+                "R": {
+                    "host": "url",
+                    "remote": "https://templateflow.s3.amazonaws.com/tpl-fsaverage/tpl-fsaverage_hemi-R_den-41k_sphere.surf.gii"
+                }
+            }
+        }
+
+    }
+}

@@ -1,15 +1,13 @@
 
-_PARCS = ["schaefer100melbournes1", "schaefer200melbournes2", "schaefer300melbournes3", "hcpex", 
-          "desikankilliany", "destrieux"]
-_PARCS_NICE = ["Schaefer100MelbourneS1", "Schaefer200MelbourneS2", "Schaefer300MelbourneS3", "HCPex", 
-               "DesikanKilliany", "Destrieux"]
-_PARCS_DEFAULT = "schaefer200melbournes2"
+_PARCS = ["schaefer100", "schaefer200", "schaefer300", "hcp", "desikankilliany", "destrieux"]
+_PARCS_NICE = ["Schaefer100", "Schaefer200", "Schaefer300", "HCP", "DesikanKilliany", "Destrieux"]
+_PARCS_DEFAULT = "schaefer200"
 
-_DSETS_VERSION = "v0"
-_DSETS = ["pet", "mrna", "brainmap"]
-_DSETS_NICE = ["PET", "mRNA", "BrainMap"]
-_DSETS_MAP = ["pet", "brainmap"]
-_DSETS_TAB = ["mrna"]
+_DSETS = ["pet", "mrna", "rsn"]
+_DSETS_NICE = ["PET", "mRNA", "RSN"]
+_DSETS_TAB_ONLY = ["mrna"]
+_DSETS_CX_ONLY = ["rsn"]
+_DSETS_SC_ONLY = []
 
 _COLLECT_DEFAULT = {
     "pet": "UniqueTracers",

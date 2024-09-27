@@ -1,0 +1,139 @@
+{
+    "Schaefer100": {
+        "mni152": {
+            "map": {
+                "host": "github",
+                "remote": ["yetianmed/subcortex", "master", "Group-Parcellation/3T/Cortex-Subcortex/MNIvolumetric/Schaefer2018_100Parcels_7Networks_order_Tian_Subcortex_S1_3T_MNI152NLin2009cAsym_1mm.nii.gz"]
+            },
+            "label": {
+                "host": "osf",
+                "remote": ["derpj", "66abbcbaf2537b72ab932d0b"]
+            },
+            "distmat": {
+                "host": "osf",
+                "remote": ["derpj", "66ad19c913c02efe2e9b45ba"]
+            }
+        }
+    },
+
+    "Schaefer200": {
+        "mni152": {
+            "map": {
+                "host": "github",
+                "remote": ["yetianmed/subcortex", "master", "Group-Parcellation/3T/Cortex-Subcortex/MNIvolumetric/Schaefer2018_200Parcels_7Networks_order_Tian_Subcortex_S2_3T_MNI152NLin2009cAsym_1mm.nii.gz"]
+            },
+            "label": {
+                "host": "osf",
+                "remote": ["derpj", "66abc22fdc529eb5f89b3960"]
+            },
+            "distmat": {
+                "host": "osf",
+                "remote": ["derpj", "66ad18b7d5ac802d052ee472"]
+            }
+        }
+    },
+
+    "Schaefer300": {
+        "mni152": {
+            "map": {
+                "host": "github",
+                "remote": ["yetianmed/subcortex", "master", "Group-Parcellation/3T/Cortex-Subcortex/MNIvolumetric/Schaefer2018_300Parcels_7Networks_order_Tian_Subcortex_S3_3T_MNI152NLin2009cAsym_1mm.nii.gz"]
+            },
+            "label": {
+                "host": "osf",
+                "remote": ["derpj", "66abbc563bdd59fec1a1c405"]
+            },
+            "distmat": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1861fba8cf2b0aa1b658"]
+            }
+        }
+    },
+    
+    "HCP": {
+        "mni152": {
+            "map": {
+                "host": "github",
+                "remote": ["wayalan/HCPex", "main", "HCPex_v1.1/HCPex.nii.gz"]
+            },
+            "label": {
+                "host": "osf",
+                "remote": ["derpj", "66abc23a1ac9757fe8519698"]
+            },
+            "distmat": {
+                "host": "osf",
+                "remote": ["derpj", "66ad18c5865bf853e29334a1"]
+            }
+        }
+    },
+
+    "DesikanKilliany": {
+        "fsaverage": {
+            "map": {
+                "L": {
+                    "host": "osf",
+                    "remote": ["derpj", "66abbc215968d6c5249b49dc"]
+                },
+                "R": {
+                    "host": "osf",
+                    "remote": ["derpj", "66abbc2d30f8e00b6893328e"]
+                }
+            },
+            "label": {
+                "L": {
+                    "host": "osf",
+                    "remote": ["derpj", "66abbc3d5383dbdb679b3994"]
+                },
+                "R": {
+                    "host": "osf",
+                    "remote": ["derpj", "66abbc4978e0aacdf7a1bf00"]
+                }
+            },
+            "distmat": {
+                "L": {
+                    "host": "osf",
+                    "remote": ["derpj", "66ad18532d0f7e1831a1b3e9"]
+                },
+                "R": {
+                    "host": "osf",
+                    "remote": ["derpj", "66ad17f442d353ad532eec6d"]
+                }
+            }
+        }
+    },
+
+    "Destrieux": {
+        "fsaverage": {
+            "map": {
+                "L": {
+                    "host": "osf",
+                    "remote": ["derpj", "66abbc9678e0aacdf7a1bf1a"]
+                },
+                "R": {
+                    "host": "osf",
+                    "remote": ["derpj", "66abbca21f8978af462ee983"]
+                }
+            },
+            "label": {
+                "L": {
+                    "host": "osf",
+                    "remote": ["derpj", "66abbc7c2741f694c2519763"]
+                },
+                "R": {
+                    "host": "osf",
+                    "remote": ["derpj", "66abbc89ac269a9040a1c8c6"]
+                }
+            },
+            "distmat": {
+                "L": {
+                    "host": "osf",
+                    "remote": ["derpj", "66ad192dd5ac802d052ee4bf"]
+                },
+                "R": {
+                    "host": "osf",
+                    "remote": ["derpj", "66ad195a0440a1f05ca1bfa5"]
+                }
+            }
+        }
+    }
+}

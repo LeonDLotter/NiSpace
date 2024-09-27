@@ -7,7 +7,7 @@ from sklearn.decomposition import PCA
 from tqdm.auto import tqdm
 
 from .. import lgr
-from ..utils import _del_from_tuple
+from ..utils.utils import _del_from_tuple
 
 
 @njit(cache=True, nogil=True)

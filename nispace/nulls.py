@@ -21,7 +21,7 @@ except ImportError:
     _BRAINSMASH_AVAILABLE = False
 
 from . import lgr
-from .utils import set_log
+from .utils.utils import set_log
 
 
 def _dist_mat_from_coords(coords, dtype=np.float32):
@@ -349,7 +349,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
     ## distance matrix provided -> we dont need parcellation
     if dist_mat is not None:
         lgr.info(f"Using provided distance matrix/matrices.")
-        if isinstance(dist_mat, np.ndarray):
+        if isinstance(dist_mat, (np.ndarray, pd.DataFrame)):
             n_parcels = dist_mat.shape[0]
             if parc_space is None:
                 lgr.warning("Distance matrix provided as array but 'parc_space' is None: "

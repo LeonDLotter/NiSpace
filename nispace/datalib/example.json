@@ -1,0 +1,29 @@
+{
+    "abide": {
+        "tab": {
+            "host": "osf",
+            "remote": ["derpj", "66f6913d75b087b4913cc25b"]
+        },
+        "info": {
+            "host": "osf",
+            "remote": ["derpj", "6669866565e1de57a88945e2"]
+        },
+        "parc": "Schaefer200"
+    },
+
+    "enigma": {
+        "tab": {
+            "host": "osf",
+            "remote": ["derpj", "6669868165e1de57a88945e6"]
+        },
+        "parc": "DesikanKilliany"
+    },
+
+    "happy": {
+        "tab": {
+            "host": "osf",
+            "remote": ["derpj", "66f690dfeb0c749ff2f42e6f"]
+        },
+        "parc": "Schaefer200"
+    }
+}

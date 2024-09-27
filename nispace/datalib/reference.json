@@ -1,0 +1,400 @@
+{
+
+    "pet": {
+        "metadata": {
+            "host": "osf",
+            "remote": ["derpj", "6669923c6b6c8e2dc004cbfa"]
+        },
+        "map": {
+            "target-5HT1a_tracer-cumi101_n-8_dx-hc_pub-beliveau2017_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["beliveau2017", "cumi101", "MNI152"]
+            },
+            "target-5HT1a_tracer-way100635_n-35_dx-hc_pub-savli2012_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["savli2012", "way100635", "MNI152"]
+            },
+            "target-5HT1b_tracer-az10419369_n-36_dx-hc_pub-beliveau2017_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["beliveau2017", "az10419369", "MNI152"]
+            },
+            "target-5HT1b_tracer-p943_n-23_dx-hc_pub-savli2012_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["savli2012", "p943", "MNI152"]
+            },
+            "target-5HT1b_tracer-p943_n-65_dx-hc_pub-gallezot2010_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["gallezot2010", "p943", "MNI152"]
+            },
+            "target-5HT2a_tracer-altanserin_n-19_dx-hc_pub-savli2012_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["savli2012", "altanserin", "MNI152"]
+            },
+            "target-5HT2a_tracer-cimbi36_n-29_dx-hc_pub-beliveau2017_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["beliveau2017", "cimbi36", "MNI152"]
+            },
+            "target-5HT4_tracer-sb207145_n-59_dx-hc_pub-beliveau2017_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["beliveau2017", "sb207145", "MNI152"]
+            },
+            "target-5HT6_tracer-gsk215083_n-30_dx-hc_pub-radhakrishnan2018_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["radnakrishnan2018", "gsk215083", "MNI152"]
+            },
+            "target-5HTT_tracer-dasb_n-100_dx-hc_pub-beliveau2017_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["beliveau2017", "dasb", "MNI152"]
+            },
+            "target-5HTT_tracer-dasb_n-18_dx-hc_pub-savli2012_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["savli2012", "dasb", "MNI152"]
+            },
+            "target-5HTT_tracer-madam_n-10_dx-hc_pub-fazio2016_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["fazio2016", "madam", "MNI152"]
+            },
+            "target-A4B2_tracer-flubatine_n-30_dx-hc_pub-hillmer2016_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["hillmer2016", "flubatine", "MNI152"]
+            },
+            "target-CB1_tracer-fmpepd2_n-22_dx-hc_pub-laurikainen2019_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["laurikainen2018", "fmpepd2", "MNI152"]
+            },
+            "target-CB1_tracer-omar_n-77_dx-hc_pub-normandin2015_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["normandin2015", "omar", "MNI152"]
+            },
+            "target-CMRglu_tracer-fdg_n-20_dx-hc_pub-castrillon2023_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["castrillon2023", "cmrglc", "MNI152"]
+            },
+            "target-COX1_tracer-ps13_n-11_dx-hc_pub-kim2020_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["kim2020", "ps13", "MNI152"]
+            },
+            "target-D1_tracer-sch23390_n-13_dx-hc_pub-kaller2017_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["kaller2017", "sch23390", "MNI152"]
+            },
+            "target-D2_tracer-fallypride_n-49_dx-hc_pub-jaworska2020_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["jaworska2020", "fallypride", "MNI152"]
+            },
+            "target-D2_tracer-flb457_n-37_dx-hc_pub-smith2017_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["smith2017", "flb457", "MNI152"]
+            },
+            "target-D2_tracer-flb457_n-55_dx-hc_pub-sandiego2015_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["sandiego2015", "flb457", "MNI152"]
+            },
+            "target-D2_tracer-raclopride_n-7_dx-hc_pub-alarkurtti2015_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["alarkurtti2015", "raclopride", "MNI152"]
+            },
+            "target-DAT_tracer-fepe2i_n-10_dx-hc_pub-sasaki2012_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["sasaki2012", "fepe2i", "MNI152"]
+            },
+            "target-DAT_tracer-fpcit_n-174_dx-hc_pub-dukart2018_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["dukart2018", "fpcit", "MNI152"]
+            },
+            "target-DAT_tracer-fpcit_n-30_dx-hc_pub-garciagomez2013_space-mni152": {
+                "host": "url",
+                "remote": "https://master.dl.sourceforge.net/project/spmtemplates/symFPCITtemplate_MNI_norm.nii"
+            },
+            "target-FDOPA_tracer-fluorodopa_n-12_dx-hc_pub-garciagomez2018_space-mni152": {
+                "host": "url",
+                "remote": "https://master.dl.sourceforge.net/project/spmtemplates/symFDOPAtemplate_MNI_norm.nii"
+            },
+            "target-GABAa5_tracer-ro154513_n-10_dx-hc_pub-lukow2022_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["lukow2022", "ro154513", "MNI152"]
+            },
+            "target-GABAa_tracer-flumazenil_n-16_dx-hc_pub-norgaard2021_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["norgaard2021", "flumazenil", "MNI152"]
+            },
+            "target-GABAa_tracer-flumazenil_n-6_dx-hc_pub-dukart2018_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["dukart2018", "flumazenil", "MNI152"]
+            },
+            "target-H3_tracer-gsk189254_n-8_dx-hc_pub-gallezot2017_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["gallezot2017", "gsk189254", "MNI152"]
+            },
+            "target-HDAC_tracer-martinostat_n-8_dx-hc_pub-wey2016_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["wey2016", "martinostat", "MNI152"]
+            },
+            "target-KOR_tracer-ly2795050_n-28_dx-hc_pub-vijay2018_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["vijay2018", "ly2795050", "MNI152"]
+            },
+            "target-M1_tracer-lsn3172176_n-24_dx-hc_pub-naganawa2020_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["naganawa2020", "lsn3172176", "MNI152"]
+            },
+            "target-MOR_tracer-carfentanil_n-204_dx-hc_pub-kantonen2020_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["kantonen2020", "carfentanil", "MNI152"]
+            },
+            "target-MOR_tracer-carfentanil_n-39_dx-hc_pub-turtonen2021_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["turtonen2020", "carfentanil", "MNI152"]
+            },
+            "target-NET_tracer-mrb_n-10_dx-hc_pub-hesse2017_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["hesse2017", "methylreboxetine", "MNI152"]
+            },
+            "target-NET_tracer-mrb_n-77_dx-hc_pub-ding2010_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["ding2010", "mrb", "MNI152"]
+            },
+            "target-NMDA_tracer-ge179_n-29_dx-hc_pub-galovic2021_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["galovic2021", "ge179", "MNI152"]
+            },
+            "target-SV2A_tracer-ucbj_n-10_dx-hc_pub-finnema2016_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["finnema2016", "ucbj", "MNI152"]
+            },
+            "target-TSPO_tracer-pbr28_n-6_dx-hc_pub-lois2018_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["lois2018", "pbr28", "MNI152"]
+            },
+            "target-VAChT_tracer-feobv_n-18_dx-hc_pub-aghourian2017_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["aghourian2017", "feobv", "MNI152"]
+            },
+            "target-VAChT_tracer-feobv_n-4_dx-hc_pub-tuominen_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["tuominen", "feobv", "MNI152"]
+            },
+            "target-VAChT_tracer-feobv_n-5_dx-hc_pub-bedard2019_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["bedard2019", "feobv", "MNI152"]
+            },
+            "target-mGluR5_tracer-abp688_n-22_dx-hc_pub-rosaneto_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["rosaneto", "abp688", "MNI152"]
+            },
+            "target-mGluR5_tracer-abp688_n-28_dx-hc_pub-dubois2015_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["dubois2015", "abp688", "MNI152"]
+            },
+            "target-mGluR5_tracer-abp688_n-73_dx-hc_pub-smart2019_space-mni152": {
+                "host": "neuromaps",
+                "remote": ["smart2019", "abp688", "MNI152"]
+            }
+        },
+        "tab": {
+            "DesikanKilliany": {
+                "host": "osf",
+                "remote": ["derpj", "666993806b6c8e2db904cb14"]
+            },
+            "Destrieux": {
+                "host": "osf",
+                "remote": ["derpj", "6669932d6b6c8e2dc004ccac"]
+            },
+            "HCP": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1d420440a1f05ca1c24a"]
+            },
+            "Schaefer100": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1d6cfba8cf2b0aa1b8fc"]
+            },
+            "Schaefer200": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1da38cddd8b8f09b3698"]
+            },
+            "Schaefer300": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1d95751afa761b9b435c"]
+            }
+        },
+        "collection": {
+            "All": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1ddd751afa761b9b447f"]
+            },
+            "AllTargetSets": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1d31865bf853e2933651"]
+            },
+            "UniqueTracers": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1dae42d353ad532ef0e7"]
+            },
+            "UniqueTracerSets": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1dd11dfa0f2ad9933887"]
+            }
+        }
+        
+    },
+
+    "mrna": {
+        "metadata": {
+            "host": "osf",
+            "remote": ["derpj", "666989f66b6c8e2da704cd2d"]
+        },
+        "tab": {
+            "DesikanKilliany": {
+                "host": "osf",
+                "remote": ["derpj", "66698a42d835c433424ce2bc"]
+            },
+            "Destrieux": {
+                "host": "osf",
+                "remote": ["derpj", "66698b1d77ff4c583be047d9"]
+            },
+            "HCP": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1b326c5d65dfd22eee54"]
+            },
+            "Schaefer100": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1c751dfa0f2ad993377e"]
+            },
+            "Schaefer200": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1bf37a9f8f549851a6a3"]
+            },
+            "Schaefer300": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1bc17a9f8f549851a687"]
+            }
+        },
+        "collection": {
+            "All": {
+                "host": "osf",
+                "remote": ["derpj", "66f6b855abd283bd3af42d8f"]
+            },
+            "CellTypesPsychEncodeTPM": {
+                "host": "osf",
+                "remote": ["derpj", "66f6b85664b7b3530a9e8205"]
+            },
+            "CellTypesPsychEncodeUMI": {
+                "host": "osf",
+                "remote": ["derpj", "66f6b85528683715e3b40169"]
+            },
+            "CellTypesSilettiClusters": {
+                "host": "osf",
+                "remote": ["derpj", "66f6d30fb08236a0129e8866"]
+            },
+            "CellTypesSilettiSuperclusters": {
+                "host": "osf",
+                "remote": ["derpj", "66f6d30fda6dafaeb9f42bfc"]
+            },
+            "Chromosome": {
+                "host": "osf",
+                "remote": ["derpj", "66f6b856f5650cfd99f43075"]
+            },
+            "SynGO": {
+                "host": "osf",
+                "remote": ["derpj", "66f6b85764b7b3530a9e8207"]
+            }
+        }
+    },
+
+    "rsn": {
+        "metadata": {
+            "host": "osf",
+            "remote": ["derpj", "none"]
+        },
+        "map": {
+            "nw-Aud_space-mni152": {
+                "host": "github",
+                "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_Aud_MNI_333.nii"]
+            },
+            "nw-CO_space-mni152": {
+                "host": "github",
+                "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_CO_MNI_333.nii"]
+            },
+            "nw-DAN_space-mni152": {
+                "host": "github",
+                "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_DAN_MNI_333.nii"]
+            },
+            "nw-DMN_space-mni152": {
+                "host": "github",
+                "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_DMN_MNI_333.nii"]
+            },
+            "nw-FP_space-mni152": {
+                "host": "github",
+                "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_FP_MNI_333.nii"]
+            },
+            "nw-MTL_space-mni152": {
+                "host": "github",
+                "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_MTL_MNI_333.nii"]
+            },
+            "nw-PMN_space-mni152": {
+                "host": "github",
+                "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_PMN_MNI_333.nii"]
+            },
+            "nw-PON_space-mni152": {
+                "host": "github",
+                "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_PON_MNI_333.nii"]
+            },
+            "nw-SMd_space-mni152": {
+                "host": "github",
+                "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_SMd_MNI_333.nii"]
+            },
+            "nw-SMl_space-mni152": {
+                "host": "github",
+                "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_SMl_MNI_333.nii"]
+            },
+            "nw-Sal_space-mni152": {
+                "host": "github",
+                "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_Sal_MNI_333.nii"]
+            },
+            "nw-Tpole_space-mni152": {
+                "host": "github",
+                "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_Tpole_MNI_333.nii"]
+            },
+            "nw-VAN_space-mni152": {
+                "host": "github",
+                "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_VAN_MNI_333.nii"]
+            },
+            "nw-Vis_space-mni152": {
+                "host": "github",
+                "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_Vis_MNI_333.nii"]
+            }
+        },
+        "tab": {
+            "DesikanKilliany": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1d0d6f4e298d28a1beb9"]
+            },
+            "Destrieux": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1cf16c5d65dfd22eef38"]
+            },
+            "HCP": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1cff0440a1f05ca1c218"]
+            },
+            "Schaefer100": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1d1b6f4e298d28a1bebd"]
+            },
+            "Schaefer200": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1cd60440a1f05ca1c201"]
+            },
+            "Schaefer300": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1ce42d0f7e1831a1b9d5"]
+            }
+        },
+        "collection": {
+            "All": {
+                "host": "osf",
+                "remote": ["derpj", "66ad1d2713c02efe2e9b47e2"]
+            }
+        }
+    }
+}

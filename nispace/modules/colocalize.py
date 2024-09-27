@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from .. import lgr
-from ..utils import nan_detector
+from ..utils.utils import nan_detector
 from ..stats.coloc import (corr, partialcorr, r2, mlr, dominance, pls, pcr,lasso, ridge, elasticnet)
 from ..stats.misc import residuals_nan, rho_to_z
 from ..modules.constants import _COLOC_METHODS, _COLOC_METHODS_DROPOPT, _COLOC_METHODS_PERM

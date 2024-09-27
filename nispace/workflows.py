@@ -4,7 +4,7 @@ from nilearn.plotting import plot_design_matrix
 import matplotlib.pyplot as plt
 
 from . import lgr, NiSpace
-from .utils import set_log
+from .utils.utils import set_log
 from .modules.constants import (_PARCS, _PARCS_NICE, _PARCS_DEFAULT, 
                                 _DSETS, _DSETS_NICE, _COLLECT_DEFAULT,
                                 _COLOC_METHODS)
@@ -59,7 +59,9 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
                 lgr.info(f"Using integrated parcellation {parcellation}.")
                 parc_integrated = parcellation
             else:
-                parc_integrated = None
+                lgr.info(f"Input '{parcellation}' not recognized as integrated parcellation. "
+                         "Checking if path to parcellation file.")
+                parc_integrated = _PARCS_DEFAULT
             
         # y
         if y is None:

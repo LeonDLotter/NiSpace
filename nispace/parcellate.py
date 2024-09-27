@@ -17,14 +17,13 @@ from neuromaps.resampling import resample_images
 from neuromaps.transforms import _check_hemi, _estimate_density
 from neuromaps.nulls.spins import vertices_to_parcels, parcels_to_vertices
 
-from nispace.utils import get_background_value
+from nispace.utils.utils import get_background_value
 
 
 def _gifti_to_array(gifti):
     """ Converts tuple of `gifti` to numpy array
     """
     return np.hstack([load_gifti(img).agg_data() for img in gifti])
-
 
 def _array_to_gifti(data):
     """ Converts numpy `array` to tuple of gifti images
@@ -298,12 +297,18 @@ class Parcellater():
                                                       .inverse_transform(data)
         return img
 
-    def fit_transform(self, data, space, ignore_background_data=False,
-                      background_value=None, hemi=None, fill_dropped=True):
+    def fit_transform(self, data, space, ignore_background_data=True,
+                      background_value=None, hemi=None, 
+                      fill_dropped=True, background_parcels_to_nan=True,
+                      min_num_valid_datapoints=None, min_fraction_valid_datapoints=None):
+                      
         """ Prepare and perform parcellation of `data`
         """
         return self.fit().transform(data, space, ignore_background_data,
-                                    background_value, hemi, fill_dropped)
+                                    background_value, hemi, fill_dropped,
+                                    background_parcels_to_nan,
+                                    min_num_valid_datapoints,
+                                    min_fraction_valid_datapoints)
 
     def _check_fitted(self):
         if not hasattr(self, '_fit'):

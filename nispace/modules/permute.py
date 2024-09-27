@@ -5,7 +5,7 @@ from tqdm.auto import tqdm
 from .. import lgr
 from ..nulls import generate_null_maps
 from ..stats.misc import null_to_p, zscore_df
-from ..utils import set_log
+from ..utils.utils import set_log
 from ..modules.colocalize import _get_coloc_stats
 from ..modules.constants import _P_TAILS
 
