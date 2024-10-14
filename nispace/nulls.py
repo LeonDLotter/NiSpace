@@ -166,13 +166,10 @@ def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"],
         mask = np.logical_not(np.logical_or(np.isclose(parc_data, 0), np.isnan(parc_data)))
         parc_data_m = parc_data * mask
 
-        # case distances between parcel centroids
+        # case distances between volumetric parcel centroids
         if centroids:  
-            # get centroid coordinates in world space
-            xyz = np.zeros((n_parcels, 3), float)
-            for i, i_parcel in enumerate(parcels):
-                xyz[i,:] = np.column_stack(np.where(parc_data_m==i_parcel)).mean(axis=0)
-            ijk = nib.affines.apply_affine(parc_affine, xyz)
+            # get centroids
+            ijk = find_vol_parc_centroids(parc_data_m, affine=parc_affine, parcel_idc=parcels)
             # get distances
             dist = _dist_mat_from_coords(ijk, dtype)
             
@@ -254,6 +251,33 @@ def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"],
         
     ## return
     return dist
+
+def find_vol_parc_centroids(parc, affine=None, parcel_idc=None):
+    # get parcellation data
+    if isinstance(parc, np.ndarray):
+        parc_data = parc
+    else:
+        parc = load_nifti(parc)
+        parc_data = parc.get_fdata()
+    
+    # get affine matrix
+    if affine is None:
+        if not isinstance(parc, nib.Nifti1Image):
+            lgr.critical_raise("If 'affine' is not provided, 'parc' must be a Nifti image!",
+                               TypeError)
+        affine = parc.affine
+    
+    # get parcel indices
+    if parcel_idc is None:
+        parcel_idc = np.trim_zeros(np.unique(parc_data))
+    
+    # get centroid coordinates in world space
+    xyz = np.zeros((len(parcel_idc), 3), float)
+    for i, i_parcel in enumerate(parcel_idc):
+        xyz[i,:] = np.column_stack(np.where(parc_data==i_parcel)).mean(axis=0)
+    ijk = nib.affines.apply_affine(affine, xyz)
+    
+    return ijk
 
 
 def find_surf_parc_centroids(parc, parc_hemi, parc_density="10k"):
