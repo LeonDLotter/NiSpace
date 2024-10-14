@@ -426,7 +426,7 @@ def _fetch_collection(collection_path):
                     header = 0
                 else: 
                     header = None
-            collection = pd.read_csv(collection_path, header=header)
+            collection = pd.read_csv(collection_path, header=header, sep=",")
     else:
         collection = collection_path
         
