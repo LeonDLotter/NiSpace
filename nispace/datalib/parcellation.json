@@ -1,70 +1,156 @@
 {
-    "Schaefer100": {
-        "mni152": {
+    "Schaefer100MelbourneS1": {
+
+        "MNI152NLin2009cAsym": {
             "map": {
                 "host": "github",
                 "remote": ["yetianmed/subcortex", "master", "Group-Parcellation/3T/Cortex-Subcortex/MNIvolumetric/Schaefer2018_100Parcels_7Networks_order_Tian_Subcortex_S1_3T_MNI152NLin2009cAsym_1mm.nii.gz"]
             },
             "label": {
                 "host": "osf",
-                "remote": ["derpj", "66abbcbaf2537b72ab932d0b"]
+                "remote": ["derpj", "672ccc457954d4f2e8dcc98b"]
             },
             "distmat": {
                 "host": "osf",
-                "remote": ["derpj", "66ad19c913c02efe2e9b45ba"]
+                "remote": ["derpj", "672ccc3931322f9bd5027a1f"]
+            }
+        },
+
+        "MNI152NLin6Asym": {
+            "map": {
+                "host": "github",
+                "remote": ["yetianmed/subcortex", "master", "Group-Parcellation/3T/Cortex-Subcortex/MNIvolumetric/Schaefer2018_100Parcels_7Networks_order_Tian_Subcortex_S1_MNI152NLin6Asym_1mm.nii.gz"]
+            },
+            "label": {
+                "host": "osf",
+                "remote": ["derpj", "672ccc2de9409f4ae6f743a7"]
+            },
+            "distmat": {
+                "host": "osf",
+                "remote": ["derpj", "672cdc1ad6b5c0a9b20de2a0"]
             }
         }
+
+    },
+    "Schaefer100": {
+        "alias": "Schaefer100MelbourneS1",
+        "cortex": true,
+        "subcortex": false
+    },
+    "MelbourneS1": {
+        "alias": "Schaefer100MelbourneS1",
+        "cortex": false,
+        "subcortex": true
     },
 
-    "Schaefer200": {
-        "mni152": {
+    "Schaefer200MelbourneS2": {
+
+        "MNI152NLin2009cAsym": {
             "map": {
                 "host": "github",
                 "remote": ["yetianmed/subcortex", "master", "Group-Parcellation/3T/Cortex-Subcortex/MNIvolumetric/Schaefer2018_200Parcels_7Networks_order_Tian_Subcortex_S2_3T_MNI152NLin2009cAsym_1mm.nii.gz"]
             },
             "label": {
                 "host": "osf",
-                "remote": ["derpj", "66abc22fdc529eb5f89b3960"]
+                "remote": ["derpj", "672ccc982cc28b6457027618"]
             },
             "distmat": {
                 "host": "osf",
-                "remote": ["derpj", "66ad18b7d5ac802d052ee472"]
+                "remote": ["derpj", "672ccc8e173d9cbc020277af"]
             }
-        }
-    },
+        },
 
-    "Schaefer300": {
-        "mni152": {
+        "MNI152NLin6Asym": {
             "map": {
                 "host": "github",
-                "remote": ["yetianmed/subcortex", "master", "Group-Parcellation/3T/Cortex-Subcortex/MNIvolumetric/Schaefer2018_300Parcels_7Networks_order_Tian_Subcortex_S3_3T_MNI152NLin2009cAsym_1mm.nii.gz"]
+                "remote": ["yetianmed/subcortex", "master", "Group-Parcellation/3T/Cortex-Subcortex/MNIvolumetric/Schaefer2018_200Parcels_7Networks_order_Tian_Subcortex_S2_MNI152NLin6Asym_1mm.nii.gz"]
             },
             "label": {
                 "host": "osf",
-                "remote": ["derpj", "66abbc563bdd59fec1a1c405"]
+                "remote": ["derpj", "672ccc821b2f783970baa20d"]
             },
             "distmat": {
                 "host": "osf",
-                "remote": ["derpj", "66ad1861fba8cf2b0aa1b658"]
+                "remote": ["derpj", "672cdd45fb4c132ba38ea3a6"]
             }
         }
+
+    },
+    "Schaefer200": {
+        "alias": "Schaefer200MelbourneS2",
+        "cortex": true,
+        "subcortex": false
+    },
+    "MelbourneS2": {
+        "alias": "Schaefer200MelbourneS2",
+        "cortex": false,
+        "subcortex": true
+    },
+
+    "Schaefer400MelbourneS3": {
+        
+        "MNI152NLin2009cAsym": {
+            "map": {
+                "host": "github",
+                "remote": ["yetianmed/subcortex", "master", "Group-Parcellation/3T/Cortex-Subcortex/MNIvolumetric/Schaefer2018_400Parcels_7Networks_order_Tian_Subcortex_S3_3T_MNI152NLin2009cAsym_1mm.nii.gz"]
+            },
+            "label": {
+                "host": "osf",
+                "remote": ["derpj", "672cccafe9409f4ae6f74445"]
+            },
+            "distmat": {
+                "host": "osf",
+                "remote": ["derpj", "672cddccb1881f23464d6e37"]
+            }
+        },
+
+        "MNI152NLin6Asym": {
+            "map": {
+                "host": "github",
+                "remote": ["yetianmed/subcortex", "master", "Group-Parcellation/3T/Cortex-Subcortex/MNIvolumetric/Schaefer2018_400Parcels_7Networks_order_Tian_Subcortex_S3_MNI152NLin6Asym_1mm.nii.gz"]
+            },
+            "label": {
+                "host": "osf",
+                "remote": ["derpj", "672ccca3f2a54200f8dcc90f"]
+            },
+            "distmat": {
+                "host": "osf",
+                "remote": ["derpj", "672cdd887690dc30fb0de2ff"]
+            }
+        }
+
+    },
+    "Schaefer400": {
+        "alias": "Schaefer400MelbourneS3",
+        "cortex": true,
+        "subcortex": false
+    },
+    "MelbourneS3": {
+        "alias": "Schaefer400MelbourneS3",
+        "cortex": false,
+        "subcortex": true
     },
     
-    "HCP": {
-        "mni152": {
+    "HCPex": {
+        "MNI152NLin2009cAsym": {
             "map": {
                 "host": "github",
                 "remote": ["wayalan/HCPex", "main", "HCPex_v1.1/HCPex.nii.gz"]
             },
             "label": {
                 "host": "osf",
-                "remote": ["derpj", "66abc23a1ac9757fe8519698"]
+                "remote": ["derpj", "672ccc4c7954d4f2e8dcc98d"]
             },
             "distmat": {
                 "host": "osf",
-                "remote": ["derpj", "66ad18c5865bf853e29334a1"]
+                "remote": ["derpj", "672cdc62aad11e88c78ea540"]
             }
         }
+    },
+    "HCP": {
+        "alias": "HCPex",
+        "cortex": true,
+        "subcortex": false
     },
 
     "DesikanKilliany": {
@@ -72,31 +158,31 @@
             "map": {
                 "L": {
                     "host": "osf",
-                    "remote": ["derpj", "66abbc215968d6c5249b49dc"]
+                    "remote": ["derpj", "672ccc248619404f35baa417"]
                 },
                 "R": {
                     "host": "osf",
-                    "remote": ["derpj", "66abbc2d30f8e00b6893328e"]
+                    "remote": ["derpj", "672ccc187954d4f2e8dcc92a"]
                 }
             },
             "label": {
                 "L": {
                     "host": "osf",
-                    "remote": ["derpj", "66abbc3d5383dbdb679b3994"]
+                    "remote": ["derpj", "672ccc0ff2a54200f8dcc8a2"]
                 },
                 "R": {
                     "host": "osf",
-                    "remote": ["derpj", "66abbc4978e0aacdf7a1bf00"]
+                    "remote": ["derpj", "672ccc0579b58b8925f7419b"]
                 }
             },
             "distmat": {
                 "L": {
                     "host": "osf",
-                    "remote": ["derpj", "66ad18532d0f7e1831a1b3e9"]
+                    "remote": ["derpj", "672cdadd9929c290914d6cfd"]
                 },
                 "R": {
                     "host": "osf",
-                    "remote": ["derpj", "66ad17f442d353ad532eec6d"]
+                    "remote": ["derpj", "672cdbd9fddddf078962f9e1"]
                 }
             }
         }
@@ -107,31 +193,31 @@
             "map": {
                 "L": {
                     "host": "osf",
-                    "remote": ["derpj", "66abbc9678e0aacdf7a1bf1a"]
+                    "remote": ["derpj", "672ccc6e99f746fbccbaa64e"]
                 },
                 "R": {
                     "host": "osf",
-                    "remote": ["derpj", "66abbca21f8978af462ee983"]
+                    "remote": ["derpj", "672ccc636ca18622e5f5cf6d"]
                 }
             },
             "label": {
                 "L": {
                     "host": "osf",
-                    "remote": ["derpj", "66abbc7c2741f694c2519763"]
+                    "remote": ["derpj", "672ccc7a31322f9bd5027a45"]
                 },
                 "R": {
                     "host": "osf",
-                    "remote": ["derpj", "66abbc89ac269a9040a1c8c6"]
+                    "remote": ["derpj", "672ccc5631322f9bd5027a34"]
                 }
             },
             "distmat": {
                 "L": {
                     "host": "osf",
-                    "remote": ["derpj", "66ad192dd5ac802d052ee4bf"]
+                    "remote": ["derpj", "672cdcc1948ec62e278ea751"]
                 },
                 "R": {
                     "host": "osf",
-                    "remote": ["derpj", "66ad195a0440a1f05ca1bfa5"]
+                    "remote": ["derpj", "672cdd05d6b5c0a9b20de2f1"]
                 }
             }
         }

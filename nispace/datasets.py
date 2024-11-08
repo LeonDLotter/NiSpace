@@ -1,22 +1,13 @@
 from typing import Union, List, Dict, Tuple
-import requests
 import pathlib
-import os
-import io
-import zipfile
 import pandas as pd
 import numpy as np
 from nilearn import image
-import gzip
-import pickle
+import shutil
 from typing import Literal
 
-from sklearn.decomposition import non_negative_factorization
-
 from . import lgr
-from .modules.constants import (_DSETS, _DSETS_NICE, _DSETS_TAB_ONLY,
-                                _DSETS_CX_ONLY, _DSETS_SC_ONLY,
-                                _PARCS_DEFAULT)
+from .modules.constants import _PARC_DEFAULT, _SPACE_DEFAULT
 from .stats.misc import zscore_df
 from .utils.utils import _rm_ext, set_log
 from .utils.utils_datasets import get_file
@@ -29,91 +20,31 @@ template_lib = read_json(datalib_dir / "template.json")
 parcellation_lib = read_json(datalib_dir / "parcellation.json")
 example_lib = read_json(datalib_dir / "example.json")
 
-# OSF HANDLING =====================================================================================
+def keys2list(dct):
+    return list(dct.keys())
 
-def download_datasets(datasets="all", 
-                      nispace_data_dir: Union[str, pathlib.Path] = None, 
-                      osf_id: str = "derpj"):
-    """
-    Download all data associated with NiSpace.
+def keys2str(dct, sep=", "):
+    return sep.join(list(dct.keys()))
 
-    Parameters
-    ----------
-    datasets : str or list of str, optional
-        The datasets to download. Options are "template", "parcellation", "reference", "example", or "all".
-        Default is "all".
-    nispace_data_dir : str or pathlib.Path, optional
-        The directory where the data will be downloaded. Default is `~HOME/nispace-data`.
-    osf_id : str, optional
-        The OSF project ID from which to download the data. Default is "derpj".
 
-    Raises
-    ------
-    ValueError
-        If the specified datasets are not in the list of available datasets.
-    FileNotFoundError
-        If the specified directory does not exist and cannot be created.
-    requests.exceptions.RequestException
-        If there is an issue with the HTTP request to the OSF API.
+# EMPTY NISPACE DATA DIR ===========================================================================
 
-    Notes
-    -----
-    This function downloads approximately 250 MB of data. This process will be updated in the future
-    by integrating downloads into the "fetch_...()" functions and only downloading necessary data.
-    """
-    
-    lgr.info("Downloading all data associated with NiSpace (~250 MB). This will take some time.\n"
-             "By default, data will be downloaded to ~HOME/nispace-data. "
-             "You can also download the data manually from https://osf.io/derpj\n"
-             "This strategy will change in the future to a more reliable, version-tracked one, "
-             "integrated into the fetch_...() functions.")
-    
+_EMPTY_DATA_CONFIRMED = False
+def empty_nispace_data_dir(nispace_data_dir: Union[str, pathlib.Path] = None):
+    global _EMPTY_DATA_CONFIRMED
     if nispace_data_dir is None:
         nispace_data_dir = pathlib.Path.home() / "nispace-data"
-        
-    dsets_all = ["template", "parcellation", "reference", "example"]
-    if isinstance(datasets, str):
-        datasets = [datasets]
-    if datasets in [["all"], [None]]:
-        datasets = dsets_all
+    if not _EMPTY_DATA_CONFIRMED:
+        lgr.warning("If you call this function again, it will remove all contents of your NiSpace "
+                    f"data directory at {nispace_data_dir}.")
+        lgr.warning("Call it again to proceed.")
+        _EMPTY_DATA_CONFIRMED = True
     else:
-        if not all(dset in dsets_all for dset in datasets):
-            raise ValueError(f"Datasets must be 'all' or one or more of {dsets_all}")
-    
-    if not os.path.exists(nispace_data_dir):
-        os.makedirs(nispace_data_dir)
-    
-    # Get a list of files in the project
-    response = requests.get(f'https://api.osf.io/v2/nodes/{osf_id}/files/osfstorage/')
-    response.raise_for_status()
-    files = response.json()['data']
-    
-    for file in files:
-        if file["attributes"]["kind"] == "folder":
-            folder_name = file["attributes"]["name"]
-            if folder_name in datasets:
-                folder_id = file["attributes"]["path"]
-                local_path = pathlib.Path(nispace_data_dir, folder_name)
-                local_path.mkdir(parents=True, exist_ok=True)
-                lgr.info(f"Downloading '{folder_name}' data to '{local_path}'")
-                response = requests.get(f'https://files.osf.io/v1/resources/{osf_id}/providers/osfstorage/{folder_id}/?zip=')
-                response.raise_for_status()
-                # Open the ZIP file
-                with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-                    # Extract all files to the specified directory
-                    z.extractall(local_path)
+        lgr.warning(f"Emptying nispace data dir at {nispace_data_dir}.")
+        shutil.rmtree(nispace_data_dir)
+        nispace_data_dir.mkdir(parents=True, exist_ok=True)
 
-def _check_base_dir(base_dir, data_type):
-    base_dir = pathlib.Path(base_dir)
-    if not base_dir.exists():
-        lgr.critical_raise(f"{data_type} data not found. Run 'nispace.datasets.download_datasets()' "
-                           "to download it or adjust 'nispace_data_path'!",
-                           FileNotFoundError)
-    elif len(os.listdir(base_dir)) < 1:
-        lgr.critical_raise(f"{data_type} directory exists but data not found! Maybe something "
-                           "went wrong with the download?!",
-                           FileNotFoundError)
-        
+
 # FILE HANDLING ====================================================================================
 
 def _file_desc(fname, feature_position):
@@ -127,7 +58,7 @@ def _file_desc(fname, feature_position):
     
 # BRAIN TEMPLATES ==================================================================================
 
-def fetch_template(template: str = "mni152", 
+def fetch_template(template: str = _SPACE_DEFAULT, 
                    res: str = None,
                    desc: str = None,
                    #parcellation: str = None,
@@ -140,14 +71,14 @@ def fetch_template(template: str = "mni152",
     Parameters
     ----------
     template : str, optional
-        The template to fetch. Default is "mni152".
+        The template to fetch. Default is "MNI152NLin2009cAsym".
         
     res : str, optional
         The resolution of the template to fetch. If None, will default to "1mm" for MNI152 and 
         "10k" for fsaverage.
         
     desc : str, optional
-        The description of the template to fetch. If None, will default to "T1" for MNI152 and 
+        The description of the template to fetch. If None, will default to "T1w" for MNI152 and 
         "pial" for fsaverage.
         
     hemi : list of str, optional
@@ -162,13 +93,9 @@ def fetch_template(template: str = "mni152",
     """
     verbose = set_log(lgr, verbose)
     
-    # hard-coded template type    
-    if "mni" in template.lower():
-        template = "mni152"
-    elif "fsa" in template.lower():
-        template = "fsaverage"
-    else:
-        raise ValueError("template should be 'MNI152' or 'fsaverage'!")
+    # check if template exists
+    if template not in template_lib:
+        raise ValueError(f"Template '{template}' not found. Available: {keys2str(template_lib)}")
     
     # paths        
     if nispace_data_dir is None:
@@ -176,62 +103,49 @@ def fetch_template(template: str = "mni152",
     base_dir = pathlib.Path(nispace_data_dir) / "template" / template
     map_dir = base_dir / "map"
     
-    # get files
-    # mni
-    if template == "mni152":
-        # default resolution
-        if res is None:
-            res = "1mm"
-        if res not in template_lib["mni152"]:
-            raise ValueError(f"res = '{res}' not defined. Choose one of '1mm', '2mm', or '3mm'!")
-        # default desc
-        if desc is None:
-            desc = "T1"
-        if desc not in template_lib["mni152"][res]:
-            raise ValueError(f"desc = '{desc}' not defined. Choose one of {list(template_lib['mni152'][res].keys())}!")
-        # get file
-        lgr.info(f"Loading MNI152NLin2009cAsym '{desc}' template in '{res}' resolution.")
-        tpl_path = map_dir / f"MNI152NLin20009cAsym_desc-{desc}_res-{res}.nii.gz"
-        tpl_file = get_file(tpl_path, **template_lib["mni152"][res][desc])
-
-    # fsa
-    elif template == "fsaverage":
-        # default resolution
-        if res is None:
-            res = "10k"
-        if res not in template_lib["fsaverage"]:
-            raise ValueError(f"res = '{res}' not defined. Choose one of {list(template_lib['fsaverage'].keys())}!")
-        # default desc
-        if desc is None:
-            desc = "pial"
-        if desc not in template_lib["fsaverage"][res]:
-            raise ValueError(f"desc = '{desc}' not defined. Choose one of {list(template_lib['fsaverage'][res].keys())}!")
-        # hemi
+    # set defaults:
+    if "mni" in template.lower():
+        res = "1mm" if res is None else res
+        desc = "T1w" if desc is None else desc
+        hemi = None
+    elif "fsa" in template.lower():
+        res = "10k" if res is None else res
+        desc = "pial" if desc is None else desc
+        if hemi is None:
+            hemi = ["L", "R"]
+    
+    # check settings
+    if res not in template_lib[template]:
+        raise ValueError(f"res = '{res}' not defined. Choose one of {keys2str(template_lib[template])}!")
+    if desc not in template_lib[template][res]:
+        raise ValueError(f"desc = '{desc}' not defined. Choose one of {keys2str(template_lib[template][res])}!")
+    if hemi is not None:
         if isinstance(hemi, str):
             hemi = [hemi]
         if hemi not in [["L"], ["R"], ["L", "R"]]:
             raise ValueError(f"hemi = '{hemi}' not defined. Choose one of 'L', 'R', or ['L', 'R']!")
-        # get file(s)
-        lgr.info(f"Loading fsaverage '{desc}' template in '{res}' resolution.")
+    
+    # get file
+    lgr.info(f"Loading {template} '{desc}' template in '{res}' resolution.")
+    if "mni" in template.lower():
+        tpl_path = map_dir / desc / f"tpl-{template}_desc-{desc}_res-{res}.nii.gz"
+        tpl_file = get_file(tpl_path, **template_lib[template][res][desc])
+    else:
         tpl_file = ()
         for h in hemi:
-            tpl_path = map_dir / f"fsaverage_desc-{desc}_res-{res}_hemi-{h}.surf.gii"
-            tpl_file += get_file(tpl_path, **template_lib["fsaverage"][res][desc][h]),
-        if len(tpl_file) == 1:
+            tpl_path = map_dir / desc / f"tpl-{template}_desc-{desc}_res-{res}_hemi-{h}.surf.gii"
+            tpl_file += get_file(tpl_path, **template_lib[template][res][desc][h]),
+        if len(tpl_file) == 1: 
             tpl_file = tpl_file[0]
-            
+    
     # return
     return tpl_file
 
 # PARCELLATIONS ====================================================================================
 
-def fetch_parcellation(parcellation: str = _PARCS_DEFAULT, 
-                       space: Literal["mni152", "fsaverage"] = None,
-                       #n_parcels: Union[int, str] = None,
-                       #resolution: str = None,
+def fetch_parcellation(parcellation: str = _PARC_DEFAULT, 
+                       space: str = None,
                        hemi: Union[List[str], str] = ["L", "R"],
-                       cortex_only: bool = False,
-                       subcortex_only: bool = False,
                        return_labels: bool = True,
                        return_space: bool = False,
                        return_resolution: bool = False,
@@ -239,81 +153,92 @@ def fetch_parcellation(parcellation: str = _PARCS_DEFAULT,
                        return_loaded: bool = False,
                        nispace_data_dir: Union[str, pathlib.Path] = None):
     
-    # Check available
+    # Check if in main parcellation list
     if parcellation not in parcellation_lib:
-        lgr.critical_raise(f"Parcellation '{parcellation}' not found. Available: {list(parcellation_lib.keys())}",
+        lgr.critical_raise(f"Parcellation '{parcellation}' not found. Available: {keys2str(parcellation_lib)}",
                            ValueError)
+        
+    # check if alias and set data to retrieve
+    # variable "parcellation" is now what the user sees, "parc" is what we go with internally
+    if "alias" in parcellation_lib[parcellation]:
+        parc = parcellation_lib[parcellation]["alias"]
+        cortex = parcellation_lib[parcellation]["cortex"]
+        subcortex = parcellation_lib[parcellation]["subcortex"]
+    else:
+        parc = parcellation
+        cortex, subcortex = True, True
+        
     # Check space
     if space is None:
         # get default space -> first space listed in parcellation_lib
-        space = list(parcellation_lib[parcellation].keys())[0]
+        space = list(parcellation_lib[parc].keys())[0]
     else:
-        if space.lower() not in parcellation_lib[parcellation]:
+        if space not in parcellation_lib[parc]:
             lgr.critical_raise(f"Space '{space}' not found for parcellation '{parcellation}'. "
-                               f"Available: {list(parcellation_lib[parcellation].keys())}",
+                               f"Available: {keys2str(parcellation_lib[parc])}",
                                ValueError)
-        
+    
     # base dir
     if not nispace_data_dir:
-        base_dir = pathlib.Path.home() / "nispace-data" / "parcellation" / parcellation / space
+        base_dir = pathlib.Path.home() / "nispace-data" / "parcellation" / parc / space
     else:
-        base_dir = pathlib.Path(nispace_data_dir) / "parcellation" / parcellation / space
+        base_dir = pathlib.Path(nispace_data_dir) / "parcellation" / parc / space
     
     # LOAD
     lgr.info(f"Loading parcellation '{parcellation}' in '{space}' space.")
     
     # volume
-    if space.lower() == "mni152":
+    if "mni" in space.lower():
         
         # get files
         parcellation_file = get_file(
-            base_dir / f"{parcellation}_space-{space}.label.nii.gz", 
-            **parcellation_lib[parcellation][space]["map"]
+            base_dir / f"parc-{parc}_space-{space}.label.nii.gz", 
+            **parcellation_lib[parc][space]["map"]
         )
-        if return_labels or cortex_only or subcortex_only:
+        if return_labels or not cortex or not subcortex:
             label_file = get_file(
-                base_dir / f"{parcellation}_space-{space}.label.txt",
-                **parcellation_lib[parcellation][space]["label"]
+                base_dir / f"parc-{parc}_space-{space}.label.txt",
+                **parcellation_lib[parc][space]["label"]
             )
         if return_dist_mat:
             distmat_file = get_file(
-                base_dir / f"{parcellation}_space-{space}.dist.csv.gz",
-            **parcellation_lib[parcellation][space]["distmat"]
-        )
+                base_dir / f"parc-{parc}_space-{space}.dist.csv.gz",
+                **parcellation_lib[parc][space]["distmat"]
+            )
     
         # cortex only:
-        if cortex_only and subcortex_only:
-            lgr.error("Cannot set both 'cortex_only' and 'subcortex_only' to True. Returning all!")
-            cortex_only = False
-            subcortex_only = False
-            
-        if cortex_only or subcortex_only:
-            # specify the indices * we want to remove *
-            labels = load_labels(label_file)
-            str_rm = "_SC_" if cortex_only else "_CX_"
-            idc_rm = [int(l.split("_")[0]) for l in labels if str_rm in l]
-            lgr.info(f"Removing {len(idc_rm)} {'subcortical' if str_rm=='_SC_' else 'cortical'} "
-                     "parcels. Will return Nifti1 object instead of path!")
-            # drop from parcellation
+        if not cortex and not subcortex:
+            lgr.error("Cannot set both 'cortex' and 'subcortex' to False. Returning all!")
+            cortex, subcortex = True, True
+        if not cortex or not subcortex:
+            lgr.info(f"{parcellation} is a {['cortex', 'subcortex'][not cortex]} version of the "
+                     f"whole-brain parcellation {parc}.")
+            # get the labels we want to keep
+            labels_all = load_labels(label_file)
+            str_to_keep = "_CX_" if cortex else "_SC_"
+            labels_to_keep = [l for l in labels_all if str_to_keep in l]
+            # get the indices we want to remove
+            idc_rm = [int(l.split("_")[0]) for l in labels_all if l not in labels_to_keep]
+            lgr.info(f"Removing {len(idc_rm)} {['cortical', 'subcortical'][not cortex]} parcels and "
+                     "returning Nifti1 object instead of path!")
+            # drop indices from parcellation
             parc = load_img(parcellation_file)
             parc_array = parc.get_fdata()
             for idx in idc_rm:
                 parc_array[parc_array==idx] = 0
             parc = image.new_img_like(parc, parc_array, copy_header=True)
-            # drop from labels
-            labels = [l for l in labels if str_rm not in l]
             # replace vars
-            parcellation_file, label_file = parc, labels
+            parcellation_file, label_file = parc, labels_to_keep
             # drop from dist mat
             if return_dist_mat:
-                bool_keep = np.array([False if str_rm in l else True for l in labels])
+                bool_keep = np.array([True if l in labels_to_keep else False for l in labels_all])
                 distmat = load_distmat(distmat_file)
                 distmat = distmat[np.ix_(bool_keep, bool_keep)]
                 distmat_file = distmat
             
             
     # surface
-    elif space.lower() in ["fsaverage", "fslr"]:
+    else:
         
         # check hemis
         if isinstance(hemi, str):
@@ -325,18 +250,18 @@ def fetch_parcellation(parcellation: str = _PARCS_DEFAULT,
         parcellation_file, label_file, distmat_file = (), (), ()
         for h in hemi:
             parcellation_file += get_file(
-                base_dir / f"{parcellation}_space-{space}_hemi-{h}.label.gii.gz", 
-                **parcellation_lib[parcellation][space]["map"][h]
+                base_dir / f"{parc}_space-{space}_hemi-{h}.label.gii.gz", 
+                **parcellation_lib[parc][space]["map"][h]
             ),
-            if return_labels or cortex_only or subcortex_only:
+            if return_labels:
                 label_file += get_file(
-                    base_dir / f"{parcellation}_space-{space}_hemi-{h}.label.txt",
-                    **parcellation_lib[parcellation][space]["label"][h]
+                    base_dir / f"{parc}_space-{space}_hemi-{h}.label.txt",
+                    **parcellation_lib[parc][space]["label"][h]
                 ),
             if return_dist_mat:
                 distmat_file += get_file(
-                    base_dir / f"{parcellation}_space-{space}_hemi-{h}.dist.csv.gz",
-                    **parcellation_lib[parcellation][space]["distmat"][h]
+                    base_dir / f"{parc}_space-{space}_hemi-{h}.dist.csv.gz",
+                    **parcellation_lib[parc][space]["distmat"][h]
                 ),
         if len(parcellation_file) == 1:
             parcellation_file, label_file, distmat_file = parcellation_file[0], label_file[0], distmat_file[0]
@@ -474,7 +399,7 @@ def _apply_collection_filter(dataset: str,
             collection_file = get_file(collection_path, **reference_lib[dataset]["collection"][collection])
         else:
             lgr.warning(f"Collection '{collection}' not found! Available: "
-                        f"{list(reference_lib[dataset]['collection'].keys())}")
+                        f"{keys2str(reference_lib[dataset]['collection'])}")
             return map_files, None
 
     # Load collection file; 1-column df (= maps) or 2-column df (= set and maps)
@@ -516,21 +441,19 @@ def _apply_collection_filter(dataset: str,
 
 def _load_parcellated_data(dataset: str, 
                            tab_dir: pathlib.Path, 
-                           parcellation: str, 
+                           parc: str, 
                            map_files: List[str],
                            collection_df: pd.DataFrame,
-                           return_nulls: bool, 
-                           nulls_dir: pathlib.Path, 
-                           cortex_only: bool,
-                           subcortex_only: bool,
+                           cortex: bool,
+                           subcortex: bool,
                            standardize: bool) -> Union[pd.DataFrame, Tuple[pd.DataFrame, Dict]]:
-    lgr.info(f"Loading parcellated data: {parcellation}")
-    parcellation_file = tab_dir / f"{dataset}_{parcellation}.csv.gz"
+    lgr.info(f"Loading parcellated data: {parc}")
+    parcellation_file = tab_dir / f"dset-{dataset}_parc-{parc}.csv.gz"
     lgr.debug(f"Loading {parcellation_file}")
     
     # Load parcellated data
     data = pd.read_csv(
-        get_file(parcellation_file, **reference_lib[dataset]["tab"][parcellation]), 
+        get_file(parcellation_file, **reference_lib[dataset]["tab"][parc]), 
         index_col=0
     )
     lgr.debug(f"Loaded parcellated data of shape {data.shape}")
@@ -550,50 +473,22 @@ def _load_parcellated_data(dataset: str,
         data = data.loc[collection_df_intersection["map"]]     
         data.index = pd.MultiIndex.from_frame(collection_df_intersection)
         
-    # Load null maps if requested
-    if return_nulls:
-        lgr.info("Loading precomputed null maps.")
-        try:
-            # load
-            with gzip.open(nulls_dir / f"{dataset}_{parcellation}.pkl.gz", "rb") as f:
-                null_maps = pickle.load(f)
-            # filter to selected maps
-            if collection_df is None:
-                null_maps = {name: null_maps[name] for name in data.index}
-            else:
-                null_maps = {idx: null_maps[name] 
-                             for idx, name in zip(data.index, data.index.get_level_values("map"))}
-        except FileNotFoundError:
-            lgr.warning("No precomputed null map data found. Did you download it?")
-            return_nulls = False
-
     # Filter to keep only cortical parcels if requested
-    if cortex_only and subcortex_only:
-        lgr.error("Cannot set both 'cortex_only' and 'subcortex_only' to True. Returning all!")
-        cortex_only = False
-        subcortex_only = False
-    
-    if cortex_only or subcortex_only:
-        str_rm = "_SC_" if cortex_only else "_CX_"
-        lgr.info(f"Removing {'subcortical' if str_rm=='_SC_' else 'cortical'} parcels.")
-        bool_keep = np.array([False if str_rm in c else True for c in data.columns])
+    if not cortex and not subcortex:
+        lgr.error("Cannot set both 'cortex' and 'subcortex' to False. Returning all!")
+        cortex, subcortex = True, True
+    if not cortex or not subcortex:
+        str_to_keep = "_CX_" if cortex else "_SC_"
+        bool_keep = np.array([True if str_to_keep in c else False for c in data.columns])
+        lgr.info(f"Removing {bool_keep.sum()} {['cortical', 'subcortical'][not cortex]} parcels.")
         data = data.loc[:, bool_keep]
-        if return_nulls:
-            null_maps = {name: null_maps[:, bool_keep] 
-                         for name, null_maps in null_maps.items()}
-            
+        
     # Standardize
     if standardize:
         lgr.info("Standardizing parcellated data.")
         data = zscore_df(data, along="rows")
-        if return_nulls:
-            null_maps = {name: zscore_df(null_maps, along="rows", force_df=False) 
-                         for name, null_maps in null_maps.items()}
 
-    if return_nulls:
-        return data, null_maps
-    else:
-        return data
+    return data
     
 
 def _print_references(dataset: str, meta: pd.DataFrame = None):
@@ -619,13 +514,22 @@ def _print_references(dataset: str, meta: pd.DataFrame = None):
         msg = get_ref_info(dataset)
         if meta is not None:
             atlas_maxlen = max([len(x) for x in meta["atlas"]])
-            author_maxlen = max([len(x) for x in meta["author"]])
-            lic_maxlen = max([len(x) for x in meta["license"]])
-            for atlas, pub, doi, lic in zip(meta["atlas"], meta["author"], meta["doi"], meta["license"]):
+            author_maxlen = max([len(x) for x in meta["publication"]])
+            license_maxlen = max([len(x) for x in meta["license"]])
+            for atlas, pub, doi, license, note in zip(
+                meta["atlas"], meta["publication"], meta["doi"], meta["license"], meta["note"]
+                ):
+                
+                doi_list = [f"https://doi.org/{doi}" for doi in doi.replace(" ", "").split(";")]
+                if "" in doi_list: doi_list.remove("")
+                doi_str = ", ".join(doi_list)
                 atlas = atlas.ljust(atlas_maxlen)
                 author = pub.capitalize().ljust(author_maxlen)
-                lic = lic.ljust(lic_maxlen)
-                msg += f"- {atlas}  Source: {author}  {lic}  https://doi.org/{doi}\n"
+                license = license.ljust(license_maxlen)
+                msg += f"- {atlas}  Source: {author}  {license}  {doi_str}\n"
+                
+                if not pd.isna(note):
+                    msg += f"    CAVE: {note}\n"
     
     # mRNA
     elif dataset.lower() == "mrna":
@@ -659,26 +563,26 @@ def _print_references(dataset: str, meta: pd.DataFrame = None):
 
 def fetch_reference(dataset: str,
                     maps: Union[None, str, List[str], Dict[str, Union[str, list]]] = None,
+                    space: str = _SPACE_DEFAULT,
                     collection: str = None,
                     set_size_range: Union[None, Tuple[int, int]] = None,
                     parcellation: str = None,
                     standardize_parcellated: bool = True,
-                    cortex_only: bool = False,
-                    subcortex_only: bool = False,
-                    return_nulls: bool = False,
                     return_metadata: bool = False,
                     print_references: bool = True,
                     verbose: bool = True,
-                    nispace_data_dir: Union[str, pathlib.Path] = None):
+                    nispace_data_dir: Union[str, pathlib.Path] = None,
+                    osf_config_file: str = None):
     verbose = set_log(lgr, verbose)
 
+    # Check dataset availability
     if isinstance(dataset, str):
         dataset = dataset.lower()
-        if dataset not in _DSETS:
-            lgr.critical_raise(f"Dataset '{dataset}' not found! Available datasets: {_DSETS_NICE}",
+        if dataset not in reference_lib:
+            lgr.critical_raise(f"Dataset '{dataset}' not found! Available datasets: {keys2str(reference_lib)}",
                                ValueError)
     else:
-        lgr.critical_raise(f"Invalid dataset type; expecting string. Available datasets: {_DSETS_NICE}",
+        lgr.critical_raise(f"Invalid dataset type; expecting string.",
                            TypeError)
     lgr.info(f"Loading {dataset} maps.")
     
@@ -689,31 +593,49 @@ def fetch_reference(dataset: str,
         base_dir = pathlib.Path(nispace_data_dir) / f"reference" / dataset
     map_dir = base_dir / "map"
     tab_dir = base_dir / "tab"
-    nulls_dir = base_dir / "null"
-
-    # Get list of maps
-    if dataset not in _DSETS_TAB_ONLY:
-        maps_avail = list(reference_lib[dataset]["map"].keys())
-    else:
-        if parcellation is None:
-            lgr.warning(f"mRNA data requires a parcellation. Defaulting to: '{_PARCS_DEFAULT}'.")
-            parcellation = _PARCS_DEFAULT
-        if return_nulls:
-            lgr.warning("Precomputed null maps are not available for mRNA data. Will not return any.")
-            return_nulls = False
+    
+    # Check if parcellation is defined correctly and load map lists
+    if parcellation is not None:
+        
+        # check if parcellation is defined correctly and set alias settings
+        if parcellation not in parcellation_lib:
+            lgr.critical_raise(f"Parcellation '{parcellation}' not found. Available: {keys2str(parcellation_lib)}",
+                               ValueError)
+        if "alias" in parcellation_lib[parcellation]:
+            parc = parcellation_lib[parcellation]["alias"]
+            cortex = parcellation_lib[parcellation]["cortex"]
+            subcortex = parcellation_lib[parcellation]["subcortex"]
+        else:
+            parc = parcellation
+            cortex, subcortex = True, True
+        
+        # load maps from tabulated data (index col)
         maps_avail = pd.read_csv(
-            get_file(tab_dir / f"{dataset}_{parcellation}.csv.gz", **reference_lib[dataset]["tab"][parcellation]), 
+            get_file(tab_dir / f"dset-{dataset}_parc-{parc}.csv.gz", **reference_lib[dataset]["tab"][parc]), 
             index_col=0
         ).index.to_list()
+    
+    # Check space availability and load map lists   
+    else:
+            
+        # get list of map image files
+        maps_avail = [m for m, v in reference_lib[dataset]["map"].items() if space in v]
+        if len(maps_avail) == 0:
+            lgr.critical_raise(f"Found no maps for space '{space}' in dataset '{dataset}'.",
+                               ValueError)
         
     lgr.debug(f"Loaded {len(maps_avail)} unfiltered map(s). "
               f"First 5: {maps_avail[:5] if len(maps_avail) >= 5 else maps_avail[:len(maps_avail)]}")
 
+    # Remove private maps
+    if osf_config_file is None:
+        maps_avail = [m for m in maps_avail if reference_lib[dataset]["map"][m][space]["host"] != "osfprivate"]
+    
     # Filter by 'maps'
     if maps:
         n_tmp = len(maps_avail)
         lgr.info(f"Applying filter: {maps}")
-        if dataset not in _DSETS_TAB_ONLY:
+        if "map" not in reference_lib[dataset]:
             maps_avail = _filter_maps(maps_avail, maps)
         else:
             if isinstance(maps, str):
@@ -723,7 +645,7 @@ def fetch_reference(dataset: str,
                 maps = maps_avail
             maps_avail = list(set(maps_avail).intersection(maps))
         lgr.info(f"Filtered from {n_tmp} to {len(maps_avail)} maps.")
-            
+    
     # Filter by 'collection'
     if collection == "All":
         collection = None
@@ -735,31 +657,14 @@ def fetch_reference(dataset: str,
 
     # Load tabulated data if 'parcellation' is specified
     if parcellation:
-        # for now, no null data included. TODO: re-evaluate cost/benefits
-        if return_nulls:
-            lgr.warning("Pre-calculated null maps are currently not available. Will not return any.")
-            return_nulls = False
-        # cortex only for specific datasets
-        if dataset in _DSETS_CX_ONLY:
-            lgr.warning(f"Dataset '{dataset}' is cortex-only. Will not return subcortical parcels.")
-            cortex_only = True
-            subcortex_only = False
-        # subcortex only for specific datasets
-        if dataset in _DSETS_SC_ONLY:
-            lgr.warning(f"Dataset '{dataset}' is subcortex-only. Will not return cortical parcels.")
-            cortex_only = False
-            subcortex_only = True
-        # get data
         data = _load_parcellated_data(
             dataset=dataset, 
             tab_dir=tab_dir, 
-            parcellation=parcellation, 
+            parc=parcellation, 
             map_files=maps_avail, 
             collection_df=collection_df,
-            return_nulls=return_nulls, 
-            nulls_dir=nulls_dir, 
-            cortex_only=cortex_only,
-            subcortex_only=subcortex_only,
+            cortex=cortex,
+            subcortex=subcortex,
             standardize=standardize_parcellated
         )
         
@@ -767,10 +672,10 @@ def fetch_reference(dataset: str,
     else:
         data = [
             get_file(
-                local_path=map_dir / f"{m}.nii.gz", 
-                **reference_lib[dataset]["map"][m], 
-                process_img=True,
-                override_file_format="nifti"
+                local_path=map_dir / m / f"{m}_space-{space}.nii.gz", 
+                **reference_lib[dataset]["map"][m][space], 
+                compress_nifti=True,
+                osf_config_file=osf_config_file
             ) 
             for m in maps_avail
         ]
@@ -782,8 +687,6 @@ def fetch_reference(dataset: str,
             meta = fetch_metadata(dataset, maps_avail)
         elif dataset == "mrna" and collection_df is not None:
             meta = fetch_metadata(dataset, collection=collection)
-        elif dataset == "brainmap":
-            meta = fetch_metadata(dataset)
         else: 
             meta = None
  
@@ -798,7 +701,7 @@ def fetch_reference(dataset: str,
 def fetch_metadata(dataset: str, maps: Union[str, list] = None, collection: str = None):
     if isinstance(dataset, str):
         dataset = dataset.lower()
-        if dataset not in _DSETS:
+        if dataset not in reference_lib:
             return None
     else:
         return None

@@ -1,7 +1,11 @@
 {
-    "mni152": {
+    "MNI152NLin2009cAsym": {
         "1mm": {
-            "T1": {
+            "T1w": {
+                "host": "url",
+                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_T1w.nii.gz"
+            },
+            "brain": {
                 "host": "url",
                 "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_desc-brain_T1w.nii.gz"
             },
@@ -15,7 +19,11 @@
             }
         },
         "2mm": {
-            "T1": {
+            "T1w": {
+                "host": "url",
+                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_T1w.nii.gz"
+            },
+            "brain": {
                 "host": "url",
                 "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_desc-brain_T1w.nii.gz"
             },
@@ -29,31 +37,66 @@
             }
         },
         "3mm": {
-            "T1": {
+            "T1w": {
                 "host": "osf",
-                "remote": ["derpj", "66ab5e1f827ec8e3919330eb"]
+                "remote": ["derpj", "672ccbd74a85a5a540f5ccdd"]
+            },
+            "brain": {
+                "host": "osf",
+                "remote": ["derpj", "672ccbeee62f54fc87dcd12f"]
             },
             "mask": {
                 "host": "osf",
-                "remote": ["derpj", "66ab5e1d35130561f39b3746"]
+                "remote": ["derpj", "672ccbbe7954d4f2e8dcc8db"]
             },
             "gmprob": {
                 "host": "osf",
-                "remote": ["derpj", "66ab5e21f9cf3ca1559b3c98"]
+                "remote": ["derpj", "672ccbf8d3523f9fb1ba9fe1"]
+            }
+        }
+    },
+
+    "MNI152NLin6Asym": {
+        "1mm": {
+            "T1w": {
+                "host": "url",
+                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin6Asym/tpl-MNI152NLin6Asym_res-01_T1w.nii.gz"
+            },
+            "brain": {
+                "host": "url",
+                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin6Asym/tpl-MNI152NLin6Asym_res-01_desc-brain_T1w.nii.gz"
+            },
+            "mask": {
+                "host": "url",
+                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin6Asym/tpl-MNI152NLin6Asym_res-01_desc-brain_mask.nii.gz"
             }
         },
-        "4mm": {
-            "T1": {
+        "2mm": {
+            "T1w": {
+                "host": "url",
+                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin6Asym/tpl-MNI152NLin6Asym_res-02_T1w.nii.gz"
+            },
+            "brain": {
+                "host": "url",
+                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin6Asym/tpl-MNI152NLin6Asym_res-02_desc-brain_T1w.nii.gz"
+            },
+            "mask": {
+                "host": "url",
+                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin6Asym/tpl-MNI152NLin6Asym_res-02_desc-brain_mask.nii.gz"
+            }
+        },
+        "3mm": {
+            "T1w": {
                 "host": "osf",
-                "remote": ["derpj", "66ab5e20e75f83de049b3a6a"]
+                "remote": ["derpj", "672e06948f48bbcc730de0b6"]
+            },
+            "brain": {
+                "host": "osf",
+                "remote": ["derpj", "672ccbb5e9409f4ae6f74349"]
             },
             "mask": {
                 "host": "osf",
-                "remote": ["derpj", "66ab5e1edb006681a72ee280"]
-            },
-            "gmprob": {
-                "host": "osf",
-                "remote": ["derpj", "66ab5e1f0aa42bda57519d84"]
+                "remote": ["derpj", "672ccbab916fcbffa7baa0c3"]
             }
         }
     },

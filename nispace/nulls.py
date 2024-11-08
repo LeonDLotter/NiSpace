@@ -146,7 +146,7 @@ def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"],
     
     ## generate distance matrix
     # case volumetric 
-    if parc_space in ["MNI152", "mni152", "MNI", "mni"]:
+    if "mni" in parc_space.lower():
         # get parcellation data
         parc = load_nifti(parc)
         if downsample_vol:

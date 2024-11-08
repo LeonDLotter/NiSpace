@@ -304,6 +304,9 @@ def write_json(json_dict, json_path):
 
 
 def load_img(img, override_file_format=False):
+    # check override_file_format
+    if override_file_format not in [False, ".nii", ".nii.gz", ".gii", ".gii.gz"]:
+        raise ValueError("'override_file_format' must be False, '.nii', '.nii.gz', '.gii' or '.gii.gz'")
     # to tuple
     if isinstance(img, (str, Path, nib.Nifti1Image, nib.GiftiImage)):
         img = (img,)
@@ -322,9 +325,15 @@ def load_img(img, override_file_format=False):
         # if string, load
         elif isinstance(i, (str, Path)):
             i = str(i)
-            if i.endswith(".nii") or i.endswith(".nii.gz") or override_file_format=="nifti":
+            if i.endswith(".nii") or i.endswith(".nii.gz"):
                 i = images.load_nifti(i)
-            elif i.endswith(".gii") or i.endswith(".gii.gz") or override_file_format=="gifti":
+            elif override_file_format in [".nii", ".nii.gz"]:
+                i = Path(i).rename(Path(i).with_suffix(override_file_format))
+                i = images.load_nifti(i)
+            elif i.endswith(".gii") or i.endswith(".gii.gz"):
+                i = images.load_gifti(i)
+            elif override_file_format in [".gii", ".gii.gz"]:
+                i = Path(i).rename(Path(i).with_suffix(override_file_format))
                 i = images.load_gifti(i)
             else:
                 raise ValueError(f"File format of '{i}' not supported. Path must end with .nii(.gz) or .gii(.gz)")

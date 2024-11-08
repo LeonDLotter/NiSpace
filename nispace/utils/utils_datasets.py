@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import shutil
 import pickle
@@ -6,6 +7,10 @@ import requests
 import numpy as np
 import pandas as pd
 import tempfile
+import re
+import configparser
+import hashlib
+
 from typing import Literal, Union
 from nilearn import image
 from neuromaps.datasets import fetch_annotation
@@ -16,6 +21,12 @@ from nibabel import Nifti1Image
 
 import nispace.datasets as datasets
 import nispace.io as io
+    
+try:
+    import osfclient
+    _OSF_AVAIL = True
+except:
+    _OSF_AVAIL = False
     
     
 def download(url, path=None):
@@ -28,13 +39,27 @@ def download(url, path=None):
     return path
 
 
-def download_file(host: Literal["url", "github", "osf", "neuromaps"] = "url", 
+def download_via_osfclient(osf_repo, osf_file_id, save_path,
+                           osf_username=None, osf_password=None, osf_token=None):
+    osf = osfclient.OSF(username=osf_username, password=osf_password, token=osf_token)
+    project = osf.project(osf_repo)
+    storage = project.storage()
+    remote_files = {remote_file.id: remote_file for remote_file in storage.files}
+    remote_file = remote_files[osf_file_id]
+    with open(save_path, "wb") as local_file:
+        remote_file.write_to(local_file)
+    return save_path
+
+
+def download_file(host: Literal["url", "github", "osf", "osfprivate", "neuromaps"] = "url", 
                   remote: Union[str, Path, tuple[str, str], tuple[str, str, str]] = None, 
-                  save_path: Union[str, Path] = None):
+                  save_path: Union[str, Path] = None,
+                  osf_config_file: str = None):
     
     # errors
-    if host not in ["url", "github", "osf", "neuromaps"]:
-        raise ValueError(f"'host' must be one of 'url', 'github', 'osf', or 'neuromaps; not '{host}'.")
+    hosts_avail = ["url", "github", "osf", "osfprivate", "neuromaps"]
+    if host not in hosts_avail:
+        raise ValueError(f"'host' must be one of {hosts_avail}; not '{host}'.")
     if remote is not None:
         if isinstance(remote, (str, Path)):
             if str(remote).lower() in ["", "none"]:
@@ -61,6 +86,19 @@ def download_file(host: Literal["url", "github", "osf", "neuromaps"] = "url",
         else:
             osf_repo, osf_id = remote
             remote = Path(osf_id)
+    elif host == "osfprivate":
+        if not isinstance(remote, (tuple, list)):
+            raise ValueError("'remote' must be a tuple of (osf_repo, osf_id) for osfprivate")
+        elif not Path(osf_config_file).exists():
+            raise ValueError(f"Config file '{osf_config_file}' does not exist.")
+        else:
+            config = configparser.ConfigParser()
+            config.read(osf_config_file)
+            osf_username = config["osf"]["username"] if "username" in config["osf"] else None
+            osf_token = config["osf"]["token"] if "token" in config["osf"] else None
+            osf_password = config["osf"]["password"] if "password" in config["osf"] else None
+            osf_repo, osf_id = remote
+            remote = Path(osf_id)
     elif host == "neuromaps":
         if not isinstance(remote, (tuple, list)):
             raise ValueError("'remote' must be a tuple of (source, target, space) for neuromaps")
@@ -81,17 +119,32 @@ def download_file(host: Literal["url", "github", "osf", "neuromaps"] = "url",
         else:
             raise ValueError("'save_path' must be a string, pathlib.Path, or 'cwd'")
         
-        # get url
-        if host == "url":
-            url = str(remote)        
-        elif host == "github":
-            url = f"https://raw.githubusercontent.com/{repo}/{branch}/{path}"
-        elif host == "osf":
-            url = f"https://files.osf.io/v1/resources/{osf_repo}/providers/osfstorage/{osf_id}"
+        # download if not osfprivate
+        if host != "osfprivate":
+            
+            # get url
+            if host == "url":
+                url = str(remote)        
+            elif host == "github":
+                url = f"https://raw.githubusercontent.com/{repo}/{branch}/{path}"
+            elif host == "osf":
+                url = f"https://files.osf.io/v1/resources/{osf_repo}/providers/osfstorage/{osf_id}"
         
-        # download
-        return download(url, save_path)
-    
+            # download
+            return download(url, save_path)
+        
+        # download if osfprivate via osfclient
+        else:
+            print(f"Downloading private OSF file via osfclient (this will be slow).")
+            if not _OSF_AVAIL:
+                raise ImportError("'osfclient' is not installed. Install it with, e.g., 'pip install osfclient'.")
+            return download_via_osfclient(
+                osf_repo=osf_repo, 
+                osf_file_id=osf_id, 
+                save_path=save_path, 
+                osf_username=osf_username, osf_password=osf_password, osf_token=osf_token
+            )
+            
     else:
         path = fetch_annotation(source=source, desc=tracer, space=space)
         if isinstance(path, str):
@@ -100,60 +153,77 @@ def download_file(host: Literal["url", "github", "osf", "neuromaps"] = "url",
             raise ValueError(f"Unexpected neuromaps output for "
                              f"source={source}, desc={tracer}, space={space}: {path}")
 
-def process_ref_img(image_path, save_path=None, override_file_format=False):
-    if not isinstance(image_path, (str, Path)):
-        raise ValueError(f"'image_path' must be a string or pathlib.Path; not '{image_path}'.")
-    image_path = Path(image_path)
+# def process_ref_img(image_path, save_path=None, override_file_format=False):
+#     if not isinstance(image_path, (str, Path)):
+#         raise ValueError(f"'image_path' must be a string or pathlib.Path; not '{image_path}'.")
+#     image_path = Path(image_path)
     
-    # load image
-    img = io.load_img(image_path, override_file_format)
+#     # load image
+#     img = io.load_img(image_path, override_file_format)
     
-    # volumetric processing
-    if isinstance(img, Nifti1Image):
+#     # volumetric processing
+#     if isinstance(img, Nifti1Image):
         
-        # image voxelsize
-        voxsize = int(np.abs(np.round(img.affine[0,0])))
+#         # image voxelsize
+#         voxsize = int(np.abs(np.round(img.affine[0,0])))
         
-        # get rid of 4th dimension if present
-        if img.ndim==4:
-            img = image.index_img(img, 0)
+#         # get rid of 4th dimension if present
+#         if img.ndim==4:
+#             img = image.index_img(img, 0)
         
-        # load mask and resample to voxsize
-        mask = io.load_img(datasets.fetch_template("mni152", res=f"{voxsize}mm", desc="mask", verbose=False))
+#         # load mask and resample to voxsize
+#         mask = io.load_img(datasets.fetch_template("mni152", res=f"{voxsize}mm", desc="mask", verbose=False))
         
-        # resample image to mask space
-        img, _ = resample_images(
-            src=img,
-            src_space="mni152",
-            trg=mask,
-            trg_space="mni152",
-            method="linear",
-            resampling="transform_to_trg"
-        )
+#         # resample image to mask space
+#         img, _ = resample_images(
+#             src=img,
+#             src_space="mni152",
+#             trg=mask,
+#             trg_space="mni152",
+#             method="linear",
+#             resampling="transform_to_trg"
+#         )
         
-        # get background mask
-        bg_mask = compute_background_mask(img)   
-        bg_mask = image.math_img("bg_mask * mni_mask", bg_mask=bg_mask, mni_mask=mask)
+#         # get background mask
+#         bg_mask = compute_background_mask(img)   
+#         bg_mask = image.math_img("bg_mask * mni_mask", bg_mask=bg_mask, mni_mask=mask)
         
-        # rescale and adjust data type
-        img_data = img.get_fdata()
-        img_data[bg_mask.get_fdata() == 0] = np.nan
-        img_data = minmax_scale(img_data.flatten(), (1, 100)).reshape(img_data.shape)
-        img_data = np.nan_to_num(img_data)
-        img = image.new_img_like(img, img_data.astype(np.float32), copy_header=True)
+#         # rescale and adjust data type
+#         img_data = img.get_fdata()
+#         img_data[bg_mask.get_fdata() == 0] = np.nan
+#         img_data = minmax_scale(img_data.flatten(), (1, 100)).reshape(img_data.shape)
+#         img_data = np.nan_to_num(img_data)
+#         img = image.new_img_like(img, img_data.astype(np.float32), copy_header=True)
         
-        if save_path is None:
-            return img
-        else:
-            img.to_filename(save_path)
-            return save_path
+#         if save_path is None:
+#             return img
+#         else:
+#             img.to_filename(save_path)
+#             return save_path
             
-    # surface processing
-    else:
-        raise NotImplementedError("Surface processing not implemented.")
+#     # surface processing
+#     else:
+#         raise NotImplementedError("Surface processing not implemented.")
+
+def _compress_nifti(file_path, save_path, dtype=np.float32):
+    # try to load
+    try:
+        img = io.load_img(file_path, override_file_format=".nii.gz")
+    except:
+        try:
+            img = io.load_img(file_path, override_file_format=".nii")
+        except Exception as e:
+            raise ValueError(f"Could not load file '{file_path}': {e}")
+    # change dtype
+    img_dat = img.get_fdata().astype(dtype)
+    img = image.new_img_like(img, img_dat, copy_header=True)
+    # save
+    img.to_filename(save_path)
 
 
-def get_file(local_path, host, remote, process_img=False, override_file_format=False):
+def get_file(local_path, host, remote, 
+             compress_nifti=False,
+             osf_config_file=None):
     
     local_path = Path(local_path)
     if local_path.is_dir():
@@ -161,15 +231,123 @@ def get_file(local_path, host, remote, process_img=False, override_file_format=F
     
     if not local_path.exists():
         
-        print(f"Downloading '{local_path}'.")
+        print(f"Downloading {local_path.resolve()}.")
         if not local_path.parent.exists():
             local_path.parent.mkdir(parents=True)
-        tmp_path = download_file(host, remote)
+        tmp_path = download_file(
+            host, remote, 
+            osf_config_file=osf_config_file
+        )
         
-        if process_img:
-            print("Processing image.")
-            local_path = process_ref_img(tmp_path, local_path, override_file_format)
+        if compress_nifti:
+            _compress_nifti(tmp_path, local_path)
         else:
             shutil.copy(tmp_path, local_path)
             
     return local_path
+
+
+def calculate_file_hash(file_path):
+    """Calculate the MD5 hash of a file."""
+    hash_md5 = hashlib.md5()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+
+def sync_osf(local_path, osf_id, username=None, password=None, token=None,
+             dry_run=False, exclude=["^\."], config_file=None):
+    # check if osfclient is installed
+    if not _OSF_AVAIL:
+        raise ImportError("'osfclient' is not installed. Install it with, e.g., 'pip install osfclient'.")
+    
+    # Initialize OSF client
+    print(f"Syncing local::{local_path} to osf::{osf_id}")
+    if config_file is not None:
+        if Path(config_file).exists():
+            print(f"Attempting to read config file {config_file}")
+            config = configparser.ConfigParser()
+            config.read(config_file)
+            username = config["osf"]["username"] if "username" in config["osf"] else None
+            password = config["osf"]["password"] if "password" in config["osf"] else None
+            token = config["osf"]["token"] if "token" in config["osf"] else None
+        else:
+            print(f"Config {config_file} does not exist. Trying to proceed without.")
+    osf = osfclient.OSF(username, password, token)
+    project = osf.project(osf_id)
+    storage = project.storage()
+
+    # Helper function to get remote files and folders
+    def get_remote_files_and_folders(storage):
+        remote_files = {}
+        for file in storage.files:
+            remote_files[file.path] = file
+        return remote_files
+
+    # Get remote files and folders
+    print(f"Loading osf::{osf_id} remote files and folders (this will take a while...)")
+    remote_files = get_remote_files_and_folders(storage)
+
+    # Prepare local path
+    local_path = Path(local_path)
+    if not local_path.exists() or not local_path.is_dir():
+        raise FileNotFoundError(f"Local path::{local_path} does not exist")
+    if isinstance(exclude, str):
+        exclude = [exclude]
+    ids = {}
+        
+    # Traverse local path
+    print(f"Traversing local::{local_path}")
+    for root, dirs, files in os.walk(local_path):
+        for name in files:
+            if any(re.match(pattern, name) for pattern in exclude):
+                continue
+            local_file_path = Path(root) / name
+            remote_file_path = f"/{local_file_path.relative_to(local_path)}"
+
+            # check if file exists on remote
+            if remote_file_path in remote_files:
+                remote_file = remote_files[remote_file_path]
+                
+                # get hash 
+                local_file_hash = calculate_file_hash(local_file_path)
+                remote_file_hash = remote_file.hashes.get('md5')
+                
+                # Check if the local file is different from the remote file and update if so
+                if local_file_hash != remote_file_hash:
+                    print(f"local::{local_file_path.relative_to(local_path)}: Updating remote")
+                    if not dry_run:
+                        with open(local_file_path, 'rb') as local_file:
+                            remote_file.update(local_file)
+                else:
+                    print(f"local::{local_file_path.relative_to(local_path)}: Remote is up to date")
+                    
+            # file does not exist on remote
+            else:
+                # Upload new file
+                print(f"local::{local_file_path.relative_to(local_path)}: Uploading to remote")
+                if not dry_run:
+                    with open(local_file_path, 'rb') as local_file:
+                        storage.create_file(remote_file_path, local_file)
+
+    # Remove remote files not present locally
+    for remote_file_path in remote_files.keys():
+        if remote_file_path.startswith("/"):
+            remote_file_path = remote_file_path[1:]
+        if not (local_path / remote_file_path).exists():
+            print(f"remote::{remote_file_path}: Deleting remote")
+            if not dry_run:
+                remote_files["/" + remote_file_path].remove()
+                
+    # get file ids
+    print(f"Loading updated osf::{osf_id} remote files and folders")
+    remote_files = get_remote_files_and_folders(storage)
+    for remote_file_path in sorted(remote_files.keys()):
+        ids[remote_file_path] = {
+            "id": remote_files[remote_file_path].id,
+            "md5": remote_files[remote_file_path].hashes.get('md5')
+        }
+        
+    return ids
+                    

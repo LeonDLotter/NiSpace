@@ -1,7 +1,9 @@
 # pet
 The NiSpace "PET" dataset is based on openly available nuclear imaging maps largely accessed via neuromaps 
-(https://neuromaps-main.readthedocs.io/). The maps are downloaded via neuromaps, processed on-the-fly, and cached locally 
-(find them in `~HOME/nispace-data/reference/pet/map`). The accompanying metadata table contains detailed information about 
+(https://neuromaps-main.readthedocs.io/). If requested in the original space and resolution (termed "MNI152"),
+the maps are downloaded via neuromaps and cached locally. If, as is highly recommended, the maps are requested in a defined
+space ("MNI152NLin2009cAsym" or "MNI152NLin6Asym"), they are downloaded from the NiSpace OSF project (find them in 
+`~HOME/nispace-data/reference/pet/map`). The accompanying metadata table contains detailed information about 
 tracers, source samples, original publications and data sources, as well as the publication licenses. Every map should be 
 cited when used. The responsibility for this lies with the user! We additionally ask to cite:
 - Markello et al., 2022 (https://doi.org/10.1038/s41592-022-01625-w)

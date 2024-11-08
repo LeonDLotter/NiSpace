@@ -1,45 +1,55 @@
 # %% Init
 
 import sys
-import pathlib
+from pathlib import Path
 import numpy as np
-import pandas as pd
-from templateflow import api as tf
-from nilearn.plotting import plot_anat, plot_surf
 from nilearn import image
-from nilearn import datasets 
-import matplotlib.pyplot as plt
+
+wd = Path.cwd().parent
+print(f"Working dir: {wd}")
+sys.path.append(wd.as_posix())
 
 from nispace.io import parcellate_data
 from nispace.modules.constants import _PARCS_NICE
 from nispace.datasets import fetch_template
 #from nispace.utils.utils_datasets import parcellate_reference_dataset
 
-# nispace data path in home dir
-nispace_data_path = pathlib.Path.cwd() / "nispace-data"
+# nispace data path 
+nispace_source_data_path = wd / "datasets" / "nispace-data_source"
 
 
-# %% MNI152 - We use: MNI152NLin2009cAsym as does fMRIprep by default!
+# %% MNI152NLin2009cAsym and MNI152NLin6Asym
 
-# MNI 152 templates in 1 and 2 mm resolution are fetched directly from templateflow.
-# We will only generate 3 and 4 mm resolution templates from the 1mm templateflow version
+# MNI152 templates in 1 and 2 mm resolution are fetched directly from templateflow.
+# For MNI152NLin2009cAsym, we have T1w, brain, mask, and gmprob.
+# For MNI152NLin6Asym, we have T1w, brain, mask.
+# We will only generate 3mm templates from the 1mm templateflow version
 
-tpl_1mm_T1 = fetch_template("MNI152", res="1mm", desc="T1")
-tpl_1mm_gmprob = fetch_template("MNI152", res="1mm", desc="gmprob")
-tpl_1mm_mask = fetch_template("MNI152", res="1mm", desc="mask")
+# MNI152NLin2009cAsym - 3mm versions
+for desc in ["T1w", "brain", "mask", "gmprob"]:
+    tpl = fetch_template("MNI152NLin2009cAsym", res="1mm", desc=desc)
+    tpl_resampled = image.resample_img(
+        image.load_img(tpl),
+        target_affine=np.diag([3, 3, 3]), 
+        interpolation="nearest" if desc == "mask" else "linear"
+    )
+    path = nispace_source_data_path / "template" / "MNI152NLin2009cAsym" / "map" / desc / tpl.name.replace("1mm", "3mm")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"Saving {path}")
+    tpl_resampled.to_filename(path)
 
-for voxsize in [3, 4]:
-    for tpl_file, interp in [(tpl_1mm_T1, "linear"), (tpl_1mm_gmprob, "linear"), (tpl_1mm_mask, "nearest")]:
-        # resample
-        tpl_resampled = image.resample_img(
-            image.load_img(tpl_file),
-            target_affine=np.diag([voxsize, voxsize, voxsize]), 
-            interpolation=interp
-        )
-        # save
-        path = nispace_data_path / "template" / "mni152" / "map" / tpl_file.name.replace("1mm", f"{voxsize}mm")
-        tpl_resampled.to_filename(path)
-
+# MNI152NLin6Asym - 3mm versions
+for desc in ["T1w", "brain", "mask"]:
+    tpl = fetch_template("MNI152NLin6Asym", res="1mm", desc=desc)
+    tpl_resampled = image.resample_img(
+        image.load_img(tpl),
+        target_affine=np.diag([3, 3, 3]), 
+        interpolation="nearest" if desc == "mask" else "linear"
+    )
+    path = nispace_source_data_path / "template" / "MNI152NLin6Asym" / "map" / desc / tpl.name.replace("1mm", "3mm")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"Saving {path}")
+    tpl_resampled.to_filename(path)
 
 
 # %% GM parcellated tissue probability data

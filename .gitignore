@@ -3,7 +3,9 @@
 # private folders
 _*/
 */_archive/
-datasets/nispace-data
+datasets/nispace-*
+.osfcli*
+osf*
 
 ## OSX ################################
 

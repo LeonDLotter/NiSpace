@@ -1,19 +1,20 @@
 # %% Init
 
-
-import pathlib
+import sys
+from pathlib import Path
 import numpy as np
 import pandas as pd
 from neuromaps import images
-from nispace.datasets import fetch_parcellation
+
+wd = Path.cwd().parent
+print(f"Working dir: {wd}")
+sys.path.append(wd.as_posix())
 
 # import NiSpace functions
-from nispace.modules.constants import _PARCS_NICE
-from nispace.nulls import get_distance_matrix
 from nispace.utils.utils_datasets import download
 
-# nispace data path in home dir
-nispace_data_path = pathlib.Path.cwd() / "nispace-data"
+# nispace data path 
+nispace_source_data_path = wd / "datasets" / "nispace-data_source"
 
 
 # %% Get parcellations
@@ -26,12 +27,11 @@ parc_info = {}
 # ==================================================================================================
 # Schaefer + Melbourne
 
-for schaefer, tian in [(100, "S1"), (200, "S2"), (300, "S3")]:
+for schaefer, tian in [(100, "S1"), (200, "S2"), (400, "S3")]:
     print(f"Schaefer {schaefer} + Melbourne {tian}")
     
     # name
-    name = f"Schaefer{schaefer}"
-    space = "mni152"
+    name = f"Schaefer{schaefer}Melbourne{tian}"
     
     # labels Melbourne
     labs_tian = pd.read_csv(
@@ -57,20 +57,20 @@ for schaefer, tian in [(100, "S1"), (200, "S2"), (300, "S3")]:
         labs.append(l[1] + "_CX_" + "_".join(l[2:]))
     labs = [f"{i}_{l}" for i, l in enumerate(labs, start=1)]
     
-    # info
-    # spaces: "FSL" (schaefer), "MNI152NLin2009cAsym" (Melbourne)
-    parc_info[name, space] = {
-        "n_parcels": len(labs), 
-        "resolution": "1mm", 
-        "publication": "10.1093/cercor/bhx179; 0.1038/s41593-020-00711-6",
-        "license": "MIT"
-    }
-    # save labels
-    path = nispace_data_path / "parcellation" / name / space / f"{name}_space-{space}.label.txt"
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
-        f.write("\n".join(labs))
+    # write info and labels, we have the same labels (obiously) for both resolutions
+    for space in ["MNI152NLin2009cAsym", "MNI152NLin6Asym"]:
+        parc_info[name, space] = {
+            "n_parcels": len(labs), 
+            "resolution": "1mm", 
+            "publication": "10.1093/cercor/bhx179; 0.1038/s41593-020-00711-6",
+            "license": "MIT"
+        }
+        # save labels
+        path = nispace_source_data_path / "parcellation" / name / space / f"parc-{name}_space-{space}.label.txt"
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as f:
+            f.write("\n".join(labs))
         
 # ==================================================================================================
 
@@ -78,11 +78,11 @@ for schaefer, tian in [(100, "S1"), (200, "S2"), (300, "S3")]:
 # ==================================================================================================
 # HCP
 
-print("HCP")
+print("HCPex")
 
 # name
-name = "HCP"
-space = "mni152"
+name = "HCPex"
+space = "MNI152NLin2009cAsym"
 
 # labels
 labs = np.loadtxt(
@@ -100,7 +100,7 @@ parc_info[name, space] = {
     "license": "GPL-3.0"
 }
 # save labels
-path = nispace_data_path / "parcellation" / name / space / f"{name}_space-{space}.label.txt"
+path = nispace_source_data_path / "parcellation" / name / space / f"parc-{name}_space-{space}.label.txt"
 if not path.exists():
     path.parent.mkdir(parents=True, exist_ok=True)
 with open(path, "w") as f:
@@ -144,16 +144,16 @@ parc_info[name, space] = {
 }
 
 # save maps and labels
-save_dir = nispace_data_path / "parcellation" / name / space
+save_dir = nispace_source_data_path / "parcellation" / name / space
 if not save_dir.exists():
     save_dir.mkdir(parents=True, exist_ok=True)
 # left
-parc[0].to_filename(save_dir / f"{name}_space-{space}_hemi-L.label.gii.gz")
-with open(save_dir / f"{name}_space-{space}_hemi-L.label.txt", "w") as f:
+parc[0].to_filename(save_dir / f"parc-{name}_space-{space}_hemi-L.label.gii.gz")
+with open(save_dir / f"parc-{name}_space-{space}_hemi-L.label.txt", "w") as f:
     f.write("\n".join([f"{i}_LH_CX_{l}" for i, l in enumerate([l for l in labs if l not in labs_bg], start=1)]))
 # right
-parc[1].to_filename(save_dir / f"{name}_space-{space}_hemi-R.label.gii.gz")
-with open(save_dir / f"{name}_space-{space}_hemi-R.label.txt", "w") as f:
+parc[1].to_filename(save_dir / f"parc-{name}_space-{space}_hemi-R.label.gii.gz")
+with open(save_dir / f"parc-{name}_space-{space}_hemi-R.label.txt", "w") as f:
     f.write("\n".join([f"{i}_RH_CX_{l}" for i, l in enumerate([l for l in labs if l not in labs_bg], start=35)]))
 
 # ==================================================================================================
@@ -193,16 +193,16 @@ parc_info[name, space] = {
 }
 
 # save maps and labels
-save_dir = nispace_data_path / "parcellation" / name / space
+save_dir = nispace_source_data_path / "parcellation" / name / space
 if not save_dir.exists():
     save_dir.mkdir(parents=True, exist_ok=True)
 # left
-parc[0].to_filename(save_dir / f"{name}_space-{space}_hemi-L.label.gii.gz")
-with open(save_dir / f"{name}_space-{space}_hemi-L.label.txt", "w") as f:
+parc[0].to_filename(save_dir / f"parc-{name}_space-{space}_hemi-L.label.gii.gz")
+with open(save_dir / f"parc-{name}_space-{space}_hemi-L.label.txt", "w") as f:
     f.write("\n".join([f"{i}_LH_CX_{l}" for i, l in enumerate([l for l in labs if l not in labs_bg], start=1)]))
 # right
-parc[1].to_filename(save_dir / f"{name}_space-{space}_hemi-R.label.gii.gz")
-with open(save_dir / f"{name}_space-{space}_hemi-R.label.txt", "w") as f:
+parc[1].to_filename(save_dir / f"parc-{name}_space-{space}_hemi-R.label.gii.gz")
+with open(save_dir / f"parc-{name}_space-{space}_hemi-R.label.txt", "w") as f:
     f.write("\n".join([f"{i}_RH_CX_{l}" for i, l in enumerate([l for l in labs if l not in labs_bg], start=75)]))
 
 # ==================================================================================================
@@ -211,35 +211,9 @@ with open(save_dir / f"{name}_space-{space}_hemi-R.label.txt", "w") as f:
 
 parc_info = pd.DataFrame.from_dict(parc_info).T
 parc_info.index.names = ["parcellation", "space"]
-parc_info.to_csv(nispace_data_path / "parcellation" / "metadata.csv")
+parc_info.to_csv(nispace_source_data_path / "parcellation" / "metadata.csv")
 
 # ==================================================================================================
-
-# %% Generate distance matrices
-
-for parc in _PARCS_NICE:
-    print(parc)
-    
-    # load
-    parc_loaded, labels = fetch_parcellation(parc, return_loaded=True) 
-        
-    # distance matrix 
-    dist_mat = get_distance_matrix(
-        parc_loaded, 
-        parc_space=space,
-        downsample_vol=False,
-        centroids=False,
-        surf_euclidean=False,
-        n_proc=-1,
-        dtype=np.float32
-    )
-    if not isinstance(dist_mat, tuple):
-        pd.DataFrame(dist_mat).to_csv(nispace_data_path / "parcellation" / parc / space / f"{parc}_space-{space}.dist.csv.gz", 
-                                      header=None, index=None)
-    else:
-        for mat, hemi in zip(dist_mat, ["L", "R"]):
-            pd.DataFrame(mat).to_csv(nispace_data_path / "parcellation" / parc / space / f"{parc}_space-{space}_hemi-{hemi}.dist.csv.gz", 
-                                      header=None, index=None)
 
 
 # %%
