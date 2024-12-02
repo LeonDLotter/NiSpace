@@ -282,6 +282,9 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
     # distmat
     if return_dist_mat:
         out += (load_distmat(distmat_file) if return_loaded else distmat_file),
+    # index into tuple if length is 1
+    if len(out) == 1:
+        out = out[0]
     
     return out
 

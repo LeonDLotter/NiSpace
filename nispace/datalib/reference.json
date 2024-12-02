@@ -285,6 +285,34 @@
                 }
             },
 
+            "target-mGluR5_tracer-abp688_n-22_dx-hc_pub-rosaneto": {
+                "MNI152": {
+                    "host": "neuromaps",
+                    "remote": ["rosaneto", "abp688", "MNI152"]
+                }
+            },
+
+            "target-mGluR5_tracer-abp688_n-28_dx-hc_pub-dubois2015": {
+                "MNI152": {
+                    "host": "neuromaps",
+                    "remote": ["dubois2015", "abp688", "MNI152"]
+                }
+            },
+
+            "target-mGluR5_tracer-abp688_n-73_dx-hc_pub-smart2019": {
+                "MNI152": {
+                    "host": "neuromaps",
+                    "remote": ["smart2019", "abp688", "MNI152"]
+                }
+            },
+
+            "target-mGluR5_tracer-abp688_n-13_dx-hc_pub-kaulen2022": {
+                "MNI152": {
+                    "host": "osfprivate",
+                    "remote": ["m2ctx", "672cfa7e0135a811f14d707d"]
+                }
+            },
+
             "target-MOR_tracer-carfentanil_n-204_dx-hc_pub-kantonen2020": {
                 "MNI152": {
                     "host": "neuromaps",
@@ -355,31 +383,10 @@
                 }
             },
 
-            "target-mGluR5_tracer-abp688_n-22_dx-hc_pub-rosaneto": {
+            "target-VMAT2_tracer-dtbz_n-76_dx-hc_pub-larsen2020": {
                 "MNI152": {
-                    "host": "neuromaps",
-                    "remote": ["rosaneto", "abp688", "MNI152"]
-                }
-            },
-
-            "target-mGluR5_tracer-abp688_n-28_dx-hc_pub-dubois2015": {
-                "MNI152": {
-                    "host": "neuromaps",
-                    "remote": ["dubois2015", "abp688", "MNI152"]
-                }
-            },
-
-            "target-mGluR5_tracer-abp688_n-73_dx-hc_pub-smart2019": {
-                "MNI152": {
-                    "host": "neuromaps",
-                    "remote": ["smart2019", "abp688", "MNI152"]
-                }
-            },
-
-            "target-mGluR5_tracer-abp688_n-13_dx-hc_pub-kaulen2022": {
-                "MNI152": {
-                    "host": "osfprivate",
-                    "remote": ["m2ctx", "672cfa7e0135a811f14d707d"]
+                    "host": "url",
+                    "remote": "http://neurovault.org/media/images/19085/average_ses-1_task-rest_acq-dtbz_space-MNI152_pet_bpnd.nii.gz"
                 }
             }
         },
