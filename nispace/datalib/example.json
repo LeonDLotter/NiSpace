@@ -1,28 +1,28 @@
 {
     "abide": {
         "tab": {
-            "host": "osf",
-            "remote": ["derpj", "66f6913d75b087b4913cc25b"]
+            "host": "github-nispace",
+            "remote": "example/example-abide_parc-Schaefer200.csv.gz"
         },
         "info": {
-            "host": "osf",
-            "remote": ["derpj", "6669866565e1de57a88945e2"]
+            "host": "github-nispace",
+            "remote": "example/example-abide_info.csv"
         },
         "parc": "Schaefer200"
     },
 
     "enigma": {
         "tab": {
-            "host": "osf",
-            "remote": ["derpj", "6669868165e1de57a88945e6"]
+            "host": "github-nispace",
+            "remote": "example/example-enigma_parc-DesikanKilliany.csv.gz"
         },
         "parc": "DesikanKilliany"
     },
 
     "happy": {
         "tab": {
-            "host": "osf",
-            "remote": ["derpj", "66f690dfeb0c749ff2f42e6f"]
+            "host": "github-nispace",
+            "remote": "example/example-happy_parc-Schaefer200.csv.gz"
         },
         "parc": "Schaefer200"
     }

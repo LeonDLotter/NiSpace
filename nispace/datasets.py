@@ -141,7 +141,17 @@ def fetch_template(template: str = _SPACE_DEFAULT,
     # return
     return tpl_file
 
-# PARCELLATIONS ====================================================================================
+# PARCELLATIONS ===================================================================================
+
+def _parc_alias(parcellation: str):
+    if "alias" in parcellation_lib[parcellation]:
+        parc = parcellation_lib[parcellation]["alias"]
+        cortex = parcellation_lib[parcellation]["cortex"]
+        subcortex = parcellation_lib[parcellation]["subcortex"]
+    else:
+        parc = parcellation
+        cortex, subcortex = True, True
+    return parc, cortex, subcortex
 
 def fetch_parcellation(parcellation: str = _PARC_DEFAULT, 
                        space: str = None,
@@ -160,13 +170,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
         
     # check if alias and set data to retrieve
     # variable "parcellation" is now what the user sees, "parc" is what we go with internally
-    if "alias" in parcellation_lib[parcellation]:
-        parc = parcellation_lib[parcellation]["alias"]
-        cortex = parcellation_lib[parcellation]["cortex"]
-        subcortex = parcellation_lib[parcellation]["subcortex"]
-    else:
-        parc = parcellation
-        cortex, subcortex = True, True
+    parc, cortex, subcortex = _parc_alias(parcellation)
         
     # Check space
     if space is None:
@@ -575,7 +579,8 @@ def fetch_reference(dataset: str,
                     print_references: bool = True,
                     verbose: bool = True,
                     nispace_data_dir: Union[str, pathlib.Path] = None,
-                    osf_config_file: str = None):
+                    osf_config_file: str = None,
+                    github_config_file: str = None):
     verbose = set_log(lgr, verbose)
 
     # Check dataset availability
@@ -583,6 +588,9 @@ def fetch_reference(dataset: str,
         dataset = dataset.lower()
         if dataset not in reference_lib:
             lgr.critical_raise(f"Dataset '{dataset}' not found! Available datasets: {keys2str(reference_lib)}",
+                               ValueError)
+        elif parcellation is None and "map" not in reference_lib[dataset]:
+            lgr.critical_raise(f"Dataset '{dataset}' is only available as parcellated data, choose a parcellation!",
                                ValueError)
     else:
         lgr.critical_raise(f"Invalid dataset type; expecting string.",
@@ -604,13 +612,8 @@ def fetch_reference(dataset: str,
         if parcellation not in parcellation_lib:
             lgr.critical_raise(f"Parcellation '{parcellation}' not found. Available: {keys2str(parcellation_lib)}",
                                ValueError)
-        if "alias" in parcellation_lib[parcellation]:
-            parc = parcellation_lib[parcellation]["alias"]
-            cortex = parcellation_lib[parcellation]["cortex"]
-            subcortex = parcellation_lib[parcellation]["subcortex"]
-        else:
-            parc = parcellation
-            cortex, subcortex = True, True
+        # check parcellation aliases
+        parc, cortex, subcortex = _parc_alias(parcellation)
         
         # load maps from tabulated data (index col)
         maps_avail = pd.read_csv(
@@ -631,8 +634,11 @@ def fetch_reference(dataset: str,
               f"First 5: {maps_avail[:5] if len(maps_avail) >= 5 else maps_avail[:len(maps_avail)]}")
 
     # Remove private maps
-    if osf_config_file is None:
-        maps_avail = [m for m in maps_avail if reference_lib[dataset]["map"][m][space]["host"] != "osfprivate"]
+    if not osf_config_file and not github_config_file:
+        maps_avail = [
+            m for m in maps_avail 
+            if reference_lib[dataset]["map"][m][space]["host"] not in ["osfprivate", "github-nispace-private"]
+        ]
     
     # Filter by 'maps'
     if maps:
@@ -663,7 +669,7 @@ def fetch_reference(dataset: str,
         data = _load_parcellated_data(
             dataset=dataset, 
             tab_dir=tab_dir, 
-            parc=parcellation, 
+            parc=parc, 
             map_files=maps_avail, 
             collection_df=collection_df,
             cortex=cortex,
@@ -678,7 +684,8 @@ def fetch_reference(dataset: str,
                 local_path=map_dir / m / f"{m}_space-{space}.nii.gz", 
                 **reference_lib[dataset]["map"][m][space], 
                 compress_nifti=True,
-                osf_config_file=osf_config_file
+                osf_config_file=osf_config_file,
+                github_config_file=github_config_file
             ) 
             for m in maps_avail
         ]

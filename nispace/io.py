@@ -119,8 +119,8 @@ def parcellate_data(data,
             lgr.critical(f"Parcellation data type not recognized! ({type(parcellation)})")
         
         # catch problems
-        if (data_space.lower() in ["mni", "mni152"]) & \
-            (parc_space.lower() not in ["mni", "mni152"]) & \
+        if ("mni" in data_space.lower()) & \
+            ("mni" not in parc_space.lower()) & \
             (resampling_target=="data"):
                 lgr.warning("Data in MNI space but parcellation in surface space and "
                             "'resampling_target' is 'data'! Cannot resample surface to MNI: "
@@ -142,7 +142,7 @@ def parcellate_data(data,
         # modified neuromaps parcellater: can deal with str, path, nifti, gifti, tuple
         parcellater = Parcellater(
             parcellation=parcellation, 
-            space=parc_space,
+            space="mni152" if "mni" in parc_space.lower() else parc_space,
             resampling_target=resampling_target,
             hemi=parc_hemi
         ).fit()

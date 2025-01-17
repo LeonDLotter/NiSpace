@@ -38,20 +38,20 @@
         },
         "3mm": {
             "T1w": {
-                "host": "osf",
-                "remote": ["derpj", "672ccbd74a85a5a540f5ccdd"]
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/T1w/tpl-MNI152NLin2009cAsym_desc-T1w_res-3mm.nii.gz"
             },
             "brain": {
-                "host": "osf",
-                "remote": ["derpj", "672ccbeee62f54fc87dcd12f"]
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/brain/tpl-MNI152NLin2009cAsym_desc-brain_res-3mm.nii.gz"
             },
             "mask": {
-                "host": "osf",
-                "remote": ["derpj", "672ccbbe7954d4f2e8dcc8db"]
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/mask/tpl-MNI152NLin2009cAsym_desc-mask_res-3mm.nii.gz"
             },
             "gmprob": {
-                "host": "osf",
-                "remote": ["derpj", "672ccbf8d3523f9fb1ba9fe1"]
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/gmprob/tpl-MNI152NLin2009cAsym_desc-gmprob_res-3mm.nii.gz"
             }
         }
     },
@@ -87,16 +87,16 @@
         },
         "3mm": {
             "T1w": {
-                "host": "osf",
-                "remote": ["derpj", "672e06948f48bbcc730de0b6"]
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/T1w/tpl-MNI152NLin6Asym_desc-T1w_res-3mm.nii.gz"
             },
             "brain": {
-                "host": "osf",
-                "remote": ["derpj", "672ccbb5e9409f4ae6f74349"]
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/brain/tpl-MNI152NLin6Asym_desc-brain_res-3mm.nii.gz"
             },
             "mask": {
-                "host": "osf",
-                "remote": ["derpj", "672ccbab916fcbffa7baa0c3"]
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/mask/tpl-MNI152NLin6Asym_desc-mask_res-3mm.nii.gz"
             }
         }
     },

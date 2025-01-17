@@ -1,4 +1,3 @@
-
 _PARCS = ["schaefer100", "schaefer200", "schaefer300", "hcp", "desikankilliany", "destrieux"]
 _PARCS_NICE = ["Schaefer100", "Schaefer200", "Schaefer300", "HCP", "DesikanKilliany", "Destrieux"]
 _PARCS_DEFAULT = "schaefer200"

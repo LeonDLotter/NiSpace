@@ -1,11 +1,12 @@
 ## REPO FOLDERS/FILES ################################
 
-# private folders
+# private folders /files
 _*/
 */_archive/
 datasets/nispace-*
 .osfcli*
 osf*
+.github.config
 
 ## OSX ################################
 

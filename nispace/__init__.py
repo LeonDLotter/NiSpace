@@ -10,3 +10,4 @@ __version__ = _version.get_versions()['version']
 # Public API
 from .api import NiSpace
 from .workflows import simple_colocalization, simple_xsea, group_comparison
+
