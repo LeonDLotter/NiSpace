@@ -27,14 +27,14 @@ from .modules.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_st
 from .modules.permute import _get_null_maps, _get_exact_p_values, _get_correct_mc_method
 from .modules.plot import _plot_categorical
 from .modules.constants import _PARCS, _PARCS_DEFAULT, _COLOC_METHODS
-from .datasets import fetch_parcellation, fetch_template
+from .datasets import fetch_parcellation, fetch_template, parcellation_lib
 from .nulls import get_distance_matrix
 from .stats.coloc import *
 from .stats.misc import mc_correction, residuals_nan, zscore_df, permute_groups
 from .cv import _get_dist_dep_splits, _get_rand_splits
 from .plotting import nice_stats_labels
 from .utils.utils import (set_log, fill_nan, _get_df_string, _lower_strip_ws, mean_by_set_df,
-                    get_column_names, lower, print_arg_pairs)
+                          get_column_names, lower, print_arg_pairs)
 
 
 # ==================================================================================================
@@ -59,17 +59,21 @@ class NiSpace:
                  y_labels: Sequence[str] = None, 
                  z_labels: Sequence[str] = None, 
                  data_space: Literal["mni152", "fsaverage", "fslr"] = "mni152", 
-                 standardize: Union[Literal["x", "y", "z", "xy", "xz", "yz"], bool] = "xz", 
+                 standardize: Union[Literal["x", "y", "z", "xy", "xz", "yz", "xyz"], bool] = "xz", 
                  drop_nan: bool = False,    
                  parcellation: Union[str, Path, nib.Nifti1Image, nib.GiftiImage] = None, 
                  parcellation_labels: Sequence[str] = None, 
                  parcellation_space: Literal["mni152", "fsaverage", "fslr"] = "mni152", 
                  parcellation_hemi: Union[Literal["R", "L"], Sequence[Literal["L", "R"]]] = ["L", "R"], 
+                 parcellation_idc_lh: Sequence[int] = None,
+                 parcellation_idc_rh: Sequence[int] = None,
+                 parcellation_idc_sc: Sequence[int] = None,
                  parcellation_dist_mat: Union[np.ndarray, pd.DataFrame] = None,
                  resampling_target: Literal["data", "parcellation"] = "data",
                  n_proc: int = 1, 
                  verbose: bool = True,
-                 dtype: Union[type, str] = np.float32):
+                 dtype: Union[type, str] = np.float32,
+                 **kwargs):
         """
         Initialize the NiSpace model. 
         On initialization, the parameters are only stored. Processing is done with NiSpace.fit().
@@ -164,11 +168,16 @@ class NiSpace:
                                f"len==3! Is {type(data_space)} with len({len(data_space)}).",
                                ValueError)
         self._data_space = data_space
+        if "parc" in kwargs and parcellation is None:
+            parcellation = kwargs.pop("parc")
         self._parc = parcellation
         self._parc_info = {
             "labels": parcellation_labels,
             "space": parcellation_space,
             "hemi": parcellation_hemi,
+            "idc_lh": parcellation_idc_lh,
+            "idc_rh": parcellation_idc_rh,
+            "idc_sc": parcellation_idc_sc,
             #"density": parcellation_density,
         }
         self._parc_dist_mat = {
@@ -230,7 +239,7 @@ class NiSpace:
         if self._parc is None:
             self._parc = _PARCS_DEFAULT
         if isinstance(self._parc, str):
-            if self._parc.lower() in _PARCS:
+            if self._parc.lower() in [s.lower() for s in parcellation_lib.keys()]:
                 try:
                     parc, labels, space, density, dist_mat = fetch_parcellation(
                         parcellation=self._parc,                 
@@ -245,6 +254,12 @@ class NiSpace:
                     #self._parc_info["density"] = density
                     self._parc_info["hemi"] = ("L", "R") if space=="fsaverage" else None
                     self._parc_dist_mat["null_maps"] = dist_mat
+                    self._parc_info["idc_lh"] = [i for i, l in enumerate(labels) if "_LH_" in l]
+                    self._parc_info["idc_rh"] = [i for i, l in enumerate(labels) if "_RH_" in l]
+                    self._parc_info["idc_sc"] = [i for i, l in enumerate(labels) if "_SC_" in l]
+                    for idc in ["idc_lh", "idc_rh", "idc_sc"]:
+                        if len(self._parc_info[idc]) == 0:
+                            self._parc_info[idc] = None
                     lgr.info("Loaded integrated parcellation with pre-calculated distance matrix.")
                 except FileNotFoundError:
                     pass
@@ -276,8 +291,11 @@ class NiSpace:
         # target data -> usually e.g. subject data or group-level outcome data
         if self._y is None:
             lgr.warning("No 'y' data detected. Will use 'X' as both reference and target data!")
-            self._Y = self._X
+            self._Y = self._X.copy()
             self._x_with_self = True
+            if isinstance(self._zscore, str):
+                if "x" in self._zscore and not "y" in self._zscore:
+                    self._zscore += "y"
         else:
             lgr.info("Checking input data for 'y' (should be, e.g., subject data):")
             self._Y = parcellate_data(
@@ -1076,10 +1094,7 @@ class NiSpace:
     
     def permute(self, what, method=None, X_reduction=None, Y_transform=None, xsea=None, 
                 n_perm=10000, 
-                maps_which="X", maps_nulls=None, maps_use_existing_nulls=True, 
-                maps_null_method="moran", 
-                maps_dist_mat=None, maps_dist_mat_centroids=False, maps_dist_mat_downsample=3,
-                groups_perm_paired="auto", groups_perm_strategy="proportional",
+                maps_which="X", maps_nulls=None, maps_method="moran", dist_mat=None,
                 sets_X_background=None,
                 p_tails=None, p_from_average_y_coloc="auto",
                 n_proc=None, seed=None, store=True, verbose=None,
@@ -1103,7 +1118,7 @@ class NiSpace:
         # check maps_which variable
         if maps_which:
             if isinstance(maps_which, str):
-                maps_which = [maps_which]
+                maps_which = [m for m in maps_which]
             maps_which = sorted(maps_which)
             if maps_which not in [["X"], ["Y"], ["X", "Y"]]:
                 lgr.critical_raise(f"'maps_which' has to be 'X', 'Y', or ['X', 'Y'] not '{maps_which}'",
@@ -1153,6 +1168,43 @@ class NiSpace:
             xsea=xsea
         )
         
+        # specific settings via kwargs
+        # distance matrix generation 
+        dist_mat_kwargs = {
+            "dist_mat_type": "null_maps", 
+            "centroids": False,
+            "downsample_vol": 3
+        } 
+        for k in [k for k in kwargs.keys() if k.startswith("distmat_")]:
+            dist_mat_kwargs[k.removeprefix("distmat_")] = kwargs.pop(k)
+        # null maps generation
+        maps_kwargs = {
+            "nispace_nulls": self._nulls, 
+            "use_existing_maps": True,
+            "null_maps": maps_nulls,
+            "null_method": maps_method,
+            "parc_idc_lh": self._parc_info["idc_lh"], 
+            "parc_idc_rh": self._parc_info["idc_rh"], 
+            "parc_idc_sc": self._parc_info["idc_sc"], 
+            "lr_mirror_dist_mat": False, 
+            "cx_sc_minmax_scale": True,
+        }
+        for k in [k for k in kwargs.keys() if k.startswith("maps_")]:
+            maps_kwargs[k.removeprefix("maps_")] = kwargs.pop(k)
+        # groups permutation
+        groups_kwargs = {
+            "paired": "auto",
+            "strategy": "proportional",
+        }
+        for k in [k for k in kwargs.keys() if k.startswith("groups_")]:
+            groups_kwargs[k.removeprefix("groups_")] = kwargs.pop(k)
+        # colocalization
+        coloc_kwargs = {
+            "xsea": xsea,
+            "n_proc": n_proc,
+            "seed": seed,
+        } | kwargs
+        
         ## merge with settings from current NiSpace object        
         n_proc = n_proc if n_proc is not None else self._n_proc
         dtype = self._dtype
@@ -1162,12 +1214,6 @@ class NiSpace:
         if not self._check_colocalize(method, None, X_reduction, Y_transform, xsea, 
                                       raise_error=False):
             lgr.warning(f"'{method}' colocalization was not run before. Running now.")
-            coloc_kwargs = dict(
-                xsea=xsea,
-                n_proc=n_proc,
-                seed=seed,
-                **kwargs
-            )
             self.colocalize(method, X_reduction, Y_transform, **coloc_kwargs)
         
         ## get observed data
@@ -1203,14 +1249,15 @@ class NiSpace:
         # False -> calculate p for every Y map, anything else -> defaults to mean
         if p_from_average_y_coloc:
             if p_from_average_y_coloc == "auto":
-                if _Y_obs.shape[0] > 1:
-                    lgr.info("Will calculate p values for mean calculation across Y maps. Set "
-                             "'p_from_average_y_coloc' = False to change this behavior.")
-                    p_from_average_y_coloc = "mean"
-                else:
+                if _Y_obs.shape[0] == 1 or self._x_with_self:
                     p_from_average_y_coloc = False
+                elif _Y_obs.shape[0] > 1:
+                    p_from_average_y_coloc = "mean"
             elif p_from_average_y_coloc not in ["mean", "median"]:
                 p_from_average_y_coloc = "mean"
+            if p_from_average_y_coloc:
+                lgr.info("Will calculate p values for mean calculation across Y maps. Set "
+                         "'p_from_average_y_coloc' = False to change this behavior.")
             self._nulls["p_from_average_y_coloc"] = p_from_average_y_coloc
                     
         ## get observed colocalizations as numpy arrays
@@ -1243,12 +1290,8 @@ class NiSpace:
                 lgr.info(f"Generating permuted {XY} maps.")
                 
                 # if no null maps & also no distance matrix given, generate distance matrix
-                if (maps_nulls is None) & (maps_dist_mat is None):
-                    maps_dist_mat = self._get_dist_mat(
-                        dist_mat_type="null_maps", 
-                        centroids=maps_dist_mat_centroids,
-                        downsample_vol=maps_dist_mat_downsample
-                    )
+                if maps_nulls is None and dist_mat is None:
+                    dist_mat = self._get_dist_mat(**dist_mat_kwargs)
                 
                 # get null maps, will not generate new maps if already existing and use of 
                 # existing is requested
@@ -1262,24 +1305,22 @@ class NiSpace:
                         data_obs = _Y_obs
                     standardize_nulls = True if "y" in self._zscore else False
                 maps_nulls = _get_null_maps(
-                    data_obs=data_obs, 
-                    null_maps=maps_nulls,
-                    nispace_nulls=self._nulls, 
-                    use_existing_maps=maps_use_existing_nulls, 
-                    standardize=standardize_nulls,
-                    null_method=maps_null_method,
-                    dist_mat=maps_dist_mat,
+                    data_obs=data_obs,
+                    dist_mat=dist_mat,
                     parc=self._parc,
                     parc_kwargs=self._parc_info,
+                    #standardize=False,
+                    standardize=standardize_nulls,
                     n_perm=n_perm, 
                     seed=seed, 
                     n_proc=n_proc, 
                     dtype=dtype,
-                    verbose=verbose
+                    verbose=verbose,        
+                    **maps_kwargs
                 )
                 
                 # store null maps
-                self._nulls["maps_null_method"] = maps_null_method
+                self._nulls["maps_null_method"] = maps_kwargs["null_method"]
                 self._nulls["maps_null"] = maps_nulls
                 self._nulls["maps_null_which"] = XY
 
@@ -1330,16 +1371,15 @@ class NiSpace:
             
             # get list of permuted group labels
             lgr.info(f"Permuting groups/sessions vector, strategy: "
-                     f"{'paired' if groups_perm_paired else 'unpaired'}, {groups_perm_strategy}.")
+                     f"{'paired' if groups_perm_paired else 'unpaired'}, {groups_kwargs['strategy']}.")
             groups_null = permute_groups(
                 groups=groups, 
                 subjects=subjects, 
-                strategy=groups_perm_strategy, 
-                paired=groups_perm_paired,
                 n_perm=n_perm, 
                 n_proc=n_proc,
                 seed=seed,
-                verbose=verbose
+                verbose=verbose,
+                **groups_kwargs
             )
             
             # get permuted group comparison results

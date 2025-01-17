@@ -1,10 +1,12 @@
 import sys
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import re
 import copy
 import logging
 from colorlog import ColoredFormatter
+from numba import njit
 
 import nibabel as nib
 from nilearn import image
@@ -274,33 +276,44 @@ def get_background_value(img, border_size=2):
     return background
 
 
+@njit
+def vect_to_vol_arr(vect, parc_arr, parc_idc):
+    parc_arr2d = parc_arr.flatten().astype(vect.dtype)
+    vect_arr2d = np.zeros_like(parc_arr2d, dtype=vect.dtype)
+    parc_idc = parc_idc.astype(vect.dtype)
+    for i, idx in enumerate(parc_idc):
+        vect_arr2d[parc_arr2d==idx] = vect[i]
+    return vect_arr2d.reshape(parc_arr.shape)
+
+@njit
+def vol_to_vect_arr(vol_arr, parc_arr, parc_idc):
+    vol_arr2d = vol_arr.flatten()
+    parc_arr2d = parc_arr.flatten().astype(vol_arr.dtype)
+    parc_idc = parc_idc.astype(vol_arr.dtype)
+    vect = np.zeros(len(parc_idc), dtype=vol_arr.dtype)
+    for i, idx in enumerate(parc_idc):
+        vect[i] = vol_arr2d[parc_arr2d==idx].mean()
+    return vect
+    
+
 def parc_vect_to_vol(vect, parc):
     # check data
     if isinstance(vect, (list, set, tuple, pd.Series)):
         vect = np.array(vect)
     elif isinstance(vect, (np.ndarray, pd.DataFrame())):
         if len(vect.shape) > 1:
-            print("Input vector should be 1d-array/list-like. Will flatten and see for the best.")
+            print("Input vector should be 1d-array/list-like. Will flatten and hope for the best.")
         vect = np.array(vect).flatten()
     else:
         raise ValueError("Input vector should be 1d-array or list-like.")
     # load data
     parc = image.load_img(parc)
-    parc_3darr = parc.get_fdata().astype(int)
-    # create empty 3d array
-    vect_3darr = np.zeros_like(parc_3darr).astype(vect.dtype)
-    # get unique parcels
-    parc_idc = np.trim_zeros(np.unique(parc_3darr)).astype(int)
-    # check length
-    if len(parc_idc) != len(vect):
-        raise ValueError("Number of parcels and length of input vector must match.")
-    # create mapping
-    mapping = {idx: vect[i] for i, idx in enumerate(parc_idc)}
-    # assign values
-    for idx, val in mapping.items():
-        vect_3darr[parc_3darr == idx] = val
+    parc_arr = parc.get_fdata()
+    parc_idc = np.trim_zeros(np.unique(parc_arr))
+    # get volume
+    vol_arr = vect_to_vol_arr(vect, parc_arr, parc_idc)
     # return image
-    return image.new_img_like(parc, vect_3darr)
+    return image.new_img_like(parc, vol_arr)
 
 
 def relabel_gifti_parc(parc, new_labels=None):
@@ -331,3 +344,133 @@ def relabel_gifti_parc(parc, new_labels=None):
     parc_relabeled.darrays[0].data = data_relabeled
     
     return parc_relabeled
+
+
+def relabel_nifti_parc(parc, new_order=None, new_labels=None, dtype=None):
+    
+    parc_orig = images.load_nifti(parc)
+    data_orig = parc_orig.get_fdata()
+    if dtype is None:
+        dtype = data_orig.dtype
+    if new_order is None:
+        new_order = np.trim_zeros(np.unique(data_orig)).astype(dtype)
+    if new_labels is None:
+        new_labels = np.arange(len(new_order)).astype(dtype) + 1
+    if len(new_order) != len(new_labels) != len(np.unique(data_orig)):
+        raise ValueError("'new_order' and 'new_labels' must be the same length as the number of parcels in 'parc'!")
+    if not all(np.isin(new_order, np.unique(data_orig))):
+        raise ValueError("'new_order' must be a subset of the parcels in 'parc'!")
+    
+    parc_relabeled = np.zeros_like(data_orig, dtype=dtype)
+    for label_orig, label_new in zip(new_order, new_labels):
+        parc_relabeled[data_orig == label_orig] = label_new
+    parc_relabeled = image.new_img_like(parc_orig, parc_relabeled)
+    
+    return parc_relabeled
+
+
+def correlate_hemispheres(img, mask=None):
+    if isinstance(img, (str, Path, nib.Nifti1Image)):
+        #raise NotImplementedError("Nifti1Image input not implemented yet!")
+        img = images.load_nifti(img)
+        dat = img.get_fdata()
+    elif isinstance(img, np.ndarray):
+        #raise NotImplementedError("Numpy array input not implemented yet!")
+        dat = np.squeeze(img)
+    elif isinstance(img, (tuple, list)):
+        if isinstance(img[0], (nib.GiftiImage, Path, str)):
+            dat = (images.load_gifti(img[0]).agg_data(), images.load_gifti(img[1]).agg_data())
+        elif isinstance(img[0], np.ndarray):
+            dat = (np.squeeze(img[0]), np.squeeze(img[1]))
+        else:
+            raise ValueError("If input is a tuple, it must be a size-2 tuple of numpy arrays or (path to) two GiftiImages!")
+    else:
+        raise ValueError("Input must be (path to) a Nifti1Image, numpy array, or size-2 tuple of numpy arrays or GiftiImages!")
+    
+    if isinstance(dat, tuple):
+        a = dat[0].copy()
+        b = dat[1].copy()
+    else:
+        #xyz0 = image.coord_transform(0, 0, 0, np.linalg.inv(affine))
+        if mask is None:
+            mask = ~(np.isclose(dat, 0) | np.isnan(dat))
+        elif isinstance(mask, (str, Path, nib.Nifti1Image)):
+            mask = images.load_nifti(mask).get_fdata()
+        # original data
+        a = dat[mask]
+        # flipped across x-axis
+        b = dat[::-1, :, :][mask]
+        
+    return np.corrcoef(a.flatten(), b.flatten())[0,1]
+
+
+def mirror_nifti(img, affine=None, direction="left_to_right", match_r=False, mask=None):
+    if isinstance(img, (np.ndarray)):
+        dat = np.squeeze(np.array(img))
+        return_array = True
+        if affine is None:
+            raise ValueError("Affine must be provided if input is array")
+    else:
+        img = images.load_nifti(img)
+        return_array = False
+        dat = img.get_fdata()
+        affine = img.affine
+        
+    if len(dat.shape) != 3:
+        raise ValueError("Input must be a 3D array or Nifti1Image")
+    
+    # get coordinates of voxel (0,0,0)
+    xyz0 = image.coord_transform(0, 0, 0, np.linalg.inv(affine))
+    
+    # get left hemisphere
+    dat_lh = dat.copy()
+    dat_lh[:int(xyz0[0])] = 0
+    
+    # get right hemisphere
+    dat_rh = dat.copy()
+    dat_rh[int(xyz0[0]):] = 0
+    
+    # mirror
+    if direction == "left_to_right":
+        dat_mirr = dat_lh.copy()
+        dat_mirr[:int(xyz0[0])] = dat_lh[::-1, :, :][:int(xyz0[0])]
+    elif direction == "right_to_left":
+        dat_mirr = dat_rh.copy()
+        dat_mirr[int(xyz0[0]):] = dat_rh[::-1, :, :][int(xyz0[0]):]
+    elif direction in ["average", "bilateral"]:
+        dat_mirr = (dat + dat_lh[::-1, :, :] + dat_rh[::-1, :, :]) / 2
+        
+    # n
+    if return_array:
+        return dat_mirr
+    else:
+        return image.new_img_like(img, dat_mirr)
+    
+    
+def mirror_gifti(img, direction="left_to_right", match_r=False, mask=None):
+    if not isinstance(img, tuple):
+        raise ValueError("Input must be a tuple of two GiftiImages or arrays!")
+    
+    if isinstance(img[0], np.ndarray):
+        dat = (np.squeeze(img[0]), np.squeeze(img[1]))
+        return_array = True
+    elif isinstance(img[0], nib.GiftiImage):
+        dat = (images.load_gifti(img[0]).agg_data(), images.load_gifti(img[1]).agg_data())
+        return_array = False
+    else:
+        raise ValueError("Input must be a tuple of two GiftiImages or arrays!")
+            
+    # mirror
+    if direction == "left_to_right":
+        dat_mirr = (dat[0], dat[0].copy())
+    elif direction == "right_to_left":
+        dat_mirr = (dat[1].copy(), dat[1])
+    elif direction in ["average", "bilateral"]:
+        dat_mirr = ((dat[0] + dat[1]) / 2, (dat[0] + dat[1]) / 2)
+        
+    # return
+    if return_array:
+        return dat_mirr
+    else:
+        return (nib.GiftiImage(darrays=dat_mirr[0]), nib.GiftiImage(darrays=dat_mirr[1]))
+    

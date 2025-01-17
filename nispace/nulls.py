@@ -8,7 +8,9 @@ from neuromaps.nulls.nulls import batch_surrogates
 from neuromaps.nulls.nulls import _get_distmat
 from neuromaps.datasets import fetch_fsaverage
 from scipy.spatial.distance import cdist
+from sklearn.preprocessing import minmax_scale
 from tqdm.auto import tqdm
+
 try:
     from brainspace.null_models.moran import MoranRandomization
     _BRAINSPACE_AVAILABLE = True
@@ -21,7 +23,7 @@ except ImportError:
     _BRAINSMASH_AVAILABLE = False
 
 from . import lgr
-from .utils.utils import set_log
+from .utils.utils import set_log, mirror_nifti, mirror_gifti, vect_to_vol_arr, vol_to_vect_arr
 
 
 def _dist_mat_from_coords(coords, dtype=np.float32):
@@ -88,7 +90,7 @@ def nulls_burt2018(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
     # return
     return null_data.astype(data_1d.dtype)
 
-def nulls_moran(data_1d, dist_mat, n_nulls=1000, seed=None,**kwargs):
+def nulls_moran(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
     data_1d = np.array(data_1d).flatten()
     # results array with shape (n_nulls, n_parcels)
     null_data = np.full((n_nulls, len(data_1d)), np.nan)
@@ -274,7 +276,7 @@ def find_vol_parc_centroids(parc, affine=None, parcel_idc=None):
     # get centroid coordinates in world space
     xyz = np.zeros((len(parcel_idc), 3), float)
     for i, i_parcel in enumerate(parcel_idc):
-        xyz[i,:] = np.column_stack(np.where(parc_data==i_parcel)).mean(axis=0)
+        xyz[i, :] = np.column_stack(np.where(parc_data==i_parcel)).mean(axis=0)
     ijk = nib.affines.apply_affine(affine, xyz)
     
     return ijk
@@ -332,7 +334,8 @@ def find_surf_parc_centroids(parc, parc_hemi, parc_density="10k"):
 
 def generate_null_maps(method, data, parcellation, dist_mat=None, 
                        parc_space=None, parc_hemi=None, 
-                       n_nulls=1000, centroids=False,
+                       n_nulls=1000, downsample_parcellation=3, centroids=False, lr_mirror_dist_mat=False,
+                       parc_idc_lh=None, parc_idc_rh=None, parc_idc_sc=None, cx_sc_minmax_scale=False,
                        dtype=float,
                        n_proc=1, seed=None, verbose=True,
                        **kwargs):
@@ -345,12 +348,16 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
         lgr.critical_raise(f"Null method {method} not implemented!",
                            ValueError)
     null_fun = _NULL_METHODS[method]
+    random_nulls = False
     if null_fun.__name__ == "nulls_moran" and not _BRAINSPACE_AVAILABLE:
         lgr.critical_raise("Null method 'moran' requires brainspace! Run 'pip install brainspace'!",
                            ImportError)
     elif null_fun.__name__ == "nulls_burt2020" and not _BRAINSMASH_AVAILABLE:
         lgr.critical_raise("Null method 'burt2020' requires brainsmash! Run 'pip install brainsmash'!",
                            ImportError)
+    elif null_fun.__name__ == "nulls_random":
+        random_nulls = True
+        
     # input data
     if not isinstance(data, (pd.DataFrame, pd.Series, np.ndarray)):
         lgr.critical_raise(f"Input data not array-like! Type: {type(data)}",
@@ -370,8 +377,12 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
     lgr.info(f"Null map generation: Assuming n = {n_data} data vector(s) for "
              f"n = {data.shape[1]} parcels.")
     
+    ## random nulls -> no distmat
+    if random_nulls:
+        dist_mat = (None, None) if isinstance(dist_mat, tuple) else None
+        
     ## distance matrix provided -> we dont need parcellation
-    if dist_mat is not None:
+    if dist_mat is not None and not random_nulls:        
         lgr.info(f"Using provided distance matrix/matrices.")
         if isinstance(dist_mat, (np.ndarray, pd.DataFrame)):
             n_parcels = dist_mat.shape[0]
@@ -392,7 +403,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
             dist_mat = None
       
     ## get dist mat -> we need parcellation
-    if dist_mat is None:   
+    if dist_mat is None and not random_nulls:
         # load function
         def load_parc(parc, parc_type, parc_space):
             if parc_type=="nifti":
@@ -435,12 +446,18 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
 
         # check for problems
         if isinstance(parc, nib.GiftiImage):
-            if (parc_hemi is None) | (len(parc_hemi)>1):
+            if parc_hemi is None:
                 lgr.warning("If only one gifti parcellation image is supplied, 'parc_hemi' must "
                             "be one of: ['L'], ['R']! Assuming left hemisphere!" )
                 parc_hemi = ["L"]
+            elif len(parc_hemi) > 1:
+                lgr.warning("If only one gifti parcellation image is supplied, 'parc_hemi' can "
+                            "only be one of: ['L'], ['R']! Assuming left hemisphere!" )
+                parc_hemi = ["L"]
         if isinstance(parc, tuple):
-            if (parc_hemi is None) | (len(parc_hemi)==1):
+            if parc_hemi is None:
+                parc_hemi = ["L", "R"]
+            elif len(parc_hemi) == 1:
                 lgr.warning("If 'parc_hemi' is ['L'] or ['R'], only one gifti parcellation image "
                             "should be supplied as string or gifti! Assuming both hemispheres!")
                 parc_hemi = ["L", "R"]   
@@ -454,35 +471,140 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
                 f"{temp if parc_space in ['fsaverage', 'fsLR', 'fsa', 'fslr'] else ''}).")
      
         ## calculate distance matrix
-        lgr.info("Calculating distance matrix/matrices ({d}).".format(
-            d='euclidean' if parc_space in ['mni','MNI','mni152','MNI152'] else 'geodesic'))
+        # lgr.info("Calculating distance matrix/matrices ({d}).".format(
+        #     d='euclidean' if parc_space in ['mni','MNI','mni152','MNI152'] else 'geodesic'))
         dist_mat = get_distance_matrix(
             parc=parc, 
             parc_space=parc_space,
             parc_hemi=parc_hemi,
+            downsample_vol=downsample_parcellation,
             centroids=centroids,
             n_proc=n_proc,
-            verbose=False
+            verbose=verbose
         )
     
-    ## generate null data    
-    # case two surface files
-    if isinstance(dist_mat, tuple):
-        def par_fun(data_1d):
-            data_1d_split = (data_1d[:len(dist_mat[0])], 
-                             data_1d[len(dist_mat[0]):])
-            null_data = []
-            for data, dist in zip(data_1d_split, dist_mat):
-                null_data.append(
-                    null_fun(data_1d=data, dist_mat=dist, n_nulls=n_nulls, seed=seed, **kwargs)
-                )
-            return np.concatenate(null_data, 1)
+    ## generate null data     
     
-    # case one surface/volume file
+    # check if separate indices for hemispheres are provided as tuple of arrays
+    if parc_idc_lh is not None and parc_idc_rh is not None:
+        if not isinstance(parc_idc_lh, (list, np.ndarray)) or not isinstance(parc_idc_rh, (list, np.ndarray)):
+            lgr.warning("'parc_idc_lh' and 'parc_idc_rh' must be lists or arrays! Setting both to None!")
+            parc_idc_lh, parc_idc_rh = None, None
+    elif parc_idc_lh is None and parc_idc_rh is None:
+        pass
     else:
-        def par_fun(data_1d):
-            return null_fun(data_1d=data_1d, dist_mat=dist_mat, n_nulls=n_nulls, seed=seed, **kwargs)
+        for var, idc in [("parc_idc_lh", parc_idc_lh), ("parc_idc_rh", parc_idc_rh)]:
+            if idc is not None:
+                if not isinstance(idc, (list, np.ndarray)):
+                    lgr.warning(f"'{var}' must be a list or array! Setting '{var}' to None!")
+                    locals()[var] = None
+                else:
+                    lgr.warning(f"Only indices of {var} provided, inferring indices of other hemisphere!")
+                    if var == "parc_idc_lh":
+                        parc_idc_rh = np.setdiff1d(np.arange(data.shape[1]), idc)
+                    else:
+                        parc_idc_lh = np.setdiff1d(np.arange(data.shape[1]), idc)
+            
+    # check if separate indices for subcortex are provided as array
+    if parc_idc_sc is not None:
+        if not isinstance(parc_idc_sc, (list, np.ndarray)):
+            lgr.warning("'parc_idc_sc' must be a list or array! Setting 'parc_idc_sc' to None!")
+            parc_idc_sc = None
+    
+    # create indices for cortex
+    if parc_idc_sc is not None:
+        parc_idc_cx = np.setdiff1d(np.arange(data.shape[1]), parc_idc_sc)
+        if len(parc_idc_cx) == 0:
+            parc_idc_sc, parc_idc_cx = None, None
+            
+    # get all index lists according to which we want to split the data and distance matrix
+    if isinstance(dist_mat, tuple): # surface input
+        split_by_idc = (
+            np.arange(dist_mat[0].shape[0]), # left hemisphere
+            np.arange(dist_mat[1].shape[0]) + dist_mat[0].shape[0], # right hemisphere
+        )
+    elif parc_idc_lh is None and parc_idc_sc is None: # none given
+        split_by_idc = (
+            np.arange(data.shape[1]), # whole dataset
+        )
+        lr_mirror_dist_mat = False
+    elif parc_idc_lh is not None and parc_idc_sc is not None: # hemis + sc given
+        lgr.info("Generating null data separately for left and right cortex and subcortex.")
+        split_by_idc = (
+            np.intersect1d(parc_idc_lh, parc_idc_cx),  # left cortex
+            np.intersect1d(parc_idc_rh, parc_idc_cx),  # right cortex
+            np.intersect1d(parc_idc_lh, parc_idc_sc),  # left subcortex
+            np.intersect1d(parc_idc_rh, parc_idc_sc),  # right subcortex
+        )
+    elif parc_idc_lh is not None: # hemi but not sc given
+        lgr.info("Generating null data separately for left and right hemisphere.")
+        split_by_idc = (
+            parc_idc_lh,  # whole left hemisphere
+            parc_idc_rh,  # whole right hemisphere
+        )
+    elif parc_idc_sc is not None: # sc but not hemi given
+        lgr.info("Generating null data separately for cortex and subcortex.")
+        split_by_idc = (
+            parc_idc_cx, # whole cortex
+            parc_idc_sc, # whole subcortex
+        )
+        # set lr_mirror_dist_mat to False as we apparently dont have hemisphere-indices available
+        lr_mirror_dist_mat = False
+    else:
+        lgr.critical_raise("Problem with 'split_by_idc': No indices generated/provided!", 
+                           ValueError)
         
+    # check if indices are missing
+    missing_idc = np.setdiff1d(np.arange(data.shape[1]), np.concatenate(split_by_idc))
+    if len(missing_idc) == data.shape[1]:
+        lgr.critical_raise("No parcel indices are present in the processed data! Check the provided "
+                           "'parc_idc_lh', 'parc_idc_rh', and 'parc_idc_sc' variables.",
+                           ValueError)
+    elif len(missing_idc) > 0:
+        lgr.warning(f"Some parcel indices are missing in the processed data! You might want to check "
+                    f"the provided 'parc_idc_lh', 'parc_idc_rh', and 'parc_idc_sc' variables. "
+                    f"Missing indices: {missing_idc}")
+        
+    # check duplicate indices
+    if np.unique(np.concatenate(split_by_idc)).size != np.concatenate(split_by_idc).size:
+        lgr.critical_raise("Duplicate indices found in 'parc_idc_lh' and 'parc_idc_rh'! "
+                           "Check if 'parc_idc_lh' and 'parc_idc_rh' are correctly defined.",
+                           ValueError)
+        
+    # split distance matrix to align with surface hemisphere distance matrices 
+    if not isinstance(dist_mat, tuple):
+        if dist_mat is not None:
+            dist_mat_split = tuple([dist_mat[np.ix_(i, i)] for i in split_by_idc])
+        else:
+            dist_mat_split = tuple([None] * len(split_by_idc))
+    else:
+        dist_mat_split = dist_mat
+        
+    # mirror distance matrix if requested
+    if lr_mirror_dist_mat and dist_mat is not None:
+        lgr.info("Left-right averaging distance matrices to generate symmetrized null maps.")
+        if len(dist_mat_split) == 2:
+            dist_mat_split = tuple([np.average(dist_mat_split, axis=0)] * 2)
+            if not np.allclose(dist_mat_split[0], dist_mat_split[1]):
+                lgr.critical_raise("Left-right averaged whole-hemisphere distance matrices are not equal! "
+                                   "Check if 'parc_idc_lh' and 'parc_idc_rh' are correctly defined.",
+                                   ValueError)
+        elif len(dist_mat_split) == 4:
+            dist_mat_split = tuple([np.average(dist_mat_split[:2], axis=0)] * 2 + 
+                                   [np.average(dist_mat_split[2:], axis=0)] * 2)
+            if not (np.allclose(dist_mat_split[0], dist_mat_split[1]) and np.allclose(dist_mat_split[2], dist_mat_split[3])):
+                lgr.critical_raise("Left-right averaged cortical and subcortical distance matrices are not equal! "
+                                   "Check if 'parc_idc_lh' and 'parc_idc_rh' are correctly defined.",
+                                   ValueError)
+                
+    # define function to generate null data
+    def par_fun(data_1d):
+        null_data = np.full((n_nulls, len(data_1d)), np.nan)
+        for idc, dist in zip(split_by_idc, dist_mat_split):
+            null_data[:, idc] = null_fun(data_1d=data_1d[idc], dist_mat=dist, n_nulls=n_nulls, seed=seed, **kwargs)
+        return null_data
+    
+    # run null data generation
     nulls = Parallel(n_jobs=n_proc)(
         delayed(par_fun)(data[i, :]) 
         for i in tqdm(
@@ -492,7 +614,22 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
         )
     )
     nulls = {l: n.astype(dtype) for l, n in zip(data_labs, nulls)}
-
+    
+    # adjust scaling
+    if cx_sc_minmax_scale:
+        if parc_idc_sc is None:
+            lgr.warning("To perform subcortical and cortical scaling adjustment, provide 'parc_idc_sc'!")
+        else:
+            lgr.info("Matching min-max range of subcortical and cortical null data to observed data.")
+            for i, (l, n) in enumerate(nulls.items()):
+                # get min, max, and mean of original subcortical data
+                scale_sc = (np.nanmin(data[i, parc_idc_sc]), np.nanmax(data[i, parc_idc_sc]))
+                # get min, max, and mean of original cortical data
+                scale_cx = (np.nanmin(data[i, parc_idc_cx]), np.nanmax(data[i, parc_idc_cx]))
+                # scale subcortical null data
+                nulls[l][:, parc_idc_sc] = minmax_scale(n[:, parc_idc_sc], feature_range=scale_sc, axis=1)
+                # scale cortical null data
+                nulls[l][:, parc_idc_cx] = minmax_scale(n[:, parc_idc_cx], feature_range=scale_cx, axis=1)
     ## return
     lgr.info("Null data generation finished.")
     return nulls, dist_mat
