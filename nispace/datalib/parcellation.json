@@ -29,6 +29,39 @@
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer100MelbourneS1/MNI152NLin6Asym/parc-Schaefer100MelbourneS1_space-MNI152NLin6Asym.dist.csv.gz"
             }
+        },
+
+        "fsLR": {
+            "map": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer100MelbourneS1/fsLR/parc-Schaefer100MelbourneS1_space-fsLR_hemi-L.label.gii.gz"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer100MelbourneS1/fsLR/parc-Schaefer100MelbourneS1_space-fsLR_hemi-R.label.gii.gz"
+                }
+            },
+            "label": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer100MelbourneS1/fsLR/parc-Schaefer100MelbourneS1_space-fsLR_hemi-L.label.txt"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer100MelbourneS1/fsLR/parc-Schaefer100MelbourneS1_space-fsLR_hemi-R.label.txt"
+                }
+            },
+            "distmat": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer100MelbourneS1/fsLR/parc-Schaefer100MelbourneS1_space-fsLR_hemi-L.dist.csv.gz"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer100MelbourneS1/fsLR/parc-Schaefer100MelbourneS1_space-fsLR_hemi-R.dist.csv.gz"
+                }
+            }
         }
 
     },
@@ -73,6 +106,39 @@
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer200MelbourneS2/MNI152NLin6Asym/parc-Schaefer200MelbourneS2_space-MNI152NLin6Asym.dist.csv.gz"
             }
+        },
+
+        "fsLR": {
+            "map": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer200MelbourneS2/fsLR/parc-Schaefer200MelbourneS2_space-fsLR_hemi-L.label.gii.gz"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer200MelbourneS2/fsLR/parc-Schaefer200MelbourneS2_space-fsLR_hemi-R.label.gii.gz"
+                }
+            },
+            "label": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer200MelbourneS2/fsLR/parc-Schaefer200MelbourneS2_space-fsLR_hemi-L.label.txt"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer200MelbourneS2/fsLR/parc-Schaefer200MelbourneS2_space-fsLR_hemi-R.label.txt"
+                }
+            },
+            "distmat": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer200MelbourneS2/fsLR/parc-Schaefer200MelbourneS2_space-fsLR_hemi-L.dist.csv.gz"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer200MelbourneS2/fsLR/parc-Schaefer200MelbourneS2_space-fsLR_hemi-R.dist.csv.gz"
+                }
+            }
         }
 
     },
@@ -116,6 +182,39 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer400MelbourneS3/MNI152NLin6Asym/parc-Schaefer400MelbourneS3_space-MNI152NLin6Asym.dist.csv.gz"
+            }
+        },
+
+        "fsLR": {
+            "map": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer400MelbourneS3/fsLR/parc-Schaefer400MelbourneS3_space-fsLR_hemi-L.label.gii.gz"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer400MelbourneS3/fsLR/parc-Schaefer400MelbourneS3_space-fsLR_hemi-R.label.gii.gz"
+                }
+            },
+            "label": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer400MelbourneS3/fsLR/parc-Schaefer400MelbourneS3_space-fsLR_hemi-L.label.txt"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer400MelbourneS3/fsLR/parc-Schaefer400MelbourneS3_space-fsLR_hemi-R.label.txt"
+                }
+            },
+            "distmat": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer400MelbourneS3/fsLR/parc-Schaefer400MelbourneS3_space-fsLR_hemi-L.dist.csv.gz"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Schaefer400MelbourneS3/fsLR/parc-Schaefer400MelbourneS3_space-fsLR_hemi-R.dist.csv.gz"
+                }
             }
         }
 
