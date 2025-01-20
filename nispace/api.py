@@ -312,7 +312,8 @@ class NiSpace:
             if isinstance(self._z, str):
                 if self._z in ["GM", "GMV", "gm", "gmv"]:
                     lgr.info("Using standard grey matter probability map as 'z' for GMV-control.")
-                    self._z = [fetch_template("MNI152", desc="gmprob")]
+                    # TODO: should be MNI152NLin6Asym space when a surface parcellation is used
+                    self._z = [fetch_template("MNI152NLin2009cAsym", desc="gmprob")]
                     self._z_lab = ["gm"]
             self._Z = parcellate_data(
                 self._z, 
@@ -1362,16 +1363,16 @@ class NiSpace:
                                                          ignore_nan_warnings=True)
             
             # paired permutations?
-            if groups_perm_paired not in ["auto", True, False]:
-                lgr.warning("Argument 'groups_perm_paired' must be of boolean type or 'auto' not "
-                            f"'{groups_perm_paired}'! Setting to 'auto'.")
-                groups_perm_paired = "auto"
-            if groups_perm_paired == "auto":
-                groups_perm_paired = paired
+            if groups_kwargs["paired"] not in ["auto", True, False]:
+                lgr.warning("Argument 'groups_paired' must be of boolean type or 'auto' not "
+                            f"'{groups_kwargs['paired']}'! Setting to 'auto'.")
+                groups_kwargs["paired"] = "auto"
+            if groups_kwargs["paired"] == "auto":
+                groups_kwargs["paired"] = paired
             
             # get list of permuted group labels
             lgr.info(f"Permuting groups/sessions vector, strategy: "
-                     f"{'paired' if groups_perm_paired else 'unpaired'}, {groups_kwargs['strategy']}.")
+                     f"{'paired' if groups_kwargs['paired'] else 'unpaired'}, {groups_kwargs['strategy']}.")
             groups_null = permute_groups(
                 groups=groups, 
                 subjects=subjects, 

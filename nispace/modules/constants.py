@@ -12,7 +12,7 @@ _DSETS_SC_ONLY = []
 
 _COLLECT_DEFAULT = {
     "pet": "UniqueTracers",
-    "mrna": "CellTypesPsychEncodeTPM",
+    "mrna": "CellTypesSilettiSuperclusters",
     "brainmap": "AllDomainSets",
 }
 

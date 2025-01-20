@@ -634,25 +634,27 @@ def fetch_reference(dataset: str,
               f"First 5: {maps_avail[:5] if len(maps_avail) >= 5 else maps_avail[:len(maps_avail)]}")
 
     # Remove private maps
-    if not osf_config_file and not github_config_file:
-        maps_avail = [
-            m for m in maps_avail 
-            if reference_lib[dataset]["map"][m][space]["host"] not in ["osfprivate", "github-nispace-private"]
-        ]
+    if "map" in reference_lib[dataset]:
+        if not osf_config_file and not github_config_file:
+            maps_avail = [
+                m for m in maps_avail 
+                if reference_lib[dataset]["map"][m][space]["host"] not in ["osfprivate", "github-nispace-private"]
+            ]
     
     # Filter by 'maps'
     if maps:
         n_tmp = len(maps_avail)
         lgr.info(f"Applying filter: {maps}")
-        if "map" not in reference_lib[dataset]:
-            maps_avail = _filter_maps(maps_avail, maps)
-        else:
-            if isinstance(maps, str):
-                maps = [maps]
-            elif not isinstance(maps, (list, tuple, set, pd.Series)):
-                lgr.warning(f"For dataset '{dataset}', 'maps' must be list-like. Skipping filter.")
-                maps = maps_avail
-            maps_avail = list(set(maps_avail).intersection(maps))
+        maps_avail = _filter_maps(maps_avail, maps)
+        # if "map" not in reference_lib[dataset]:
+        #     maps_avail = _filter_maps(maps_avail, maps)
+        # else:
+        #     if isinstance(maps, str):
+        #         maps = [maps]
+        #     elif not isinstance(maps, (list, tuple, set, pd.Series)):
+        #         lgr.warning(f"For dataset '{dataset}', 'maps' must be list-like. Skipping filter.")
+        #         maps = maps_avail
+        #     maps_avail = list(set(maps_avail).intersection(maps))
         lgr.info(f"Filtered from {n_tmp} to {len(maps_avail)} maps.")
     
     # Filter by 'collection'

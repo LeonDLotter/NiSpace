@@ -61,7 +61,7 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
             else:
                 lgr.info(f"Input '{parcellation}' not recognized as integrated parcellation. "
                          "Checking if path to parcellation file.")
-                parc_integrated = _PARCS_DEFAULT
+                parc_integrated = None
             
         # y
         if y is None:
@@ -80,7 +80,6 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
                     collection=x_collection,
                     standardize_parcellated=False,
                     parcellation=parc_integrated,
-                    return_nulls=False,
                     verbose=verbose
                 ) | fetch_x_kwargs
                 x = fetch_reference(**fetch_x_kwargs)
@@ -390,8 +389,8 @@ def group_comparison(y, design,
                     what="groups",
                     method=method,
                     Y_transform=group_comparison,
-                    groups_perm_paired=paired, 
-                    groups_perm_strategy="proportional",
+                    groups_paired=paired, 
+                    groups_strategy="proportional",
                     n_perm=n_perm,
                     seed=seed,
                     verbose=verbose,

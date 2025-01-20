@@ -11,11 +11,20 @@ from nilearn.image import new_img_like, math_img
 import numpy as np
 import pandas as pd
 
-from neuromaps.datasets import ALIAS, DENSITIES, fetch_atlas
+from neuromaps.datasets import DENSITIES, fetch_atlas
 from neuromaps.images import construct_shape_gii, load_gifti, load_nifti, load_data
 from neuromaps.resampling import resample_images
 from neuromaps.transforms import _check_hemi, _estimate_density
 from neuromaps.nulls.spins import vertices_to_parcels, parcels_to_vertices
+
+# monkey fix to neuromaps ALIAS
+ALIAS = dict(
+    fslr='fsLR', fsavg='fsaverage', 
+    mni152='MNI152', mni='MNI152', 
+    mni152nlin6asym='MNI152', mni152nlin200asym='MNI152',
+    MNI152NLin6Asym='MNI152', MNI152NLin200Asym='MNI152',
+    FSLR='fsLR', CIVET='civet'
+)
 
 from nispace.utils.utils import get_background_value
 
@@ -166,6 +175,7 @@ class Parcellater():
             resampling_method = 'nearest'
         else:
             resampling_method = 'linear'
+        
         data, parc = resample_images(data, self.parcellation,
                                      space, self.space, hemi=hemi,
                                      resampling=self._resampling,

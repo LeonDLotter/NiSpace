@@ -12,7 +12,7 @@ from statsmodels.stats.multitest import multipletests
 @njit(cache=True)
 def np_any_axis1(x):
     """Numba compatible version of np.any(x, axis=1)."""
-    out = np.zeros(x.shape[0], dtype=np.bool8)
+    out = np.zeros(x.shape[0], dtype=np.bool_)
     for i in range(x.shape[1]):
         out = np.logical_or(out, x[:, i])
     return out 
