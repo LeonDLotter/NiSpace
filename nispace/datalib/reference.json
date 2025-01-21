@@ -11,8 +11,14 @@
 
             "target-5HT1a_tracer-cumi101_n-8_dx-hc_pub-beliveau2017": {
                 "fsaverage": {
-                    "host": "neuromaps",
-                    "remote": ["beliveau2017", "cumi101", "fsaverage"]
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["beliveau2017", "cumi101", "fsaverage", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["beliveau2017", "cumi101", "fsaverage", "R"]
+                    }
                 },
                 "MNI152": {
                     "host": "neuromaps",
@@ -45,8 +51,14 @@
 
             "target-5HT1b_tracer-az10419369_n-36_dx-hc_pub-beliveau2017": {
                 "fsaverage": {
-                    "host": "neuromaps",
-                    "remote": ["beliveau2017", "az10419369", "fsaverage"]
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["beliveau2017", "az10419369", "fsaverage", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["beliveau2017", "az10419369", "fsaverage", "R"]
+                    }
                 },
                 "MNI152": {
                     "host": "neuromaps",
@@ -109,8 +121,14 @@
 
             "target-5HT2a_tracer-cimbi36_n-29_dx-hc_pub-beliveau2017": {
                 "fsaverage": {
-                    "host": "neuromaps",
-                    "remote": ["beliveau2017", "cimbi36", "fsaverage"]
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["beliveau2017", "cimbi36", "fsaverage", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["beliveau2017", "cimbi36", "fsaverage", "R"]
+                    }
                 },
                 "MNI152": {
                     "host": "neuromaps",
@@ -128,8 +146,14 @@
 
             "target-5HT4_tracer-sb207145_n-59_dx-hc_pub-beliveau2017": {
                 "fsaverage": {
-                    "host": "neuromaps",
-                    "remote": ["beliveau2017", "sb207145", "fsaverage"]
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["beliveau2017", "sb207145", "fsaverage", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["beliveau2017", "sb207145", "fsaverage", "R"]
+                    }
                 },
                 "MNI152": {
                     "host": "neuromaps",
@@ -162,8 +186,14 @@
 
             "target-5HTT_tracer-dasb_n-100_dx-hc_pub-beliveau2017": {
                 "fsaverage": {
-                    "host": "neuromaps",
-                    "remote": ["beliveau2017", "dasb", "fsaverage"]
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["beliveau2017", "dasb", "fsaverage", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["beliveau2017", "dasb", "fsaverage", "R"]
+                    }
                 },
                 "MNI152": {
                     "host": "neuromaps",
@@ -466,8 +496,14 @@
 
             "target-GABAa_tracer-flumazenil_n-16_dx-hc_pub-norgaard2021": {
                 "fsaverage": {
-                    "host": "neuromaps",
-                    "remote": ["norgaard2021", "flumazenil", "fsaverage"]
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["norgaard2021", "flumazenil", "fsaverage", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["norgaard2021", "flumazenil", "fsaverage", "R"]
+                    }
                 },
                 "MNI152": {
                     "host": "neuromaps",

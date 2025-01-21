@@ -153,7 +153,7 @@ def parcellate_data(data,
             # apply parcellater
             kwargs = dict(
                 data=file, 
-                space=data_space,
+                space="mni152" if "mni" in data_space.lower() else data_space,
                 ignore_background_data=True,
                 background_value=None,
                 fill_dropped=True,

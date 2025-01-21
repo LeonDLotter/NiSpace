@@ -636,10 +636,16 @@ def fetch_reference(dataset: str,
     # Remove private maps
     if "map" in reference_lib[dataset]:
         if not osf_config_file and not github_config_file:
-            maps_avail = [
-                m for m in maps_avail 
-                if reference_lib[dataset]["map"][m][space]["host"] not in ["osfprivate", "github-nispace-private"]
-            ]
+            if "mni152" in space.lower():
+                maps_avail = [
+                    m for m in maps_avail 
+                    if reference_lib[dataset]["map"][m][space]["host"] not in ["osfprivate", "github-nispace-private"]
+                ]
+            else:
+                maps_avail = [
+                    m for m in maps_avail 
+                    if reference_lib[dataset]["map"][m][space]["L"]["host"] not in ["osfprivate", "github-nispace-private"]
+                ]
     
     # Filter by 'maps'
     if maps:
@@ -681,16 +687,35 @@ def fetch_reference(dataset: str,
         
     # Fetch paths to maps if no 'parcellation' is specified
     else:
-        data = [
-            get_file(
-                local_path=map_dir / m / f"{m}_space-{space}.nii.gz", 
-                **reference_lib[dataset]["map"][m][space], 
-                compress_nifti=True,
-                osf_config_file=osf_config_file,
-                github_config_file=github_config_file
-            ) 
-            for m in maps_avail
-        ]
+        # MNI: one file per map
+        if "mni152" in space.lower():
+            data = [
+                get_file(
+                    local_path=map_dir / m / f"{m}_space-{space}.nii.gz", 
+                    **reference_lib[dataset]["map"][m][space], 
+                    compress_nifti=True,
+                    osf_config_file=osf_config_file,
+                    github_config_file=github_config_file
+                ) 
+                for m in maps_avail
+            ]
+        # surface: two files per map
+        else:
+            data = [
+                (get_file(
+                     local_path=map_dir / m / f"{m}_space-{space}_hemi-L.surf.gii", 
+                     **reference_lib[dataset]["map"][m][space]["L"], 
+                     osf_config_file=osf_config_file,
+                     github_config_file=github_config_file
+                 ),
+                 get_file(
+                     local_path=map_dir / m / f"{m}_space-{space}_hemi-R.surf.gii", 
+                     **reference_lib[dataset]["map"][m][space]["R"], 
+                     osf_config_file=osf_config_file,
+                     github_config_file=github_config_file
+                 ))
+                for m in maps_avail
+            ]
         
     # Print references
     # for maps if "pet", or for sets if "mrna"

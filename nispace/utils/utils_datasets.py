@@ -120,10 +120,13 @@ def download_file(host: Literal["url", "github", "github-nispace", "github-nispa
             remote = Path(osf_id)
     elif host == "neuromaps":
         if not isinstance(remote, (tuple, list)):
-            raise ValueError("'remote' must be a tuple of (source, target, space) for neuromaps")
+            raise ValueError("'remote' must be a tuple of (source, tracer, space, "
+                             "{hemi: 'L' or 'R' if surface space}) for neuromaps")
         else:
-            source, tracer, space = remote
-    
+            if len(remote) == 3:
+                remote = (remote[0], remote[1], remote[2], ["L", "R"])
+            source, tracer, space, hemi = remote
+           
     if host != "neuromaps":
         
         # save path
@@ -177,64 +180,14 @@ def download_file(host: Literal["url", "github", "github-nispace", "github-nispa
             )
             
     else:
-        path = fetch_annotation(source=source, desc=tracer, space=space)
-        if isinstance(path, str):
+        path = fetch_annotation(source=source, desc=tracer, space=space, hemi=hemi)
+        # should be a string or pathlib.Path
+        if isinstance(path, (str, Path)):
             return path
         else: 
             raise ValueError(f"Unexpected neuromaps output for "
                              f"source={source}, desc={tracer}, space={space}: {path}")
 
-# def process_ref_img(image_path, save_path=None, override_file_format=False):
-#     if not isinstance(image_path, (str, Path)):
-#         raise ValueError(f"'image_path' must be a string or pathlib.Path; not '{image_path}'.")
-#     image_path = Path(image_path)
-    
-#     # load image
-#     img = io.load_img(image_path, override_file_format)
-    
-#     # volumetric processing
-#     if isinstance(img, Nifti1Image):
-        
-#         # image voxelsize
-#         voxsize = int(np.abs(np.round(img.affine[0,0])))
-        
-#         # get rid of 4th dimension if present
-#         if img.ndim==4:
-#             img = image.index_img(img, 0)
-        
-#         # load mask and resample to voxsize
-#         mask = io.load_img(datasets.fetch_template("mni152", res=f"{voxsize}mm", desc="mask", verbose=False))
-        
-#         # resample image to mask space
-#         img, _ = resample_images(
-#             src=img,
-#             src_space="mni152",
-#             trg=mask,
-#             trg_space="mni152",
-#             method="linear",
-#             resampling="transform_to_trg"
-#         )
-        
-#         # get background mask
-#         bg_mask = compute_background_mask(img)   
-#         bg_mask = image.math_img("bg_mask * mni_mask", bg_mask=bg_mask, mni_mask=mask)
-        
-#         # rescale and adjust data type
-#         img_data = img.get_fdata()
-#         img_data[bg_mask.get_fdata() == 0] = np.nan
-#         img_data = minmax_scale(img_data.flatten(), (1, 100)).reshape(img_data.shape)
-#         img_data = np.nan_to_num(img_data)
-#         img = image.new_img_like(img, img_data.astype(np.float32), copy_header=True)
-        
-#         if save_path is None:
-#             return img
-#         else:
-#             img.to_filename(save_path)
-#             return save_path
-            
-#     # surface processing
-#     else:
-#         raise NotImplementedError("Surface processing not implemented.")
 
 def _compress_nifti(file_path, save_path, dtype=np.float32):
     # try to load
