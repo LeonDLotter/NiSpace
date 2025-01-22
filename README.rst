@@ -89,6 +89,12 @@ You can install the development version of ``NiSpace`` in a Python 3.9+ environm
 
    pip install git+https://github.com/LeonDLotter/NiSpace.git@dev
 
+For reproducibility, consider installing a specific commit:
+
+.. code-block:: bash
+
+   pip install git+https://github.com/LeonDLotter/NiSpace.git@{commit_hash}
+
 
 Citation
 --------

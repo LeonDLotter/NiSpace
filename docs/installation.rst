@@ -27,6 +27,12 @@ The current development version is most conveniently installed from GitHub using
 
    pip install git+https://github.com/LeonDLotter/NiSpace.git@dev
 
+For reproducibility, consider installing a specific commit:
+
+.. code-block:: bash
+
+   pip install git+https://github.com/LeonDLotter/NiSpace.git@{commit_hash}
+
 There are some optional dependencies. When calling the respective ``NiSpace`` functions, you are prompted to install them. 
 However, to avoid this, you can install them directly with the other dependencies using:
 
