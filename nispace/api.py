@@ -1644,7 +1644,7 @@ class NiSpace:
              method=None, stats=None, 
              X_reduction=None, Y_transform=None,
              xsea=None,
-             Y_labels=None,
+             Y_labels=None, X_labels=None,
              plot_nulls=True, plot_p=True, permute_what=None,
              title="auto", sort_colocs=False,
              colocalizations_dict=None, nulls_dict=None, p_dict=None, pc_dict=None, mc_method="fdr_bh",
@@ -1718,6 +1718,16 @@ class NiSpace:
                 if nulls_dict is not None:
                     for null_str in nulls_dict[stat]:
                         nulls_dict[stat][null_str] = nulls_dict[stat][null_str].loc[indexer]
+                        
+        # restrict to given x labels
+        if X_labels is not None:
+            if isinstance(X_labels, str):
+                X_labels = [X_labels]
+            for stat in colocalizations_dict:
+                colocalizations_dict[stat] = colocalizations_dict[stat].loc[:, X_labels]
+                if nulls_dict is not None:
+                    nulls_dict[stat] = {null_str: nulls_dict[stat][null_str]
+                                        for null_str in nulls_dict[stat]}
         
         # # get p values
         # if plot_p and p_dict is None:

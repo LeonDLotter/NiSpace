@@ -49,12 +49,12 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
                                f"n = {l_split[2].split('-')[1]})")
                 X_labels = tmp
             # check if brainmap labels, if yes make nice string
-            if all([s in X_labels[0] for s in ["domain-", "n-"]]):
-                tmp = []
-                for l in X_labels:
-                    l_split = l.split("_")
-                    tmp.append(f"{l_split[0].split('-')[1]} (n = {l_split[-1].split('-')[1]})")
-                X_labels = tmp
+            # if all([s in X_labels[0] for s in ["domain-", "n-"]]):
+            #     tmp = []
+            #     for l in X_labels:
+            #         l_split = l.split("_")
+            #         tmp.append(f"{l_split[0].split('-')[1]} (n = {l_split[-1].split('-')[1]})")
+            #     X_labels = tmp
                 
         # if labels are not to be cleaned, convert potential multi-idc to string
         else:
@@ -168,7 +168,8 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
                     "title": ax.get_title(),
                     "x": ax.get_xlabel(),
                     "y": ax.get_ylabel(),
-                    "category_order": ax.get_yticklabels()
+                    "category_order": ax.get_yticklabels() 
+                    if catplot_kwargs["categorical_axis"] == "y" else ax.get_xticklabels()
                 }
             }
         plot = nullplot(fig, ax, nulls_df_melt, categorical_var="X", continuous_var=stat,

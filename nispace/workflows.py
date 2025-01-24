@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 from . import lgr, NiSpace
 from .utils.utils import set_log
-from .modules.constants import (_PARCS, _PARCS_NICE, _PARCS_DEFAULT, 
+from .modules.constants import (_PARCS, _PARCS_NICE, _PARC_DEFAULT, 
                                 _DSETS, _DSETS_NICE, _COLLECT_DEFAULT,
                                 _COLOC_METHODS)
 from .datasets import fetch_reference
@@ -115,10 +115,11 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
        
        
 def simple_colocalization(y, 
-                          x="PET", z="gm", 
+                          x="PET", 
+                          z=None, 
                           x_collection=None,
                           standardize="xz",
-                          parcellation=_PARCS_DEFAULT,
+                          parcellation=_PARC_DEFAULT,
                           parcellation_labels=None,
                           y_covariates=None,
                           colocalization_method="spearman",
@@ -138,6 +139,72 @@ def simple_colocalization(y,
                           permute_kwargs={},
                           correct_p_kwargs={},
                           plot_kwargs={}):
+    """Simple colocalization workflow.
+    
+    Parameters
+    ----------
+    y : array-like or pandas DataFrame or list
+        Input Y data to colocalize with X. Can be a numpy array, pandas DataFrame,
+        (list of) path(s) to a file(s) or list of image objects.
+    x : str or array-like, default="PET"
+        Input X data. Can be a string indicating a reference dataset ("PET", "mRNA", ...), 
+        or inputs types as listed for y.
+    z : array-like or None, default=None
+        Optional confound data to regress out. Can be "gm", or input types as listed for y.
+    x_collection : str or None, default=None
+        If x is a string reference dataset, specifies which collection to use.
+    standardize : str, default="xz"
+        Which data to standardize. Can contain "x", "y", and/or "z".
+    parcellation : str or int, default=_PARC_DEFAULT
+        Brain parcellation to use. Can be a string name or integer ID.
+    parcellation_labels : array-like or None, default=None
+        Optional labels for the parcellation regions.
+    y_covariates : array-like or None, default=None
+        Optional covariates to regress from Y data.
+    colocalization_method : str or list, default="spearman"
+        Method(s) to use for colocalization. Can be "spearman", "pearson", etc.
+    p_from_average_y : bool, default=False
+        Whether to compute p-values from averaged Y values.
+    plot : bool, default=True
+        Whether to generate visualization plots.
+    combat : bool, default=False
+        Whether to apply ComBat harmonization.
+    n_perm : int, default=10000
+        Number of permutations for null distribution.
+    seed : int or None, default=None
+        Random seed for reproducibility.
+    n_proc : int, default=-1
+        Number of processes for parallel computation. -1 uses all CPUs.
+    verbose : bool, default=True
+        Whether to print progress messages.
+    nispace_object : NiSpace or None, default=None
+        Optional pre-initialized NiSpace object to use.
+    fetch_x_kwargs : dict, default={}
+        Additional arguments for fetching X data.
+    init_kwargs : dict, default={}
+        Additional arguments for NiSpace initialization.
+    clean_y_kwargs : dict, default={}
+        Additional arguments for Y data cleaning.
+    colocalize_kwargs : dict, default={}
+        Additional arguments for colocalization.
+    permute_kwargs : dict, default={}
+        Additional arguments for permutation testing.
+    correct_p_kwargs : dict, default={}
+        Additional arguments for p-value correction.
+    plot_kwargs : dict, default={}
+        Additional arguments for plotting.
+
+    Returns
+    -------
+    colocs : dict or array
+        Colocalization values for each method.
+    p_values : dict or array
+        Uncorrected p-values for each method.
+    p_fdr_values : dict or array
+        FDR-corrected p-values for each method.
+    nsp : NiSpace
+        The NiSpace object containing all results.
+    """
     verbose = set_log(lgr, verbose)
     
     ## COMMON FUNCTIONS: COLOC METHOD VALIDATION, DATA LOADING, INIT,
@@ -227,10 +294,11 @@ def simple_colocalization(y,
     
         
 def group_comparison(y, design, 
-                     x="PET", z="gm", 
+                     x="PET", 
+                     z=None, 
                      x_collection=None,
                      standardize="xz",
-                     parcellation=_PARCS_DEFAULT,
+                     parcellation=_PARC_DEFAULT,
                      parcellation_labels=None,
                      colocalization_method="spearman",
                      group_comparison=None,
@@ -283,7 +351,7 @@ def group_comparison(y, design,
         else:
             lgr.info("1d array provided for design. Assuming this to be dummy-coded groups!")
             design = pd.DataFrame(
-                {"groups": design}, 
+                {"groups": np.array(design)}, 
                 index=y.index
             )
     # 2darray
@@ -306,6 +374,7 @@ def group_comparison(y, design,
             )
     # dataframe
     elif isinstance(design, pd.DataFrame):
+        lgr.info("DataFrame provided for design. Expecting 'groups' and, if paired==True, 'subjects' columns.")
         if paired:
             if "groups" not in design.columns and "subjects" not in design.columns:
                 lgr.critical_raise("If a DataFrame is passed for design with paired==True, "
@@ -435,11 +504,12 @@ def group_comparison(y, design,
     
 
 def simple_xsea(y, 
-                x="mRNA", z="gm", 
+                x="mRNA", 
+                z=None, 
                 x_collection=None,
                 x_background=None,
                 standardize="xz",
-                parcellation=_PARCS_DEFAULT,
+                parcellation=_PARC_DEFAULT,
                 parcellation_labels=None,
                 y_covariates=None,
                 colocalization_method="spearman",
@@ -466,7 +536,7 @@ def simple_xsea(y,
         lgr.info("Trying to fetch background X dataset.")
         if x.lower() in ["mrna", "pet", "brainmap"]:
             try:
-                x_background = fetch_reference(x.lower(), parcellation=parcellation)
+                x_background = fetch_reference(x.lower(), parcellation=parcellation, print_references=False)
             except:
                 x_background = None
     if x_background is None:

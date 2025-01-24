@@ -8,6 +8,12 @@ import numpy as np
 import seaborn as sns
 import seaborn.objects as sno
 from sklearn.preprocessing import minmax_scale
+from nilearn.plotting import view_surf as view_surf_nilearn
+from neuromaps import images
+
+from . import lgr
+from .utils.utils import vect_to_vol_arr
+from .datasets import fetch_parcellation, fetch_template, parcellation_lib, template_lib
 
 
 def nice_stats_labels(string, add_dollars=True):
@@ -834,3 +840,51 @@ def heatmap(ax,
         
     return ax, collection
 
+def view_surf(data=None, parcellation=None, hemi="L", template="fsaverage", template_kwargs={}, parcellation_kwargs={},
+              verbose=False, **kwargs):
+    lgr.setLevel(verbose)
+    
+    # parcellation and data
+    if data is None and parcellation is None:
+        raise ValueError("Either data or parcellation must be provided")
+    
+    # parcellation
+    if parcellation is not None:
+        if not isinstance(parcellation, str):
+            raise NotImplementedError(f"For now, parcellation must be a string: {list(parcellation_lib.keys())}")
+        else:
+            parc, labels = fetch_parcellation(parcellation, return_loaded=True, **parcellation_kwargs)
+            parc_arr = parc[0 if hemi == "L" else 1].agg_data()
+            labels = [l for l in labels if f"_{hemi}H_" in l]
+    if data is None:
+        data = np.trim_zeros(np.unique(parc_arr))
+        
+    # template
+    if not isinstance(template, str):
+        raise NotImplementedError(f"For now, template must be a string: {list(template_lib.keys())}")
+    else:
+        template = fetch_template(template, hemi=hemi, **template_kwargs, verbose=verbose)
+        template = images.load_gifti(template)
+        template_arr = template.agg_data()
+        
+    # data
+    if not isinstance(data, (list, pd.Series, pd.DataFrame, np.ndarray)):
+        raise ValueError(f"Data must be a list, pd.Series, pd.DataFrame or np.array, not {type(data)}")
+    else:
+        data = np.squeeze(np.array(data))
+    if data.ndim > 1:
+        raise ValueError(f"Data must be a 1D array, not {data.ndim}D")
+    
+    # check dimensions
+    if len(data) == len(template_arr):
+        data_arr = data     
+    elif "parc_arr" in locals():
+        if len(data) == len(labels):
+            data_arr = vect_to_vol_arr(data, parc_arr, np.trim_zeros(np.unique(parc_arr)))
+        else:
+            raise ValueError(f"Data length ({len(data)}) must match number of parcels")
+    else:
+        raise ValueError("Data must mach either the shape of the template or the number of parcels")
+    
+    # plot
+    return view_surf_nilearn(surf_map=data_arr, surf_mesh=template_arr, **{"cmap": "RdBu_r"} | kwargs)
