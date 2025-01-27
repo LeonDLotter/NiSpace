@@ -848,24 +848,25 @@ def view_surf(data=None, parcellation=None, hemi="L", template="fsaverage", temp
     if data is None and parcellation is None:
         raise ValueError("Either data or parcellation must be provided")
     
+    # template
+    if not isinstance(template, str):
+        raise NotImplementedError(f"For now, template must be a string: {list(template_lib.keys())}")
+    else:
+        space = template
+        template = fetch_template(template, hemi=hemi, **template_kwargs, verbose=verbose)
+        template = images.load_gifti(template)
+        template_arr = template.agg_data()
+        
     # parcellation
     if parcellation is not None:
         if not isinstance(parcellation, str):
             raise NotImplementedError(f"For now, parcellation must be a string: {list(parcellation_lib.keys())}")
         else:
-            parc, labels = fetch_parcellation(parcellation, return_loaded=True, **parcellation_kwargs)
+            parc, labels = fetch_parcellation(parcellation, space=space, return_loaded=True, **parcellation_kwargs)
             parc_arr = parc[0 if hemi == "L" else 1].agg_data()
             labels = [l for l in labels if f"_{hemi}H_" in l]
     if data is None:
         data = np.trim_zeros(np.unique(parc_arr))
-        
-    # template
-    if not isinstance(template, str):
-        raise NotImplementedError(f"For now, template must be a string: {list(template_lib.keys())}")
-    else:
-        template = fetch_template(template, hemi=hemi, **template_kwargs, verbose=verbose)
-        template = images.load_gifti(template)
-        template_arr = template.agg_data()
         
     # data
     if not isinstance(data, (list, pd.Series, pd.DataFrame, np.ndarray)):

@@ -254,17 +254,17 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
         parcellation_file, label_file, distmat_file = (), (), ()
         for h in hemi:
             parcellation_file += get_file(
-                base_dir / f"{parc}_space-{space}_hemi-{h}.label.gii.gz", 
+                base_dir / f"parc-{parc}_space-{space}_hemi-{h}.label.gii.gz", 
                 **parcellation_lib[parc][space]["map"][h]
             ),
             if return_labels:
                 label_file += get_file(
-                    base_dir / f"{parc}_space-{space}_hemi-{h}.label.txt",
+                    base_dir / f"parc-{parc}_space-{space}_hemi-{h}.label.txt",
                     **parcellation_lib[parc][space]["label"][h]
                 ),
             if return_dist_mat:
                 distmat_file += get_file(
-                    base_dir / f"{parc}_space-{space}_hemi-{h}.dist.csv.gz",
+                    base_dir / f"parc-{parc}_space-{space}_hemi-{h}.dist.csv.gz",
                     **parcellation_lib[parc][space]["distmat"][h]
                 ),
         if len(parcellation_file) == 1:
