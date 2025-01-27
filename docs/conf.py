@@ -9,7 +9,7 @@ import sys
 # -- Project information -----------------------------------------------------
 
 project = 'NiSpace'
-copyright = '2024, Leon D. Lotter'
+copyright = '2025, Leon D. Lotter'
 author = 'Leon D. Lotter'
 
 # Version
@@ -40,12 +40,13 @@ napoleon_numpy_docstring = True     # Turn on numpydoc strings
 napoleon_use_param = True
 napoleon_use_rtype = True
 templates_path = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'nb_examples/ds*', 'nb_examples/_archive']
 autodoc_default_options = {
     'members': True, 
     'inherited-members': True,
     'special-members': '__init__'
 }
+autosummary_generate = True
 autodoc_typehints = 'description'
 
 nbsphinx_execute_arguments = [
@@ -62,3 +63,6 @@ html_theme_options = {
     "repository_url": "https://github.com/leondlotter/nispace",
     "use_repository_button": True,
 }
+
+pygments_style = 'sphinx'
+

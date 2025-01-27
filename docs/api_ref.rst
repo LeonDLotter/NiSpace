@@ -12,18 +12,18 @@ Reference API
 .. _api_api:
 
 :mod:`nispace.api` - NiSpace main class
-------------------------------------------
+---------------------------------------
 .. autoclass:: nispace.api
    :no-members:
    :no-inherited-members:
 
-.. currentclass:: nispace.api
+.. currentmodule:: nispace.api
 
 .. autosummary::
    :template: class.rst
    :toctree: generated/
 
-   nispace.api.NiSpace
+   NiSpace
 
 
 .. _api_datasets:
@@ -40,19 +40,17 @@ Reference API
    :template: function.rst
    :toctree: generated/
 
-   nispace.datasets.download_datasets
-   nispace.datasets.fetch_template
-   nispace.datasets.fetch_parcellation
-   nispace.datasets.fetch_reference
-   nispace.datasets.fetch_example
-   nispace.datasets.fetch_metadata
-   nispace.datasets.fetch_example
-
+   fetch_template
+   fetch_parcellation
+   fetch_reference
+   fetch_metadata
+   fetch_example
+   
 
 .. _api_workflows:
 
 :mod:`nispace.workflows` - Workflows
-------------------------------------------
+------------------------------------
 .. automodule:: nispace.workflows
    :no-members:
    :no-inherited-members:
@@ -63,15 +61,15 @@ Reference API
    :template: function.rst
    :toctree: generated/
 
-   nispace.workflows.simple_colocalization
-   nispace.workflows.group_comparison
-   nispace.workflows.simple_xsea
+   simple_colocalization
+   group_comparison
+   simple_xsea
 
 
 .. _api_stats:
 
 :mod:`nispace.stats` - Statistics
-------------------------------------------
+---------------------------------
 .. automodule:: nispace.stats
    :no-members:
    :no-inherited-members:
@@ -82,9 +80,9 @@ Reference API
    :template: function.rst
    :toctree: generated/
 
-   nispace.stats.coloc
-   nispace.stats.effectsize
-   nispace.stats.misc
+   coloc
+   effectsize
+   misc
 
 
 .. _api_io:
@@ -101,18 +99,18 @@ Reference API
    :template: function.rst
    :toctree: generated/
 
-   nispace.io.parcellate_data
-   nispace.io.read_json
-   nispace.io.write_json
-   nispace.io.load_img
-   nispace.io.load_labels
-   nispace.io.load_distmat
+   parcellate_data
+   read_json
+   write_json
+   load_img
+   load_labels
+   load_distmat
 
 
 .. _api_parcellate:
 
 :mod:`nispace.parcellate` - Parcellation class
---------------------------------------
+----------------------------------------------
 .. automodule:: nispace.parcellate
    :no-members:
    :no-inherited-members:
@@ -123,13 +121,13 @@ Reference API
    :template: class.rst
    :toctree: generated/
 
-   nispace.parcellate.Parcellater
+   Parcellater
 
 
 .. _api_nulls:
 
 :mod:`nispace.nulls` - Null map generation
---------------------------------------
+------------------------------------------
 .. automodule:: nispace.nulls
    :no-members:
    :no-inherited-members:
@@ -140,18 +138,18 @@ Reference API
    :template: function.rst
    :toctree: generated/
 
-   nispace.nulls.generate_null_maps
-   nispace.nulls.nulls_moran
-   nispace.nulls.nulls_burt2020
-   nispace.nulls.nulls_burt2018
-   nispace.nulls.get_distance_matrix
-   nispace.nulls.find_surf_parc_centroids
+   generate_null_maps
+   nulls_moran
+   nulls_burt2020
+   nulls_burt2018
+   get_distance_matrix
+   find_surf_parc_centroids
 
 
 .. _api_plotting:
 
 :mod:`nispace.plotting` - Plotting functions
---------------------------------------
+--------------------------------------------
 .. automodule:: nispace.plotting
    :no-members:
    :no-inherited-members:
@@ -162,38 +160,38 @@ Reference API
    :template: function.rst
    :toctree: generated/
 
-   nispace.plotting.catplot
-   nispace.plotting.nullplot
-   nispace.plotting.heatmap
-   nispace.plotting.move_legend_fig_to_ax
-   nispace.plotting.colors_from_values
-   nispace.plotting.hide_empty_axes
-   nispace.plotting.linewidth_from_data_units
+   catplot
+   nullplot
+   heatmap
+   move_legend_fig_to_ax
+   colors_from_values
+   hide_empty_axes
+   linewidth_from_data_units
 
 
-.. _api_utils:
+.. _api_utils_utils:
 
 :mod:`nispace.utils` - Utility functions
 ----------------------------------------
-.. automodule:: nispace.utils
+.. automodule:: nispace.utils.utils
    :no-members:
    :no-inherited-members:
 
-.. currentmodule:: nispace.utils
+.. currentmodule:: nispace.utils.utils
 
 .. autosummary::
    :template: function.rst
    :toctree: generated/
 
-   nispace.utils.set_log
-   nispace.utils.nan_detector
-   nispace.utils.remove_nan
-   nispace.utils.fill_nan
-   nispace.utils.print_arg_pairs
-   nispace.utils.get_column_names
-   nispace.utils.lower
-   nispace.utils.get_background_value
-   nispace.utils.parc_vect_to_vol
-   nispace.utils.relabel_gifti_parc
+   set_log
+   nan_detector
+   remove_nan
+   fill_nan
+   print_arg_pairs
+   get_column_names
+   lower
+   get_background_value
+   parc_vect_to_vol
+   relabel_gifti_parc
 
 
