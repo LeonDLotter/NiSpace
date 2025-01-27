@@ -236,8 +236,8 @@ def get_column_names(df_or_series, force_list=False):
     get the names from.
     
     Returns:
-    list or None: List of column names if input is a DataFrame, str if input is a Series, 
-        or None if input is a numpy array. If force_list is True, will always return a list.
+    list or None: List of column names if input is a DataFrame, str if input is a Series, or None 
+    if input is a numpy array. If force_list is True, will always return a list.
     """
     if isinstance(df_or_series, pd.DataFrame):
         names = df_or_series.columns.tolist()

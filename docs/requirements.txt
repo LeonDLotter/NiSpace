@@ -4,3 +4,4 @@ sphinx_book_theme
 sphinx-gallery
 sphinx_copybutton
 nbsphinx
+IPython

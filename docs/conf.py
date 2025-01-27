@@ -32,10 +32,11 @@ extensions = [
     'sphinx.ext.viewcode',
     'nbsphinx',
     'sphinx_copybutton',
-    'sphinx_gallery.load_style'
+    'sphinx_gallery.load_style',
+    'IPython.sphinxext.ipython_console_highlighting'
 ]
 
-napoleon_google_docstring = False   # Turn off googledoc strings
+napoleon_google_docstring = True   # Turn off googledoc strings
 napoleon_numpy_docstring = True     # Turn on numpydoc strings
 napoleon_use_param = True
 napoleon_use_rtype = True
@@ -44,7 +45,9 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'nb_examples/ds*', 'nb_e
 autodoc_default_options = {
     'members': True, 
     'inherited-members': True,
-    'special-members': '__init__'
+    #'special-members': '__init__'
+    'undoc-members': True,
+    'show-inheritance': True,
 }
 autosummary_generate = True
 autodoc_typehints = 'description'
