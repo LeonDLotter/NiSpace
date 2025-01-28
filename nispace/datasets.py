@@ -109,7 +109,7 @@ def fetch_template(template: str = _SPACE_DEFAULT,
         desc = "T1w" if desc is None else desc
         hemi = None
     elif "fsa" in template.lower():
-        res = "10k" if res is None else res
+        res = "41k" if res is None else res
         desc = "pial" if desc is None else desc
         if hemi is None:
             hemi = ["L", "R"]
