@@ -1179,6 +1179,10 @@ class NiSpace:
         for k in [k for k in kwargs.keys() if k.startswith("distmat_")]:
             dist_mat_kwargs[k.removeprefix("distmat_")] = kwargs.pop(k)
         # null maps generation
+        if "maps_separate_sc" in kwargs:
+            maps_separate_sc = kwargs.pop("maps_separate_sc")
+        else:
+            maps_separate_sc = False
         maps_kwargs = {
             "nispace_nulls": self._nulls, 
             "use_existing_maps": True,
@@ -1186,9 +1190,9 @@ class NiSpace:
             "null_method": maps_method,
             "parc_idc_lh": self._parc_info["idc_lh"], 
             "parc_idc_rh": self._parc_info["idc_rh"], 
-            "parc_idc_sc": self._parc_info["idc_sc"], 
+            "parc_idc_sc": self._parc_info["idc_sc"] if maps_separate_sc else None, 
             "lr_mirror_dist_mat": False, 
-            "cx_sc_minmax_scale": True,
+            "cx_sc_minmax_scale": False,
         }
         for k in [k for k in kwargs.keys() if k.startswith("maps_")]:
             maps_kwargs[k.removeprefix("maps_")] = kwargs.pop(k)
