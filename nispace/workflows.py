@@ -8,7 +8,7 @@ from .utils.utils import set_log
 from .modules.constants import (_PARCS, _PARCS_NICE, _PARC_DEFAULT, 
                                 _DSETS, _DSETS_NICE, _COLLECT_DEFAULT,
                                 _COLOC_METHODS)
-from .datasets import fetch_reference
+from .datasets import fetch_reference, reference_lib
 
 def _workflow_base(x, y, z, x_collection, #x_load_nulls,
                    standardize,
@@ -534,7 +534,7 @@ def simple_xsea(y,
     # GET THE BACKGROUND
     if x_background is None and isinstance(x, str):
         lgr.info("Trying to fetch background X dataset.")
-        if x.lower() in ["mrna", "pet", "brainmap"]:
+        if x.lower() in reference_lib:
             try:
                 x_background = fetch_reference(x.lower(), parcellation=parcellation, print_references=False)
             except:

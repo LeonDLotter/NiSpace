@@ -450,6 +450,38 @@
                     "remote": "parcellation/DesikanKilliany/fsaverage/parc-DesikanKilliany_space-fsaverage_hemi-R.dist.csv.gz"
                 }
             }
+        },
+        "fsLR": {
+            "map": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/DesikanKilliany/fsLR/parc-DesikanKilliany_space-fsLR_hemi-L.label.gii.gz"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/DesikanKilliany/fsLR/parc-DesikanKilliany_space-fsLR_hemi-R.label.gii.gz"
+                }
+            },
+            "label": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/DesikanKilliany/fsLR/parc-DesikanKilliany_space-fsLR_hemi-L.label.txt"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/DesikanKilliany/fsLR/parc-DesikanKilliany_space-fsLR_hemi-R.label.txt"
+                }
+            },
+            "distmat": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/DesikanKilliany/fsLR/parc-DesikanKilliany_space-fsLR_hemi-L.dist.csv.gz"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/DesikanKilliany/fsLR/parc-DesikanKilliany_space-fsLR_hemi-R.dist.csv.gz"
+                }
+            }
         }
     },
 
@@ -483,6 +515,38 @@
                 "R": {
                     "host": "github-nispace",
                     "remote": "parcellation/Destrieux/fsaverage/parc-Destrieux_space-fsaverage_hemi-R.dist.csv.gz"
+                }
+            }
+        },
+        "fsLR": {
+            "map": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Destrieux/fsLR/parc-Destrieux_space-fsLR_hemi-L.label.gii.gz"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Destrieux/fsLR/parc-Destrieux_space-fsLR_hemi-R.label.gii.gz"
+                }
+            },
+            "label": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Destrieux/fsLR/parc-Destrieux_space-fsLR_hemi-L.label.txt"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Destrieux/fsLR/parc-Destrieux_space-fsLR_hemi-R.label.txt"
+                }
+            },
+            "distmat": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Destrieux/fsLR/parc-Destrieux_space-fsLR_hemi-L.dist.csv.gz"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/Destrieux/fsLR/parc-Destrieux_space-fsLR_hemi-R.dist.csv.gz"
                 }
             }
         }

@@ -17,9 +17,19 @@ We additionally ask to cite:
 
 # mrna
 The NiSpace "mRNA" dataset is based on Allen Human Brain Atlas (AHBA) gene expression data published in Hawrylycz et al., 
-2012 (https://doi.org/10.1038/nature11405). The AHBA dataset consists of mRNA expression data from postmortem brain tissue of 
-six donors, mapped into imaging space using the abagen toolbox (Markello et al., 2021, https://doi.org/10.7554/eLife.72129).
-In addition to those two publications, please cite publications associated with gene set collections as appropriate.
+2012 (https://doi.org/10.1038/nature11405). The dataset consists of mRNA expression data from postmortem brain tissue of 
+six donors, mapped onto MNI or fsaverage parcels using the abagen toolbox (Markello et al., 2021, https://doi.org/10.7554/eLife.72129).
+The data was extracted using abagen.get_expression_data(..., lr_mirror="bidirectional"), considering parcel hemisphere and 
+cortical vs. subcortical location. Only genes that showed a mean donor-to-donor Spearman correlation of > 0.2 were retained.
+In addition to the two publications listed above, please cite publications associated with gene set collections as appropriate.
+
+
+# magicc
+The NiSpace "magicc" dataset is based on Allen Human Brain Atlas (AHBA) gene expression data published in Hawrylycz et al., 
+2012 (https://doi.org/10.1038/nature11405). The dataset consists of mRNA expression data from postmortem brain tissue of 
+six donors, mapped onto continuous fsLR space as described in Wagstyl et al., 2024 (https://doi.org/10.7554/eLife.86933.1),
+and parcellated with integrated parcellation. Only genes that showed a high reproducibility (>= 0.5, see paper) were retained.
+In addition to the two publications listed above, please cite publications associated with gene set collections as appropriate.
 
 
 # rsn

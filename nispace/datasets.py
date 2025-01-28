@@ -539,7 +539,7 @@ def _print_references(dataset: str, meta: pd.DataFrame = None):
                     msg += f"    CAVE: {note}\n"
     
     # mRNA
-    elif dataset.lower() == "mrna":
+    elif dataset.lower() in ["mrna", "magicc"]:
         msg = get_ref_info(dataset)
         if meta is not None:
             if len(meta) > 0:
@@ -722,7 +722,7 @@ def fetch_reference(dataset: str,
     if return_metadata or print_references:
         if dataset == "pet":
             meta = fetch_metadata(dataset, maps_avail)
-        elif dataset == "mrna" and collection_df is not None:
+        elif dataset in ["mrna", "magicc"] and collection_df is not None:
             meta = fetch_metadata(dataset, collection=collection)
         else: 
             meta = None
@@ -750,7 +750,7 @@ def fetch_metadata(dataset: str, maps: Union[str, list] = None, collection: str 
         if isinstance(maps, str):
             maps = [maps]
         meta = meta[meta.atlas.str.contains("|".join(maps), na=False)]
-    elif dataset == "mrna" and collection is not None:
+    elif dataset in ["mrna", "magicc"] and collection is not None:
         meta = meta.query("collection == @collection")
     elif dataset == "rsn":
         meta = None

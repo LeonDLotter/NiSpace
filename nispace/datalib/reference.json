@@ -949,6 +949,72 @@
         }
     },
 
+    "magicc": {
+
+        "metadata": {
+            "host": "github-nispace",
+            "remote": "reference/magicc/metadata.csv"
+        },
+
+        "tab": {
+            "DesikanKilliany": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-DesikanKilliany.csv.gz"
+            },
+            "Destrieux": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-Destrieux.csv.gz"
+            },
+            "HCPex": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-HCPex.csv.gz"
+            },
+            "Schaefer100MelbourneS1": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-Schaefer100MelbourneS1.csv.gz"
+            },
+            "Schaefer200MelbourneS2": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-Schaefer200MelbourneS2.csv.gz"
+            },
+            "Schaefer400MelbourneS3": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-Schaefer400MelbourneS3.csv.gz"
+            }
+        },
+
+        "collection": {
+            "All": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-All.collect"
+            },
+            "CellTypesPsychEncodeTPM": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-CellTypesPsychEncodeTPM.collect"
+            },
+            "CellTypesPsychEncodeUMI": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-CellTypesPsychEncodeUMI.collect"
+            },
+            "CellTypesSilettiClusters": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-CellTypesSilettiClusters.collect"
+            },
+            "CellTypesSilettiSuperclusters": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-CellTypesSilettiSuperclusters.collect"
+            },
+            "Chromosome": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-Chromosome.collect"
+            },
+            "SynGO": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-SynGO.collect"
+            }
+        }
+    },
+
     "rsn": {
 
         "metadata": {

@@ -883,9 +883,10 @@ def view_surf(data=None, parcellation=None, hemi="L", template="fsaverage", temp
         if len(data) == len(labels):
             data_arr = vect_to_vol_arr(data, parc_arr, np.trim_zeros(np.unique(parc_arr)))
         else:
-            raise ValueError(f"Data length ({len(data)}) must match number of parcels")
+            raise ValueError(f"Data length ({len(data)}) must match number of parcels ({len(labels)})")
     else:
-        raise ValueError("Data must mach either the shape of the template or the number of parcels")
+        raise ValueError("Data must match either the shape of the template or the number of parcels"
+                         f"template: {template_arr.shape}, data: {data_arr.shape}")
     
     # plot
     return view_surf_nilearn(surf_map=data_arr, surf_mesh=template_arr, **{"cmap": "RdBu_r"} | kwargs)
