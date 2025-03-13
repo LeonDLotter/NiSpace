@@ -1191,7 +1191,8 @@ class NiSpace:
             "parc_idc_lh": self._parc_info["idc_lh"], 
             "parc_idc_rh": self._parc_info["idc_rh"], 
             "parc_idc_sc": self._parc_info["idc_sc"] if maps_separate_sc else None, 
-            "lr_mirror_dist_mat": False, 
+            "lr_mirror_dist_mat": True, 
+            "lr_mirror_null_maps": False,
             "cx_sc_minmax_scale": False,
         }
         for k in [k for k in kwargs.keys() if k.startswith("maps_")]:

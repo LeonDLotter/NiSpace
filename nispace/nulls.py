@@ -1,6 +1,7 @@
 import nibabel as nib
 import numpy as np
 import pandas as pd
+import warnings
 from joblib import Parallel, delayed
 from nilearn.image import resample_img
 from neuromaps.images import load_gifti, load_nifti
@@ -334,8 +335,9 @@ def find_surf_parc_centroids(parc, parc_hemi, parc_density="10k"):
 
 def generate_null_maps(method, data, parcellation, dist_mat=None, 
                        parc_space=None, parc_hemi=None, 
-                       n_nulls=1000, downsample_parcellation=3, centroids=False, lr_mirror_dist_mat=False,
-                       parc_idc_lh=None, parc_idc_rh=None, parc_idc_sc=None, cx_sc_minmax_scale=False,
+                       n_nulls=1000, downsample_parcellation=3, centroids=False, 
+                       parc_idc_lh=None, parc_idc_rh=None, parc_idc_sc=None, 
+                       lr_mirror_dist_mat=False, lr_mirror_null_maps=False, cx_sc_minmax_scale=False,
                        dtype=float,
                        n_proc=1, seed=None, verbose=True,
                        **kwargs):
@@ -584,14 +586,14 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
     if lr_mirror_dist_mat and dist_mat is not None:
         lgr.info("Left-right averaging distance matrices to generate symmetrized null maps.")
         if len(dist_mat_split) == 2:
-            dist_mat_split = tuple([np.average(dist_mat_split, axis=0)] * 2)
+            dist_mat_split = tuple([np.mean(dist_mat_split, axis=0)] * 2)
             if not np.allclose(dist_mat_split[0], dist_mat_split[1]):
                 lgr.critical_raise("Left-right averaged whole-hemisphere distance matrices are not equal! "
                                    "Check if 'parc_idc_lh' and 'parc_idc_rh' are correctly defined.",
                                    ValueError)
         elif len(dist_mat_split) == 4:
-            dist_mat_split = tuple([np.average(dist_mat_split[:2], axis=0)] * 2 + 
-                                   [np.average(dist_mat_split[2:], axis=0)] * 2)
+            dist_mat_split = tuple([np.mean(dist_mat_split[:2], axis=0)] * 2 + 
+                                   [np.mean(dist_mat_split[2:], axis=0)] * 2)
             if not (np.allclose(dist_mat_split[0], dist_mat_split[1]) and np.allclose(dist_mat_split[2], dist_mat_split[3])):
                 lgr.critical_raise("Left-right averaged cortical and subcortical distance matrices are not equal! "
                                    "Check if 'parc_idc_lh' and 'parc_idc_rh' are correctly defined.",
@@ -615,6 +617,26 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
     )
     nulls = {l: n.astype(dtype) for l, n in zip(data_labs, nulls)}
     
+    # mirror null maps if requested
+    if lr_mirror_null_maps and parc_idc_lh is not None and parc_idc_rh is not None:
+        # checks
+        if (parc_idc_lh is None or parc_idc_rh is None):
+            lgr.warning("Left-right mirroring null maps requested but 'parc_idc_lh' and/or "
+                        "'parc_idc_rh' are not defined! Skipping mirroring.")
+        elif len(parc_idc_lh) != len(parc_idc_rh):
+            lgr.warning("Left and right hemisphere parcel indices have different lengths! "
+                        "Skipping mirroring.")
+        else:
+            # run
+            lgr.info("Left-right mirroring null maps.")
+            for i, (l, n) in enumerate(nulls.items()):
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=RuntimeWarning)
+                    n_mean = np.nanmean([n[:, parc_idc_lh], n[:, parc_idc_rh]], axis=0)
+                nulls[l] = np.full_like(n, np.nan)
+                nulls[l][:, parc_idc_lh] = n_mean
+                nulls[l][:, parc_idc_rh] = n_mean
+                
     # adjust scaling
     if cx_sc_minmax_scale:
         if parc_idc_sc is None:

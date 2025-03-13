@@ -14,7 +14,7 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
                    n_perm=1000, null_method="moran",
                    dist_mat=None, parc=None, parc_kwargs=None, centroids=False,
                    parc_idc_lh=None, parc_idc_rh=None, parc_idc_sc=None, 
-                   lr_mirror_dist_mat=False, cx_sc_minmax_scale=False,
+                   lr_mirror_dist_mat=False, lr_mirror_null_maps=False, cx_sc_minmax_scale=False,
                    seed=None, n_proc=-1, dtype=np.float32, verbose=True):
     
     # case null maps given
@@ -71,6 +71,7 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
             parc_idc_rh=parc_idc_rh,
             parc_idc_sc=parc_idc_sc,
             lr_mirror_dist_mat=lr_mirror_dist_mat,
+            lr_mirror_null_maps=lr_mirror_null_maps,
             cx_sc_minmax_scale=cx_sc_minmax_scale,
             n_proc=n_proc, 
             seed=seed, 
