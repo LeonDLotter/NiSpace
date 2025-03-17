@@ -65,6 +65,7 @@ class NiSpace:
                  parcellation_labels: Sequence[str] = None, 
                  parcellation_space: Literal["mni152", "fsaverage", "fslr"] = "mni152", 
                  parcellation_hemi: Union[Literal["R", "L"], Sequence[Literal["L", "R"]]] = ["L", "R"], 
+                 parcellation_symmetric: bool = False,
                  parcellation_idc_lh: Sequence[int] = None,
                  parcellation_idc_rh: Sequence[int] = None,
                  parcellation_idc_sc: Sequence[int] = None,
@@ -175,6 +176,7 @@ class NiSpace:
             "labels": parcellation_labels,
             "space": parcellation_space,
             "hemi": parcellation_hemi,
+            "symmetric": parcellation_symmetric,
             "idc_lh": parcellation_idc_lh,
             "idc_rh": parcellation_idc_rh,
             "idc_sc": parcellation_idc_sc,
@@ -1174,7 +1176,7 @@ class NiSpace:
         dist_mat_kwargs = {
             "dist_mat_type": "null_maps", 
             "centroids": False,
-            "downsample_vol": 3
+            "parc_resample": 2
         } 
         for k in [k for k in kwargs.keys() if k.startswith("distmat_")]:
             dist_mat_kwargs[k.removeprefix("distmat_")] = kwargs.pop(k)
@@ -1194,6 +1196,7 @@ class NiSpace:
             "lr_mirror_dist_mat": False, 
             "lr_mirror_null_maps": False,
             "cx_sc_minmax_scale": False,
+            "parc_resample": 2,
         }
         for k in [k for k in kwargs.keys() if k.startswith("maps_")]:
             maps_kwargs[k.removeprefix("maps_")] = kwargs.pop(k)
@@ -2189,7 +2192,7 @@ class NiSpace:
         
     # ----------------------------------------------------------------------------------------------
         
-    def _get_dist_mat(self, dist_mat_type, centroids=False, downsample_vol=3, 
+    def _get_dist_mat(self, dist_mat_type, centroids=False, parc_resample=2, 
                       n_proc=None, store=True, verbose=None):
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
@@ -2214,7 +2217,7 @@ class NiSpace:
                 parc_space=self._parc_info["space"],
                 parc_hemi=self._parc_info["hemi"],
                 #parc_density=self._parc_info["density"],
-                downsample_vol=downsample_vol,
+                parc_resample=parc_resample,
                 centroids=centroids,
                 surf_euclidean=True if dist_mat_type=="cv" else False,
                 n_proc=self._n_proc if not n_proc else n_proc,

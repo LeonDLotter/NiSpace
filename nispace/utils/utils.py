@@ -277,22 +277,23 @@ def get_background_value(img, border_size=2):
 
 
 @njit
-def vect_to_vol_arr(vect, parc_arr, parc_idc):
-    parc_arr2d = parc_arr.flatten().astype(vect.dtype)
-    vect_arr2d = np.zeros_like(parc_arr2d, dtype=vect.dtype)
+def vect_to_vol_arr(vect, parc_arr, parc_idc, bg_value=0):
+    parc_arr_1d = parc_arr.flatten().astype(vect.dtype)
+    vect_arr_1d = np.full_like(parc_arr_1d, bg_value, dtype=vect.dtype)
     parc_idc = parc_idc.astype(vect.dtype)
     for i, idx in enumerate(parc_idc):
-        vect_arr2d[parc_arr2d==idx] = vect[i]
-    return vect_arr2d.reshape(parc_arr.shape)
+        vect_arr_1d[parc_arr_1d==idx] = vect[i]
+    return vect_arr_1d.reshape(parc_arr.shape)
 
 @njit
-def vol_to_vect_arr(vol_arr, parc_arr, parc_idc):
+def vol_to_vect_arr(vol_arr, parc_arr, parc_idc, bg_value=0):
     vol_arr2d = vol_arr.flatten()
     parc_arr2d = parc_arr.flatten().astype(vol_arr.dtype)
+    mask = (parc_arr2d != bg_value)
     parc_idc = parc_idc.astype(vol_arr.dtype)
     vect = np.zeros(len(parc_idc), dtype=vol_arr.dtype)
     for i, idx in enumerate(parc_idc):
-        vect[i] = vol_arr2d[parc_arr2d==idx].mean()
+        vect[i] = vol_arr2d[(parc_arr2d==idx) * mask].mean()
     return vect
     
 
@@ -431,14 +432,24 @@ def mirror_nifti(img, affine=None, direction="left_to_right", match_r=False, mas
     dat_rh[int(xyz0[0]):] = 0
     
     # mirror
-    if direction == "left_to_right":
+    if direction == "right_to_left":
         dat_mirr = dat_lh.copy()
         dat_mirr[:int(xyz0[0])] = dat_lh[::-1, :, :][:int(xyz0[0])]
-    elif direction == "right_to_left":
+    elif direction == "left_to_right":
         dat_mirr = dat_rh.copy()
         dat_mirr[int(xyz0[0]):] = dat_rh[::-1, :, :][int(xyz0[0]):]
     elif direction in ["average", "bilateral"]:
         dat_mirr = (dat + dat_lh[::-1, :, :] + dat_rh[::-1, :, :]) / 2
+    elif direction == "switch":
+        dat_mirr = np.zeros_like(dat)
+        dat_mirr[int(xyz0[0]):] = dat_rh[::-1, :, :][int(xyz0[0]):]
+        dat_mirr[:int(xyz0[0])] = dat_lh[::-1, :, :][:int(xyz0[0])]
+    elif direction == "drop_left":
+        dat_mirr = dat_lh
+    elif direction == "drop_right":
+        dat_mirr = dat_rh
+    else:
+        raise ValueError(f"Invalid direction: {direction}")
         
     # n
     if return_array:

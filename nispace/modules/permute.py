@@ -12,7 +12,7 @@ from ..modules.constants import _P_TAILS
 
 def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=True, standardize=True,
                    n_perm=1000, null_method="moran",
-                   dist_mat=None, parc=None, parc_kwargs=None, centroids=False,
+                   dist_mat=None, parc=None, parc_kwargs=None, centroids=False, parc_resample=2,
                    parc_idc_lh=None, parc_idc_rh=None, parc_idc_sc=None, 
                    lr_mirror_dist_mat=False, lr_mirror_null_maps=False, cx_sc_minmax_scale=False,
                    seed=None, n_proc=-1, dtype=np.float32, verbose=True):
@@ -63,6 +63,8 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
             parcellation=parc,
             parc_space=parc_kwargs["space"], 
             parc_hemi=parc_kwargs["hemi"], 
+            parc_symmetric=parc_kwargs["symmetric"],
+            parc_resample=parc_resample,
             #parc_density=parc_kwargs["density"], 
             n_nulls=n_perm, 
             centroids=centroids, 
