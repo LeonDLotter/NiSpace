@@ -1,12 +1,13 @@
+_SPACE_DEFAULT = "MNI152NLin2009cAsym"
+
 _PARCS = ["schaefer100", "schaefer200", "schaefer300", "hcp", "desikankilliany", "destrieux"]
 _PARCS_NICE = ["Schaefer100", "Schaefer200", "Schaefer300", "HCP", "DesikanKilliany", "Destrieux"]
 _PARCS_DEFAULT = "schaefer200"
 _PARC_DEFAULT = "Schaefer200"
-_SPACE_DEFAULT = "MNI152NLin2009cAsym"
 
-_DSETS = ["pet", "mrna", "rsn", "magicc"]
-_DSETS_NICE = ["PET", "mRNA", "RSN", "MAGICC"]
-_DSETS_TAB_ONLY = ["mrna", "magicc"]
+_DSETS = ["pet", "mrna", "rsn", "magicc", "grf"]
+_DSETS_NICE = ["PET", "mRNA", "RSN", "MAGICC", "GRF"]
+_DSETS_TAB_ONLY = ["mrna", "magicc", "grf"]
 _DSETS_CX_ONLY = ["rsn"]
 _DSETS_SC_ONLY = []
 
@@ -14,6 +15,7 @@ _COLLECT_DEFAULT = {
     "pet": "UniqueTracers",
     "mrna": "CellTypesSilettiSuperclusters",
     "magicc": "CellTypesSilettiSuperclusters",
+    "grf": "ByAlpha",
     "brainmap": "AllDomainSets",
 }
 

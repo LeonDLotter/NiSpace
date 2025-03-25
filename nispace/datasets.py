@@ -153,12 +153,23 @@ def _parc_alias(parcellation: str):
         cortex, subcortex = True, True
     return parc, cortex, subcortex
 
+def _parc_symmetric(parc_labels):
+    labels_lh = [l.split("_LH_")[1] for l in parc_labels if "_LH_" in l]
+    labels_rh = [l.split("_RH_")[1] for l in parc_labels if "_RH_" in l]
+    if not labels_lh or not labels_rh:
+        return False
+    if labels_lh == labels_rh:
+        return True
+    return False
+
 def fetch_parcellation(parcellation: str = _PARC_DEFAULT, 
                        space: str = None,
                        hemi: Union[List[str], str] = ["L", "R"],
                        return_labels: bool = True,
                        return_space: bool = False,
                        return_resolution: bool = False,
+                       return_symmetric: bool = False,
+                       return_l2rmap: bool = False,
                        return_dist_mat: bool = False,
                        return_loaded: bool = False,
                        nispace_data_dir: Union[str, pathlib.Path] = None):
@@ -269,20 +280,47 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                 ),
         if len(parcellation_file) == 1:
             parcellation_file, label_file, distmat_file = parcellation_file[0], label_file[0], distmat_file[0]
-                   
-                     
+    
     # return
+
+    # labels
+    if return_labels or return_symmetric or return_l2rmap:
+        labels = load_labels(label_file)
+        
+    # symmetry
+    if return_symmetric or return_l2rmap:
+        symmetric = _parc_symmetric(labels)
+    
+    # left-to-right mapping
+    if return_l2rmap:
+        if not symmetric:
+            l2rmap_file = get_file(
+                base_dir / f"parc-{parc}_space-{space}.l2rmap.csv.gz",
+                **parcellation_lib[parc][space]["l2rmap"]
+            )
+            if return_loaded:
+                l2rmap_file = pd.read_csv(l2rmap_file, index_col=0, header=0)
+        else:
+            l2rmap_file = None          
+    
+    # build output
     # parc
     out = (load_img(parcellation_file) if return_loaded else parcellation_file),
     # label
     if return_labels:
-        out += (load_labels(label_file) if return_loaded else label_file),
+        out += (labels if return_loaded else label_file),
     # space
     if return_space:
         out += space,
     # res
     if return_resolution:
         out += _img_density_for_neuromaps(load_img(parcellation_file)),
+    # symmetric
+    if return_symmetric:
+        out += _parc_symmetric(labels),
+    # l2rmap
+    if return_l2rmap:
+        out += l2rmap_file,
     # distmat
     if return_dist_mat:
         out += (load_distmat(distmat_file) if return_loaded else distmat_file),

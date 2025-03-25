@@ -1142,5 +1142,50 @@
                 "remote": "reference/rsn/collection-All.collect"
             }
         }
+    },
+
+    "grf": {
+
+        "tab": {
+            "DesikanKilliany": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-DesikanKilliany.csv.gz"
+            },
+            "Destrieux": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-Destrieux.csv.gz"
+            },
+            "HCPex": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-HCPex.csv.gz"
+            },
+            "Schaefer100MelbourneS1": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-Schaefer100MelbourneS1.csv.gz"
+            },
+            "Schaefer200MelbourneS2": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-Schaefer200MelbourneS2.csv.gz"
+            },
+            "Schaefer400MelbourneS3": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-Schaefer400MelbourneS3.csv.gz"
+            }
+        },
+
+        "collection": {
+            "All": {
+                "host": "github-nispace",
+                "remote": "reference/grf/collection-All.collect"
+            },
+            "Alpha0": {
+                "host": "github-nispace",
+                "remote": "reference/grf/collection-Alpha0.collect"
+            },
+            "ByAlpha": {
+                "host": "github-nispace",
+                "remote": "reference/grf/collection-ByAlpha.collect"
+            }
+        }
     }
 }

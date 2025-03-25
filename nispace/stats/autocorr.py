@@ -4,17 +4,17 @@ from nispace.stats.coloc import corr
 from numba import njit
 
 
-def morans_i(distmat, data, normalize=False, local=False, invert_dist=True, nan_policy="drop"):
+def morans_i(data, distmat, normalize=False, local=False, invert_dist=True, nan_policy="drop"):
     """
     Calculates Moran's I from distance matrix `distmat` and brain map `data`
     Adopted from https://github.com/netneurolab/markello_spatialnulls/blob/master/parspin/parspin/spatial.py
 
     Parameters
     ----------
-    distmat : (N, N) array_like
-        Distance matrix between `N` regions / vertices / voxels / whatever
     data : (N,) array_like
         Brain map vector of interest
+    distmat : (N, N) array_like
+        Distance matrix between `N` regions / vertices / voxels / whatever
     normalize : bool, optional
         Whether to normalize rows of distance matrix prior to calculation.
         Default: False
@@ -29,12 +29,15 @@ def morans_i(distmat, data, normalize=False, local=False, invert_dist=True, nan_
     i : float
         Moran's I, measure of spatial autocorrelation
     """
+    # ensure data and distmat are numpy arrays
+    data = np.array(data).squeeze()
+    distmat = np.array(distmat)
     
-    # Drop nan
+    # drop nan
     if nan_policy == "drop":
-        data_nan = np.isnan(data)
-        data = data[~data_nan]
-        distmat = distmat[np.ix_(~data_nan, ~data_nan)]
+        notnan = ~np.isnan(data)
+        data = data[notnan]
+        distmat = distmat[np.ix_(notnan, notnan)]
     elif nan_policy == "raise":
         raise ValueError("NaN values in data")
     elif nan_policy == "propagate":

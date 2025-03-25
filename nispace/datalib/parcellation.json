@@ -13,6 +13,10 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer100MelbourneS1/MNI152NLin2009cAsym/parc-Schaefer100MelbourneS1_space-MNI152NLin2009cAsym.dist.csv.gz"
+            },
+            "l2rmap": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer100MelbourneS1/MNI152NLin2009cAsym/parc-Schaefer100MelbourneS1_space-MNI152NLin2009cAsym.l2rmap.csv.gz"
             }
         },
 
@@ -28,6 +32,10 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer100MelbourneS1/MNI152NLin6Asym/parc-Schaefer100MelbourneS1_space-MNI152NLin6Asym.dist.csv.gz"
+            },
+            "l2rmap": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer100MelbourneS1/MNI152NLin6Asym/parc-Schaefer100MelbourneS1_space-MNI152NLin6Asym.l2rmap.csv.gz"
             }
         },
 
@@ -61,6 +69,10 @@
                     "host": "github-nispace",
                     "remote": "parcellation/Schaefer100MelbourneS1/fsaverage/parc-Schaefer100MelbourneS1_space-fsaverage_hemi-R.dist.csv.gz"
                 }
+            },
+            "l2rmap": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer100MelbourneS1/fsaverage/parc-Schaefer100MelbourneS1_space-fsaverage.l2rmap.csv.gz"
             }
         },
 
@@ -94,6 +106,10 @@
                     "host": "github-nispace",
                     "remote": "parcellation/Schaefer100MelbourneS1/fsLR/parc-Schaefer100MelbourneS1_space-fsLR_hemi-R.dist.csv.gz"
                 }
+            },
+            "l2rmap": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer100MelbourneS1/fsLR/parc-Schaefer100MelbourneS1_space-fsLR.l2rmap.csv.gz"
             }
         }
 
@@ -123,6 +139,10 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer200MelbourneS2/MNI152NLin2009cAsym/parc-Schaefer200MelbourneS2_space-MNI152NLin2009cAsym.dist.csv.gz"
+            },
+            "l2rmap": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer200MelbourneS2/MNI152NLin2009cAsym/parc-Schaefer200MelbourneS2_space-MNI152NLin2009cAsym.l2rmap.csv.gz"
             }
         },
 
@@ -138,6 +158,10 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer200MelbourneS2/MNI152NLin6Asym/parc-Schaefer200MelbourneS2_space-MNI152NLin6Asym.dist.csv.gz"
+            },
+            "l2rmap": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer200MelbourneS2/MNI152NLin6Asym/parc-Schaefer200MelbourneS2_space-MNI152NLin6Asym.l2rmap.csv.gz"
             }
         },
 
@@ -171,6 +195,10 @@
                     "host": "github-nispace",
                     "remote": "parcellation/Schaefer200MelbourneS2/fsaverage/parc-Schaefer200MelbourneS2_space-fsaverage_hemi-R.dist.csv.gz"
                 }
+            },
+            "l2rmap": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer200MelbourneS2/fsaverage/parc-Schaefer200MelbourneS2_space-fsaverage.l2rmap.csv.gz"
             }
         },
 
@@ -204,6 +232,10 @@
                     "host": "github-nispace",
                     "remote": "parcellation/Schaefer200MelbourneS2/fsLR/parc-Schaefer200MelbourneS2_space-fsLR_hemi-R.dist.csv.gz"
                 }
+            },
+            "l2rmap": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer200MelbourneS2/fsLR/parc-Schaefer200MelbourneS2_space-fsLR.l2rmap.csv.gz"
             }
         }
 
@@ -233,6 +265,10 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer400MelbourneS3/MNI152NLin2009cAsym/parc-Schaefer400MelbourneS3_space-MNI152NLin2009cAsym.dist.csv.gz"
+            },
+            "l2rmap": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer400MelbourneS3/MNI152NLin2009cAsym/parc-Schaefer400MelbourneS3_space-MNI152NLin2009cAsym.l2rmap.csv.gz"
             }
         },
 
@@ -248,6 +284,10 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer400MelbourneS3/MNI152NLin6Asym/parc-Schaefer400MelbourneS3_space-MNI152NLin6Asym.dist.csv.gz"
+            },
+            "l2rmap": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer400MelbourneS3/MNI152NLin6Asym/parc-Schaefer400MelbourneS3_space-MNI152NLin6Asym.l2rmap.csv.gz"
             }
         },
 
@@ -281,6 +321,10 @@
                     "host": "github-nispace",
                     "remote": "parcellation/Schaefer400MelbourneS3/fsaverage/parc-Schaefer400MelbourneS3_space-fsaverage_hemi-R.dist.csv.gz"
                 }
+            },
+            "l2rmap": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer400MelbourneS3/fsaverage/parc-Schaefer400MelbourneS3_space-fsaverage.l2rmap.csv.gz"
             }
         },
 
@@ -314,6 +358,10 @@
                     "host": "github-nispace",
                     "remote": "parcellation/Schaefer400MelbourneS3/fsLR/parc-Schaefer400MelbourneS3_space-fsLR_hemi-R.dist.csv.gz"
                 }
+            },
+            "l2rmap": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer400MelbourneS3/fsLR/parc-Schaefer400MelbourneS3_space-fsLR.l2rmap.csv.gz"
             }
         }
 
@@ -343,6 +391,10 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/HCPex/MNI152NLin2009cAsym/parc-HCPex_space-MNI152NLin2009cAsym.dist.csv.gz"
+            },
+            "l2rmap": {
+                "host": "github-nispace",
+                "remote": "parcellation/HCPex/MNI152NLin2009cAsym/parc-HCPex_space-MNI152NLin2009cAsym.l2rmap.csv.gz"
             }
         },
 
@@ -376,6 +428,10 @@
                     "host": "github-nispace",
                     "remote": "parcellation/HCPex/fsaverage/parc-HCPex_space-fsaverage_hemi-R.dist.csv.gz"
                 }
+            },
+            "l2rmap": {
+                "host": "github-nispace",
+                "remote": "parcellation/HCPex/fsaverage/parc-HCPex_space-fsaverage.l2rmap.csv.gz"
             }
         },
 
@@ -409,6 +465,10 @@
                     "host": "github-nispace",
                     "remote": "parcellation/HCPex/fsLR/parc-HCPex_space-fsLR_hemi-R.dist.csv.gz"
                 }
+            },
+            "l2rmap": {
+                "host": "github-nispace",
+                "remote": "parcellation/HCPex/fsLR/parc-HCPex_space-fsLR.l2rmap.csv.gz"
             }
         }
     },

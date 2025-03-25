@@ -66,6 +66,7 @@ class NiSpace:
                  parcellation_space: Literal["mni152", "fsaverage", "fslr"] = "mni152", 
                  parcellation_hemi: Union[Literal["R", "L"], Sequence[Literal["L", "R"]]] = ["L", "R"], 
                  parcellation_symmetric: bool = False,
+                 parcellation_l2rmap: pd.DataFrame = None,
                  parcellation_idc_lh: Sequence[int] = None,
                  parcellation_idc_rh: Sequence[int] = None,
                  parcellation_idc_sc: Sequence[int] = None,
@@ -177,6 +178,7 @@ class NiSpace:
             "space": parcellation_space,
             "hemi": parcellation_hemi,
             "symmetric": parcellation_symmetric,
+            "l2rmap": parcellation_l2rmap,
             "idc_lh": parcellation_idc_lh,
             "idc_rh": parcellation_idc_rh,
             "idc_sc": parcellation_idc_sc,
@@ -243,16 +245,20 @@ class NiSpace:
         if isinstance(self._parc, str):
             if self._parc.lower() in [s.lower() for s in parcellation_lib.keys()]:
                 try:
-                    parc, labels, space, density, dist_mat = fetch_parcellation(
+                    parc, labels, space, density, symmetric, l2rmap, dist_mat = fetch_parcellation(
                         parcellation=self._parc,                 
                         return_space=True,
                         return_resolution=True,
+                        return_symmetric=True,
+                        return_l2rmap=True,
                         return_dist_mat=True,
                         return_loaded=True
                     )
                     self._parc = parc
                     self._parc_info["labels"] = labels
                     self._parc_info["space"] = space
+                    self._parc_info["symmetric"] = symmetric
+                    self._parc_info["l2rmap"] = l2rmap
                     #self._parc_info["density"] = density
                     self._parc_info["hemi"] = ("L", "R") if space=="fsaverage" else None
                     self._parc_dist_mat["null_maps"] = dist_mat
@@ -1181,10 +1187,7 @@ class NiSpace:
         for k in [k for k in kwargs.keys() if k.startswith("distmat_")]:
             dist_mat_kwargs[k.removeprefix("distmat_")] = kwargs.pop(k)
         # null maps generation
-        if "maps_separate_sc" in kwargs:
-            maps_separate_sc = kwargs.pop("maps_separate_sc")
-        else:
-            maps_separate_sc = False
+        maps_separate_sc = kwargs.pop("maps_separate_sc", False)
         maps_kwargs = {
             "nispace_nulls": self._nulls, 
             "use_existing_maps": True,
@@ -1193,8 +1196,9 @@ class NiSpace:
             "parc_idc_lh": self._parc_info["idc_lh"], 
             "parc_idc_rh": self._parc_info["idc_rh"], 
             "parc_idc_sc": self._parc_info["idc_sc"] if maps_separate_sc else None, 
+            "l2rmap": self._parc_info["l2rmap"],
             "lr_mirror_dist_mat": False, 
-            "lr_mirror_null_maps": False,
+            "lr_mirror_null_maps": True,
             "cx_sc_minmax_scale": False,
             "parc_resample": 2,
         }

@@ -11,6 +11,7 @@ from neuromaps.datasets import fetch_fsaverage
 from scipy.spatial.distance import cdist
 from sklearn.preprocessing import minmax_scale
 from tqdm.auto import tqdm
+from numba import njit
 
 try:
     from brainspace.null_models.moran import MoranRandomization
@@ -77,26 +78,50 @@ def _symmetrize_nans(data_1d, idc):
         data_1d[i_idc] = np.where(isnan, np.nan, data_1d[i_idc])
     # return
     return data_1d
-    
-    
-def _mirror_parc_maps(data, parc_idc_lh, parc_idc_rh, parc=None, project_to_volume=False, 
-                      resample_vol=2, n_proc=1):
+
+@njit(cache=True)
+def _apply_l2rmap(data_1d, l2rmap, parc_idc_lh, parc_idc_rh):
+    data_lh_1d = data_1d[parc_idc_lh]
+    data_mirrored_1d = np.full_like(data_1d, np.nan)
+    data_mirrored_1d[parc_idc_lh] = data_lh_1d
+    for i_parcel, idx_parcel in enumerate(parc_idc_rh):
+        data_mirrored_1d[idx_parcel] = np.nansum( data_lh_1d * l2rmap[:, i_parcel] )
+    return data_mirrored_1d
+
+def _mirror_parc_maps(data, parc_idc_lh, parc_idc_rh, 
+                      l2rmap=None,
+                      parc=None, project_to_volume=False, resample_vol=2, n_proc=1):
     
     data = np.array(data)
     if data.ndim == 1:
         data = data[None, :]
-    data_mirrored = np.full(data.shape, np.nan)
+    data_lh = data[:, parc_idc_lh]
+    data_mirrored = np.full_like(data, np.nan)
+    data_mirrored[:, parc_idc_lh] = data_lh
     
     # simple copy of right to left indices
-    if not project_to_volume:
-        data_mirrored[:, parc_idc_lh] = data[:, parc_idc_lh]
-        data_mirrored[:, parc_idc_rh] = data[:, parc_idc_lh]
+    if not project_to_volume and l2rmap is None:
+        data_mirrored[:, parc_idc_rh] = data_lh
+        
+    # use left-to-right mapping
+    elif not project_to_volume and l2rmap is not None:
+        
+        l2rmap = np.array(l2rmap).astype(data.dtype)
+        parc_idc_lh = np.array(parc_idc_lh)
+        parc_idc_rh = np.array(parc_idc_rh)
+        data_mirrored = np.stack(
+            Parallel(n_jobs=n_proc)(
+                delayed(_apply_l2rmap)(data[i, :], l2rmap, parc_idc_lh, parc_idc_rh)
+                for i in range(data.shape[0])
+            ),
+            axis=0
+        )
         
     # else: complicated approach for cases in which the parcellation is not bilaterally symmetric
     # 1. take left-hemisphere parcels and mirror them across the x-axis
     # 2. project the right hemisphere data into volume space using the original parcellation
     # 3. re-parcellate the right-hemisphere data using the original parcellation
-    else:
+    elif project_to_volume:
         if parc is None:
             raise ValueError("'parc' must be provided if 'project_to_volume' is True!")
         
@@ -114,9 +139,7 @@ def _mirror_parc_maps(data, parc_idc_lh, parc_idc_rh, parc=None, project_to_volu
         parc_right_mirrored = mirror_nifti(parc_left, affine=parc.affine, direction="switch")
                 
         # 2. and 3. 
-        data_mirrored = np.full_like(data, np.nan)
-        data_mirrored[:, parc_idc_lh] = data[:, parc_idc_lh]
-        
+                
         def par_fun(vect_left):
             vol_right_mirrored = vect_to_vol_arr(vect_left, parc_right_mirrored, idc_left)
             vect_right_mirrored = vol_to_vect_arr(vol_right_mirrored, parc_right, idc_right)
@@ -132,8 +155,11 @@ def _mirror_parc_maps(data, parc_idc_lh, parc_idc_rh, parc=None, project_to_volu
         #     vect_left = data[i, parc_idc_lh]
         #     vol_right_mirrored = vect_to_vol_arr(vect_left, parc_right_mirrored, idc_left)
         #     data_mirrored[i, parc_idc_rh] = vol_to_vect_arr(vol_right_mirrored, parc_right, idc_right)
-                        
-        return data_mirrored
+    
+    else:
+        raise ValueError("Invalid input arguments, no mirroring method selected!")
+    
+    return data_mirrored
         
 
 def nulls_burt2020(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
@@ -415,7 +441,8 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
                        parc_space=None, parc_hemi=None, parc_symmetric=False,
                        n_nulls=1000, parc_resample=2, centroids=False, 
                        parc_idc_lh=None, parc_idc_rh=None, parc_idc_sc=None, 
-                       lr_mirror_dist_mat=False, lr_mirror_null_maps=False, cx_sc_minmax_scale=False,
+                       lr_mirror_dist_mat=False, lr_mirror_null_maps=False, l2rmap=None,
+                       cx_sc_minmax_scale=False,
                        dtype=float,
                        n_proc=1, seed=None, verbose=True,
                        **kwargs):
@@ -566,11 +593,16 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
     ## generate null data     
     
     # check symmetry settings
-    if (lr_mirror_dist_mat or lr_mirror_null_maps) and not parc_symmetric:
-        lgr.warning("Left-right mirroring of distance matrix (lr_mirror_dist_mat) or null maps (lr_mirror_null_maps) "
-                    "requested, but parcellation may not be symmetric. Check if your parcellation is symmetric and "
+    if lr_mirror_dist_mat and not parc_symmetric:
+        lgr.warning("Left-right mirroring of distance matrix (lr_mirror_dist_mat) requested, but "
+                    "parcellation may not be symmetric. Check if your parcellation is symmetric and "
                     "set 'parc_symmetric' to True. Be careful, this might lead to unexpected results!")
         lr_mirror_dist_mat = False
+    if lr_mirror_null_maps and not parc_symmetric and l2rmap is None:
+        lgr.warning("Left-right mirroring of null maps ('lr_mirror_null_maps') requested, but "
+                    "'parc_symmetric' is False and no left-to-right mapping df ('l2rmap') provided. "
+                    "Check if your parcellation is symmetric and set 'parc_symmetric' to True. "
+                    "Be careful, this might lead to unexpected results!")
         lr_mirror_null_maps = False
     
     # check if separate indices for hemispheres are provided as tuple of arrays
@@ -658,6 +690,11 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
         lgr.critical_raise("Duplicate indices found in 'parc_idc_lh' and 'parc_idc_rh'! "
                            "Check if 'parc_idc_lh' and 'parc_idc_rh' are correctly defined.",
                            ValueError)
+    
+    # check if any index set is empty
+    if any(len(idc) == 0 for idc in split_by_idc):
+        lgr.critical_raise(f"Empty index set found! {[len(idc) for idc in split_by_idc]}",
+                           ValueError)
         
     # split distance matrix to align with surface hemisphere distance matrices 
     if not isinstance(dist_mat, tuple):
@@ -667,6 +704,11 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
             dist_mat_split = tuple([None] * len(split_by_idc))
     else:
         dist_mat_split = dist_mat
+    
+    # check distance matrices
+    if any(dist is None or dist.shape[0] != dist.shape[1] for dist in dist_mat_split):
+        lgr.critical_raise("Distance matrix is not square or None! Check the provided distance matrix.",
+                           ValueError)
         
     # mirror distance matrix if requested
     if lr_mirror_dist_mat and dist_mat is not None:
@@ -693,7 +735,11 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
     def par_fun(data_1d, seed):
         null_data = np.full((n_nulls, len(data_1d)), np.nan)
         for idc, dist in zip(split_by_idc, dist_mat_split):
-            null_data[:, idc] = null_fun(data_1d=data_1d[idc], dist_mat=dist, n_nulls=n_nulls, seed=seed, **kwargs)
+            data_1d_sel = data_1d[idc]
+            if np.isnan(data_1d_sel).all():
+                null_data[:, idc] = np.nan
+            else:
+                null_data[:, idc] = null_fun(data_1d=data_1d_sel, dist_mat=dist, n_nulls=n_nulls, seed=seed, **kwargs)
         return null_data
     
     # run null data generation
@@ -720,16 +766,10 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
                         "parcel indices have different lengths! Skipping mirroring.")
         else:
             # run
-            lgr.info("Left-to-right mirroring null maps.")
+            lgr.info("Left-to-right mirroring null maps "
+                     f"({'simple mirroring' if parc_symmetric else 'using left-to-right mapping'}).")
             for i, (l, n) in enumerate(tqdm(nulls.items(), desc="Mirroring null maps", disable=not verbose)):
-                if parc_symmetric:
-                    nulls[l] = _mirror_parc_maps(n, parc_idc_lh, parc_idc_rh, 
-                                                 project_to_volume=False)
-                else:
-                    lgr.critical_raise("Left-to-right mirroring of null maps not succesfully tested!",
-                                       NotImplementedError)
-                    # nulls[l] = _mirror_parc_maps(n, parc_idc_lh, parc_idc_rh, parcellation, 
-                    #                              project_to_volume=True, n_proc=n_proc, resample_vol=parc_resample)
+                nulls[l] = _mirror_parc_maps(n, parc_idc_lh, parc_idc_rh, l2rmap=None if parc_symmetric else l2rmap)
                 
     # adjust scaling
     if cx_sc_minmax_scale:
@@ -746,6 +786,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
                 nulls[l][:, parc_idc_sc] = minmax_scale(n[:, parc_idc_sc], feature_range=scale_sc, axis=1)
                 # scale cortical null data
                 nulls[l][:, parc_idc_cx] = minmax_scale(n[:, parc_idc_cx], feature_range=scale_cx, axis=1)
+                
     ## return
     lgr.info("Null data generation finished.")
     return nulls, dist_mat

@@ -38,3 +38,10 @@ The NiSpace "RSN" dataset is based on resting-state network probability maps gen
 (https://github.com/GrattonLab/Dworetsky_etal_ConsensusNetworks), processed on-the-fly, and cached locally (find them in 
 `~HOME/nispace-data/reference/rsn/map`). Please cite the original publication when using these maps.
 
+
+# grf
+The NiSpace "GRF" dataset consists of many thousands of "Gaussian Random Field Maps" (GRFs) generated with different levels
+of spatial smoothness. The parameter "alpha" controls the smoothness of the field and therefore the spatial autocorrelation
+of the resulting brain maps. The maps are mirrored across hemispheres exactly at MNI coordinate (0,0,0). There are 10,000
+maps for alpha == 0 and 1,000 maps each for alpha == {1,2,3}. The code used was adopted from Markello et al., 2021
+(https://doi.org/10.1016/j.neuroimage.2021.118052) and Burt et al., 2020 (https://doi.org/10.1016/j.neuroimage.2020.117038).
