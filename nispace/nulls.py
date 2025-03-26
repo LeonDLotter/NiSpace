@@ -706,7 +706,8 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
         dist_mat_split = dist_mat
     
     # check distance matrices
-    if any(dist is None or dist.shape[0] != dist.shape[1] for dist in dist_mat_split):
+    if any((dist is None and not random_nulls) or (dist.shape[0] != dist.shape[1]) 
+           for dist in dist_mat_split):
         lgr.critical_raise("Distance matrix is not square or None! Check the provided distance matrix.",
                            ValueError)
         
