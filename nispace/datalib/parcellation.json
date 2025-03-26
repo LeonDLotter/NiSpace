@@ -391,10 +391,6 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/HCPex/MNI152NLin2009cAsym/parc-HCPex_space-MNI152NLin2009cAsym.dist.csv.gz"
-            },
-            "l2rmap": {
-                "host": "github-nispace",
-                "remote": "parcellation/HCPex/MNI152NLin2009cAsym/parc-HCPex_space-MNI152NLin2009cAsym.l2rmap.csv.gz"
             }
         },
 
@@ -428,10 +424,6 @@
                     "host": "github-nispace",
                     "remote": "parcellation/HCPex/fsaverage/parc-HCPex_space-fsaverage_hemi-R.dist.csv.gz"
                 }
-            },
-            "l2rmap": {
-                "host": "github-nispace",
-                "remote": "parcellation/HCPex/fsaverage/parc-HCPex_space-fsaverage.l2rmap.csv.gz"
             }
         },
 
@@ -465,10 +457,6 @@
                     "host": "github-nispace",
                     "remote": "parcellation/HCPex/fsLR/parc-HCPex_space-fsLR_hemi-R.dist.csv.gz"
                 }
-            },
-            "l2rmap": {
-                "host": "github-nispace",
-                "remote": "parcellation/HCPex/fsLR/parc-HCPex_space-fsLR.l2rmap.csv.gz"
             }
         }
     },

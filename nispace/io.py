@@ -378,7 +378,24 @@ def load_labels(labels, concat=True, header=None, index=None):
     return labels_load
 
 
+def load_l2rmap(l2rmap, header=0, index=0):
+    # catch None content
+    if l2rmap is None:
+        return l2rmap
+    # catch DataFrame
+    elif isinstance(l2rmap, pd.DataFrame):
+        return l2rmap
+    # catch path
+    elif isinstance(l2rmap, (str, Path)):
+        return pd.read_csv(l2rmap, header=header, index_col=index)
+    else:
+        raise ValueError("Input must be str, path, or DataFrame")
+
+
 def load_distmat(distmat):
+    # catch None content
+    if distmat is None or (isinstance(distmat, tuple) and distmat == (None, None)):
+        return distmat
     # to tuple
     if isinstance(distmat, (str, Path, np.ndarray, pd.DataFrame)):
         distmat = (distmat,)

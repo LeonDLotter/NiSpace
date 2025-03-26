@@ -11,7 +11,7 @@ from .modules.constants import _PARC_DEFAULT, _SPACE_DEFAULT
 from .stats.misc import zscore_df
 from .utils.utils import _rm_ext, set_log
 from .utils.utils_datasets import get_file
-from .io import read_json, load_img, load_distmat, load_labels
+from .io import read_json, load_img, load_distmat, load_labels, load_l2rmap
 from .nulls import _img_density_for_neuromaps
 
 datalib_dir = pathlib.Path(__file__).parent / "datalib"
@@ -179,7 +179,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
         lgr.critical_raise(f"Parcellation '{parcellation}' not found. Available: {keys2str(parcellation_lib)}",
                            ValueError)
         
-    # check if alias and set data to retrieve
+    # Check if alias and set data to retrieve
     # variable "parcellation" is now what the user sees, "parc" is what we go with internally
     parc, cortex, subcortex = _parc_alias(parcellation)
         
@@ -192,6 +192,12 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
             lgr.critical_raise(f"Space '{space}' not found for parcellation '{parcellation}'. "
                                f"Available: {keys2str(parcellation_lib[parc])}",
                                ValueError)
+    
+    # Symmetry
+    if "l2rmap" in parcellation_lib[parc][space]:
+        symmetric = False
+    else:
+        symmetric = True
     
     # base dir
     if not nispace_data_dir:
@@ -215,6 +221,13 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                 base_dir / f"parc-{parc}_space-{space}.label.txt",
                 **parcellation_lib[parc][space]["label"]
             )
+        if return_l2rmap and not symmetric:
+            l2rmap_file = get_file(
+                base_dir / f"parc-{parc}_space-{space}.l2rmap.csv.gz",
+                **parcellation_lib[parc][space]["l2rmap"]
+            )
+        elif return_l2rmap and symmetric:
+            l2rmap_file = None
         if return_dist_mat:
             distmat_file = get_file(
                 base_dir / f"parc-{parc}_space-{space}.dist.csv.gz",
@@ -244,13 +257,18 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
             parc = image.new_img_like(parc, parc_array, copy_header=True)
             # replace vars
             parcellation_file, label_file = parc, labels_to_keep
+            # drop from left-to-right mapping
+            if return_l2rmap and not symmetric:
+                l2rmap = load_l2rmap(l2rmap_file)
+                l2rmap = l2rmap.loc[l2rmap.index.intersection(labels_to_keep), 
+                                    l2rmap.columns.intersection(labels_to_keep)]
+                l2rmap_file = l2rmap
             # drop from dist mat
             if return_dist_mat:
                 bool_keep = np.array([True if l in labels_to_keep else False for l in labels_all])
                 distmat = load_distmat(distmat_file)
                 distmat = distmat[np.ix_(bool_keep, bool_keep)]
                 distmat_file = distmat
-            
             
     # surface
     else:
@@ -274,41 +292,33 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                     **parcellation_lib[parc][space]["label"][h]
                 ),
             if return_dist_mat:
-                distmat_file += get_file(
-                    base_dir / f"parc-{parc}_space-{space}_hemi-{h}.dist.csv.gz",
-                    **parcellation_lib[parc][space]["distmat"][h]
-                ),
-        if len(parcellation_file) == 1:
-            parcellation_file, label_file, distmat_file = parcellation_file[0], label_file[0], distmat_file[0]
-    
-    # return
-
-    # labels
-    if return_labels or return_symmetric or return_l2rmap:
-        labels = load_labels(label_file)
-        
-    # symmetry
-    if return_symmetric or return_l2rmap:
-        symmetric = _parc_symmetric(labels)
-    
-    # left-to-right mapping
-    if return_l2rmap:
-        if not symmetric:
+                if "fslr" in space.lower():
+                    lgr.warning("Distance matrices for fslr spaces are currently not available. Returning None.")
+                    distmat_file += None,
+                else:
+                    distmat_file += get_file(
+                        base_dir / f"parc-{parc}_space-{space}_hemi-{h}.dist.csv.gz",
+                        **parcellation_lib[parc][space]["distmat"][h]
+                    ),
+        if return_l2rmap and not symmetric:
             l2rmap_file = get_file(
                 base_dir / f"parc-{parc}_space-{space}.l2rmap.csv.gz",
                 **parcellation_lib[parc][space]["l2rmap"]
             )
-            if return_loaded:
-                l2rmap_file = pd.read_csv(l2rmap_file, index_col=0, header=0)
-        else:
-            l2rmap_file = None          
+        elif return_l2rmap and symmetric:
+            l2rmap_file = None
+        if len(parcellation_file) == 1:
+            parcellation_file, label_file, distmat_file, l2rmap_file = parcellation_file[0], label_file[0], distmat_file[0], None
+        
+    
+    # return      
     
     # build output
     # parc
     out = (load_img(parcellation_file) if return_loaded else parcellation_file),
     # label
     if return_labels:
-        out += (labels if return_loaded else label_file),
+        out += (load_labels(label_file) if return_loaded else label_file),
     # space
     if return_space:
         out += space,
@@ -317,10 +327,10 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
         out += _img_density_for_neuromaps(load_img(parcellation_file)),
     # symmetric
     if return_symmetric:
-        out += _parc_symmetric(labels),
+        out += symmetric,
     # l2rmap
     if return_l2rmap:
-        out += l2rmap_file,
+        out += (load_l2rmap(l2rmap_file) if return_loaded else l2rmap_file),
     # distmat
     if return_dist_mat:
         out += (load_distmat(distmat_file) if return_loaded else distmat_file),
