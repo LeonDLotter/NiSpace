@@ -7,7 +7,6 @@ adapted for convenient use in NiSpace
 import nibabel as nib
 from nilearn.maskers import NiftiLabelsMasker
 from nilearn.image import new_img_like, math_img
-#from nilearn.masking import compute_background_mask
 import numpy as np
 import pandas as pd
 
@@ -21,12 +20,12 @@ from neuromaps.nulls.spins import vertices_to_parcels, parcels_to_vertices
 ALIAS = dict(
     fslr='fsLR', fsavg='fsaverage', 
     mni152='MNI152', mni='MNI152', 
-    mni152nlin6asym='MNI152', mni152nlin200asym='MNI152',
-    MNI152NLin6Asym='MNI152', MNI152NLin200Asym='MNI152',
+    mni152nlin6asym='MNI152', mni152nlin2009asym='MNI152',
+    MNI152NLin6Asym='MNI152', MNI152NLin2009Asym='MNI152',
     FSLR='fsLR', CIVET='civet'
 )
 
-from nispace.utils.utils import get_background_value
+from nispace.utils.utils import get_background_value, vol_to_vect_arr
 
 
 def _gifti_to_array(gifti):
@@ -236,8 +235,10 @@ class Parcellater():
                     mask_space = self.space
                 nomedialwall = load_data(fetch_atlas(mask_space, density)['medial'])
                 background_value = np.median(darr[nomedialwall == 0])
-            parcellated = vertices_to_parcels(darr, parc, background=background_value)
-
+            #parcellated = vertices_to_parcels(darr, parc, background=background_value)
+            parc_arr = _gifti_to_array(parc)
+            parcellated = vol_to_vect_arr(darr, parc_arr, self._parc_idc, background_value)
+            
         # fill parcels with background intensity with nan, works only if background_value exists
         if background_parcels_to_nan and background_value is not None:
             bg_idc = parcellated == background_value
@@ -247,7 +248,7 @@ class Parcellater():
         # drop parcels for which there are too few non-background voxels/vertices (= datapoints)
         # given as a minimum number of datapoints and/or a minimum fraction of datapoints
         # this option is computationally expensive!
-        # TODO: improve efficiency, get rid of list comprehension?
+        # TODO: improve efficiency, get rid of loop?
         if ((min_num_valid_datapoints or min_fraction_valid_datapoints) 
                 and background_value is not None):
             

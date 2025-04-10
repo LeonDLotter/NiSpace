@@ -289,11 +289,15 @@ def vect_to_vol_arr(vect, parc_arr, parc_idc, bg_value=0):
 def vol_to_vect_arr(vol_arr, parc_arr, parc_idc, bg_value=0):
     vol_arr2d = vol_arr.flatten()
     parc_arr2d = parc_arr.flatten().astype(vol_arr.dtype)
-    mask = (parc_arr2d != bg_value)
+    mask = (parc_arr2d != bg_value) & ~np.isnan(parc_arr2d)
     parc_idc = parc_idc.astype(vol_arr.dtype)
     vect = np.zeros(len(parc_idc), dtype=vol_arr.dtype)
     for i, idx in enumerate(parc_idc):
-        vect[i] = vol_arr2d[(parc_arr2d==idx) * mask].mean()
+        idc = (parc_arr2d==idx) * mask
+        if len(vol_arr2d[idc]) > 0:
+            vect[i] = vol_arr2d[idc].mean()
+        else:
+            vect[i] = np.nan
     return vect
     
 
