@@ -124,7 +124,7 @@ def download_file(host: Literal["url", "github", "github-nispace", "github-nispa
                              "{hemi: 'L' or 'R' if surface space}) for neuromaps")
         else:
             if len(remote) == 3:
-                remote = (remote[0], remote[1], remote[2], ["L", "R"])
+                remote = (remote[0], remote[1], remote[2], None)
             source, tracer, space, hemi = remote
            
     if host != "neuromaps":
