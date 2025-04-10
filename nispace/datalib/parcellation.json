@@ -466,36 +466,64 @@
         "subcortex": false
     },
 
-    "DesikanKilliany": {
+    "DesikanKillianyAseg": {
+        "MNI152NLin2009cAsym": {
+            "map": {
+                "host": "github-nispace",
+                "remote": "parcellation/DesikanKillianyAseg/MNI152NLin2009cAsym/parc-DesikanKillianyAseg_space-MNI152NLin2009cAsym.label.nii.gz"
+            },
+            "label": {
+                "host": "github-nispace",
+                "remote": "parcellation/DesikanKillianyAseg/MNI152NLin2009cAsym/parc-DesikanKillianyAseg_space-MNI152NLin2009cAsym.label.txt"
+            },
+            "distmat": {
+                "host": "github-nispace",
+                "remote": "parcellation/DesikanKillianyAseg/MNI152NLin2009cAsym/parc-DesikanKillianyAseg_space-MNI152NLin2009cAsym.dist.csv.gz"
+            }
+        },
+        "MNI152NLin6Asym": {
+            "map": {
+                "host": "github-nispace",
+                "remote": "parcellation/DesikanKillianyAseg/MNI152NLin6Asym/parc-DesikanKillianyAseg_space-MNI152NLin6Asym.label.nii.gz"
+            },
+            "label": {
+                "host": "github-nispace",
+                "remote": "parcellation/DesikanKillianyAseg/MNI152NLin6Asym/parc-DesikanKillianyAseg_space-MNI152NLin6Asym.label.txt"
+            },
+            "distmat": {
+                "host": "github-nispace",
+                "remote": "parcellation/DesikanKillianyAseg/MNI152NLin6Asym/parc-DesikanKillianyAseg_space-MNI152NLin6Asym.dist.csv.gz"
+            }
+        },
         "fsaverage": {
             "map": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/DesikanKilliany/fsaverage/parc-DesikanKilliany_space-fsaverage_hemi-L.label.gii.gz"
+                    "remote": "parcellation/DesikanKillianyAseg/fsaverage/parc-DesikanKillianyAseg_space-fsaverage_hemi-L.label.gii.gz"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/DesikanKilliany/fsaverage/parc-DesikanKilliany_space-fsaverage_hemi-R.label.gii.gz"
+                    "remote": "parcellation/DesikanKillianyAseg/fsaverage/parc-DesikanKillianyAseg_space-fsaverage_hemi-R.label.gii.gz"
                 }
             },
             "label": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/DesikanKilliany/fsaverage/parc-DesikanKilliany_space-fsaverage_hemi-L.label.txt"
+                    "remote": "parcellation/DesikanKillianyAseg/fsaverage/parc-DesikanKillianyAseg_space-fsaverage_hemi-L.label.txt"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/DesikanKilliany/fsaverage/parc-DesikanKilliany_space-fsaverage_hemi-R.label.txt"
+                    "remote": "parcellation/DesikanKillianyAseg/fsaverage/parc-DesikanKillianyAseg_space-fsaverage_hemi-R.label.txt"
                 }
             },
             "distmat": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/DesikanKilliany/fsaverage/parc-DesikanKilliany_space-fsaverage_hemi-L.dist.csv.gz"
+                    "remote": "parcellation/DesikanKillianyAseg/fsaverage/parc-DesikanKillianyAseg_space-fsaverage_hemi-L.dist.csv.gz"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/DesikanKilliany/fsaverage/parc-DesikanKilliany_space-fsaverage_hemi-R.dist.csv.gz"
+                    "remote": "parcellation/DesikanKillianyAseg/fsaverage/parc-DesikanKillianyAseg_space-fsaverage_hemi-R.dist.csv.gz"
                 }
             }
         },
@@ -503,66 +531,104 @@
             "map": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/DesikanKilliany/fsLR/parc-DesikanKilliany_space-fsLR_hemi-L.label.gii.gz"
+                    "remote": "parcellation/DesikanKillianyAseg/fsLR/parc-DesikanKillianyAseg_space-fsLR_hemi-L.label.gii.gz"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/DesikanKilliany/fsLR/parc-DesikanKilliany_space-fsLR_hemi-R.label.gii.gz"
+                    "remote": "parcellation/DesikanKillianyAseg/fsLR/parc-DesikanKillianyAseg_space-fsLR_hemi-R.label.gii.gz"
                 }
             },
             "label": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/DesikanKilliany/fsLR/parc-DesikanKilliany_space-fsLR_hemi-L.label.txt"
+                    "remote": "parcellation/DesikanKillianyAseg/fsLR/parc-DesikanKillianyAseg_space-fsLR_hemi-L.label.txt"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/DesikanKilliany/fsLR/parc-DesikanKilliany_space-fsLR_hemi-R.label.txt"
+                    "remote": "parcellation/DesikanKillianyAseg/fsLR/parc-DesikanKillianyAseg_space-fsLR_hemi-R.label.txt"
                 }
             },
             "distmat": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/DesikanKilliany/fsLR/parc-DesikanKilliany_space-fsLR_hemi-L.dist.csv.gz"
+                    "remote": "parcellation/DesikanKillianyAseg/fsLR/parc-DesikanKillianyAseg_space-fsLR_hemi-L.dist.csv.gz"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/DesikanKilliany/fsLR/parc-DesikanKilliany_space-fsLR_hemi-R.dist.csv.gz"
+                    "remote": "parcellation/DesikanKillianyAseg/fsLR/parc-DesikanKillianyAseg_space-fsLR_hemi-R.dist.csv.gz"
                 }
             }
         }
     },
+    "DesikanKilliany": {
+        "alias": "DesikanKillianyAseg",
+        "cortex": true,
+        "subcortex": false
+    },
+    "Aseg": {
+        "alias": "DestrieuxAseg",
+        "cortex": false,
+        "subcortex": true
+    },
 
-    "Destrieux": {
+    "DestrieuxAseg": {
+        "MNI152NLin2009cAsym": {
+            "map": {
+                "host": "github-nispace",
+                "remote": "parcellation/DestrieuxAseg/MNI152NLin2009cAsym/parc-DestrieuxAseg_space-MNI152NLin2009cAsym.label.nii.gz"
+            },
+            "label": {
+                "host": "github-nispace",
+                "remote": "parcellation/DestrieuxAseg/MNI152NLin2009cAsym/parc-DestrieuxAseg_space-MNI152NLin2009cAsym.label.txt"
+            },
+            "distmat": {
+                "host": "github-nispace",
+                "remote": "parcellation/DestrieuxAseg/MNI152NLin2009cAsym/parc-DestrieuxAseg_space-MNI152NLin2009cAsym.dist.csv.gz"
+            }
+        },
+        "MNI152NLin6Asym": {
+            "map": {
+                "host": "github-nispace",
+                "remote": "parcellation/DestrieuxAseg/MNI152NLin6Asym/parc-DestrieuxAseg_space-MNI152NLin6Asym.label.nii.gz"
+            },
+            "label": {
+                "host": "github-nispace",
+                "remote": "parcellation/DestrieuxAseg/MNI152NLin6Asym/parc-DestrieuxAseg_space-MNI152NLin6Asym.label.txt"
+            },
+            "distmat": {
+                "host": "github-nispace",
+                "remote": "parcellation/DestrieuxAseg/MNI152NLin6Asym/parc-DestrieuxAseg_space-MNI152NLin6Asym.dist.csv.gz"
+            }
+        },
         "fsaverage": {
             "map": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/Destrieux/fsaverage/parc-Destrieux_space-fsaverage_hemi-L.label.gii.gz"
+                    "remote": "parcellation/DestrieuxAseg/fsaverage/parc-DestrieuxAseg_space-fsaverage_hemi-L.label.gii.gz"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/Destrieux/fsaverage/parc-Destrieux_space-fsaverage_hemi-R.label.gii.gz"
+                    "remote": "parcellation/DestrieuxAseg/fsaverage/parc-DestrieuxAseg_space-fsaverage_hemi-R.label.gii.gz"
                 }
             },
             "label": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/Destrieux/fsaverage/parc-Destrieux_space-fsaverage_hemi-L.label.txt"
+                    "remote": "parcellation/DestrieuxAseg/fsaverage/parc-DestrieuxAseg_space-fsaverage_hemi-L.label.txt"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/Destrieux/fsaverage/parc-Destrieux_space-fsaverage_hemi-R.label.txt"
+                    "remote": "parcellation/DestrieuxAseg/fsaverage/parc-DestrieuxAseg_space-fsaverage_hemi-R.label.txt"
                 }
             },
             "distmat": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/Destrieux/fsaverage/parc-Destrieux_space-fsaverage_hemi-L.dist.csv.gz"
+                    "remote": "parcellation/DestrieuxAseg/fsaverage/parc-DestrieuxAseg_space-fsaverage_hemi-L.dist.csv.gz"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/Destrieux/fsaverage/parc-Destrieux_space-fsaverage_hemi-R.dist.csv.gz"
+                    "remote": "parcellation/DestrieuxAseg/fsaverage/parc-DestrieuxAseg_space-fsaverage_hemi-R.dist.csv.gz"
                 }
             }
         },
@@ -570,33 +636,38 @@
             "map": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/Destrieux/fsLR/parc-Destrieux_space-fsLR_hemi-L.label.gii.gz"
+                    "remote": "parcellation/DestrieuxAseg/fsLR/parc-DestrieuxAseg_space-fsLR_hemi-L.label.gii.gz"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/Destrieux/fsLR/parc-Destrieux_space-fsLR_hemi-R.label.gii.gz"
+                    "remote": "parcellation/DestrieuxAseg/fsLR/parc-DestrieuxAseg_space-fsLR_hemi-R.label.gii.gz"
                 }
             },
             "label": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/Destrieux/fsLR/parc-Destrieux_space-fsLR_hemi-L.label.txt"
+                    "remote": "parcellation/DestrieuxAseg/fsLR/parc-DestrieuxAseg_space-fsLR_hemi-L.label.txt"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/Destrieux/fsLR/parc-Destrieux_space-fsLR_hemi-R.label.txt"
+                    "remote": "parcellation/DestrieuxAseg/fsLR/parc-DestrieuxAseg_space-fsLR_hemi-R.label.txt"
                 }
             },
             "distmat": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/Destrieux/fsLR/parc-Destrieux_space-fsLR_hemi-L.dist.csv.gz"
+                    "remote": "parcellation/DestrieuxAseg/fsLR/parc-DestrieuxAseg_space-fsLR_hemi-L.dist.csv.gz"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/Destrieux/fsLR/parc-Destrieux_space-fsLR_hemi-R.dist.csv.gz"
+                    "remote": "parcellation/DestrieuxAseg/fsLR/parc-DestrieuxAseg_space-fsLR_hemi-R.dist.csv.gz"
                 }
             }
         }
+    },
+    "Destrieux": {
+        "alias": "DestrieuxAseg",
+        "cortex": true,
+        "subcortex": false
     }
 }
