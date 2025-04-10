@@ -836,13 +836,13 @@
         },
 
         "tab": {
-            "DesikanKilliany": {
+            "DesikanKillianyAseg": {
                 "host": "github-nispace",
-                "remote": "reference/pet/tab/dset-pet_parc-DesikanKilliany.csv.gz"
+                "remote": "reference/pet/tab/dset-pet_parc-DesikanKillianyAseg.csv.gz"
             },
-            "Destrieux": {
+            "DestrieuxAseg": {
                 "host": "github-nispace",
-                "remote": "reference/pet/tab/dset-pet_parc-Destrieux.csv.gz"
+                "remote": "reference/pet/tab/dset-pet_parc-DestrieuxAseg.csv.gz"
             },
             "HCPex": {
                 "host": "github-nispace",
@@ -891,13 +891,13 @@
         },
 
         "tab": {
-            "DesikanKilliany": {
+            "DesikanKillianyAseg": {
                 "host": "github-nispace",
-                "remote": "reference/mrna/tab/dset-mrna_parc-DesikanKilliany.csv.gz"
+                "remote": "reference/mrna/tab/dset-mrna_parc-DesikanKillianyAseg.csv.gz"
             },
-            "Destrieux": {
+            "DestrieuxAseg": {
                 "host": "github-nispace",
-                "remote": "reference/mrna/tab/dset-mrna_parc-Destrieux.csv.gz"
+                "remote": "reference/mrna/tab/dset-mrna_parc-DestrieuxAseg.csv.gz"
             },
             "HCPex": {
                 "host": "github-nispace",
@@ -957,13 +957,13 @@
         },
 
         "tab": {
-            "DesikanKilliany": {
+            "DesikanKillianyAseg": {
                 "host": "github-nispace",
-                "remote": "reference/magicc/tab/dset-magicc_parc-DesikanKilliany.csv.gz"
+                "remote": "reference/magicc/tab/dset-magicc_parc-DesikanKillianyAseg.csv.gz"
             },
-            "Destrieux": {
+            "DestrieuxAseg": {
                 "host": "github-nispace",
-                "remote": "reference/magicc/tab/dset-magicc_parc-Destrieux.csv.gz"
+                "remote": "reference/magicc/tab/dset-magicc_parc-DestrieuxAseg.csv.gz"
             },
             "HCPex": {
                 "host": "github-nispace",
@@ -1110,13 +1110,13 @@
         },
 
         "tab": {
-            "DesikanKilliany": {
+            "DesikanKillianyAseg": {
                 "host": "github-nispace",
-                "remote": "reference/rsn/tab/dset-rsn_parc-DesikanKilliany.csv.gz"
+                "remote": "reference/rsn/tab/dset-rsn_parc-DesikanKillianyAseg.csv.gz"
             },
-            "Destrieux": {
+            "DestrieuxAseg": {
                 "host": "github-nispace",
-                "remote": "reference/rsn/tab/dset-rsn_parc-Destrieux.csv.gz"
+                "remote": "reference/rsn/tab/dset-rsn_parc-DestrieuxAseg.csv.gz"
             },
             "HCPex": {
                 "host": "github-nispace",
@@ -1147,13 +1147,13 @@
     "grf": {
 
         "tab": {
-            "DesikanKilliany": {
+            "DesikanKillianyAseg": {
                 "host": "github-nispace",
-                "remote": "reference/grf/tab/dset-grf_parc-DesikanKilliany.csv.gz"
+                "remote": "reference/grf/tab/dset-grf_parc-DesikanKillianyAseg.csv.gz"
             },
-            "Destrieux": {
+            "DestrieuxAseg": {
                 "host": "github-nispace",
-                "remote": "reference/grf/tab/dset-grf_parc-Destrieux.csv.gz"
+                "remote": "reference/grf/tab/dset-grf_parc-DestrieuxAseg.csv.gz"
             },
             "HCPex": {
                 "host": "github-nispace",
