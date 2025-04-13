@@ -337,14 +337,17 @@ def null_to_p(test_value, null_array, tail="two", fit_norm=False):
             return 1 - norm.cdf(t, mu, sd)
             
     ## calculate p
+    null_array_mean = np.mean(null_array)
+    test_value_centered = test_value - null_array_mean
+    null_array_centered = null_array - null_array_mean
     if tail == "two":
-        p_l = compute_p(test_value, null_array)
-        p_r = compute_p(test_value * -1, null_array * -1)
+        p_l = compute_p(test_value_centered, null_array_centered)
+        p_r = compute_p(-test_value_centered, -null_array_centered)
         p = 2 * np.minimum(p_l, p_r)
     elif tail == "lower":
-        p = compute_p(test_value * -1, null_array * -1)
+        p = compute_p(-test_value_centered, -null_array_centered)
     elif tail == "upper":
-        p = compute_p(test_value, null_array)
+        p = compute_p(test_value_centered, null_array_centered)
 
     # ensure p_value in the following range:
     # smallest_value <= p_value <= (1.0 - smallest_value) or 1 if fit_norm
