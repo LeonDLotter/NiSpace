@@ -374,6 +374,39 @@ def relabel_nifti_parc(parc, new_order=None, new_labels=None, dtype=None):
     return parc_relabeled
 
 
+def merge_parcellations(parcellations, labels=None):
+    if not isinstance(parcellations, list):
+        raise ValueError("parcellations must be a list")
+    if labels is None:
+        labels = [None] * len(parcellations)
+    if not isinstance(labels, list):
+        raise ValueError("labels must be a list")
+    if len(parcellations) != len(labels):
+        raise ValueError("parcellations and labels must have the same length")
+    if not np.equal(*[type(p) for p in parcellations]):
+        raise ValueError("all parcellations must be of the same type")
+    if not isinstance(parcellations[0], nib.Nifti1Image):
+        raise NotImplementedError("Parcellation merging currently only implemented for Nifti1Image")
+    if not np.allclose(*[parc.shape for parc in parcellations]):
+        raise ValueError("all parcellations must have the same shape")
+    
+    arr_merged = np.zeros_like(parcellations[0].get_fdata(), dtype=np.int32)
+    labels_merged = pd.Series(dtype=str)
+    i = 1
+    for ii, (parc, labs) in enumerate(zip(parcellations, labels)):
+        arr = parc.get_fdata()
+        idc = np.trim_zeros(np.unique(arr))
+        if labs is None:
+            labs = idc
+        if len(idc) != len(labs):
+            raise ValueError(f"parcellation at position {ii} has {len(idc)} indices, but {len(labs)} labels")
+        for idx, l in zip(idc, labs):
+            arr_merged[arr == idx] = i
+            labels_merged.loc[i] = l
+            i += 1
+    return image.new_img_like(parcellations[0], arr_merged), labels_merged
+
+
 def correlate_hemispheres(img, mask=None):
     if isinstance(img, (str, Path, nib.Nifti1Image)):
         #raise NotImplementedError("Nifti1Image input not implemented yet!")
