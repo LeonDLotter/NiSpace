@@ -566,7 +566,7 @@
         "subcortex": false
     },
     "Aseg": {
-        "alias": "DestrieuxAseg",
+        "alias": "DesikanKillianyAseg",
         "cortex": false,
         "subcortex": true
     },
