@@ -377,52 +377,37 @@
         "subcortex": true
     },
     
-    "HCPex": {
-
-        "MNI152NLin2009cAsym": {
-            "map": {
-                "host": "github",
-                "remote": ["wayalan/HCPex", "main", "HCPex_v1.1/HCPex.nii.gz"]
-            },
-            "label": {
-                "host": "github-nispace",
-                "remote": "parcellation/HCPex/MNI152NLin2009cAsym/parc-HCPex_space-MNI152NLin2009cAsym.label.txt"
-            },
-            "distmat": {
-                "host": "github-nispace",
-                "remote": "parcellation/HCPex/MNI152NLin2009cAsym/parc-HCPex_space-MNI152NLin2009cAsym.dist.csv.gz"
-            }
-        },
+    "Glasser": {
 
         "fsaverage": {
             "map": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/HCPex/fsaverage/parc-HCPex_space-fsaverage_hemi-L.label.gii.gz"
+                    "remote": "parcellation/Glasser/fsaverage/parc-Glasser_space-fsaverage_hemi-L.label.gii.gz"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/HCPex/fsaverage/parc-HCPex_space-fsaverage_hemi-R.label.gii.gz"
+                    "remote": "parcellation/Glasser/fsaverage/parc-Glasser_space-fsaverage_hemi-R.label.gii.gz"
                 }
             },
             "label": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/HCPex/fsaverage/parc-HCPex_space-fsaverage_hemi-L.label.txt"
+                    "remote": "parcellation/Glasser/fsaverage/parc-Glasser_space-fsaverage_hemi-L.label.txt"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/HCPex/fsaverage/parc-HCPex_space-fsaverage_hemi-R.label.txt"
+                    "remote": "parcellation/Glasser/fsaverage/parc-Glasser_space-fsaverage_hemi-R.label.txt"
                 }
             },
             "distmat": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/HCPex/fsaverage/parc-HCPex_space-fsaverage_hemi-L.dist.csv.gz"
+                    "remote": "parcellation/Glasser/fsaverage/parc-Glasser_space-fsaverage_hemi-L.dist.csv.gz"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/HCPex/fsaverage/parc-HCPex_space-fsaverage_hemi-R.dist.csv.gz"
+                    "remote": "parcellation/Glasser/fsaverage/parc-Glasser_space-fsaverage_hemi-R.dist.csv.gz"
                 }
             }
         },
@@ -431,39 +416,39 @@
             "map": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/HCPex/fsLR/parc-HCPex_space-fsLR_hemi-L.label.gii.gz"
+                    "remote": "parcellation/Glasser/fsLR/parc-Glasser_space-fsLR_hemi-L.label.gii.gz"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/HCPex/fsLR/parc-HCPex_space-fsLR_hemi-R.label.gii.gz"
+                    "remote": "parcellation/Glasser/fsLR/parc-Glasser_space-fsLR_hemi-R.label.gii.gz"
                 }
             },
             "label": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/HCPex/fsLR/parc-HCPex_space-fsLR_hemi-L.label.txt"
+                    "remote": "parcellation/Glasser/fsLR/parc-Glasser_space-fsLR_hemi-L.label.txt"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/HCPex/fsLR/parc-HCPex_space-fsLR_hemi-R.label.txt"
+                    "remote": "parcellation/Glasser/fsLR/parc-Glasser_space-fsLR_hemi-R.label.txt"
                 }
             },
             "distmat": {
                 "L": {
                     "host": "github-nispace",
-                    "remote": "parcellation/HCPex/fsLR/parc-HCPex_space-fsLR_hemi-L.dist.csv.gz"
+                    "remote": "parcellation/Glasser/fsLR/parc-Glasser_space-fsLR_hemi-L.dist.csv.gz"
                 },
                 "R": {
                     "host": "github-nispace",
-                    "remote": "parcellation/HCPex/fsLR/parc-HCPex_space-fsLR_hemi-R.dist.csv.gz"
+                    "remote": "parcellation/Glasser/fsLR/parc-Glasser_space-fsLR_hemi-R.dist.csv.gz"
                 }
             }
         }
     },
     "HCP": {
-        "alias": "HCPex",
+        "alias": "Glasser",
         "cortex": true,
-        "subcortex": false
+        "subcortex": true
     },
 
     "DesikanKillianyAseg": {

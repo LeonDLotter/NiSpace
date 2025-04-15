@@ -338,11 +338,10 @@ def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"],
                 )
                 return(dist)
             
-            n_jobs = 2 if (n_proc > 1) & len(parc_hemi) > 1 else 1
-            dist = Parallel(n_jobs=n_jobs)(
+            dist = Parallel(n_jobs=n_proc)(
                 delayed(surf_dist)(i, h) for i, h in enumerate(tqdm(
                     parc_hemi, 
-                    desc=f"Calculating distance matrix ({n_jobs} proc)", 
+                    desc=f"Calculating distance matrix ({n_proc} proc)", 
                     disable=not verbose
                 ))
             )
