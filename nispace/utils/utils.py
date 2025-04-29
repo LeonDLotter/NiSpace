@@ -281,6 +281,8 @@ def vect_to_vol_arr(vect, parc_arr, parc_idc, bg_value=0):
     parc_arr_1d = parc_arr.flatten().astype(vect.dtype)
     vect_arr_1d = np.full_like(parc_arr_1d, bg_value, dtype=vect.dtype)
     parc_idc = parc_idc.astype(vect.dtype)
+    if len(parc_idc) != len(vect):
+        raise ValueError(f"vect ({vect.shape}) and parc_idc ({parc_idc.shape}) don't match.")
     for i, idx in enumerate(parc_idc):
         vect_arr_1d[parc_arr_1d==idx] = vect[i]
     return vect_arr_1d.reshape(parc_arr.shape)
