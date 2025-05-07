@@ -8,7 +8,7 @@ from .utils.utils import set_log
 from .modules.constants import (_PARCS, _PARCS_NICE, _PARC_DEFAULT, 
                                 _DSETS, _DSETS_NICE, _COLLECT_DEFAULT,
                                 _COLOC_METHODS)
-from .datasets import fetch_reference, reference_lib
+from .datasets import fetch_reference, reference_lib, parcellation_lib
 
 def _workflow_base(x, y, z, x_collection, #x_load_nulls,
                    standardize,
@@ -55,7 +55,7 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
         # check provided data
         # parcellation
         if isinstance(parcellation, str):
-            if parcellation.lower() in _PARCS:
+            if parcellation in parcellation_lib:
                 lgr.info(f"Using integrated parcellation {parcellation}.")
                 parc_integrated = parcellation
             else:
@@ -129,7 +129,7 @@ def simple_colocalization(y,
                           n_perm=10000,
                           seed=None,
                           #x_load_nulls=True,
-                          n_proc=-1,
+                          n_proc=1,
                           verbose=True,
                           nispace_object=None, 
                           fetch_x_kwargs={},
@@ -286,10 +286,9 @@ def simple_colocalization(y,
     p_fdr_values = {method: nsp.get_p_values(method, permuted, mc_method="fdrbh") 
                     for method in colocalization_method}
     if len(colocalization_method)==1:
-        colocs, p_values, p_fdr_values = (colocs[colocalization_method[0]], 
-                                          p_values[colocalization_method[0]], 
-                                          p_fdr_values[colocalization_method[0]])
-        
+        k = colocalization_method[0]
+        colocs, p_values, p_fdr_values = colocs[k], p_values[k], p_fdr_values[k]
+
     return colocs, p_values, p_fdr_values, nsp
     
         
@@ -308,7 +307,7 @@ def group_comparison(y, design,
                      plot=True,
                      n_perm=10000,
                      seed=None,
-                     n_proc=-1,
+                     n_proc=1,
                      verbose=True,
                      nispace_object=None, 
                      fetch_x_kwargs={},
@@ -519,7 +518,7 @@ def simple_xsea(y,
                 combat=False,
                 n_perm=10000,
                 seed=None,
-                n_proc=-1,
+                n_proc=1,
                 verbose=True,
                 nispace_object=None, 
                 fetch_x_kwargs={},

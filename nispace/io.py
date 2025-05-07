@@ -46,7 +46,7 @@ def parcellate_data(data,
         Hemispheres to consider for parcellation, e.g., ["L", "R"].
     resampling_target : {'data', 'parcellation'}
         Specifies which image gives the final shape/size.
-    data : list, pd.DataFrame, pd.Series, or np.ndarray
+    data : list, dict, pd.DataFrame, pd.Series, or np.ndarray
         The imaging data to be parcellated.
     data_labels : list
         Labels for the input data.
@@ -87,10 +87,15 @@ def parcellate_data(data,
         data = str(data)
     if isinstance(data, (str, tuple, nib.Nifti1Image, nib.GiftiImage)):
         data = [data]
-    
+        
     ## case list
-    if isinstance(data, list):
-        lgr.info("Input type: list, assuming imaging data.")
+    if isinstance(data, (list, dict)):
+        if isinstance(data, dict):
+            lgr.info("Input type: dict, assuming (img_name, img) pairs for imaging data.")
+            data_labels = list(data.keys()) if data_labels is None else data_labels
+            data = list(data.values())
+        else:
+            lgr.info("Input type: list, assuming imaging data.")
 
         # load parcellation
         if parcellation is None:
@@ -227,6 +232,8 @@ def parcellate_data(data,
                         for f in data]
             except:
                 data_labels = list(range(len(data)))
+        if isinstance(data_labels, str):
+            data_labels = [data_labels]
         df_parc = pd.DataFrame(
             data=data_parc, 
             index=data_labels,
@@ -394,7 +401,7 @@ def load_l2rmap(l2rmap, header=0, index=0):
 
 def load_distmat(distmat):
     # catch None content
-    if distmat is None or (isinstance(distmat, tuple) and distmat == (None, None)):
+    if distmat is None or (isinstance(distmat, tuple) and all([d is None for d in distmat])):
         return distmat
     # to tuple
     if isinstance(distmat, (str, Path, np.ndarray, pd.DataFrame)):

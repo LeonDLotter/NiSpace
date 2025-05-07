@@ -247,7 +247,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
             labels_to_keep = [l for l in labels_all if str_to_keep in l]
             # get the indices we want to remove
             idc_rm = [int(l.split("_")[0]) for l in labels_all if l not in labels_to_keep]
-            lgr.info(f"Removing {len(idc_rm)} {['cortical', 'subcortical'][not cortex]} parcels and "
+            lgr.info(f"Removing {len(idc_rm)} {['cortical', 'subcortical'][cortex]} parcels and "
                      "returning Nifti1 object instead of path!")
             # drop indices from parcellation
             parc = load_img(parcellation_file)
@@ -535,7 +535,7 @@ def _load_parcellated_data(dataset: str,
     if not cortex or not subcortex:
         str_to_keep = "_CX_" if cortex else "_SC_"
         bool_keep = np.array([True if str_to_keep in c else False for c in data.columns])
-        lgr.info(f"Removing {bool_keep.sum()} {['cortical', 'subcortical'][not cortex]} parcels.")
+        lgr.info(f"Keeping {bool_keep.sum()} {['cortical', 'subcortical'][not cortex]} parcels.")
         data = data.loc[:, bool_keep]
         
     # Standardize

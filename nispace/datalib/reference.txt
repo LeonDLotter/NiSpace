@@ -5,7 +5,7 @@ the maps are downloaded directly from the source and cached locally. If, as is h
 a defined space ("MNI152NLin2009cAsym" or "MNI152NLin6Asym"), they are downloaded from the NiSpace OSF project (find them in 
 `~HOME/nispace-data/reference/pet/map`). The NiSpace-hosted maps were directly registered to 2mm MNI152NLin6Asym space, 
 and then transformed to 2mm MNI152NLin2009cAsym with a pre-estimated MNI-to-MNI transformation using SynthMorph v4 
-(https://martinos.org/malte/synthmorph/). The resulting maps were masked with a liberal gray matter mask and scaled from 1e-6 to 1.
+(https://martinos.org/malte/synthmorph/). The resulting maps were masked with a whole-brain mask and scaled from 1e-6 to 1.
 
 The accompanying metadata table contains detailed information about tracers, source samples, original publications and data 
 sources, as well as the publication licenses. Every map should be cited when used. The responsibility for this lies with the user! 

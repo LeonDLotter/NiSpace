@@ -325,7 +325,14 @@ def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"],
         elif surf_euclidean & ("fsa" not in parc_space):
             lgr.warning("Distance matrix generation currently not implemented for surface " 
                         "spaces other than fsaverage. Will use random splits!")
-            
+        
+        # TODO: implement fsLR distance matrix
+        elif "fsLR" in parc_space.lower():
+            lgr.critical_raise(
+                "Distance matrix generation currently not implemented for fsLR space. "
+                "Use 'fsaverage' instead!",
+                ValueError
+            )
         else:
             lgr.info(f"Estimating geodesic distance matrix between surface parcels.")
             def surf_dist(i_hemi, hemi):

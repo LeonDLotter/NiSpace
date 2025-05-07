@@ -2,7 +2,7 @@ import copy
 import gzip
 import os
 import pickle
-from typing import List, Union, Sequence, Literal
+from typing import List, Union, Sequence, Literal, Dict
 from pathlib import Path
 
 import numpy as np
@@ -50,11 +50,14 @@ class NiSpace:
 
     def __init__(self, 
                  x: Union[np.ndarray, pd.DataFrame, pd.Series, 
-                          List[Union[str, Path, nib.Nifti1Image, nib.GiftiImage]]], 
+                          List[Union[str, Path, nib.Nifti1Image, nib.GiftiImage]],
+                          Dict[str, Union[str, Path, nib.Nifti1Image, nib.GiftiImage]]], 
                  y: Union[np.ndarray, pd.DataFrame, pd.Series, 
-                          List[Union[str, Path, nib.Nifti1Image, nib.GiftiImage]]] = None, 
+                          List[Union[str, Path, nib.Nifti1Image, nib.GiftiImage]],
+                          Dict[str, Union[str, Path, nib.Nifti1Image, nib.GiftiImage]]] = None, 
                  z: Union[Literal["gm"], np.ndarray, pd.DataFrame, pd.Series, 
-                          List[Union[str, Path, nib.Nifti1Image, nib.GiftiImage]]] = None, 
+                          List[Union[str, Path, nib.Nifti1Image, nib.GiftiImage]],
+                          Dict[str, Union[str, Path, nib.Nifti1Image, nib.GiftiImage]]] = None, 
                  x_labels: Sequence[str] = None, 
                  y_labels: Sequence[str] = None, 
                  z_labels: Sequence[str] = None, 
@@ -63,7 +66,7 @@ class NiSpace:
                  drop_nan: bool = False,    
                  parcellation: Union[str, Path, nib.Nifti1Image, nib.GiftiImage] = None, 
                  parcellation_labels: Sequence[str] = None, 
-                 parcellation_space: Literal["mni152", "fsaverage", "fslr"] = "mni152", 
+                 parcellation_space: Literal["mni152", "fsaverage", "fslr"] = "MNI152NLin2009cAsym", 
                  parcellation_hemi: Union[Literal["R", "L"], Sequence[Literal["L", "R"]]] = ["L", "R"], 
                  parcellation_symmetric: bool = False,
                  parcellation_l2rmap: pd.DataFrame = None,
@@ -84,12 +87,12 @@ class NiSpace:
         ----------
         x : array-like of shape(n_reference, n_parcels) or shape(n_parcels) or len(n_reference) list-like of image data
             The reference maps (e.g., pet or mRNA data). Can be a numpy array, pandas DataFrame, 
-            pandas Series, or a list containing (paths to) image objects.
+            pandas Series, a list or a dictionary containing (paths to) image objects. If a 
+            dictionary, the keys are the names of the maps, but will be overridden by x_labels.
         y : array-like of shape(n_target, n_parcels) or shape(n_parcels) or len(n_target) list-like of image data, optional
-            The target data (i.e., usually your maps of interest). Can be a numpy array, pandas 
-            DataFrame, pandas Series, or a list containing (paths to) image objects. Default is 
-            None. If None, NiSpace will create a copy of the reference maps to evaluate reference 
-            map-to-map intercorrelations.
+            The target data (i.e., usually your maps of interest). Data types can be the same as 
+            for x. Default is None. If None, NiSpace will create a copy of the reference maps to 
+            evaluate reference map-to-map intercorrelations.
         z : array-like of shape(1, n_parcels) or (n_parcels) or (n_target, n_parcels) or len(n_target) list-like of image data, optional
             Maps to regress from reference/target maps across parcels. Can be "gm", a numpy array, 
             pandas DataFrame, pandas Series, or a list containing (paths to) image objects. 
@@ -187,6 +190,8 @@ class NiSpace:
         self._parc_dist_mat = {
             "null_maps": parcellation_dist_mat
         }
+        if not isinstance(parcellation_dist_mat, tuple):
+            self._parc_dist_mat["cv"] = parcellation_dist_mat
         self._resampl_target = resampling_target
         self._n_proc = n_proc
         self._drop_nan = drop_nan
@@ -246,7 +251,8 @@ class NiSpace:
             if self._parc.lower() in [s.lower() for s in parcellation_lib.keys()]:
                 try:
                     parc, labels, space, density, symmetric, l2rmap, dist_mat = fetch_parcellation(
-                        parcellation=self._parc,                 
+                        parcellation=self._parc,
+                        space=self._parc_info["space"],
                         return_space=True,
                         return_resolution=True,
                         return_symmetric=True,
@@ -254,6 +260,8 @@ class NiSpace:
                         return_dist_mat=True,
                         return_loaded=True
                     )
+                    if all([d is None for d in dist_mat]):
+                        dist_mat = None
                     self._parc = parc
                     self._parc_info["labels"] = labels
                     self._parc_info["space"] = space
@@ -262,6 +270,8 @@ class NiSpace:
                     #self._parc_info["density"] = density
                     self._parc_info["hemi"] = ("L", "R") if space=="fsaverage" else None
                     self._parc_dist_mat["null_maps"] = dist_mat
+                    if not isinstance(dist_mat, tuple):
+                        self._parc_dist_mat["cv"] = dist_mat
                     self._parc_info["idc_lh"] = [i for i, l in enumerate(labels) if "_LH_" in l]
                     self._parc_info["idc_rh"] = [i for i, l in enumerate(labels) if "_RH_" in l]
                     self._parc_info["idc_sc"] = [i for i, l in enumerate(labels) if "_SC_" in l]
@@ -878,6 +888,7 @@ class NiSpace:
                    Z_regression=True, 
                    store=True, n_proc=None, seed=None, verbose=None,
                    dist_mat_kwargs={},
+                   force_dict=False,
                    **kwargs):
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         
@@ -1096,7 +1107,10 @@ class NiSpace:
             )
             
         # return dict of dfs
-        return _colocs
+        if force_dict or len(_colocs) > 1:
+            return _colocs
+        else:
+            return _colocs[list(_colocs.keys())[0]]
    
    
     # PERMUTE ======================================================================================
@@ -1106,7 +1120,7 @@ class NiSpace:
                 maps_which="X", maps_nulls=None, maps_method="moran", dist_mat=None,
                 sets_X_background=None,
                 p_tails=None, p_from_average_y_coloc="auto",
-                n_proc=None, seed=None, store=True, verbose=None,
+                n_proc=None, seed=None, store=True, verbose=None, force_dict=False,
                 **kwargs):
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.permute() - Estimate exact non-parametric p values. ***")
@@ -1601,9 +1615,17 @@ class NiSpace:
                 xsea=xsea,
                 perm=perm
             )
-            return p_data 
+            # return dict of dfs
+            if force_dict or len(p_data) > 1:
+                return p_data
+            else:
+                return p_data[list(p_data.keys())[0]]
         else:
-            return p_data, p_data_norm, _colocs_null
+            if force_dict or len(p_data) > 1:
+                return p_data, p_data_norm, _colocs_null
+            else:
+                k = list(p_data.keys())[0]
+                return p_data[k], p_data_norm[k], _colocs_null[k]
     
     
     # CORRECT ======================================================================================
@@ -2009,8 +2031,11 @@ class NiSpace:
                 norm=norm,
                 mc=mc_method,
             )
-            if p_str not in self._p_colocs.keys() and "coloc-mlr_stat-individual" not in p_str:
-                available = "\n".join(list(self._p_colocs.keys()))
+            if p_str not in self._p_colocs.keys():
+                if "coloc-mlr_stat-individual" in p_str:
+                    continue
+                else:
+                    available = "\n".join(list(self._p_colocs.keys()))
                 lgr.critical_raise(f"Colocalization p values for '{p_str}' not found. "
                                    f"Available: {available}",
                                    KeyError)
