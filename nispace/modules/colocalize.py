@@ -3,7 +3,7 @@ import pandas as pd
 
 from .. import lgr
 from ..utils.utils import nan_detector
-from ..stats.coloc import (corr, partialcorr, r2, mlr, dominance, pls, pcr,lasso, ridge, elasticnet)
+from ..stats.coloc import (corr, partialcorr, mutualinfo, r2, mlr, dominance, pls, pcr,lasso, ridge, elasticnet)
 from ..stats.misc import residuals_nan, rho_to_z
 from ..modules.constants import _COLOC_METHODS, _COLOC_METHODS_DROPOPT, _COLOC_METHODS_PERM
 
@@ -90,6 +90,26 @@ def _get_colocalize_fun(method, regr_z=True,
                     _colocs = rho_to_z(_colocs)
                     
                 return {"rho": _colocs}
+            
+    ## case mi
+    elif method == "mi":
+        
+        def _y_colocalize(X, y, z=None):  
+            if regr_z and z is not None:
+                y = residuals_nan(z, y)
+            parcel_mask_y = ~np.isnan(y)
+            # iterate x (atlases/predictors)
+            _colocs = np.zeros(X.shape[0], dtype=dtype)
+            for i_x in range(X.shape[0]):
+                x = X[i_x, :]
+                parcel_mask = parcel_mask_y & ~np.isnan(x)
+                _colocs[i_x] = mutualinfo(
+                    x=x[parcel_mask], # atlas
+                    y=y[parcel_mask], # subject
+                    **kwargs
+                ) 
+                
+            return {"mi": _colocs}
             
     ## case slr
     elif method=="slr":
@@ -199,7 +219,7 @@ def _get_colocalize_fun(method, regr_z=True,
     
     ## case regularized
     elif method in ["lasso", "ridge", "elasticnet"]:       
-        # NOTE: will exclude nan's list-wise (<-> case-wise as all other methods)
+        # NOTE: will exclude nan's list-wise (!= case-wise as all other methods)
         
         if method=="lasso":
             _pred_fun = lasso
@@ -221,9 +241,7 @@ def _get_colocalize_fun(method, regr_z=True,
                 **kwargs
             )
             
-            return _colocs
-        
-    
+            return _colocs              
         
     ## case not defined
     else:

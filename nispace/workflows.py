@@ -300,7 +300,7 @@ def group_comparison(y, design,
                      parcellation=_PARC_DEFAULT,
                      parcellation_labels=None,
                      colocalization_method="spearman",
-                     group_comparison=None,
+                     comparison_method=None,
                      paired=False,
                      plot_design=True,
                      combat=False,
@@ -351,7 +351,7 @@ def group_comparison(y, design,
             lgr.info("1d array provided for design. Assuming this to be dummy-coded groups!")
             design = pd.DataFrame(
                 {"groups": np.array(design)}, 
-                index=y.index
+                index=nsp._y_lab
             )
     # 2darray
     elif isinstance(design, np.ndarray) and design.ndim==2:
@@ -361,7 +361,7 @@ def group_comparison(y, design,
             design = pd.DataFrame(
                 design, 
                 columns=["groups", "subjects"] + [f"V{i}" for i in range(design.shape[1] - 2)],
-                index=y.index
+                index=nsp._y_lab
             )
         else:
             lgr.info("2d array provided for design. Assuming first column to be group labels, "
@@ -369,7 +369,7 @@ def group_comparison(y, design,
             design = pd.DataFrame(
                 design, 
                 columns=["groups"] + [f"V{i}" for i in range(design.shape[1] - 1)],
-                index=y.index
+                index=nsp._y_lab
             )
     # dataframe
     elif isinstance(design, pd.DataFrame):
@@ -389,9 +389,9 @@ def group_comparison(y, design,
                            TypeError)
     # check dimensions
     lgr.info(f"Design matrix of shape {design.shape}. Assuming {design.shape[0]} subjects/maps.")
-    if design.shape[0] != y.shape[0]:
+    if design.shape[0] != len(y):
         lgr.critical_raise(f"The number of rows in design matrix {design.shape[0]} must equal "
-                           f"the number of rows in y data {y.shape[0]}!",
+                           f"the length of the y data {len(y)}!",
                            ValueError)
     # plot
     if plot_design:
@@ -426,12 +426,12 @@ def group_comparison(y, design,
 
     ## TRANSFORM
     if not status["transform_y"]:
-        if group_comparison is None and not paired:
-            group_comparison = "hedges(a,b)"
-        elif group_comparison is None and paired:
-            group_comparison = "pairedcohen(a,b)"
+        if comparison_method is None and not paired:
+            comparison_method = "hedges(a,b)"
+        elif comparison_method is None and paired:
+            comparison_method = "pairedcohen(a,b)"
         transform_y_kwargs = dict(
-            transform=group_comparison,
+            transform=comparison_method,
             groups=design["groups"],
             subjects=design["subjects"] if paired else None,
         ) | transform_y_kwargs
@@ -443,7 +443,7 @@ def group_comparison(y, design,
         for method in colocalization_method:
             colocalize_kwargs_curr = dict(
                 method=method,
-                Y_transform=group_comparison,
+                Y_transform=comparison_method,
                 Z_regression=True,
                 verbose=verbose,
             ) | colocalize_kwargs
@@ -454,15 +454,15 @@ def group_comparison(y, design,
     if not status["permute"]:
         for method in colocalization_method:
             permute_kwargs_curr = dict(
-                    what="groups",
-                    method=method,
-                    Y_transform=group_comparison,
-                    groups_paired=paired, 
-                    groups_strategy="proportional",
-                    n_perm=n_perm,
-                    seed=seed,
-                    verbose=verbose,
-                ) | permute_kwargs
+                what="groups",
+                method=method,
+                Y_transform=comparison_method,
+                groups_paired=paired, 
+                groups_strategy="proportional",
+                n_perm=n_perm,
+                seed=seed,
+                verbose=verbose,
+            ) | permute_kwargs
             nsp.permute(**permute_kwargs_curr)
         permute_what = "groups"
         status["permute"] = True  
@@ -481,17 +481,17 @@ def group_comparison(y, design,
             plot_kwargs_curr = dict(
                 method=method,
                 permute_what=permute_what,
-                Y_transform=group_comparison,
+                Y_transform=comparison_method,
                 verbose=verbose,
             ) | plot_kwargs
             nsp.plot(**plot_kwargs_curr)
         
     ## RETURN
-    colocs = {method: nsp.get_colocalizations(method, Y_transform=group_comparison) 
+    colocs = {method: nsp.get_colocalizations(method, Y_transform=comparison_method) 
               for method in colocalization_method}
-    p_values = {method: nsp.get_p_values(method, permute_what, Y_transform=group_comparison) 
+    p_values = {method: nsp.get_p_values(method, permute_what, Y_transform=comparison_method) 
                 for method in colocalization_method}
-    p_fdr_values = {method: nsp.get_p_values(method, permute_what, Y_transform=group_comparison, 
+    p_fdr_values = {method: nsp.get_p_values(method, permute_what, Y_transform=comparison_method, 
                                              mc_method="fdrbh") 
                     for method in colocalization_method}
     if len(colocalization_method)==1:

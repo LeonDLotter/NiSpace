@@ -4,6 +4,7 @@ from numba import njit
 from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.decomposition import PCA
+from sklearn.feature_selection import mutual_info_regression
 from tqdm.auto import tqdm
 
 from .. import lgr
@@ -63,6 +64,22 @@ def partialcorr(x, y, z, rank=False):
     rp = -corr_inv[0,1] / (np.sqrt(corr_inv[0,0] * corr_inv[1,1]))
     
     return rp
+
+
+def mutualinfo(x, y, n_neighbors=3):
+    """Compute mutual information between x and y using sklearn.
+
+    Args:
+        x (numpy.ndarray): shape (n_values, n_predictors)
+        y (numpy.ndarray): shape (n_values, 1) or (n_values,)
+        n_neighbors (int, optional): Number of neighbors for MI estimation. Defaults to 3.
+
+    Returns:
+        float: mutual information between x and y
+    """
+    if x.ndim == 1:
+        x = x[:, np.newaxis]
+    return mutual_info_regression(x, y, discrete_features=False, n_neighbors=n_neighbors)[0]
 
     
 @njit(cache=True, nogil=True)
