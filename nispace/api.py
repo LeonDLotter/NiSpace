@@ -80,7 +80,7 @@ class NiSpace:
                  dtype: Union[type, str] = np.float32,
                  **kwargs):
         """
-        Initialize the NiSpace model. 
+        Initialize the NiSpace object. 
         On initialization, the parameters are only stored. Processing is done with NiSpace.fit().
         
         Parameters

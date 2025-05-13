@@ -9,6 +9,7 @@ from neuromaps.nulls.nulls import batch_surrogates
 from neuromaps.nulls.nulls import _get_distmat
 from neuromaps.datasets import fetch_fsaverage
 from scipy.spatial.distance import cdist
+from scipy.stats import zscore
 from sklearn.preprocessing import minmax_scale
 from tqdm.auto import tqdm
 from numba import njit
@@ -25,7 +26,9 @@ except ImportError:
     _BRAINSMASH_AVAILABLE = False
 
 from . import lgr
-from .utils.utils import set_log, mirror_nifti, mirror_gifti, vect_to_vol_arr, vol_to_vect_arr
+from .stats.coloc import corr
+from .utils.utils import (set_log, mirror_nifti, mirror_gifti, vect_to_vol_arr, vol_to_vect_arr,
+                          _corr_vector)
 
 
 def _dist_mat_from_coords(coords, dtype=np.float32):
@@ -79,49 +82,99 @@ def _symmetrize_nans(data_1d, idc):
     # return
     return data_1d
 
+def correlate_hemis_parc(data, parc_idc_lh=None, parc_idc_rh=None, l2rmap=None, rank=False):
+    data = np.atleast_2d(np.array(data))
+    parc_idc_lh = np.array(parc_idc_lh)
+    parc_idc_rh = np.array(parc_idc_rh)
+    n = data.shape[1]
+    n_hemi = n // 2
+    if n / 2 != n_hemi:
+        raise ValueError("Data must have an even number of parcels")
+    if parc_idc_lh is None:
+        parc_idc_lh = np.arange(n_hemi)
+    if parc_idc_rh is None:
+        parc_idc_rh = np.arange(n_hemi, n)
+    data_lh = data[:, parc_idc_lh]
+    data_rh = data[:, parc_idc_rh]
+    if l2rmap is not None:
+        l2rmap = np.nan_to_num(np.array(l2rmap)).astype(data.dtype)
+        for i in range(data.shape[0]):
+            data_lh[i, :] = _apply_l2rmap(data[i, :], l2rmap, parc_idc_lh, parc_idc_rh)[parc_idc_rh]
+    r = []
+    for i in range(data.shape[0]):
+        lh, rh = data_lh[i,:], data_rh[i,:]
+        notnan = ~(np.isnan(lh) | np.isnan(rh))
+        r.append(corr(lh[notnan], rh[notnan], rank=rank))
+    return np.array(r)
+
+# @njit(cache=True)
+# def _apply_l2rmap(data_1d, l2rmap, parc_idc_lh, parc_idc_rh):
+#     data_lh_1d = data_1d[parc_idc_lh]
+#     data_mirrored_1d = np.full_like(data_1d, np.nan)
+#     data_mirrored_1d[parc_idc_lh] = data_lh_1d
+#     for i_parcel, idx_parcel in enumerate(parc_idc_rh):
+#         data_mirrored_1d[idx_parcel] = np.nansum( data_lh_1d * l2rmap[:, i_parcel] )
+#     return data_mirrored_1d
+
 @njit(cache=True)
 def _apply_l2rmap(data_1d, l2rmap, parc_idc_lh, parc_idc_rh):
+    """Note: l2rmap must be without nans, but replacing them with 0s should not be a problem"""
+    data_mirrored_1d = data_1d.copy()
     data_lh_1d = data_1d[parc_idc_lh]
-    data_mirrored_1d = np.full_like(data_1d, np.nan)
-    data_mirrored_1d[parc_idc_lh] = data_lh_1d
-    for i_parcel, idx_parcel in enumerate(parc_idc_rh):
-        data_mirrored_1d[idx_parcel] = np.nansum( data_lh_1d * l2rmap[:, i_parcel] )
+    lh_notnan = ~np.isnan(data_lh_1d)
+    data_mirrored_1d[parc_idc_rh] = np.dot(data_lh_1d[lh_notnan], l2rmap[lh_notnan, :])
     return data_mirrored_1d
 
 def _mirror_parc_maps(data, parc_idc_lh, parc_idc_rh, 
-                      l2rmap=None,
+                      l2rmap=None, interhemi_correlation=1, seed=None,
                       parc=None, project_to_volume=False, resample_vol=2, n_proc=1):
     
     data = np.array(data)
     if data.ndim == 1:
         data = data[None, :]
     data_lh = data[:, parc_idc_lh]
+    data_rh = data[:, parc_idc_rh]
     data_mirrored = np.full_like(data, np.nan)
     data_mirrored[:, parc_idc_lh] = data_lh
     
-    # simple copy of right to left indices
+    # simple copy of left to right indices
     if not project_to_volume and l2rmap is None:
         data_mirrored[:, parc_idc_rh] = data_lh
         
+        # introduce interhemispheric correlation
+        if interhemi_correlation != 1:
+            # apply correlated vector function
+            for i in range(data.shape[0]):
+                data_mirrored[i, parc_idc_rh] = _corr_vector(
+                    data_rh[i, :], interhemi_correlation, seed)
+            
+            
     # use left-to-right mapping
     elif not project_to_volume and l2rmap is not None:
         
-        l2rmap = np.array(l2rmap).astype(data.dtype)
+        l2rmap = np.nan_to_num(np.array(l2rmap)).astype(data.dtype)
         parc_idc_lh = np.array(parc_idc_lh)
         parc_idc_rh = np.array(parc_idc_rh)
-        data_mirrored = np.stack(
-            Parallel(n_jobs=n_proc)(
-                delayed(_apply_l2rmap)(data[i, :], l2rmap, parc_idc_lh, parc_idc_rh)
-                for i in range(data.shape[0])
-            ),
-            axis=0
-        )
+        
+        if interhemi_correlation == 1:
+            mirror_fun = lambda x, seed=None: _apply_l2rmap(x, l2rmap, parc_idc_lh, parc_idc_rh)
+        else:
+            def mirror_fun(data_1d, seed=None):
+                data_1d = _apply_l2rmap(data_1d, l2rmap, parc_idc_lh, parc_idc_rh)
+                data_1d[parc_idc_rh] = _corr_vector(
+                    data_1d[parc_idc_rh], interhemi_correlation, seed)
+                return data_1d
+            
+        for i in range(data.shape[0]):
+            data_mirrored[i, :] = mirror_fun(data[i, :], seed=i**2+i if seed is not None else None) 
         
     # else: complicated approach for cases in which the parcellation is not bilaterally symmetric
     # 1. take left-hemisphere parcels and mirror them across the x-axis
     # 2. project the right hemisphere data into volume space using the original parcellation
     # 3. re-parcellate the right-hemisphere data using the original parcellation
     elif project_to_volume:
+        # TODO: test and debug
+        raise NotImplementedError("Projecting to volume not at all tested!")
         if parc is None:
             raise ValueError("'parc' must be provided if 'project_to_volume' is True!")
         
@@ -447,7 +500,8 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
                        parc_space=None, parc_hemi=None, parc_symmetric=False,
                        n_nulls=1000, parc_resample=2, centroids=False, 
                        parc_idc_lh=None, parc_idc_rh=None, parc_idc_sc=None, 
-                       lr_mirror_dist_mat=False, lr_mirror_null_maps=False, l2rmap=None,
+                       lr_mirror_dist_mat=False, lr_mirror_null_maps=False, l2rmap=None, 
+                       match_interhemi_correlation=True, report_interhemi_correlation=False,
                        cx_sc_minmax_scale=False,
                        dtype=float,
                        n_proc=1, seed=None, verbose=True,
@@ -772,12 +826,43 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
             lgr.warning("Left-to-right mirroring of null maps requested but left/right hemisphere "
                         "parcel indices have different lengths! Skipping mirroring.")
         else:
-            # run
             lgr.info("Left-to-right mirroring null maps "
                      f"({'simple mirroring' if parc_symmetric else 'using left-to-right mapping'}).")
-            for i, (l, n) in enumerate(tqdm(nulls.items(), desc="Mirroring null maps", disable=not verbose)):
-                nulls[l] = _mirror_parc_maps(n, parc_idc_lh, parc_idc_rh, l2rmap=None if parc_symmetric else l2rmap)
-                
+            # get interhemispheric correlation if necessary
+            if match_interhemi_correlation:
+                lgr_msg = "Matching interhemispheric correlation. "
+            if match_interhemi_correlation or report_interhemi_correlation:
+                interhemi_corr_obs = correlate_hemis_parc(data, parc_idc_lh, parc_idc_rh, l2rmap)
+                lgr_msg += f"Observed correlation: {interhemi_corr_obs.mean():.2f}"
+                if len(nulls) > 1:
+                    lgr_msg += f" (mean), {interhemi_corr_obs.min():.2f} - {interhemi_corr_obs.max():.2f} (range)"
+                lgr.info(lgr_msg)
+            else:
+                interhemi_corr_obs = np.ones(len(nulls))
+            
+            # run for each input map / set of null maps
+            def par_fun(n, r, seed):
+                return _mirror_parc_maps(
+                    n, parc_idc_lh, parc_idc_rh, 
+                    l2rmap=None if parc_symmetric else l2rmap,
+                    interhemi_correlation=r, 
+                    seed=seed
+                )
+            nulls_list = Parallel(n_jobs=n_proc)(
+                delayed(par_fun)(n, interhemi_corr_obs[i], seed + i ** 2) 
+                for i, n in enumerate(tqdm(nulls.values(), desc="Mirroring null maps", disable=not verbose))
+            )
+            nulls = {l: n for l, n in zip(nulls.keys(), nulls_list)}
+            
+            # get interhemispheric correlation of null maps
+            if report_interhemi_correlation:
+                interhemi_corr_nulls = np.zeros(len(nulls))
+                for i, (l, n) in enumerate(nulls.items()):
+                    interhemi_corr_nulls[i] = correlate_hemis_parc(n, parc_idc_lh, parc_idc_rh, l2rmap).mean()
+                lgr.info(f"Interhemispheric correlation of null maps:\n" + \
+                         "\n".join([f"{l}: obs: {interhemi_corr_obs[i]:.3f} -> null (mean): {interhemi_corr_nulls[i]:.3f}" 
+                                    for i, l in enumerate(nulls)]))
+            
     # adjust scaling
     if cx_sc_minmax_scale:
         if parc_idc_sc is None:

@@ -524,3 +524,38 @@ def mirror_gifti(img, direction="left_to_right", match_r=False, mask=None):
     else:
         return (nib.GiftiImage(darrays=dat_mirr[0]), nib.GiftiImage(darrays=dat_mirr[1]))
     
+
+@njit
+def _corr_vector(data_1d, correlation=1, seed=None):  
+    
+    # standardize input
+    mu, sigma = np.nanmean(data_1d), np.nanstd(data_1d)
+    data_1d = (data_1d - mu) / sigma
+    
+    # generate random noise with same length as input
+    if seed is not None:
+        np.random.seed(seed)
+    epsilon = np.random.normal(0, 1, len(data_1d))
+    epsilon = (epsilon - np.mean(epsilon)) / np.std(epsilon)
+    
+    # correlated vector using the formula:
+    # output = ρ * input + √(1-ρ²) * ε
+    output = correlation * data_1d + np.sqrt(1 - correlation**2) * epsilon
+    
+    # rescale to original scale
+    output = output * sigma + mu
+    
+    return output
+
+def correlated_vector(data_1d, correlation=1, seed=None):    
+    # if correlation is 1, return the original vector
+    if correlation == 1:
+        return data_1d.copy()
+    
+    # to array
+    data_1d = np.array(data_1d).squeeze()
+
+    # get correlated vector
+    output = _corr_vector(data_1d, correlation=correlation, seed=seed)
+    
+    return output
