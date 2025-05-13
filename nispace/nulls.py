@@ -133,7 +133,6 @@ def _mirror_parc_maps(data, parc_idc_lh, parc_idc_rh,
     if data.ndim == 1:
         data = data[None, :]
     data_lh = data[:, parc_idc_lh]
-    data_rh = data[:, parc_idc_rh]
     data_mirrored = np.full_like(data, np.nan)
     data_mirrored[:, parc_idc_lh] = data_lh
     
@@ -143,10 +142,11 @@ def _mirror_parc_maps(data, parc_idc_lh, parc_idc_rh,
         
         # introduce interhemispheric correlation
         if interhemi_correlation != 1:
+            
             # apply correlated vector function
             for i in range(data.shape[0]):
                 data_mirrored[i, parc_idc_rh] = _corr_vector(
-                    data_rh[i, :], interhemi_correlation, seed)
+                    data_mirrored[i, parc_idc_rh], interhemi_correlation, seed)
             
             
     # use left-to-right mapping
