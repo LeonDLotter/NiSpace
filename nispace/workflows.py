@@ -70,7 +70,7 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
         # x
         if isinstance(x, str):
             x = x.lower()
-            if x in _DSETS:
+            if x in reference_lib:
                 lgr.info(f"Loading integrated {x} dataset as X data.")
                 if x_collection is None or not isinstance(x_collection, str):
                     x_collection = _COLLECT_DEFAULT[x]

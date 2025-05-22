@@ -587,7 +587,7 @@ def _print_references(dataset: str, meta: pd.DataFrame = None):
                     msg += f"    CAVE: {note}\n"
     
     # mRNA
-    elif dataset.lower() in ["mrna", "magicc"]:
+    elif dataset.lower() in ["mrna", "magicc", "neurosynth", "grf"]:
         msg = get_ref_info(dataset)
         if meta is not None:
             if len(meta) > 0:

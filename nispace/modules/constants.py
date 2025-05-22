@@ -4,6 +4,7 @@ _PARCS = ["schaefer100", "schaefer200", "schaefer300", "hcp", "desikankilliany",
 _PARCS_NICE = ["Schaefer100", "Schaefer200", "Schaefer300", "HCP", "DesikanKilliany", "Destrieux"]
 _PARCS_DEFAULT = "schaefer200"
 _PARC_DEFAULT = "Schaefer200"
+# TODO: remove lists, add default to datalib files
 
 _DSETS = ["pet", "mrna", "rsn", "magicc", "grf"]
 _DSETS_NICE = ["PET", "mRNA", "RSN", "MAGICC", "GRF"]
@@ -16,8 +17,9 @@ _COLLECT_DEFAULT = {
     "mrna": "CellTypesSilettiSuperclusters",
     "magicc": "CellTypesSilettiSuperclusters",
     "grf": "ByAlpha",
-    "brainmap": "AllDomainSets",
+    "neurosynth": "CognitiveFunctions",
 }
+# TODO: move this to the datalib files
 
 _COLOC_METHODS = {
     "pearson": ["rho"],

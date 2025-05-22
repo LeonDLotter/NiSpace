@@ -2087,5 +2087,51 @@
                 "remote": "reference/grf/collection-ByAlpha.collect"
             }
         }
+    },
+
+    "neurosynth": {
+
+        "metadata": {
+            "host": "github-nispace",
+            "remote": "reference/neurosynth/metadata.csv"
+        },
+
+        "tab": {
+            "DesikanKillianyAseg": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-DesikanKillianyAseg.csv.gz"
+            },
+            "DestrieuxAseg": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-DestrieuxAseg.csv.gz"
+            },
+            "Glasser": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Glasser.csv.gz"
+            },
+            "Schaefer100MelbourneS1": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Schaefer100MelbourneS1.csv.gz"
+            },
+            "Schaefer200MelbourneS2": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Schaefer200MelbourneS2.csv.gz"
+            },
+            "Schaefer400MelbourneS3": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Schaefer400MelbourneS3.csv.gz"
+            }
+        },
+
+        "collection": {
+            "All": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/collection-All.collect"
+            },
+            "CognitiveFunctions": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/collection-CognitiveFunctions.collect"
+            }
+        }
     }
 }

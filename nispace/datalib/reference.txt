@@ -45,3 +45,13 @@ of spatial smoothness. The parameter "alpha" controls the smoothness of the fiel
 of the resulting brain maps. The maps are mirrored across hemispheres exactly at MNI coordinate (0,0,0). There are 10,000
 maps for alpha == 0 and 1,000 maps each for alpha == {1,2,3}. The code used was adopted from Markello et al., 2021
 (https://doi.org/10.1016/j.neuroimage.2021.118052) and Burt et al., 2020 (https://doi.org/10.1016/j.neuroimage.2020.117038).
+
+
+# neurosynth
+The NiSpace "neurosynth" dataset is based on the Neurosynth database (https://neurosynth.org/). The dataset consists of all 
+terms in the Neurosynth database as preselected by the authors (i.e., the same available via their website). For each term,
+a "MKDAChi2" meta-analysis map was generated in MNI152NLin6Asym-2mm space using the nimare package (https://nimare.readthedocs.io/). 
+The resulting "z_desc-association" maps were parcellated and are available only as parcellation tables. We ask to cite:
+- Yarkoni et al., 2011 (https://doi.org/10.1038/nmeth.1635) for neurosynth
+- Salo et al., 2022 (https://doi.org/10.52294/001c.87681) for nimare
+- Wager et al., 2007 (https://doi.org/10.1093/scan/nsm015) for the MKDAChi2 algorithm
