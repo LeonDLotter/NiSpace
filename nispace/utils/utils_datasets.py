@@ -208,13 +208,14 @@ def _compress_nifti(file_path, save_path, dtype=np.float32):
 def get_file(local_path, host, remote, 
              compress_nifti=False,
              osf_config_file=None,
-             github_config_file=None):
+             github_config_file=None,
+             overwrite=False):
     
     local_path = Path(local_path)
     if local_path.is_dir():
         raise ValueError(f"'local_path' must be a file path, not a directory path; not '{local_path}'.")
     
-    if not local_path.exists():
+    if not local_path.exists() or overwrite:
         
         print(f"Downloading {local_path.resolve()}.")
         if not local_path.parent.exists():

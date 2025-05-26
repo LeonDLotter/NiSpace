@@ -64,6 +64,7 @@ def fetch_template(template: str = _SPACE_DEFAULT,
                    #parcellation: str = None,
                    hemi: Union[List[str], str] = ["L", "R"],
                    nispace_data_dir: Union[str, pathlib.Path] = None,
+                   overwrite: bool = False,
                    verbose: bool = True):
     """
     Fetch a brain template.
@@ -129,12 +130,12 @@ def fetch_template(template: str = _SPACE_DEFAULT,
     lgr.info(f"Loading {template} '{desc}' template in '{res}' resolution.")
     if "mni" in template.lower():
         tpl_path = map_dir / desc / f"tpl-{template}_desc-{desc}_res-{res}.nii.gz"
-        tpl_file = get_file(tpl_path, **template_lib[template][res][desc])
+        tpl_file = get_file(tpl_path, **template_lib[template][res][desc], overwrite=overwrite)
     else:
         tpl_file = ()
         for h in hemi:
             tpl_path = map_dir / desc / f"tpl-{template}_desc-{desc}_res-{res}_hemi-{h}.surf.gii"
-            tpl_file += get_file(tpl_path, **template_lib[template][res][desc][h]),
+            tpl_file += get_file(tpl_path, **template_lib[template][res][desc][h], overwrite=overwrite),
         if len(tpl_file) == 1: 
             tpl_file = tpl_file[0]
     
@@ -172,7 +173,13 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                        return_l2rmap: bool = False,
                        return_dist_mat: bool = False,
                        return_loaded: bool = False,
-                       nispace_data_dir: Union[str, pathlib.Path] = None):
+                       nispace_data_dir: Union[str, pathlib.Path] = None,
+                       overwrite: bool = False,
+                       verbose: bool = True):
+    """
+    Fetch a parcellation.
+    """
+    verbose = set_log(lgr, verbose)
     
     # Check if in main parcellation list
     if parcellation not in parcellation_lib:
@@ -214,24 +221,28 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
         # get files
         parcellation_file = get_file(
             base_dir / f"parc-{parc}_space-{space}.label.nii.gz", 
-            **parcellation_lib[parc][space]["map"]
+            **parcellation_lib[parc][space]["map"],
+            overwrite=overwrite
         )
         if return_labels or not cortex or not subcortex:
             label_file = get_file(
                 base_dir / f"parc-{parc}_space-{space}.label.txt",
-                **parcellation_lib[parc][space]["label"]
+                **parcellation_lib[parc][space]["label"],
+                overwrite=overwrite
             )
         if return_l2rmap and not symmetric:
             l2rmap_file = get_file(
                 base_dir / f"parc-{parc}_space-{space}.l2rmap.csv.gz",
-                **parcellation_lib[parc][space]["l2rmap"]
+                **parcellation_lib[parc][space]["l2rmap"],
+                overwrite=overwrite
             )
         elif return_l2rmap and symmetric:
             l2rmap_file = None
         if return_dist_mat:
             distmat_file = get_file(
                 base_dir / f"parc-{parc}_space-{space}.dist.csv.gz",
-                **parcellation_lib[parc][space]["distmat"]
+                **parcellation_lib[parc][space]["distmat"],
+                overwrite=overwrite
             )
     
         # cortex only:
@@ -284,12 +295,14 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
         for h in hemi:
             parcellation_file += get_file(
                 base_dir / f"parc-{parc}_space-{space}_hemi-{h}.label.gii.gz", 
-                **parcellation_lib[parc][space]["map"][h]
+                **parcellation_lib[parc][space]["map"][h],
+                overwrite=overwrite
             ),
             if return_labels:
                 label_file += get_file(
                     base_dir / f"parc-{parc}_space-{space}_hemi-{h}.label.txt",
-                    **parcellation_lib[parc][space]["label"][h]
+                    **parcellation_lib[parc][space]["label"][h],
+                    overwrite=overwrite
                 ),
             if return_dist_mat:
                 if "fslr" in space.lower():
@@ -298,12 +311,14 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                 else:
                     distmat_file += get_file(
                         base_dir / f"parc-{parc}_space-{space}_hemi-{h}.dist.csv.gz",
-                        **parcellation_lib[parc][space]["distmat"][h]
+                        **parcellation_lib[parc][space]["distmat"][h],
+                        overwrite=overwrite
                     ),
         if return_l2rmap and not symmetric:
             l2rmap_file = get_file(
                 base_dir / f"parc-{parc}_space-{space}.l2rmap.csv.gz",
-                **parcellation_lib[parc][space]["l2rmap"]
+                **parcellation_lib[parc][space]["l2rmap"],
+                overwrite=overwrite
             )
         elif return_l2rmap and symmetric:
             l2rmap_file = None
@@ -443,7 +458,8 @@ def _apply_collection_filter(dataset: str,
                              map_files: List[Union[str, pathlib.Path]], 
                              collection: str,
                              base_dir: pathlib.Path,
-                             set_size_range: Union[None, Tuple[int, int]] = None) -> List[pathlib.Path]:
+                             set_size_range: Union[None, Tuple[int, int]] = None,
+                             overwrite: bool = False) -> List[pathlib.Path]:
     
     # Check if path to custom file
     collection_path = pathlib.Path(collection)
@@ -451,7 +467,11 @@ def _apply_collection_filter(dataset: str,
         # If not exists, search integrated collections
         if collection in reference_lib[dataset]["collection"]:
             collection_path = base_dir / f"collection-{collection}.collect"
-            collection_file = get_file(collection_path, **reference_lib[dataset]["collection"][collection])
+            collection_file = get_file(
+                collection_path, 
+                **reference_lib[dataset]["collection"][collection],
+                overwrite=overwrite
+            )
         else:
             lgr.warning(f"Collection '{collection}' not found! Available: "
                         f"{keys2str(reference_lib[dataset]['collection'])}")
@@ -501,14 +521,18 @@ def _load_parcellated_data(dataset: str,
                            collection_df: pd.DataFrame,
                            cortex: bool,
                            subcortex: bool,
-                           standardize: bool) -> Union[pd.DataFrame, Tuple[pd.DataFrame, Dict]]:
+                           standardize: bool,
+                           overwrite: bool = False,
+                           verbose: bool = True) -> Union[pd.DataFrame, Tuple[pd.DataFrame, Dict]]:
+    verbose = set_log(lgr, verbose)
+    
     lgr.info(f"Loading parcellated data: {parc}")
     parcellation_file = tab_dir / f"dset-{dataset}_parc-{parc}.csv.gz"
     lgr.debug(f"Loading {parcellation_file}")
     
     # Load parcellated data
     data = pd.read_csv(
-        get_file(parcellation_file, **reference_lib[dataset]["tab"][parc]), 
+        get_file(parcellation_file, **reference_lib[dataset]["tab"][parc], overwrite=overwrite), 
         index_col=0
     )
     lgr.debug(f"Loaded parcellated data of shape {data.shape}")
@@ -622,13 +646,14 @@ def fetch_reference(dataset: str,
                     collection: str = None,
                     set_size_range: Union[None, Tuple[int, int]] = None,
                     parcellation: str = None,
-                    standardize_parcellated: bool = True,
+                    standardize_parcellated: bool = False,
                     return_metadata: bool = False,
                     print_references: bool = True,
-                    verbose: bool = True,
-                    nispace_data_dir: Union[str, pathlib.Path] = None,
                     osf_config_file: str = None,
-                    github_config_file: str = None):
+                    github_config_file: str = None,
+                    nispace_data_dir: Union[str, pathlib.Path] = None,
+                    overwrite: bool = False,
+                    verbose: bool = True):
     verbose = set_log(lgr, verbose)
 
     # Check dataset availability
@@ -665,7 +690,11 @@ def fetch_reference(dataset: str,
         
         # load maps from tabulated data (index col)
         maps_avail = pd.read_csv(
-            get_file(tab_dir / f"dset-{dataset}_parc-{parc}.csv.gz", **reference_lib[dataset]["tab"][parc]), 
+            get_file(
+                tab_dir / f"dset-{dataset}_parc-{parc}.csv.gz", 
+                **reference_lib[dataset]["tab"][parc],
+                overwrite=overwrite
+            ), 
             index_col=0
         ).index.to_list()
     
@@ -716,7 +745,7 @@ def fetch_reference(dataset: str,
         collection = None
     if collection:
         maps_avail, collection_df = _apply_collection_filter(dataset, maps_avail, collection, 
-                                                             base_dir, set_size_range)
+                                                             base_dir, set_size_range, overwrite)
     else:
         collection_df = None
 
@@ -730,7 +759,9 @@ def fetch_reference(dataset: str,
             collection_df=collection_df,
             cortex=cortex,
             subcortex=subcortex,
-            standardize=standardize_parcellated
+            standardize=standardize_parcellated,
+            overwrite=overwrite,
+            verbose=verbose
         )
         
     # Fetch paths to maps if no 'parcellation' is specified
@@ -743,7 +774,8 @@ def fetch_reference(dataset: str,
                     **reference_lib[dataset]["map"][m][space], 
                     compress_nifti=True,
                     osf_config_file=osf_config_file,
-                    github_config_file=github_config_file
+                    github_config_file=github_config_file,
+                    overwrite=overwrite
                 ) 
                 for m in maps_avail
             ]
@@ -754,13 +786,15 @@ def fetch_reference(dataset: str,
                      local_path=map_dir / m / f"{m}_space-{space}_hemi-L.surf.gii", 
                      **reference_lib[dataset]["map"][m][space]["L"], 
                      osf_config_file=osf_config_file,
-                     github_config_file=github_config_file
+                     github_config_file=github_config_file,
+                     overwrite=overwrite
                  ),
                  get_file(
                      local_path=map_dir / m / f"{m}_space-{space}_hemi-R.surf.gii", 
                      **reference_lib[dataset]["map"][m][space]["R"], 
                      osf_config_file=osf_config_file,
-                     github_config_file=github_config_file
+                     github_config_file=github_config_file,
+                     overwrite=overwrite
                  ))
                 for m in maps_avail
             ]
@@ -769,9 +803,9 @@ def fetch_reference(dataset: str,
     # for maps if "pet", or for sets if "mrna"
     if return_metadata or print_references:
         if dataset == "pet":
-            meta = fetch_metadata(dataset, maps_avail)
+            meta = fetch_metadata(dataset, maps_avail, overwrite=overwrite)
         elif dataset in ["mrna", "magicc"] and collection_df is not None:
-            meta = fetch_metadata(dataset, collection=collection)
+            meta = fetch_metadata(dataset, collection=collection, overwrite=overwrite)
         else: 
             meta = None
  
@@ -783,7 +817,10 @@ def fetch_reference(dataset: str,
     return data
 
 
-def fetch_metadata(dataset: str, maps: Union[str, list] = None, collection: str = None):
+def fetch_metadata(dataset: str, 
+                   maps: Union[str, list] = None, 
+                   collection: str = None,
+                   overwrite: bool = False):
     if isinstance(dataset, str):
         dataset = dataset.lower()
         if dataset not in reference_lib:
@@ -792,7 +829,13 @@ def fetch_metadata(dataset: str, maps: Union[str, list] = None, collection: str 
         return None
     
     base_dir = pathlib.Path.home() / "nispace-data" / "reference" / dataset
-    meta = pd.read_csv(get_file(base_dir / "metadata.csv", **reference_lib[dataset]["metadata"]))
+    meta = pd.read_csv(
+        get_file(
+            base_dir / "metadata.csv", 
+            **reference_lib[dataset]["metadata"],
+            overwrite=overwrite
+        )
+    )
     
     if dataset == "pet" and maps is not None:
         if isinstance(maps, str):
@@ -810,7 +853,13 @@ def fetch_metadata(dataset: str, maps: Union[str, list] = None, collection: str 
  
 def fetch_example(example: str,
                   return_associated_data: bool = True,
-                  nispace_data_dir: Union[str, pathlib.Path] = None):
+                  nispace_data_dir: Union[str, pathlib.Path] = None,
+                  overwrite: bool = False,
+                  verbose: bool = True):
+    """
+    Fetch an example dataset.
+    """
+    verbose = set_log(lgr, verbose)
     
     # Define the base directories
     if not nispace_data_dir:
@@ -828,7 +877,11 @@ def fetch_example(example: str,
     # load
     lgr.info(f"Loading example dataset: '{example}'. The data was parcellated with: '{parc_name}'.")
     example_data = pd.read_csv(
-        get_file(base_dir / f"example-{example}_parc-{parc_name}.csv.gz", **example_lib[example]["tab"]), 
+        get_file(
+            base_dir / f"example-{example}_parc-{parc_name}.csv.gz", 
+            **example_lib[example]["tab"],
+            overwrite=overwrite
+        ), 
         index_col=0
     )
 
@@ -836,7 +889,11 @@ def fetch_example(example: str,
     if return_associated_data and "info" in example_lib[example]:
         lgr.info("Returning parcellated and associated subject data.")
         example_info = pd.read_csv(
-            get_file(base_dir / f"example-{example}_info.csv", **example_lib[example]["info"]), 
+            get_file(
+                base_dir / f"example-{example}_info.csv", 
+                **example_lib[example]["info"],
+                overwrite=overwrite
+            ), 
             index_col=0
         )
         return example_data, example_info
