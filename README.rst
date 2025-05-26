@@ -6,14 +6,42 @@
   :target: https://zenodo.org/doi/10.5281/zenodo.12514622
   :alt: Zenodo record
 .. image:: https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey
-   :target: http://creativecommons.org/licenses/by-nc-sa/4.0/
-   :alt: License: CC BY-NC-SA 4.0
+  :target: http://creativecommons.org/licenses/by-nc-sa/4.0/
+  :alt: License: CC BY-NC-SA 4.0
+
 
 *Spatial (alteration) patterns observed in MRI images may often reflect function and dysfunction of underlying biological systems. This applies alike to function and structure, on the surface or in the volumetric space, and to typical as well as disordered brain-anatomical and functional patterns.*
 
 In recent years, several methods have been developed to compare spatial patterns between brain maps. In the simplest case, two brain maps are correlated with each other at the voxel- or parcel-level. The resulting correlation coefficient reflects the degree to which the two maps share a spatial pattern. We refer to this spatial correlation as "*colocalization*". The `NiSpace` toolbox aims to provide the most comprehensive, yet easy-to-use and flexible framework for colocalization estimation, significance testing, and visualization to date.
 
-``NiSpace`` is under development and its `documentation <https://nispace.readthedocs.io/>`_ currently is (very) incomplete. We welcome anyone who would like to give it a try! If you encounter bugs or have a question, feel free to open a GitHub issue or contact us via `email <mailto:leondlotter@gmail.com>`_! 
+``NiSpace`` is under development and its `documentation <https://nispace.readthedocs.io/>`_ currently is (very) incomplete. We welcome anyone who would like to give it a try -- your feedback is highly appreciated! 
+
+
+Installation
+------------
+
+You can install the development version of ``NiSpace`` in a Python 3.9+ environment via command line using pip:
+
+.. code-block:: bash
+
+   pip install git+https://github.com/LeonDLotter/NiSpace.git@dev
+
+For reproducibility, consider installing a specific commit:
+
+.. code-block:: bash
+
+   pip install git+https://github.com/LeonDLotter/NiSpace.git@{commit_hash}
+
+
+Support
+-------
+
+For questions about the toolbox, analysis choices, or if you need help with its application, we recommend to open a new topic on `NeuroStars <https://neurostars.org/>`_ using the tag `"nispace" <https://neurostars.org/tag/nispace>`_.
+If you encounter bugs, or would like to request a new feature, dataset, or parcellation, feel free to open a `GitHub issue <https://github.com/LeonDLotter/NiSpace/issues>`_.  
+
+
+Other available tools
+---------------------
 
 There are of course many other related tools available, of which a few are listed below:
 
@@ -80,22 +108,6 @@ There are of course many other related tools available, of which a few are liste
      - Python-API (GUI planned)
 
 
-Installation
-------------
-
-You can install the development version of ``NiSpace`` in a Python 3.9+ environment via command line using pip:
-
-.. code-block:: bash
-
-   pip install git+https://github.com/LeonDLotter/NiSpace.git@dev
-
-For reproducibility, consider installing a specific commit:
-
-.. code-block:: bash
-
-   pip install git+https://github.com/LeonDLotter/NiSpace.git@{commit_hash}
-
-
 Citation
 --------
 
@@ -111,8 +123,7 @@ See the documentation's `citation <https://nispace.readthedocs.io/en/latest/cita
 Contact
 -------
 
-Do you have questions, comments or suggestions, or would like to contribute to the toolbox? Feel free to open an issue on GitHub or `contact me <mailto:leondlotter@gmail.com>`_! 
-If you would like to have a new parcellation, reference dataset, or reference collection added to the toolbox, please open a GitHub issue using the "New Dataset" template.
+You can contact me via `email <mailto:leondlotter@gmail.com>`_. For usage questions, please consider opening a topic on NeuroStars (see `Support`_), so that others can benefit from our exchange.
 
 
 
