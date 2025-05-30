@@ -37,17 +37,16 @@ dependencies = [
     "scipy>=1.6.0",
     "statsmodels>=0.14.0",
     "scikit-learn>=1.5.0",
+    "neurocombat>=0.2.12",
+    "neuroHarmonize>=2.4.5",
     "matplotlib>=3.6.0",
     "seaborn>=0.13.0",
 ]
 
 [project.optional-dependencies]
 opt = [
-    "brainspace",
     "brainsmash >=0.10.0",
     "factor-analyzer",
-    "neuroCombat",
-    "neuroHarmonize",
 ]
 
 [project.urls]
