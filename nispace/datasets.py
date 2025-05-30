@@ -355,6 +355,76 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
     
     return out
 
+def fetch_collection(collection: Union[str, pathlib.Path, np.ndarray, pd.DataFrame, pd.Series, list],
+                     dataset: str = None,
+                     nispace_data_dir: Union[str, pathlib.Path] = None,
+                     overwrite: bool = False,
+                     verbose: bool = True):
+    """
+    Fetch a collection to subset a map dataset.
+    
+    Args:
+        dataset: str
+        collection: Union[str, pathlib.Path, np.ndarray, pd.DataFrame, pd.Series, list]
+        nispace_data_dir: Union[str, pathlib.Path]
+        verbose: bool
+    """
+    verbose = set_log(lgr, verbose)
+    
+    # If dataset is provided, assume to load integrated collection
+    # check if dataset is valid
+    if dataset is not None:
+        if dataset not in reference_lib:
+            lgr.critical_raise(f"Dataset '{dataset}' not found. Available: {keys2str(reference_lib)}",
+                               ValueError)
+        else:
+            # base dir
+            if not nispace_data_dir:
+                base_dir = pathlib.Path.home() / "nispace-data" / "reference" / dataset
+            else:
+                base_dir = pathlib.Path(nispace_data_dir) / "reference" / dataset
+            
+            # get integrated collection
+            if collection in reference_lib[dataset]["collection"]:
+                lgr.info(f"Loading integrated collection '{collection}' for dataset '{dataset}'.")
+                collection_path = base_dir / f"collection-{collection}.collect"
+                collection_file = get_file(
+                    collection_path, 
+                    **reference_lib[dataset]["collection"][collection],
+                    overwrite=overwrite
+                )
+            else:
+                lgr.critical_raise(f"Collection '{collection}' not found for dataset '{dataset}'. "
+                                   f"Available: {keys2str(reference_lib[dataset]['collection'])}",
+                                   ValueError)
+
+    # dataset is not provided, assume to load custom collection
+    else:
+        
+        # check if collection is a file
+        if isinstance(collection, (str, pathlib.Path)):
+            collection_file = pathlib.Path(collection)
+            if collection_file.exists():
+                lgr.info(f"Loading custom collection from file: {collection_file}")
+            else:
+                lgr.critical_raise(f"Assuming collection '{collection_file}' to be a file, but it does not exist! "
+                                   "Ensure that the file exists and try again. If you want to load an integrated collection, "
+                                   "use the 'dataset' argument.",
+                                   ValueError)
+        
+        # else, assume to load array-like object
+        else:
+            lgr.info(f"Loading custom collection of type {type(collection)}.")
+            collection_file = collection
+
+    # Load collection file; 1-column df (= maps) or 2-column df (= set and maps)
+    collection_df = _load_collection(collection_file)
+    
+    # return
+    return collection_df
+        
+    
+
 # REFERENCE DATA - PRIVATE =========================================================================
 
 def _filter_maps(maps_avail: List[str], 
@@ -393,7 +463,7 @@ def _filter_maps(maps_avail: List[str],
     return filtered_maps
 
 
-def _fetch_collection(collection_path):
+def _load_collection(collection_path):
     
     # if path, read file
     if isinstance(collection_path, (str, pathlib.Path)):
@@ -478,7 +548,7 @@ def _apply_collection_filter(dataset: str,
             return map_files, None
 
     # Load collection file; 1-column df (= maps) or 2-column df (= set and maps)
-    collection_df = _fetch_collection(collection_file)
+    collection_df = _load_collection(collection_file)
     lgr.debug(f"Collection df shape: {collection_df.shape}; "
               f"index names: {collection_df.index.names}; "
               f"column names: {collection_df.columns.names}")

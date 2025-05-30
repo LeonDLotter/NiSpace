@@ -237,6 +237,10 @@ def simple_colocalization(y,
         status["clean_y"] = True
     
     ## COLOCALIZE
+    # xsea must be same for colocalization and permutation
+    if colocalize_kwargs.get("xsea", False) or permute_kwargs.get("xsea", False):
+        colocalize_kwargs["xsea"] = True
+        permute_kwargs["xsea"] = True
     if not status["colocalize"]:
         for method in colocalization_method:
             colocalize_kwargs_curr = dict(
