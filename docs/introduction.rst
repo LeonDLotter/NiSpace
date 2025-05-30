@@ -16,4 +16,5 @@ For a nice introduction to spatial colocalization analyses and spatial colocaliz
    nb_introduction/nispace_intro.ipynb
    nb_introduction/workflows.ipynb
    nb_introduction/fetching_datasets.ipynb
+   nb_introduction/xsea.ipynb
 
