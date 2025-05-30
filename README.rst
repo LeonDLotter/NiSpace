@@ -32,6 +32,13 @@ For reproducibility, consider installing a specific commit:
 
    pip install git+https://github.com/LeonDLotter/NiSpace.git@{commit_hash}
 
+NiSpace by default generates null maps using the Moran randomization method. All other null models are optional dependencies.  
+Install optional dependencies directly with:
+
+.. code-block:: bash
+
+   pip install "git+https://github.com/LeonDLotter/NiSpace.git@dev#egg=nispace[opt]"
+
 
 Support
 -------

@@ -14,11 +14,12 @@ from sklearn.preprocessing import minmax_scale
 from tqdm.auto import tqdm
 from numba import njit
 
-try:
-    from brainspace.null_models.moran import MoranRandomization
-    _BRAINSPACE_AVAILABLE = True
-except ImportError:
-    _BRAINSPACE_AVAILABLE = False
+# import MoranRandomization function, copied from brainspace, as our default null model
+# brainspace was removed as an dependency because it installs vtk, which is a large 3d rendering
+# library that NiSpace does not use. 
+from .modules.brainspace_moran import MoranRandomization
+    
+# brainsmash is optional dependency. Moran
 try:
     from brainsmash.mapgen import Base
     _BRAINSMASH_AVAILABLE = True
@@ -516,10 +517,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
                            ValueError)
     null_fun = _NULL_METHODS[method]
     random_nulls = False
-    if null_fun.__name__ == "nulls_moran" and not _BRAINSPACE_AVAILABLE:
-        lgr.critical_raise("Null method 'moran' requires brainspace! Run 'pip install brainspace'!",
-                           ImportError)
-    elif null_fun.__name__ == "nulls_burt2020" and not _BRAINSMASH_AVAILABLE:
+    if null_fun.__name__ == "nulls_burt2020" and not _BRAINSMASH_AVAILABLE:
         lgr.critical_raise("Null method 'burt2020' requires brainsmash! Run 'pip install brainsmash'!",
                            ImportError)
     elif null_fun.__name__ == "nulls_random":
