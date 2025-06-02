@@ -80,6 +80,8 @@ def download_file(host: Literal["url", "github", "github-nispace", "github-nispa
     if host == "url":
         if not isinstance(remote, (str, Path)):
             raise ValueError("'remote' must be a string or pathlib.Path for url")
+        else:
+            remote = Path(remote)
     elif host == "github":
         if not isinstance(remote, (tuple, list)):
             raise ValueError("'remote' must be a tuple of (repo, branch, path) for github")
@@ -146,11 +148,11 @@ def download_file(host: Literal["url", "github", "github-nispace", "github-nispa
             
             # get url
             if host == "url":
-                url = str(remote)        
+                url = remote.as_posix()        
             elif host == "github":
-                url = f"https://raw.githubusercontent.com/{repo}/{branch}/{path}"
+                url = f"https://raw.githubusercontent.com/{repo}/{branch}/{remote.as_posix()}"
             elif host == "github-nispace":
-                url = f"https://raw.githubusercontent.com/{DATA_REPO}/{DATA_REPO_COMMIT}/{remote}"                
+                url = f"https://raw.githubusercontent.com/{DATA_REPO}/{DATA_REPO_COMMIT}/{remote.as_posix()}"                
             elif host == "osf":
                 url = f"https://files.osf.io/v1/resources/{osf_repo}/providers/osfstorage/{osf_id}"
         
@@ -160,7 +162,7 @@ def download_file(host: Literal["url", "github", "github-nispace", "github-nispa
         # github-nispace-private
         elif host == "github-nispace-private":
             print(f"Downloading private GitHub file.")
-            url = f"https://raw.githubusercontent.com/{DATA_REPO_PRIVATE}/{DATA_REPO_PRIVATE_COMMIT}/{remote}"
+            url = f"https://raw.githubusercontent.com/{DATA_REPO_PRIVATE}/{DATA_REPO_PRIVATE_COMMIT}/{remote.as_posix()}"
             headers = {"Authorization": f"token {github_token}"}
             if not Path(github_config_file).exists():
                 raise ValueError(f"Config file '{github_config_file}' does not exist.")
