@@ -29,7 +29,7 @@ def _get_colocalize_fun(method, regr_z=True,
                         xsea=False, xsea_method="mean",
                         r_to_z=True, r_equal_one="raise", adj_r2=True, mlr_individual=False, 
                         parcel_mask_regularized=None, parcel_tr_te_splits=None, parcel_train_pct=None, 
-                        n_components=2,
+                        n_components=1,
                         seed=None, verbose=False, dtype=np.float32, **kwargs):
    
     ## case (partial) pearson / spearman
