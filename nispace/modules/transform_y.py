@@ -146,7 +146,9 @@ def _get_transform_fun(formula, return_df=True, return_paired=False,
     
     # arguments
     args = _args_to_tuple(formula)
+    args = [arg for arg in args if arg is not None]
     
+    # create transform function
     def apply_transform(y=None, groups=None, subjects=None):
         if y is None:
             raise ValueError("y must not be None!")
@@ -168,9 +170,9 @@ def _get_transform_fun(formula, return_df=True, return_paired=False,
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", "Mean of empty slice", RuntimeWarning)
                 warnings.filterwarnings("ignore", "Degrees of freedom <= 0 for slice", RuntimeWarning)
-                res = trans_fun(*[arrays[arg] for arg in args if arg is not None]).astype(dtype)
+                res = trans_fun(*[arrays[arg] for arg in args]).astype(dtype)
         else:
-            res = trans_fun(*[arrays[arg] for arg in args if arg is not None]).astype(dtype)
+            res = trans_fun(*[arrays[arg] for arg in args]).astype(dtype)
   
         # ensure orientation and 2-dimensionality of output
         res = np.atleast_2d(res)

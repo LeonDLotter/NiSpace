@@ -517,6 +517,7 @@ def simple_xsea(y,
                 y_covariates=None,
                 colocalization_method="spearman",
                 xsea_aggregation_method="mean",
+                permute_sets=False,
                 p_from_average_y=False,
                 plot=True,
                 combat=False,
@@ -535,15 +536,16 @@ def simple_xsea(y,
     verbose = set_log(lgr, verbose)
     
     # GET THE BACKGROUND
-    if x_background is None and isinstance(x, str):
-        lgr.info("Trying to fetch background X dataset.")
-        if x.lower() in reference_lib:
-            try:
-                x_background = fetch_reference(x.lower(), parcellation=parcellation, print_references=False)
-            except:
-                x_background = None
-    if x_background is None:
-        lgr.warning(f"Could not fetch background dataset for input x!")
+    if permute_sets:
+        if x_background is None and isinstance(x, str):
+            lgr.info("Trying to fetch background X dataset.")
+            if x.lower() in reference_lib:
+                try:
+                    x_background = fetch_reference(x.lower(), parcellation=parcellation, print_references=False)
+                except:
+                    x_background = None
+        if x_background is None:
+            lgr.warning(f"Could not fetch background dataset for input x!")
     
     ## We go the easy way and just call .simple_colocalization() with some kwargs:
     colocs, p_values, p_fdr_values, nsp = simple_colocalization(
@@ -571,8 +573,9 @@ def simple_xsea(y,
             "xsea": True
         } | colocalize_kwargs,
         permute_kwargs={
-            "what": "sets",
-            "sets_X_background": x_background
+            "what": "maps" if not permute_sets else "sets",
+            "maps_which": "Y",
+            "sets_X_background": x_background if permute_sets else None,
         } | permute_kwargs,
         correct_p_kwargs=correct_p_kwargs,
         plot_kwargs=plot_kwargs
