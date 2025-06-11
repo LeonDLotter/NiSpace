@@ -40,11 +40,14 @@ Install optional dependencies directly with:
    pip install "git+https://github.com/LeonDLotter/NiSpace.git@dev#egg=nispace[opt]"
 
 
-Support
--------
+Support & Updates
+-----------------
 
 For questions about the toolbox, analysis choices, or if you need help with its application, we recommend to open a new topic on `NeuroStars <https://neurostars.org/>`_ using the tag `"nispace" <https://neurostars.org/tag/nispace>`_.
 If you encounter bugs, or would like to request a new feature, dataset, or parcellation, feel free to open a `GitHub issue <https://github.com/LeonDLotter/NiSpace/issues>`_.  
+
+We will post regular updates on new features and releases on `NeuroStars <https://neurostars.org/tags/c/announcements/6/nispace>`_.  
+To automatically get notified about new posts, you can create a NeuroStars account and enable notifications for `"the nispace tag" <https://neurostars.org/tag/nispace>`_ (bell icon on the right side).
 
 
 Other available tools
@@ -118,11 +121,12 @@ There are of course many other related tools available, of which a few are liste
 Citation
 --------
 
-There is no paper for ``NiSpace`` yet. Please cite at least the following when you use our tools in your work:
+There is no paper for ``NiSpace`` yet. Please cite the following when you use our tools in your work:
 
-* `Lotter & Dukart, Zenodo 2024 <https://doi.org/10.5281/zenodo.12514623>`_
-* `Dukart et al., HBM 2021 <https://doi.org/10.1002/hbm.25244>`_
-* `Markello, Hansen, et al., Nat. Methods 2022 <https://doi.org/10.1038/s41592-022-01625-w>`_
+* ``NiSpace`` Zenodo DOI: `Lotter & Dukart, Zenodo 2024 <https://doi.org/10.5281/zenodo.12514623>`_
+* JuSpace toolbox paper: `Dukart et al., HBM 2021 <https://doi.org/10.1002/hbm.25244>`_
+* neuromaps toolbox paper: `Markello, Hansen, et al., Nat. Methods 2022 <https://doi.org/10.1038/s41592-022-01625-w>`_
+* Two publications with which NiSpace's core was developed: `Lotter et al., Neurosci. & Biobehav. Rev. 2023 <https://doi.org/10.1016/j.neubiorev.2023.105042>`_; `Lotter et al., Nat. Commun. 2024 <https://doi.org/10.1038/s41467-024-52366-7>`_
 
 See the documentation's `citation <https://nispace.readthedocs.io/en/latest/citation.html>`_ section for more information.
 
