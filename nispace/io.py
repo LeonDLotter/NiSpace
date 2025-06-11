@@ -1,6 +1,7 @@
 import os
 import warnings
 import json
+import dill, pickle, blosc, gzip
 from pathlib import Path
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
@@ -429,3 +430,82 @@ def load_distmat(distmat):
         distmat_load.append(d)
     # return as tuple if two, or as array if one 
     return distmat_load[0] if len(distmat_load) == 1 else tuple(distmat_load)
+
+
+def to_pickle(obj, filepath, use_dill=False):
+    """
+    Pickle, compress, and save to a file.
+
+    Parameters
+    ----------
+    obj : object
+        Any python object to be pickled.
+    filepath : str
+        File path destination.
+    """
+    
+    # use dill instead of pickle
+    if use_dill:
+        pkl = dill
+    else:
+        pkl = pickle
+        
+    # save
+    if filepath.endswith(".pkl"):
+        with open(filepath, "wb") as f:
+            pkl.dump(obj, f)
+    elif filepath.endswith(".pkl.gz"):
+        with gzip.open(filepath, "wb") as f:
+            pkl.dump(obj, f)
+    elif filepath.endswith(".pkl.blosc"):
+        arr = pkl.dumps(obj, -1)
+        with open(filepath, "wb") as f:
+            s = 0
+            while s < len(arr):
+                e = min(s + blosc.MAX_BUFFERSIZE, len(arr))
+                carr = blosc.compress(arr[s:e], typesize=8)
+                f.write(carr)
+                s = e
+    else:
+        raise ValueError(f"Unsupported file extension of path: {filepath}")
+
+
+def from_pickle(filepath, use_dill=False):
+    """
+    Unpickle a python object.
+    """
+    
+    # use dill instead of pickle
+    if use_dill:
+        pkl = dill
+    else:
+        pkl = pickle
+        
+    # load
+    if filepath.endswith(".pkl"):
+        with open(filepath, "rb") as f:
+            return pkl.load(f)
+    elif filepath.endswith(".pkl.gz"):
+        with gzip.open(filepath, "rb") as f:
+            return pkl.load(f)
+    elif filepath.endswith(".pkl.blosc"):
+        arr = []
+        buffsize = blosc.MAX_BUFFERSIZE
+        with open(filepath, "rb") as f:
+            while buffsize > 0:
+                try:
+                    carr = f.read(buffsize)
+                except (OverflowError, MemoryError):
+                    buffsize = buffsize // 2
+                    continue
+
+                if len(carr) == 0:
+                    break
+                arr.append(blosc.decompress(carr))
+
+        if buffsize == 0:
+            raise RuntimeError("Could not determine a buffer size.")
+
+        return pkl.loads(b"".join(arr))
+    else:
+        raise ValueError(f"Unsupported file extension of path: {filepath}")

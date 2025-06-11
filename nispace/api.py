@@ -1,7 +1,4 @@
 import copy
-import gzip
-import os
-import pickle
 from typing import List, Union, Sequence, Literal, Dict
 from pathlib import Path
 
@@ -11,16 +8,9 @@ import nibabel as nib
 import matplotlib.pyplot as plt
 from joblib import Parallel, delayed
 from tqdm import tqdm
-# opt. dependencies for combat harmonization
-try:
-    from neuroHarmonize import harmonizationLearn
-    from neuroCombat import neuroCombat
-    _NEUROHARMONIZE_AVAILABLE = True
-except ImportError:
-    _NEUROHARMONIZE_AVAILABLE = False
 
 from . import lgr
-from .io import parcellate_data, load_distmat
+from .io import parcellate_data, load_distmat, to_pickle, from_pickle
 from .modules.reduce_x import _reduce_dimensions
 from .modules.transform_y import _dummy_code_groups, _num_code_subjects, _get_transform_fun
 from .modules.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats
@@ -280,7 +270,7 @@ class NiSpace:
                         self._parc_dist_mat["cv"] = dist_mat
                     self._parc_info["idc_lh"] = [i for i, l in enumerate(labels) if "hemi-L" in l]
                     self._parc_info["idc_rh"] = [i for i, l in enumerate(labels) if "hemi-R" in l]
-                    self._parc_info["idc_sc"] = None # TODO: add cortex/subcortex idc management
+                    self._parc_info["idc_sc"] = [] # TODO: add cortex/subcortex idc management
                     for idc in ["idc_lh", "idc_rh", "idc_sc"]:
                         if len(self._parc_info[idc]) == 0:
                             self._parc_info[idc] = None
@@ -1737,6 +1727,10 @@ class NiSpace:
                 colocalizations_dict, nulls_dict = coloc_dicts
             else:
                 colocalizations_dict, nulls_dict = coloc_dicts, None
+            if plot_nulls and nulls_dict is None:
+                lgr.warning("No nulls found. Not plotting null distributions.")
+                plot_nulls = False
+
         else:
             if not isinstance(colocalizations_dict, dict):
                 lgr.critical_raise("Provide colocalizations as dict as returned by "
@@ -2062,26 +2056,29 @@ class NiSpace:
     # SAVE, LOAD, COPY =============================================================================
 
     def to_pickle(self, filepath, save_nulls=True, verbose=None):
+        """
+        Save the NiSpace object to a pickle file.
+
+        Parameters
+        ----------
+        filepath : str
+            Filepath to save the NiSpace object to.
+        save_nulls : bool, optional
+            Whether to save the nulls. Defaults to True.
+        verbose : bool, optional
+        """
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         
-        ext = os.path.splitext(filepath)[1]
-        if ext==".gz":
-            open_fun = gzip.open
-        elif ext in [".pkl", ".pickle"]:
-            open_fun = open
-        else:
-            lgr.critical_raise(f"Filetype *{ext} not known. Supported: '.pbz2', '.pickle', '.pkl'.",
-                               ValueError)
-        
         # remove nulls (very large depending on number of permutations) if requested
         self_save = self.copy()
-        if save_nulls == False:
-            self_save.nulls = dict()
-        
+        if not save_nulls:
+            self_save._nulls = {
+                "_colocs": {}
+            }
+
         # save
-        with open_fun(filepath, "wb") as f:
-            pickle.dump(self_save, f, pickle.HIGHEST_PROTOCOL)
+        to_pickle(self_save, filepath, use_dill=True)
         lgr.debug(f"Saved NiSpace object to {filepath}.")  
         lgr.setLevel(loglevel)
 
@@ -2099,26 +2096,31 @@ class NiSpace:
 
     @staticmethod 
     def from_pickle(filepath, verbose=True):
+        """
+        Load a NiSpace object from a pickle file.
+
+        Parameters
+        ----------
+        filepath : str
+            Filepath to load the NiSpace object from.
+        verbose : bool, optional
+            Whether to print verbose output. Defaults to True.
+
+        Returns
+        -------
+        nispace_object : NiSpace
+            The loaded NiSpace object.
+        """
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, verbose)
-        
-        ext = os.path.splitext(filepath)[1]
-        if ext==".gz":
-            open_fun = gzip.open
-        elif ext in [".pkl", ".pickle"]:
-            open_fun = open
-        else:
-            lgr.critical_raise(f"Filetype *{ext} not known. Supported: '.pbz2', '.pickle', '.pkl'.",
-                               ValueError)
-        
+
         # load   
-        with open_fun(filepath, "rb") as f:
-            juspyce_object = pickle.load(f)
+        nispace_object = from_pickle(filepath, use_dill=True)
         lgr.debug(f"Loaded NiSpace object from {filepath}.")
 
         # return
         lgr.setLevel(loglevel)
-        return juspyce_object
+        return nispace_object
 
 
     # PRIVATE METHODS ==============================================================================
