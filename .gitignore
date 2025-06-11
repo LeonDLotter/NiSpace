@@ -8,6 +8,8 @@ datasets/nispace-*
 osf*
 .github.config
 docs/nb_examples/ds*
+docs/nb_examples/*.pkl*
+docs/nb_introduction/*.pkl*
 
 ## OSX ################################
 
