@@ -148,7 +148,7 @@ def download_file(host: Literal["url", "github", "github-nispace", "github-nispa
             
             # get url
             if host == "url":
-                url = remote.as_posix()        
+                url = remote.as_posix().replace("https:/", "https://")        
             elif host == "github":
                 url = f"https://raw.githubusercontent.com/{repo}/{branch}/{remote.as_posix()}"
             elif host == "github-nispace":
@@ -205,10 +205,28 @@ def _compress_nifti(file_path, save_path, dtype=np.float32):
     img = image.new_img_like(img, img_dat, copy_header=True)
     # save
     img.to_filename(save_path)
+    
+
+def _compress_gifti(file_path, save_path):
+    if isinstance(file_path, (str, Path)):
+        file_path = file_path, 
+        save_path = save_path, 
+    for fp, sp in zip(file_path, save_path):
+        # try to load
+        try:
+            img = io.load_img(fp, override_file_format=".gii.gz")
+        except:
+            try:
+                img = io.load_img(fp, override_file_format=".gii")
+            except Exception as e:
+                raise ValueError(f"Could not load file '{fp}': {e}")
+        # save
+        img.to_filename(sp)
 
 
 def get_file(local_path, host, remote, 
              compress_nifti=False,
+             compress_gifti=False,
              osf_config_file=None,
              github_config_file=None,
              overwrite=False):
@@ -230,6 +248,8 @@ def get_file(local_path, host, remote,
         
         if compress_nifti:
             _compress_nifti(tmp_path, local_path)
+        elif compress_gifti:
+            _compress_gifti(tmp_path, local_path)
         else:
             shutil.copy(tmp_path, local_path)
             
