@@ -27,7 +27,7 @@ from .modules.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_st
 from .modules.permute import _get_null_maps, _get_exact_p_values, _get_correct_mc_method
 from .modules.plot import _plot_categorical
 from .modules.constants import _PARCS, _PARCS_DEFAULT, _COLOC_METHODS
-from .datasets import fetch_parcellation, fetch_template, parcellation_lib
+from .datasets import fetch_parcellation, fetch_template, _check_parcellation
 from .nulls import get_distance_matrix
 from .stats.coloc import *
 from .stats.misc import mc_correction, residuals_nan, zscore_df, permute_groups
@@ -248,7 +248,12 @@ class NiSpace:
         if self._parc is None:
             self._parc = _PARCS_DEFAULT
         if isinstance(self._parc, str):
-            if self._parc.lower() in [s.lower() for s in parcellation_lib.keys()]:
+            # check if parcellation is an integrated parcellation
+            try:
+                self._parc = _check_parcellation(self._parc, force_str=True)
+            except ValueError:
+                pass
+            if self._parc is not None:
                 try:
                     parc, labels, space, density, symmetric, l2rmap, dist_mat = fetch_parcellation(
                         parcellation=self._parc,
@@ -260,8 +265,9 @@ class NiSpace:
                         return_dist_mat=True,
                         return_loaded=True
                     )
-                    if all([d is None for d in dist_mat]):
-                        dist_mat = None
+                    if isinstance(dist_mat, tuple):
+                        if all([d is None for d in dist_mat]):
+                            dist_mat = None
                     self._parc = parc
                     self._parc_info["labels"] = labels
                     self._parc_info["space"] = space
@@ -272,9 +278,9 @@ class NiSpace:
                     self._parc_dist_mat["null_maps"] = dist_mat
                     if not isinstance(dist_mat, tuple):
                         self._parc_dist_mat["cv"] = dist_mat
-                    self._parc_info["idc_lh"] = [i for i, l in enumerate(labels) if "_LH_" in l]
-                    self._parc_info["idc_rh"] = [i for i, l in enumerate(labels) if "_RH_" in l]
-                    self._parc_info["idc_sc"] = [i for i, l in enumerate(labels) if "_SC_" in l]
+                    self._parc_info["idc_lh"] = [i for i, l in enumerate(labels) if "hemi-L" in l]
+                    self._parc_info["idc_rh"] = [i for i, l in enumerate(labels) if "hemi-R" in l]
+                    self._parc_info["idc_sc"] = None # TODO: add cortex/subcortex idc management
                     for idc in ["idc_lh", "idc_rh", "idc_sc"]:
                         if len(self._parc_info[idc]) == 0:
                             self._parc_info[idc] = None

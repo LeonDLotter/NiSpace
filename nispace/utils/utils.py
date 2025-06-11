@@ -376,7 +376,7 @@ def relabel_nifti_parc(parc, new_order=None, new_labels=None, dtype=None):
     return parc_relabeled
 
 
-def merge_parcellations(parcellations, labels=None):
+def merge_parcellations(parcellations, labels=None, quick=False):
     if not isinstance(parcellations, list):
         raise ValueError("parcellations must be a list")
     if labels is None:
@@ -394,6 +394,25 @@ def merge_parcellations(parcellations, labels=None):
     
     arr_merged = np.zeros_like(parcellations[0].get_fdata(), dtype=np.int32)
     labels_merged = pd.Series(dtype=str)
+    
+    if quick:
+        # arrays
+        arr1 = parcellations[0].get_fdata()
+        arr2 = parcellations[1].get_fdata()
+        # take first parcellation
+        arr_merged = arr1.copy()
+        # highest index of first parcellation
+        arr1_idx_max = np.max(arr1)
+        # nonzero voxels in second parcellation
+        arr2_nonzero = arr2 > 0
+        # all nonzero voxels in arr2 to zero 
+        arr_merged[arr2_nonzero] = 0
+        # add second parcellation
+        arr_merged[arr2_nonzero] = arr2[arr2_nonzero] + arr1_idx_max
+        # return
+        return image.new_img_like(parcellations[0], arr_merged)       
+    
+    # slow approach with relabeling
     i = 1
     for ii, (parc, labs) in enumerate(zip(parcellations, labels)):
         arr = parc.get_fdata()

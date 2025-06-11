@@ -867,7 +867,7 @@ def view_surf(data=None, parcellation=None, hemi="L", template="fsaverage", temp
         else:
             parc, labels = fetch_parcellation(parcellation, space=space, return_loaded=True, **parcellation_kwargs)
             parc_arr = parc[0 if hemi == "L" else 1].agg_data()
-            labels = [l for l in labels if f"_{hemi}H_" in l]
+            labels = [l for l in labels if f"hemi-{hemi}" in l]
     if data is None:
         data = np.trim_zeros(np.unique(parc_arr))
         

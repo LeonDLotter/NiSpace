@@ -8,7 +8,7 @@ from .utils.utils import set_log
 from .modules.constants import (_PARCS, _PARCS_NICE, _PARC_DEFAULT, 
                                 _DSETS, _DSETS_NICE, _COLLECT_DEFAULT,
                                 _COLOC_METHODS)
-from .datasets import fetch_reference, reference_lib, parcellation_lib
+from .datasets import fetch_reference, reference_lib, _check_parcellation
 
 def _workflow_base(x, y, z, x_collection, #x_load_nulls,
                    standardize,
@@ -55,10 +55,12 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
         # check provided data
         # parcellation
         if isinstance(parcellation, str):
-            if parcellation in parcellation_lib:
+            # check if parcellation is an integrated parcellation
+            try:
+                parc_integrated = _check_parcellation(parcellation, force_str=True)
                 lgr.info(f"Using integrated parcellation {parcellation}.")
-                parc_integrated = parcellation
-            else:
+            # if not, check if it's a path to a parcellation file
+            except ValueError:
                 lgr.info(f"Input '{parcellation}' not recognized as integrated parcellation. "
                          "Checking if path to parcellation file.")
                 parc_integrated = None
@@ -98,7 +100,7 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
             y=y,
             z=z,
             standardize=standardize,
-            parcellation=parcellation,
+            parcellation=parc_integrated,
             parcellation_labels=parcellation_labels,
             n_proc=n_proc,
             verbose=verbose,

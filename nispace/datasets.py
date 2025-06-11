@@ -9,7 +9,7 @@ from typing import Literal
 from . import lgr
 from .modules.constants import _PARC_DEFAULT, _SPACE_DEFAULT
 from .stats.misc import zscore_df
-from .utils.utils import _rm_ext, set_log
+from .utils.utils import _rm_ext, set_log, merge_parcellations
 from .utils.utils_datasets import get_file
 from .io import read_json, load_img, load_distmat, load_labels, load_l2rmap
 from .nulls import _img_density_for_neuromaps
@@ -147,21 +147,71 @@ def fetch_template(template: str = _SPACE_DEFAULT,
 def _parc_alias(parcellation: str):
     if "alias" in parcellation_lib[parcellation]:
         parc = parcellation_lib[parcellation]["alias"]
-        cortex = parcellation_lib[parcellation]["cortex"]
-        subcortex = parcellation_lib[parcellation]["subcortex"]
     else:
         parc = parcellation
-        cortex, subcortex = True, True
-    return parc, cortex, subcortex
+    return parc
 
 def _parc_symmetric(parc_labels):
-    labels_lh = [l.split("_LH_")[1] for l in parc_labels if "_LH_" in l]
-    labels_rh = [l.split("_RH_")[1] for l in parc_labels if "_RH_" in l]
+    labels_lh = [l.split("hemi-L")[1] for l in parc_labels if "hemi-L" in l]
+    labels_rh = [l.split("hemi-R")[1] for l in parc_labels if "hemi-R" in l]
     if not labels_lh or not labels_rh:
         return False
     if labels_lh == labels_rh:
         return True
     return False
+
+def _print_parcellations():
+    return ", ".join([p for p in parcellation_lib.keys() if "alias" not in parcellation_lib[p]])
+
+def _check_parcellation(parcellation: str, force_list: bool = False, force_str: bool = False):
+    """
+    Check if a parcellation name is valid and return the correct parcellation name as a string or
+    a list of strings containing a cortex-subcortex combination.
+    """
+    # Parcellation can be a string as it appears in parcellation_lib (e.g., "Schaefer100")
+    # OR multiple strings from parcellation_lib concatenated (e.g., "Schaefer100TianS1")
+    # (1) We check if parcellation is a string
+    assert isinstance(parcellation, str), f"Parcellation must be of type string, not {type(parcellation)}!"
+    # (2) We check if it is in parcellation_lib as is
+    if parcellation in parcellation_lib:
+        parc = _parc_alias(parcellation)
+    # (3) If not, we check if we get a partial match
+    else:
+        # get a list of potential partial matches 
+        parc = list(set([_parc_alias(p) for p in parcellation_lib if p in parcellation]))
+        # (3a) No match found: raise error
+        if len(parc) == 0:
+            lgr.critical_raise(f"Parcellation '{parcellation}' not found.\nAvailable "
+                               f"(cortex-subcortex-combinations allowed): {_print_parcellations()}",
+                               ValueError)
+        # (3b) > 2 matches found: raise error
+        elif len(parc) > 2:
+            lgr.critical_raise(f"Parcellation '{parcellation}' matches more than 2 parcellations: {', '.join(parc)}.",
+                               ValueError)
+        # (3c) 1 match found: use it
+        elif len(parc) == 1:
+            parc = parc[0]
+        # (3d) 2 matches found: check if they are cortex-subcortex combinations
+        else:
+            levels = []
+            for p in parc:
+                p_space = list(parcellation_lib[p].keys())[0]
+                levels.append(parcellation_lib[p][p_space]["level"])
+            if set(levels) != {"cortex", "subcortex"}:
+                lgr.critical_raise(f"Only cortex-subcortex combinations are allowed, not: {', '.join(levels)} ",
+                                   ValueError)
+            else:
+                # if we got to here, we have a cortex-subcortex combination; now ensure correct order
+                parc = [parc[levels.index("cortex")], parc[levels.index("subcortex")]]
+                
+        # output format
+        if force_list and not force_str and isinstance(parc, str):
+            parc = [parc]
+        elif force_str and not force_list and isinstance(parc, list):
+            parc = "".join(parc)
+    return parc
+                
+    
 
 def fetch_parcellation(parcellation: str = _PARC_DEFAULT, 
                        space: str = None,
@@ -172,7 +222,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                        return_symmetric: bool = False,
                        return_l2rmap: bool = False,
                        return_dist_mat: bool = False,
-                       return_loaded: bool = False,
+                       return_loaded: bool = True,
                        nispace_data_dir: Union[str, pathlib.Path] = None,
                        overwrite: bool = False,
                        verbose: bool = True):
@@ -181,179 +231,198 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
     """
     verbose = set_log(lgr, verbose)
     
-    # Check if in main parcellation list
-    if parcellation not in parcellation_lib:
-        lgr.critical_raise(f"Parcellation '{parcellation}' not found. Available: {keys2str(parcellation_lib)}",
-                           ValueError)
+    # check parcellation and return correct name or list of two names
+    parc = _check_parcellation(parcellation)
+    # if list, we need to merge parcellation and associated data , so we need to load stuff
+    return_loaded = True if isinstance(parc, str) else return_loaded
+    
+    # function to load individual parcellation and associated data
+    def load_parc(p, space=space, hemi=hemi, return_labels=return_labels, return_space=return_space, 
+                  return_resolution=return_resolution, return_symmetric=return_symmetric, return_l2rmap=return_l2rmap, 
+                  return_dist_mat=return_dist_mat, return_loaded=return_loaded, 
+                  nispace_data_dir=nispace_data_dir, overwrite=overwrite):
         
-    # Check if alias and set data to retrieve
-    # variable "parcellation" is now what the user sees, "parc" is what we go with internally
-    parc, cortex, subcortex = _parc_alias(parcellation)
+        # Check space
+        if space is None:
+            # get default space -> first space listed in parcellation_lib
+            space = list(parcellation_lib[p].keys())[0]
+        else:
+            if space not in parcellation_lib[p]:
+                lgr.critical_raise(f"Space '{space}' not found for parcellation '{p}'.\n"
+                                   f"Available: {keys2str(parcellation_lib[p])}",
+                                   ValueError)
         
-    # Check space
-    if space is None:
-        # get default space -> first space listed in parcellation_lib
-        space = list(parcellation_lib[parc].keys())[0]
-    else:
-        if space not in parcellation_lib[parc]:
-            lgr.critical_raise(f"Space '{space}' not found for parcellation '{parcellation}'. "
-                               f"Available: {keys2str(parcellation_lib[parc])}",
-                               ValueError)
-    
-    # Symmetry
-    if "l2rmap" in parcellation_lib[parc][space]:
-        symmetric = False
-    else:
-        symmetric = True
-    
-    # base dir
-    if not nispace_data_dir:
-        base_dir = pathlib.Path.home() / "nispace-data" / "parcellation" / parc / space
-    else:
-        base_dir = pathlib.Path(nispace_data_dir) / "parcellation" / parc / space
-    
-    # LOAD
-    lgr.info(f"Loading parcellation '{parcellation}' in '{space}' space.")
-    
-    # volume
-    if "mni" in space.lower():
+        # Symmetry
+        if "l2rmap" in parcellation_lib[p][space]:
+            symmetric = False
+        else:
+            symmetric = True
         
-        # get files
-        parcellation_file = get_file(
-            base_dir / f"parc-{parc}_space-{space}.label.nii.gz", 
-            **parcellation_lib[parc][space]["map"],
-            overwrite=overwrite
-        )
-        if return_labels or not cortex or not subcortex:
-            label_file = get_file(
-                base_dir / f"parc-{parc}_space-{space}.label.txt",
-                **parcellation_lib[parc][space]["label"],
-                overwrite=overwrite
-            )
-        if return_l2rmap and not symmetric:
-            l2rmap_file = get_file(
-                base_dir / f"parc-{parc}_space-{space}.l2rmap.csv.gz",
-                **parcellation_lib[parc][space]["l2rmap"],
-                overwrite=overwrite
-            )
-        elif return_l2rmap and symmetric:
-            l2rmap_file = None
-        if return_dist_mat:
-            distmat_file = get_file(
-                base_dir / f"parc-{parc}_space-{space}.dist.csv.gz",
-                **parcellation_lib[parc][space]["distmat"],
-                overwrite=overwrite
-            )
-    
-        # cortex only:
-        if not cortex and not subcortex:
-            lgr.error("Cannot set both 'cortex' and 'subcortex' to False. Returning all!")
-            cortex, subcortex = True, True
-        if not cortex or not subcortex:
-            lgr.info(f"{parcellation} is a {['cortex', 'subcortex'][not cortex]} version of the "
-                     f"whole-brain parcellation {parc}.")
-            # get the labels we want to keep
-            labels_all = load_labels(label_file)
-            str_to_keep = "_CX_" if cortex else "_SC_"
-            labels_to_keep = [l for l in labels_all if str_to_keep in l]
-            # get the indices we want to remove
-            idc_rm = [int(l.split("_")[0]) for l in labels_all if l not in labels_to_keep]
-            lgr.info(f"Removing {len(idc_rm)} {['cortical', 'subcortical'][cortex]} parcels and "
-                     "returning Nifti1 object instead of path!")
-            # drop indices from parcellation
-            parc = load_img(parcellation_file)
-            parc_array = parc.get_fdata()
-            for idx in idc_rm:
-                parc_array[parc_array==idx] = 0
-            parc = image.new_img_like(parc, parc_array, copy_header=True)
-            # replace vars
-            parcellation_file, label_file = parc, labels_to_keep
-            # drop from left-to-right mapping
-            if return_l2rmap and not symmetric:
-                l2rmap = load_l2rmap(l2rmap_file)
-                l2rmap = l2rmap.loc[l2rmap.index.intersection(labels_to_keep), 
-                                    l2rmap.columns.intersection(labels_to_keep)]
-                l2rmap_file = l2rmap
-            # drop from dist mat
-            if return_dist_mat:
-                bool_keep = np.array([True if l in labels_to_keep else False for l in labels_all])
-                distmat = load_distmat(distmat_file)
-                distmat = distmat[np.ix_(bool_keep, bool_keep)]
-                distmat_file = distmat
+        # base dir
+        if not nispace_data_dir:
+            base_dir = pathlib.Path.home() / "nispace-data" / "parcellation" / p / space
+        else:
+            base_dir = pathlib.Path(nispace_data_dir) / "parcellation" / p / space
+        
+        # LOAD
+        lgr.info(f"Loading {parcellation_lib[p][space]['level']} parcellation '{p}' in '{space}' space.")
+        
+        # volume
+        if "mni" in space.lower():
             
-    # surface
-    else:
-        
-        # check hemis
-        if isinstance(hemi, str):
-            hemi = [hemi]
-        if hemi not in [["L"], ["R"], ["L", "R"]]:
-            raise ValueError(f"hemi = '{hemi}' not defined. Choose one of 'L', 'R', or ['L', 'R']!")
-
-        # get files
-        parcellation_file, label_file, distmat_file = (), (), ()
-        for h in hemi:
-            parcellation_file += get_file(
-                base_dir / f"parc-{parc}_space-{space}_hemi-{h}.label.gii.gz", 
-                **parcellation_lib[parc][space]["map"][h],
+            # get files
+            parcellation_file = get_file(
+                base_dir / f"parc-{p}_space-{space}.label.nii.gz", 
+                **parcellation_lib[p][space]["map"],
                 overwrite=overwrite
-            ),
+            )
             if return_labels:
-                label_file += get_file(
-                    base_dir / f"parc-{parc}_space-{space}_hemi-{h}.label.txt",
-                    **parcellation_lib[parc][space]["label"][h],
+                label_file = get_file(
+                    base_dir / f"parc-{p}_space-{space}.label.txt",
+                    **parcellation_lib[p][space]["label"],
+                    overwrite=overwrite
+                )
+            if return_l2rmap and not symmetric:
+                l2rmap_file = get_file(
+                    base_dir / f"parc-{p}_space-{space}.l2rmap.csv.gz",
+                    **parcellation_lib[p][space]["l2rmap"],
+                    overwrite=overwrite
+                )
+            elif return_l2rmap and symmetric:
+                l2rmap_file = None
+            if return_dist_mat:
+                distmat_file = get_file(
+                    base_dir / f"parc-{p}_space-{space}.dist.csv.gz",
+                    **parcellation_lib[p][space]["distmat"],
+                    overwrite=overwrite
+                )
+        
+        # surface
+        else:
+            
+            # check hemis
+            if isinstance(hemi, str):
+                hemi = [hemi]
+            if hemi not in [["L"], ["R"], ["L", "R"]]:
+                raise ValueError(f"hemi = '{hemi}' not defined. Choose one of 'L', 'R', or ['L', 'R']!")
+
+            # get files
+            parcellation_file, label_file, distmat_file = (), (), ()
+            for h in hemi:
+                parcellation_file += get_file(
+                    base_dir / f"parc-{p}_space-{space}_hemi-{h}.label.gii.gz", 
+                    **parcellation_lib[p][space]["map"][h],
                     overwrite=overwrite
                 ),
-            if return_dist_mat:
-                if "fslr" in space.lower():
-                    lgr.warning("Distance matrices for fslr spaces are currently not available. Returning None.")
-                    distmat_file += None,
-                else:
-                    distmat_file += get_file(
-                        base_dir / f"parc-{parc}_space-{space}_hemi-{h}.dist.csv.gz",
-                        **parcellation_lib[parc][space]["distmat"][h],
+                if return_labels:
+                    label_file += get_file(
+                        base_dir / f"parc-{p}_space-{space}_hemi-{h}.label.txt",
+                        **parcellation_lib[p][space]["label"][h],
                         overwrite=overwrite
                     ),
-        if return_l2rmap and not symmetric:
-            l2rmap_file = get_file(
-                base_dir / f"parc-{parc}_space-{space}.l2rmap.csv.gz",
-                **parcellation_lib[parc][space]["l2rmap"],
-                overwrite=overwrite
-            )
-        elif return_l2rmap and symmetric:
-            l2rmap_file = None
-        if len(parcellation_file) == 1:
-            parcellation_file, label_file, distmat_file, l2rmap_file = parcellation_file[0], label_file[0], distmat_file[0], None
+                if return_dist_mat:
+                    if "fslr" in space.lower():
+                        lgr.warning("Distance matrices for fslr spaces are currently not available. Returning None.")
+                        distmat_file += None,
+                    else:
+                        distmat_file += get_file(
+                            base_dir / f"parc-{p}_space-{space}_hemi-{h}.dist.csv.gz",
+                            **parcellation_lib[p][space]["distmat"][h],
+                            overwrite=overwrite
+                        ),
+            if return_l2rmap and not symmetric:
+                l2rmap_file = get_file(
+                    base_dir / f"parc-{p}_space-{space}.l2rmap.csv.gz",
+                    **parcellation_lib[p][space]["l2rmap"],
+                    overwrite=overwrite
+                )
+            elif return_l2rmap and symmetric:
+                l2rmap_file = None
+            if len(parcellation_file) == 1:
+                parcellation_file, label_file, distmat_file, l2rmap_file = parcellation_file[0], label_file[0], distmat_file[0], None
+            
+        # return      
         
+        # build output
+        out = {}
+        # parc
+        out["parc"] = load_img(parcellation_file) if return_loaded else parcellation_file
+        # label
+        if return_labels:
+            out["label"] = load_labels(label_file) if return_loaded else label_file
+        # space
+        if return_space:
+            out["space"] = space
+        # res
+        if return_resolution:
+            out["res"] = _img_density_for_neuromaps(load_img(parcellation_file))
+        # symmetric
+        if return_symmetric:
+            out["sym"] = symmetric
+        # l2rmap
+        if return_l2rmap:
+            out["l2rmap"] = load_l2rmap(l2rmap_file) if return_loaded else l2rmap_file
+        # distmat
+        if return_dist_mat:
+            out["distmat"] = load_distmat(distmat_file) if return_loaded else distmat_file
+        
+        return out
     
-    # return      
+    # run load_parc for a single parcellation
+    if isinstance(parc, str):
+        out = load_parc(parc)
+        if len(out) == 1:
+            return list(out.values())[0]
+        else:
+            return tuple(out.values())
     
-    # build output
-    # parc
-    out = (load_img(parcellation_file) if return_loaded else parcellation_file),
+    # run load_parc for 2 parcellations
+    out_cortex = load_parc(parc[0])
+    out_subcortex = load_parc(parc[1])
+    lgr.info(f"Merging to cortex-subcortex parcellation '{parc[0]}{parc[1]}'.")
+        
+    # now, we will have to combine the data
+    out = {}
+    # combine parcellations
+    out["parc"] = merge_parcellations([out_cortex["parc"], out_subcortex["parc"]], quick=True)#[0]
     # label
     if return_labels:
-        out += (load_labels(label_file) if return_loaded else label_file),
+        out["label"] = out_cortex["label"] + out_subcortex["label"]
     # space
     if return_space:
-        out += space,
+        out["space"] = out_cortex["space"]
     # res
     if return_resolution:
-        out += _img_density_for_neuromaps(load_img(parcellation_file)),
+        out["res"] = out_cortex["res"]
     # symmetric
     if return_symmetric:
-        out += symmetric,
+        out["sym"] = True if out_cortex["sym"] and out_subcortex["sym"] else False
     # l2rmap
     if return_l2rmap:
-        out += (load_l2rmap(l2rmap_file) if return_loaded else l2rmap_file),
+        if out_cortex["l2rmap"] is None and out_subcortex["l2rmap"] is None:
+            out["l2rmap"] = None
+        else:
+            if not return_labels:
+                lgr.critical_raise("Cannot return merged l2rmap when return_labels=False!", ValueError)
+            out["l2rmap"] = pd.DataFrame(
+                np.eye(len(out["label"]) // 2),
+                index=[l for l in out["label"] if "hemi-L" in l],
+                columns=[l for l in out["label"] if "hemi-R" in l]
+            )
+            if out_cortex["l2rmap"] is not None:
+                out["l2rmap"].loc[out_cortex["l2rmap"].index, out_cortex["l2rmap"].columns] = out_cortex["l2rmap"]
+            if out_subcortex["l2rmap"] is not None:
+                out["l2rmap"].loc[out_subcortex["l2rmap"].index, out_subcortex["l2rmap"].columns] = out_subcortex["l2rmap"]
     # distmat
     if return_dist_mat:
-        out += (load_distmat(distmat_file) if return_loaded else distmat_file),
-    # index into tuple if length is 1
-    if len(out) == 1:
-        out = out[0]
+        lgr.info("Distance matrices for merged parcellations are currently not available. Returning None.")
+        out["distmat"] = None
     
-    return out
+    # return
+    if len(out) == 1:
+        return list(out.values())[0]
+    else:
+        return tuple(out.values())
 
 def fetch_collection(collection: Union[str, pathlib.Path, np.ndarray, pd.DataFrame, pd.Series, list],
                      dataset: str = None,
@@ -586,27 +655,50 @@ def _apply_collection_filter(dataset: str,
 
 def _load_parcellated_data(dataset: str, 
                            tab_dir: pathlib.Path, 
-                           parc: str, 
+                           parc: Union[str, List[str]], 
                            map_files: List[str],
                            collection_df: pd.DataFrame,
-                           cortex: bool,
-                           subcortex: bool,
                            standardize: bool,
+                           merge_how: str = "inner",
                            overwrite: bool = False,
                            verbose: bool = True) -> Union[pd.DataFrame, Tuple[pd.DataFrame, Dict]]:
     verbose = set_log(lgr, verbose)
     
-    lgr.info(f"Loading parcellated data: {parc}")
-    parcellation_file = tab_dir / f"dset-{dataset}_parc-{parc}.csv.gz"
-    lgr.debug(f"Loading {parcellation_file}")
+    # parcellation can be string with one parcellation name or list of two parcellation names
+    if isinstance(parc, str):
+        lgr.info(f"Loading data parcellated with '{parc}'")
+        # all to list
+        parc = [parc]
+    elif isinstance(parc, list):
+        lgr.info(f"Loading and {merge_how}-merging data parcellated with '{parc[0]}' and '{parc[1]}'")
+    else:
+        lgr.critical_raise(f"Invalid parcellation type: {type(parc)}", ValueError)
     
-    # Load parcellated data
-    data = pd.read_csv(
-        get_file(parcellation_file, **reference_lib[dataset]["tab"][parc], overwrite=overwrite), 
-        index_col=0
-    )
-    lgr.debug(f"Loaded parcellated data of shape {data.shape}")
-    lgr.debug(f"First 5 map names: {data.index.to_list()[:5]}")
+    # loop through parcellations
+    data = []
+    for p in parc:
+        # check if parcellation available for this data
+        if p not in reference_lib[dataset]["tab"]:
+            lgr.critical_raise(f"Dataset '{dataset}' is not available for parcellation '{p}'!\n"
+                               f"Available: {keys2str(reference_lib[dataset]['tab'])}",
+                               FileNotFoundError)
+        # file
+        parcellation_file = tab_dir / f"dset-{dataset}_parc-{p}.csv.gz"
+        lgr.debug(f"Loading {parcellation_file}")
+            
+        # load data
+        data.append(pd.read_csv(
+            get_file(parcellation_file, **reference_lib[dataset]["tab"][p], overwrite=overwrite), 
+            index_col=0
+        ))
+        lgr.debug(f"Loaded parcellated data of shape {data[-1].shape}")
+        lgr.debug(f"First 5 map names: {data[-1].index.to_list()[:5]}")
+        
+    # merge if necessary: all maps are kept even if they are not present in both parcellations
+    if len(parc) > 1:
+        data = data[0].merge(data[1], how=merge_how, left_index=True, right_index=True)
+    else:
+        data = data[0]
 
     # Apply filter to the dataframe index
     lgr.debug(f"Applying filtering based on maps, first 5: {map_files[:5]}")
@@ -621,17 +713,7 @@ def _load_parcellated_data(dataset: str,
         collection_df_intersection = collection_df.query("map in @maps_intersection")
         data = data.loc[collection_df_intersection["map"]]     
         data.index = pd.MultiIndex.from_frame(collection_df_intersection)
-        
-    # Filter to keep only cortical parcels if requested
-    if not cortex and not subcortex:
-        lgr.error("Cannot set both 'cortex' and 'subcortex' to False. Returning all!")
-        cortex, subcortex = True, True
-    if not cortex or not subcortex:
-        str_to_keep = "_CX_" if cortex else "_SC_"
-        bool_keep = np.array([True if str_to_keep in c else False for c in data.columns])
-        lgr.info(f"Keeping {bool_keep.sum()} {['cortical', 'subcortical'][not cortex]} parcels.")
-        data = data.loc[:, bool_keep]
-        
+    
     # Standardize
     if standardize:
         lgr.info("Standardizing parcellated data.")
@@ -751,22 +833,15 @@ def fetch_reference(dataset: str,
     # Check if parcellation is defined correctly and load map lists
     if parcellation is not None:
         
-        # check if parcellation is defined correctly and set alias settings
-        if parcellation not in parcellation_lib:
-            lgr.critical_raise(f"Parcellation '{parcellation}' not found. Available: {keys2str(parcellation_lib)}",
-                               ValueError)
-        # check parcellation aliases
-        parc, cortex, subcortex = _parc_alias(parcellation)
+        # check parcellation and return correct name or list of two names
+        parc = _check_parcellation(parcellation)
         
-        # load maps from tabulated data (index col)
-        maps_avail = pd.read_csv(
-            get_file(
-                tab_dir / f"dset-{dataset}_parc-{parc}.csv.gz", 
-                **reference_lib[dataset]["tab"][parc],
-                overwrite=overwrite
-            ), 
-            index_col=0
-        ).index.to_list()
+        # load maps from collection "All", which should be available for all datasets
+        maps_avail = _load_collection(get_file(
+            base_dir / f"collection-All.collect", 
+            **reference_lib[dataset]["collection"]["All"],
+            overwrite=overwrite
+        ))["map"].to_list()
     
     # Check space availability and load map lists   
     else:
@@ -827,8 +902,6 @@ def fetch_reference(dataset: str,
             parc=parc, 
             map_files=maps_avail, 
             collection_df=collection_df,
-            cortex=cortex,
-            subcortex=subcortex,
             standardize=standardize_parcellated,
             overwrite=overwrite,
             verbose=verbose
@@ -853,14 +926,14 @@ def fetch_reference(dataset: str,
         else:
             data = [
                 (get_file(
-                     local_path=map_dir / m / f"{m}_space-{space}_hemi-L.surf.gii", 
+                     local_path=map_dir / m / f"{m}_space-{space}_hemi-L.surf.gii.gz", 
                      **reference_lib[dataset]["map"][m][space]["L"], 
                      osf_config_file=osf_config_file,
                      github_config_file=github_config_file,
                      overwrite=overwrite
                  ),
                  get_file(
-                     local_path=map_dir / m / f"{m}_space-{space}_hemi-R.surf.gii", 
+                     local_path=map_dir / m / f"{m}_space-{space}_hemi-R.surf.gii.gz", 
                      **reference_lib[dataset]["map"][m][space]["R"], 
                      osf_config_file=osf_config_file,
                      github_config_file=github_config_file,
