@@ -160,6 +160,7 @@ def parcellate_data(data,
             kwargs = dict(
                 data=file, 
                 space="mni152" if "mni" in data_space.lower() else data_space,
+                hemi=parc_hemi,
                 ignore_background_data=True,
                 background_value=None,
                 fill_dropped=True,

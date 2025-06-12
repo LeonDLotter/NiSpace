@@ -625,10 +625,6 @@ class NiSpace:
                                     "DataFrame with one column named - or Series of name - 'site'.")
                         lgr.warning("Not performing ComBat harmonization.")
                         combat = False
-                    elif not _NEUROHARMONIZE_AVAILABLE:
-                        lgr.critical_raise("Optional dependency: neuroHarmonize. Run 'pip install neurocombat "
-                                           "neuroharmonize' in your environment to use ComBat harmonization.")
-                        combat = False
                     else:
                         # split into site covariate and other covariate arrays
                         bcov_site = bcov_arr[:, np.array(bcov_names) == "site"]

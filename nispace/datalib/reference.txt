@@ -58,3 +58,19 @@ The resulting "z_desc-association" maps were parcellated and are available only 
 - Yarkoni et al., 2011 (https://doi.org/10.1038/nmeth.1635) for neurosynth
 - Salo et al., 2022 (https://doi.org/10.52294/001c.87681) for nimare
 - Wager et al., 2007 (https://doi.org/10.1093/scan/nsm015) for the MKDAChi2 algorithm
+
+
+# cortexfeatures
+The NiSpace "cortexfeatures" dataset consists of different features of cortical topology available via neuromaps 
+(https://neuromaps-main.readthedocs.io/). Many of these maps were used in Shafiei et al., 2023 (https://doi.org/10.1038/s41467-023-41689-6).
+The maps are fetched directly from neuromaps (space = "fsLROriginal" or "fsaverageOriginal") or downloaded from the NiSpace-data 
+GitHub repo (space = "fsLR" | "fsaverage"). Please cite the original publication when using these maps:
+- thickness: Van Essen et al., 2013 (https://doi.org/10.1016/j.neuroimage.2013.05.041)
+- t1t2: Van Essen et al., 2013 (https://doi.org/10.1016/j.neuroimage.2013.05.041)
+- saaxis: Sydnor et al., 2021 (https://doi.org/10.1016/j.neuron.2021.06.016)
+- devel/evolexpansion: Hill et al., 2010 (https://doi.org/10.1073/pnas.1001229107)
+- evolexpansion/specieshomology: Xu et al., 2020 (https://doi.org/10.1016/j.neuroimage.2020.117346)
+- geneexpr (1. principal component): Markello et al., 2021 (https://doi.org/10.7554/eLife.72129)
+- fcgradient1/2/3: Margulies et al., 2016 (https://doi.org/10.1073/pnas.1608282113)
+- cbf/cbv/cmro2/cmrglc/glycindex: Vaishnavi et al., 2010 (https://doi.org/10.1073/pnas.1010459107)
+- meg: Shafiei et al., 2022 (https://doi.org/10.1371/journal.pbio.3001735)

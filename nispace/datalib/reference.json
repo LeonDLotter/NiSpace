@@ -30,7 +30,7 @@
                         "remote": "reference/pet/map/target-5HT1a_tracer-cumi101_n-8_dx-hc_pub-beliveau2017/target-5HT1a_tracer-cumi101_n-8_dx-hc_pub-beliveau2017_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
                     }
                 },
-                "fsa": {
+                "fsaverageOriginal": {
                     "L": {
                         "host": "neuromaps",
                         "remote": ["beliveau2017", "cumi101", "fsaverage", "L"]
@@ -110,7 +110,7 @@
                         "remote": "reference/pet/map/target-5HT1b_tracer-az10419369_n-36_dx-hc_pub-beliveau2017/target-5HT1b_tracer-az10419369_n-36_dx-hc_pub-beliveau2017_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
                     }
                 },
-                "fsa": {
+                "fsaverageOriginal": {
                     "L": {
                         "host": "neuromaps",
                         "remote": ["beliveau2017", "az10419369", "fsaverage", "L"]
@@ -260,7 +260,7 @@
                         "remote": "reference/pet/map/target-5HT2a_tracer-cimbi36_n-29_dx-hc_pub-beliveau2017/target-5HT2a_tracer-cimbi36_n-29_dx-hc_pub-beliveau2017_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
                     }
                 },
-                "fsa": {
+                "fsaverageOriginal": {
                     "L": {
                         "host": "neuromaps",
                         "remote": ["beliveau2017", "cimbi36", "fsaverage", "L"]
@@ -305,7 +305,7 @@
                         "remote": "reference/pet/map/target-5HT4_tracer-sb207145_n-59_dx-hc_pub-beliveau2017/target-5HT4_tracer-sb207145_n-59_dx-hc_pub-beliveau2017_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
                     }
                 },
-                "fsa": {
+                "fsaverageOriginal": {
                     "L": {
                         "host": "neuromaps",
                         "remote": ["beliveau2017", "sb207145", "fsaverage", "L"]
@@ -385,7 +385,7 @@
                         "remote": "reference/pet/map/target-5HTT_tracer-dasb_n-100_dx-hc_pub-beliveau2017/target-5HTT_tracer-dasb_n-100_dx-hc_pub-beliveau2017_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
                     }
                 },
-                "fsa": {
+                "fsaverageOriginal": {
                     "L": {
                         "host": "neuromaps",
                         "remote": ["beliveau2017", "dasb", "fsaverage", "L"]
@@ -1075,7 +1075,7 @@
                         "remote": "reference/pet/map/target-GABAa_tracer-flumazenil_n-16_dx-hc_pub-norgaard2021/target-GABAa_tracer-flumazenil_n-16_dx-hc_pub-norgaard2021_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
                     }
                 },
-                "fsa": {
+                "fsaverageOriginal": {
                     "L": {
                         "host": "neuromaps",
                         "remote": ["norgaard2021", "flumazenil", "fsaverage", "L"]
@@ -2026,85 +2026,85 @@
             "nw-Aud": {
                 "MNI152": {
                     "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_Aud_MNI_333.nii"]
+                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_Aud_MNI_333.nii"]
                 }
             },
             "nw-CO": {
                 "MNI152": {
                     "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_CO_MNI_333.nii"]
+                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_CO_MNI_333.nii"]
                 }
             },
             "nw-DAN": {
                 "MNI152": {
                     "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_DAN_MNI_333.nii"]
+                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_DAN_MNI_333.nii"]
                 }
             },
             "nw-DMN": {
                 "MNI152": {
                     "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_DMN_MNI_333.nii"]
+                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_DMN_MNI_333.nii"]
                 }
             },
             "nw-FP": {
                 "MNI152": {
                     "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_FP_MNI_333.nii"]
+                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_FP_MNI_333.nii"]
                 }
             },
             "nw-MTL": {
                 "MNI152": {
                     "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_MTL_MNI_333.nii"]
+                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_MTL_MNI_333.nii"]
                 }
             },
             "nw-PMN": {
                 "MNI152": {
                     "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_PMN_MNI_333.nii"]
+                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_PMN_MNI_333.nii"]
                 }
             },
             "nw-PON": {
                 "MNI152": {
                     "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_PON_MNI_333.nii"]
+                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_PON_MNI_333.nii"]
                 }
             },
             "nw-SMd": {
                 "MNI152": {
                     "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_SMd_MNI_333.nii"]
+                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_SMd_MNI_333.nii"]
                 }
             },
             "nw-SMl": {
                 "MNI152": {
                     "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_SMl_MNI_333.nii"]
+                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_SMl_MNI_333.nii"]
                 }
             },
             "nw-Sal": {
                 "MNI152": {
                     "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_Sal_MNI_333.nii"]
+                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_Sal_MNI_333.nii"]
                 }
             },
             "nw-Tpole": {
                 "MNI152": {
                     "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_Tpole_MNI_333.nii"]
+                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_Tpole_MNI_333.nii"]
                 }
             },
             "nw-VAN": {
                 "MNI152": {
                     "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_VAN_MNI_333.nii"]
+                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_VAN_MNI_333.nii"]
                 }
             },
             "nw-Vis": {
                 "MNI152": {
                     "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "master", "NetworkTemplates/MNI/volTemplate_Vis_MNI_333.nii"]
+                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_Vis_MNI_333.nii"]
                 }
             }
         },
@@ -2269,5 +2269,792 @@
                 "remote": "reference/neurosynth/collection-CognitiveFunctions.collect"
             }
         }
+    },
+
+    "cortexfeatures": {
+        "map": {
+
+            "feature-thickness_pub-hcps1200": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-thickness_pub-hcps1200/feature-thickness_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-thickness_pub-hcps1200/feature-thickness_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-thickness_pub-hcps1200/feature-thickness_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-thickness_pub-hcps1200/feature-thickness_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "thickness", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "thickness", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-t1t2_pub-hcps1200": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-t1t2_pub-hcps1200/feature-t1t2_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-t1t2_pub-hcps1200/feature-t1t2_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-t1t2_pub-hcps1200/feature-t1t2_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-t1t2_pub-hcps1200/feature-t1t2_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "myelinmap", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "myelinmap", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-saaxis_pub-sydnor2021": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-saaxis_pub-sydnor2021/feature-saaxis_pub-sydnor2021_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-saaxis_pub-sydnor2021/feature-saaxis_pub-sydnor2021_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-saaxis_pub-sydnor2021/feature-saaxis_pub-sydnor2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-saaxis_pub-sydnor2021/feature-saaxis_pub-sydnor2021_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["sydnor2021", "SAaxis", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["sydnor2021", "SAaxis", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-geneexpr-abagen": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-geneexpr-abagen/feature-geneexpr-abagen_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-geneexpr-abagen/feature-geneexpr-abagen_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-geneexpr-abagen/feature-geneexpr-abagen_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-geneexpr-abagen/feature-geneexpr-abagen_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverageOriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["abagen", "genepc1", "fsaverage", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["abagen", "genepc1", "fsaverage", "R"]
+                    }
+                }
+            },
+
+            "feature-develexpansion_pub-hill2010": {
+                "fsaverage": {
+                  "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-develexpansion_pub-hill2010/feature-develexpansion_pub-hill2010_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-develexpansion_pub-hill2010/feature-develexpansion_pub-hill2010_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["hill2010", "devexp", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-evolexpansion_pub-hill2010": {
+                "fsaverage": {
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-evolexpansion_pub-hill2010/feature-evolexpansion_pub-hill2010_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-evolexpansion_pub-hill2010/feature-evolexpansion_pub-hill2010_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["hill2010", "evoexp", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-evolexpansion_pub-xu2020": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-evolexpansion_pub-xu2020/feature-evolexpansion_pub-xu2020_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-evolexpansion_pub-xu2020/feature-evolexpansion_pub-xu2020_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-evolexpansion_pub-xu2020/feature-evolexpansion_pub-xu2020_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-evolexpansion_pub-xu2020/feature-evolexpansion_pub-xu2020_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["xu2020", "evoexp", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["xu2020", "evoexp", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-specieshomology_pub-xu2020": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-specieshomology_pub-xu2020/feature-specieshomology_pub-xu2020_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-specieshomology_pub-xu2020/feature-specieshomology_pub-xu2020_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-specieshomology_pub-xu2020/feature-specieshomology_pub-xu2020_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-specieshomology_pub-xu2020/feature-specieshomology_pub-xu2020_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["xu2020", "FChomology", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["xu2020", "FChomology", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-fcgradient1_pub-margulies2016": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-fcgradient1_pub-margulies2016/feature-fcgradient1_pub-margulies2016_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-fcgradient1_pub-margulies2016/feature-fcgradient1_pub-margulies2016_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-fcgradient1_pub-margulies2016/feature-fcgradient1_pub-margulies2016_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-fcgradient1_pub-margulies2016/feature-fcgradient1_pub-margulies2016_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["margulies2016", "fcgradient01", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["margulies2016", "fcgradient01", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-fcgradient2_pub-margulies2016": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-fcgradient2_pub-margulies2016/feature-fcgradient2_pub-margulies2016_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-fcgradient2_pub-margulies2016/feature-fcgradient2_pub-margulies2016_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-fcgradient2_pub-margulies2016/feature-fcgradient2_pub-margulies2016_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-fcgradient2_pub-margulies2016/feature-fcgradient2_pub-margulies2016_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["margulies2016", "fcgradient02", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["margulies2016", "fcgradient02", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-fcgradient3_pub-margulies2016": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-fcgradient3_pub-margulies2016/feature-fcgradient3_pub-margulies2016_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-fcgradient3_pub-margulies2016/feature-fcgradient3_pub-margulies2016_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-fcgradient3_pub-margulies2016/feature-fcgradient3_pub-margulies2016_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-fcgradient3_pub-margulies2016/feature-fcgradient3_pub-margulies2016_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["margulies2016", "fcgradient03", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["margulies2016", "fcgradient03", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-cbf_pub-vaishnavi2010": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-cbf_pub-vaishnavi2010/feature-cbf_pub-vaishnavi2010_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-cbf_pub-vaishnavi2010/feature-cbf_pub-vaishnavi2010_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-cbf_pub-vaishnavi2010/feature-cbf_pub-vaishnavi2010_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-cbf_pub-vaishnavi2010/feature-cbf_pub-vaishnavi2010_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["raichle", "cbf", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["raichle", "cbf", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-cbv_pub-vaishnavi2010": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-cbv_pub-vaishnavi2010/feature-cbv_pub-vaishnavi2010_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-cbv_pub-vaishnavi2010/feature-cbv_pub-vaishnavi2010_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-cbv_pub-vaishnavi2010/feature-cbv_pub-vaishnavi2010_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-cbv_pub-vaishnavi2010/feature-cbv_pub-vaishnavi2010_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["raichle", "cbv", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                            "remote": ["raichle", "cbf", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-cmro2_pub-vaishnavi2010": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-cmro2_pub-vaishnavi2010/feature-cmro2_pub-vaishnavi2010_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-cmro2_pub-vaishnavi2010/feature-cmro2_pub-vaishnavi2010_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-cmro2_pub-vaishnavi2010/feature-cmro2_pub-vaishnavi2010_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-cmro2_pub-vaishnavi2010/feature-cmro2_pub-vaishnavi2010_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["raichle", "cmr02", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["raichle", "cmr02", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-cmrglc_pub-vaishnavi2010": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-cmrglc_pub-vaishnavi2010/feature-cmrglc_pub-vaishnavi2010_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-cmrglc_pub-vaishnavi2010/feature-cmrglc_pub-vaishnavi2010_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-cmrglc_pub-vaishnavi2010/feature-cmrglc_pub-vaishnavi2010_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-cmrglc_pub-vaishnavi2010/feature-cmrglc_pub-vaishnavi2010_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["raichle", "cmrglc", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["raichle", "cmrglc", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-glycindex_pub-vaishnavi2010": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-glycindex_pub-vaishnavi2010/feature-glycindex_pub-vaishnavi2010_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-glycindex_pub-vaishnavi2010/feature-glycindex_pub-vaishnavi2010_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-glycindex_pub-vaishnavi2010/feature-glycindex_pub-vaishnavi2010_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-glycindex_pub-vaishnavi2010/feature-glycindex_pub-vaishnavi2010_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-glycindex_pub-vaishnavi2010/feature-glycindex_pub-vaishnavi2010_space-fsLROriginal_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-glycindex_pub-vaishnavi2010/feature-glycindex_pub-vaishnavi2010_space-fsLROriginal_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+
+            "feature-megpoweralpha_pub-shafiei2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpoweralpha_pub-shafiei2022/feature-megpoweralpha_pub-shafiei2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpoweralpha_pub-shafiei2022/feature-megpoweralpha_pub-shafiei2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpoweralpha_pub-shafiei2022/feature-megpoweralpha_pub-shafiei2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpoweralpha_pub-shafiei2022/feature-megpoweralpha_pub-shafiei2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "megalpha", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "megalpha", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-megpowerbeta_pub-shafiei2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowerbeta_pub-shafiei2022/feature-megpowerbeta_pub-shafiei2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowerbeta_pub-shafiei2022/feature-megpowerbeta_pub-shafiei2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowerbeta_pub-shafiei2022/feature-megpowerbeta_pub-shafiei2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowerbeta_pub-shafiei2022/feature-megpowerbeta_pub-shafiei2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "megbeta", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "megbeta", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-megpowerdelta_pub-shafiei2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowerdelta_pub-shafiei2022/feature-megpowerdelta_pub-shafiei2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowerdelta_pub-shafiei2022/feature-megpowerdelta_pub-shafiei2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowerdelta_pub-shafiei2022/feature-megpowerdelta_pub-shafiei2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowerdelta_pub-shafiei2022/feature-megpowerdelta_pub-shafiei2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "megdelta", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "megdelta", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-megpowergamma1_pub-shafiei2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowergamma1_pub-shafiei2022/feature-megpowergamma1_pub-shafiei2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowergamma1_pub-shafiei2022/feature-megpowergamma1_pub-shafiei2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowergamma1_pub-shafiei2022/feature-megpowergamma1_pub-shafiei2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowergamma1_pub-shafiei2022/feature-megpowergamma1_pub-shafiei2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "meggamma1", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "meggamma1", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-megpowergamma2_pub-shafiei2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowergamma2_pub-shafiei2022/feature-megpowergamma2_pub-shafiei2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowergamma2_pub-shafiei2022/feature-megpowergamma2_pub-shafiei2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowergamma2_pub-shafiei2022/feature-megpowergamma2_pub-shafiei2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowergamma2_pub-shafiei2022/feature-megpowergamma2_pub-shafiei2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "meggamma2", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "meggamma2", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-megpowertheta_pub-shafiei2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowertheta_pub-shafiei2022/feature-megpowertheta_pub-shafiei2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowertheta_pub-shafiei2022/feature-megpowertheta_pub-shafiei2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowertheta_pub-shafiei2022/feature-megpowertheta_pub-shafiei2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megpowertheta_pub-shafiei2022/feature-megpowertheta_pub-shafiei2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "megtheta", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "megtheta", "fsLR", "R"]
+                    }
+                }
+            },
+
+            "feature-megtimescale_pub-shafiei2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megtimescale_pub-shafiei2022/feature-megtimescale_pub-shafiei2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megtimescale_pub-shafiei2022/feature-megtimescale_pub-shafiei2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megtimescale_pub-shafiei2022/feature-megtimescale_pub-shafiei2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-megtimescale_pub-shafiei2022/feature-megtimescale_pub-shafiei2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLROriginal": {
+                    "L": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "megtimescale", "fsLR", "L"]
+                    },
+                    "R": {
+                        "host": "neuromaps",
+                        "remote": ["hcps1200", "megtimescale", "fsLR", "R"]
+                    }
+                }
+            }
+        },
+
+        "tab": {
+            "Schaefer100": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Schaefer100.csv.gz"
+            },
+            "Schaefer200": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Schaefer200.csv.gz"
+            },
+            "Schaefer400": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Schaefer400.csv.gz"
+            },
+            "Glasser": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Glasser.csv.gz"
+            },
+            "DesikanKilliany": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-DesikanKilliany.csv.gz"
+            },
+            "Destrieux": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Destrieux.csv.gz"
+            }
+        },
+
+        "collection": {
+            "All": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/collection-All.collect"
+            },
+            "MEG": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/collection-MEG.collect"
+            },
+            "Metabolism": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/collection-Metabolism.collect"
+            },
+            "CortexTopology": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/collection-CortexOrganisation.collect"
+            }
+        }
+
     }
 }

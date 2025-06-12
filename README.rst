@@ -134,7 +134,7 @@ See the documentation's `citation <https://nispace.readthedocs.io/en/latest/cita
 Contact
 -------
 
-You can contact me via `email <mailto:leondlotter@gmail.com>`_. For usage questions, please consider opening a topic on NeuroStars (see `Support`_), so that others can benefit from our exchange.
+You can contact me via `email <mailto:leondlotter@gmail.com>`_. For usage questions, please consider opening a topic on NeuroStars (see `Support & Updates`), so that others can benefit from our exchange.
 
 
 

@@ -20,8 +20,8 @@ def np_any_axis1(x):
 
 @njit(cache=True, nogil=True)
 def residuals(x, y, decenter=False):
-    """Compute residuals for Regression of predictor(s) x on target y. 
-    Requires numpy arrays with columns as predictors/target.
+    """Compute residuals for Regression with dependent variable y and independent variable(s) x. 
+    Requires numpy arrays with columns as independent variables.
 
     Args:
         x (numpy.ndarray): shape (n_values, n_predictors)
@@ -44,8 +44,8 @@ def residuals(x, y, decenter=False):
 
 @njit(cache=True, nogil=True)
 def residuals_nan(x, y, decenter=False):
-    """Compute residuals for Regression of predictor(s) x on target y. 
-    Requires numpy arrays with columns as predictors/target.
+    """Compute residuals for Regression with dependent variable y and independent variable(s) x. 
+    Requires numpy arrays with columns as independent variables.
 
     Args:
         x (numpy.ndarray): shape (n_values, n_predictors)

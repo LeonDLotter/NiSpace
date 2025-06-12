@@ -134,8 +134,8 @@ def fetch_template(template: str = _SPACE_DEFAULT,
     else:
         tpl_file = ()
         for h in hemi:
-            tpl_path = map_dir / desc / f"tpl-{template}_desc-{desc}_res-{res}_hemi-{h}.surf.gii"
-            tpl_file += get_file(tpl_path, **template_lib[template][res][desc][h], overwrite=overwrite),
+            tpl_path = map_dir / desc / f"tpl-{template}_desc-{desc}_res-{res}_hemi-{h}.surf.gii.gz"
+            tpl_file += get_file(tpl_path, **template_lib[template][res][desc][h], compress_gifti=True, overwrite=overwrite),
         if len(tpl_file) == 1: 
             tpl_file = tpl_file[0]
     
@@ -312,6 +312,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                 parcellation_file += get_file(
                     base_dir / f"parc-{p}_space-{space}_hemi-{h}.label.gii.gz", 
                     **parcellation_lib[p][space]["map"][h],
+                    compress_gifti=True,
                     overwrite=overwrite
                 ),
                 if return_labels:
@@ -763,7 +764,8 @@ def _print_references(dataset: str, meta: pd.DataFrame = None):
                     msg += f"    CAVE: {note}\n"
     
     # mRNA
-    elif dataset.lower() in ["mrna", "magicc", "neurosynth", "grf"]:
+    # TODO: make all this more general
+    elif dataset.lower() in ["mrna", "magicc", "neurosynth", "grf", "cortexfeatures", "megfeatures"]:
         msg = get_ref_info(dataset)
         if meta is not None:
             if len(meta) > 0:
@@ -866,7 +868,10 @@ def fetch_reference(dataset: str,
             else:
                 maps_avail = [
                     m for m in maps_avail 
-                    if reference_lib[dataset]["map"][m][space]["L"]["host"] not in ["osfprivate", "github-nispace-private"]
+                    if (reference_lib[dataset]["map"][m][space]["L"]["host"] 
+                        if "L" in reference_lib[dataset]["map"][m][space] 
+                        else reference_lib[dataset]["map"][m][space]["R"]["host"]) 
+                    not in ["osfprivate", "github-nispace-private"]
                 ]
     
     # Filter by 'maps'
@@ -924,23 +929,19 @@ def fetch_reference(dataset: str,
             ]
         # surface: two files per map
         else:
-            data = [
-                (get_file(
-                     local_path=map_dir / m / f"{m}_space-{space}_hemi-L.surf.gii.gz", 
-                     **reference_lib[dataset]["map"][m][space]["L"], 
-                     osf_config_file=osf_config_file,
-                     github_config_file=github_config_file,
-                     overwrite=overwrite
-                 ),
-                 get_file(
-                     local_path=map_dir / m / f"{m}_space-{space}_hemi-R.surf.gii.gz", 
-                     **reference_lib[dataset]["map"][m][space]["R"], 
-                     osf_config_file=osf_config_file,
-                     github_config_file=github_config_file,
-                     overwrite=overwrite
-                 ))
-                for m in maps_avail
-            ]
+            data = []
+            for m in maps_avail:
+                data.append(tuple([
+                    get_file(
+                        local_path=map_dir / m / f"{m}_space-{space}_hemi-{hemi}.surf.gii.gz", 
+                        **reference_lib[dataset]["map"][m][space][hemi], 
+                        compress_gifti=True,
+                        osf_config_file=osf_config_file,
+                        github_config_file=github_config_file,
+                        overwrite=overwrite
+                    )
+                    for hemi in reference_lib[dataset]["map"][m][space].keys()
+                ]))
         
     # Print references
     # for maps if "pet", or for sets if "mrna"

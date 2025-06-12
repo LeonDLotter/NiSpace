@@ -188,7 +188,7 @@ def download_file(host: Literal["url", "github", "github-nispace", "github-nispa
             return path
         else: 
             raise ValueError(f"Unexpected neuromaps output for "
-                             f"source={source}, desc={tracer}, space={space}: {path}")
+                             f"source={source}, desc={tracer}, space={space}, hemi={hemi}: {path}")
 
 
 def _compress_nifti(file_path, save_path, dtype=np.float32):

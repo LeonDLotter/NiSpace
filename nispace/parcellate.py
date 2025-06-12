@@ -233,7 +233,10 @@ class Parcellater():
                     mask_space = space
                 elif self.resampling_target == 'parcellation':
                     mask_space = self.space
-                nomedialwall = load_data(fetch_atlas(mask_space, density)['medial'])
+                atlas_medialwall = fetch_atlas(mask_space, density)['medial']
+                atlas_medialwall = atlas_medialwall[0] if hemi == 'L' \
+                    else atlas_medialwall[1] if hemi == 'R' else atlas_medialwall
+                nomedialwall = load_data(atlas_medialwall)
                 background_value = np.median(darr[nomedialwall == 0])
             #parcellated = vertices_to_parcels(darr, parc, background=background_value)
             parc_arr = _gifti_to_array(parc)
