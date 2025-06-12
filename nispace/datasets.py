@@ -2,11 +2,8 @@ from typing import Union, List, Dict, Tuple
 import pathlib
 import pandas as pd
 import numpy as np
-from nilearn import image
-import shutil
-from typing import Literal
 
-from . import lgr
+from . import lgr, get_commit
 from .modules.constants import _PARC_DEFAULT, _SPACE_DEFAULT
 from .stats.misc import zscore_df
 from .utils.utils import _rm_ext, set_log, merge_parcellations
@@ -26,23 +23,22 @@ def keys2list(dct):
 def keys2str(dct, sep=", "):
     return sep.join(list(dct.keys()))
 
-
 # EMPTY NISPACE DATA DIR ===========================================================================
 
-_EMPTY_DATA_CONFIRMED = False
-def empty_nispace_data_dir(nispace_data_dir: Union[str, pathlib.Path] = None):
-    global _EMPTY_DATA_CONFIRMED
-    if nispace_data_dir is None:
-        nispace_data_dir = pathlib.Path.home() / "nispace-data"
-    if not _EMPTY_DATA_CONFIRMED:
-        lgr.warning("If you call this function again, it will remove all contents of your NiSpace "
-                    f"data directory at {nispace_data_dir}.")
-        lgr.warning("Call it again to proceed.")
-        _EMPTY_DATA_CONFIRMED = True
-    else:
-        lgr.warning(f"Emptying nispace data dir at {nispace_data_dir}.")
-        shutil.rmtree(nispace_data_dir)
-        nispace_data_dir.mkdir(parents=True, exist_ok=True)
+# _EMPTY_DATA_CONFIRMED = False
+# def empty_nispace_data_dir(nispace_data_dir: Union[str, pathlib.Path] = None):
+#     global _EMPTY_DATA_CONFIRMED
+#     if nispace_data_dir is None:
+#         nispace_data_dir = pathlib.Path.home() / "nispace-data"
+#     if not _EMPTY_DATA_CONFIRMED:
+#         lgr.warning("If you call this function again, it will remove all contents of your NiSpace "
+#                     f"data directory at {nispace_data_dir}.")
+#         lgr.warning("Call it again to proceed.")
+#         _EMPTY_DATA_CONFIRMED = True
+#     else:
+#         lgr.warning(f"Emptying nispace data dir at {nispace_data_dir}.")
+#         shutil.rmtree(nispace_data_dir)
+#         nispace_data_dir.mkdir(parents=True, exist_ok=True)
 
 
 # FILE HANDLING ====================================================================================
@@ -726,7 +722,7 @@ def _load_parcellated_data(dataset: str,
 def _print_references(dataset: str, meta: pd.DataFrame = None):
     
     # info file
-    def get_ref_info(dataset):
+    def get_ref_info(dataset, add_commit=True):
         get_line = False
         msg = ""
         with open(datalib_dir / "reference.txt", "r") as f:
@@ -738,6 +734,8 @@ def _print_references(dataset: str, meta: pd.DataFrame = None):
                     break
                 if get_line:
                     msg += line
+        if add_commit:
+            msg += f"To ensure reproducibility, note the NiSpace commit/version: {get_commit()}\n"
         msg += "\n"
         return msg
                     
