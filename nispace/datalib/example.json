@@ -1,29 +1,76 @@
 {
     "abide": {
         "tab": {
-            "host": "github-nispace",
-            "remote": "example/example-abide_parc-Schaefer200.csv.gz"
+            "Schaefer200": {
+                "host": "github-nispace",
+                "remote": "example/example-abide_parc-Schaefer200.csv.gz"
+            },
+            "TianS1": {
+                "host": "github-nispace",
+                "remote": "example/example-abide_parc-TianS1.csv.gz"
+            }
         },
         "info": {
             "host": "github-nispace",
             "remote": "example/example-abide_info.csv"
-        },
-        "parc": "Schaefer200"
+        }
     },
 
     "enigma": {
         "tab": {
-            "host": "github-nispace",
-            "remote": "example/example-enigma_parc-DesikanKilliany.csv.gz"
-        },
-        "parc": "DesikanKilliany"
+            "DesikanKilliany": {
+                "host": "github-nispace",
+                "remote": "example/example-enigma_parc-DesikanKilliany.csv.gz"
+            }
+        }
     },
 
     "happy": {
         "tab": {
-            "host": "github-nispace",
-            "remote": "example/example-happy_parc-Schaefer200.csv.gz"
-        },
-        "parc": "Schaefer200"
+            "Schaefer100": {
+                "host": "github-nispace",
+                "remote": "example/example-happy_parc-Schaefer200.csv.gz"
+            },
+            "Schaefer200": {
+                "host": "github-nispace",
+                "remote": "example/example-happy_parc-Schaefer200.csv.gz"
+            },
+            "Schaefer400": {
+                "host": "github-nispace",
+                "remote": "example/example-happy_parc-Schaefer400.csv.gz"
+            },
+            "Glasser": {
+                "host": "github-nispace",
+                "remote": "example/example-happy_parc-Glasser.csv.gz"
+            },
+            "DesikanKilliany": {
+                "host": "github-nispace",
+                "remote": "example/example-happy_parc-DesikanKilliany.csv.gz"
+            },
+            "DesikanKillianyTourville": {
+                "host": "github-nispace",
+                "remote": "example/example-happy_parc-DesikanKillianyTourville.csv.gz"
+            },
+            "Destrieux": {
+                "host": "github-nispace",
+                "remote": "example/example-happy_parc-Destrieux.csv.gz"
+            },
+            "TianS1": {
+                "host": "github-nispace",
+                "remote": "example/example-happy_parc-TianS1.csv.gz"
+            },
+            "TianS2": {
+                "host": "github-nispace",
+                "remote": "example/example-happy_parc-TianS2.csv.gz"
+            },
+            "TianS3": {
+                "host": "github-nispace",
+                "remote": "example/example-happy_parc-TianS3.csv.gz"
+            },
+            "Aseg": {
+                "host": "github-nispace",
+                "remote": "example/example-happy_parc-Aseg.csv.gz"
+            }
+        }
     }
 }

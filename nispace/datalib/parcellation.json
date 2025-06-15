@@ -395,7 +395,6 @@
 
     },
     "MelbourneS1": {
-        "level": "subcortex",
         "alias": "TianS1"
     },
 
@@ -435,7 +434,6 @@
 
     },
     "MelbourneS2": {
-        "level": "subcortex",
         "alias": "TianS2"
     },
 
@@ -475,7 +473,6 @@
 
     },
     "MelbourneS3": {
-        "level": "subcortex",
         "alias": "TianS3"
     },
 
@@ -550,11 +547,9 @@
         }
     },
     "HCP": {
-        "level": "cortex",
         "alias": "Glasser"
     },
     "MMP": {
-        "level": "cortex",
         "alias": "Glasser"
     },
 
@@ -657,8 +652,7 @@
         }
     },
     "Desikan": {
-        "alias": "DesikanKilliany",
-        "level": "cortex"
+        "alias": "DesikanKilliany"
     },
 
     "DesikanKillianyTourville": {
@@ -695,8 +689,7 @@
        
     },
     "DKT": {
-        "alias": "DesikanKillianyTourville",
-        "level": "cortex"
+        "alias": "DesikanKillianyTourville"
     },
 
     "Destrieux": {

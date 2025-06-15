@@ -1,21 +1,20 @@
 # pet
 The NiSpace "PET" dataset is based on openly available nuclear imaging maps largely accessed via neuromaps 
-(https://neuromaps-main.readthedocs.io/). If requested in the varying original spaces and resolutions (termed "MNI152", "fsa",
-or "hcp"), the maps are downloaded directly from the source and cached locally. If, as is highly recommended, the maps are 
-requested in a defined space ("MNI152NLin2009cAsym", "MNI152NLin6Asym", "fsaverage", or "fsLR"), they are downloaded from the 
-NiSpace-data GitHub repo (find them in `~HOME/nispace-data/reference/pet/map`). The NiSpace-hosted MNI maps were directly 
-registered to 2mm MNI152NLin6Asym space, and then transformed to 2mm MNI152NLin2009cAsym with a pre-estimated MNI-to-MNI 
-transformation using SynthMorph v4 (https://martinos.org/malte/synthmorph/). The resulting maps were masked with a liberal
-grey matter mask generated from the Harvard-Oxford atlas and scaled from 1e-6 to 1. The scaling was transferred from MNI to 
-surface maps if both were available for the same source (e.g., maps from Beliveau et al.).
-
+(https://neuromaps-main.readthedocs.io/). If requested in the varying original spaces and resolutions (termed "MNI152", 
+"fsaverageOriginal", or "fsLROriginal"), the maps are downloaded directly from the source and cached locally. If, as is highly 
+recommended, the maps are requested in a defined space ("MNI152NLin2009cAsym", "MNI152NLin6Asym", "fsaverage", or "fsLR"), 
+they are downloaded from the NiSpace-data GitHub repo (find them in `~HOME/nispace-data/reference/pet/map`). 
+The NiSpace-hosted MNI maps were directly registered to 2mm MNI152NLin6Asym space, and transformed to 2mm MNI152NLin2009cAsym 
+with a pre-estimated MNI-to-MNI transformation using SynthMorph v4 (https://martinos.org/malte/synthmorph/). The resulting maps 
+were masked with a liberal grey matter mask generated from the Harvard-Oxford atlas and scaled from 1e-6 to 1. The scaling was 
+transferred from MNI to surface maps if both were available for the same source (e.g., maps from Beliveau et al.).
 The accompanying metadata table contains detailed information about tracers, source samples, original publications and data 
 sources, as well as the publication licenses. Every map should be cited when used. The responsibility for this lies with the user! 
 We additionally ask to cite:
 - Markello et al., 2022 (https://doi.org/10.1038/s41592-022-01625-w)
 - Hansen et al., 2022 (https://doi.org/10.1038/s41593-022-01186-3)
 - Dukart et al., 2021 (https://doi.org/10.1002/hbm.25244)
-- Hoffmann et al., 2024 (https://doi.org/10.1162/imag_a_00197), when NiSpace-processed maps are used
+- Hoffmann et al., 2024 (https://doi.org/10.1162/imag_a_00197; if NiSpace-processed maps are used)
 
 
 # mrna

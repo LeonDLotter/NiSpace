@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 
 from . import lgr, NiSpace
 from .utils.utils import set_log
-from .modules.constants import (_PARCS, _PARCS_NICE, _PARC_DEFAULT, 
-                                _DSETS, _DSETS_NICE, _COLLECT_DEFAULT,
+from .modules.constants import (_PARC_DEFAULT, 
+                                _COLLECT_DEFAULT,
                                 _COLOC_METHODS)
 from .datasets import fetch_reference, reference_lib, _check_parcellation
 
@@ -90,7 +90,7 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
                 else:
                     null_maps = None
             else:
-                lgr.error(f"'x' must be one of: '{_DSETS_NICE}' not '{x}'!")
+                lgr.error(f"'x' must be one of: '{list(reference_lib.keys())}' not '{x}'!")
         else:
             null_maps = None
         

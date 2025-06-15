@@ -14,7 +14,7 @@ from neuromaps.datasets import DENSITIES, fetch_atlas
 from neuromaps.images import construct_shape_gii, load_gifti, load_nifti, load_data
 from neuromaps.resampling import resample_images
 from neuromaps.transforms import _check_hemi, _estimate_density
-from neuromaps.nulls.spins import vertices_to_parcels, parcels_to_vertices
+from neuromaps.nulls.spins import parcels_to_vertices
 
 # monkey fix to neuromaps ALIAS
 ALIAS = dict(

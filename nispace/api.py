@@ -16,7 +16,7 @@ from .modules.transform_y import _dummy_code_groups, _num_code_subjects, _get_tr
 from .modules.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats
 from .modules.permute import _get_null_maps, _get_exact_p_values, _get_correct_mc_method
 from .modules.plot import _plot_categorical
-from .modules.constants import _PARCS, _PARCS_DEFAULT, _COLOC_METHODS
+from .modules.constants import _PARCS_DEFAULT, _COLOC_METHODS
 from .datasets import fetch_parcellation, fetch_template, _check_parcellation
 from .nulls import get_distance_matrix
 from .stats.coloc import *

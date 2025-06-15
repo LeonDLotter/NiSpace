@@ -1,11 +1,8 @@
 import os
 from pathlib import Path
 import shutil
-import pickle
-import gzip
 import requests
 import numpy as np
-import pandas as pd
 import tempfile
 import re
 import configparser
@@ -15,14 +12,12 @@ import subprocess
 from typing import Literal, Union
 from nilearn import image
 from neuromaps.datasets import fetch_annotation
-from neuromaps.resampling import resample_images
-from nilearn.masking import compute_background_mask
-from sklearn.preprocessing import minmax_scale
-from nibabel import Nifti1Image
 
-import nispace.datasets as datasets
-import nispace.io as io
-    
+from nispace.io import read_json, load_img
+
+datalib_dir = Path(__file__).parent.parent / "datalib"
+hash_lib = read_json(datalib_dir / "file_hashes.json")
+
 try:
     import osfclient
     _OSF_AVAIL = True
@@ -31,6 +26,26 @@ except:
     
 from nispace.config import DATA_REPO, DATA_REPO_COMMIT, DATA_REPO_PRIVATE, DATA_REPO_PRIVATE_COMMIT
     
+
+def _check_hash(local: Union[str, Path], remote: Union[str, Path] = None, 
+                verbose: bool = False) -> bool:
+    
+    # hash of local file
+    hash_local = calculate_sha256_hash(local)
+    
+    # hash of remote file
+    if remote is None:
+        remote = local
+    hash_remote = hash_lib[str(remote)]
+    
+    # compare hashes
+    if hash_local == hash_remote:
+        return True
+    else:
+        if verbose:
+            print(f"Hash mismatch: {local} -> {hash_local} != {remote} -> {hash_remote}")
+        return False
+     
     
 def download(url, path=None, headers=None):
     r = requests.get(url, headers=headers)
@@ -148,7 +163,7 @@ def download_file(host: Literal["url", "github", "github-nispace", "github-nispa
             
             # get url
             if host == "url":
-                url = remote.as_posix().replace("https:/", "https://")        
+                url = remote.as_posix().replace("https:/", "https://").replace("http:/", "http://")  
             elif host == "github":
                 url = f"https://raw.githubusercontent.com/{repo}/{branch}/{remote.as_posix()}"
             elif host == "github-nispace":
@@ -185,7 +200,7 @@ def download_file(host: Literal["url", "github", "github-nispace", "github-nispa
         path = fetch_annotation(source=source, desc=tracer, space=space, hemi=hemi)
         # should be a string or pathlib.Path
         if isinstance(path, (str, Path)):
-            return path
+            return Path(path)
         else: 
             raise ValueError(f"Unexpected neuromaps output for "
                              f"source={source}, desc={tracer}, space={space}, hemi={hemi}: {path}")
@@ -194,10 +209,10 @@ def download_file(host: Literal["url", "github", "github-nispace", "github-nispa
 def _compress_nifti(file_path, save_path, dtype=np.float32):
     # try to load
     try:
-        img = io.load_img(file_path, override_file_format=".nii.gz")
+        img = load_img(file_path, override_file_format=".nii.gz")
     except:
         try:
-            img = io.load_img(file_path, override_file_format=".nii")
+            img = load_img(file_path, override_file_format=".nii")
         except Exception as e:
             raise ValueError(f"Could not load file '{file_path}': {e}")
     # change dtype
@@ -214,30 +229,59 @@ def _compress_gifti(file_path, save_path):
     for fp, sp in zip(file_path, save_path):
         # try to load
         try:
-            img = io.load_img(fp, override_file_format=".gii.gz")
+            img = load_img(fp, override_file_format=".gii.gz")
         except:
             try:
-                img = io.load_img(fp, override_file_format=".gii")
+                img = load_img(fp, override_file_format=".gii")
             except Exception as e:
                 raise ValueError(f"Could not load file '{fp}': {e}")
         # save
         img.to_filename(sp)
 
 
+def _get_file_ext(remote):
+    remote = str(remote)
+    gz = ".gz" if remote.endswith(".gz") else ""
+    ext_nogz = remote.replace(gz, "").split(".")[-1]
+    return ext_nogz + gz
+
+
 def get_file(local_path, host, remote, 
-             compress_nifti=False,
-             compress_gifti=False,
              osf_config_file=None,
              github_config_file=None,
+             hash_check=True,
              overwrite=False):
     
+    # local path
     local_path = Path(local_path)
+    # infer file extension if necessary
+    if local_path.name.endswith(".%s"):
+        ext = _get_file_ext(remote)
+        local_path = local_path.parent / (local_path.name % ext)
     if local_path.is_dir():
         raise ValueError(f"'local_path' must be a file path, not a directory path; not '{local_path}'.")
     
-    if not local_path.exists() or overwrite:
+    redownload = False
+    msg = "Downloading"
+    # download always if overwrite is enabled
+    if overwrite:
+        redownload = True
+    else:
+        # download if not exists
+        if not local_path.exists():
+            redownload = True
+        # download if hash check is enabled and hash is different
+        else:
+            # check hash, this is only possible with github-nispace
+            if hash_check and host == "github-nispace":
+                if not _check_hash(local_path, remote, verbose=False):
+                    redownload = True
+                    msg = "Updating"
+    
+    # download if not exists or overwriting
+    if redownload:
         
-        print(f"Downloading {local_path.resolve()}.")
+        print(f"{msg} {local_path.resolve()}")
         if not local_path.parent.exists():
             local_path.parent.mkdir(parents=True)
         tmp_path = download_file(
@@ -245,24 +289,29 @@ def get_file(local_path, host, remote,
             osf_config_file=osf_config_file,
             github_config_file=github_config_file
         )
-        
-        if compress_nifti:
-            _compress_nifti(tmp_path, local_path)
-        elif compress_gifti:
-            _compress_gifti(tmp_path, local_path)
-        else:
-            shutil.copy(tmp_path, local_path)
+
+        # save
+        shutil.copy(tmp_path, local_path)
+        tmp_path.unlink()
             
     return local_path
 
 
-def calculate_file_hash(file_path):
+def calculate_md5_hash(file_path):
     """Calculate the MD5 hash of a file."""
     hash_md5 = hashlib.md5()
     with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
+
+def calculate_sha256_hash(file_path):
+    """Calculate the SHA-256 hash of a file."""
+    hash_sha256 = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_sha256.update(chunk)
+    return hash_sha256.hexdigest()
 
 
 def sync_osf(local_path, osf_id, username=None, password=None, token=None,
@@ -308,7 +357,7 @@ def sync_osf(local_path, osf_id, username=None, password=None, token=None,
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_file = Path(temp_dir) / "osf_ids.json"
             subprocess.run(["Rscript", "get_osf_ids.R", str(temp_file)])
-            remote_files = io.read_json(temp_file)
+            remote_files = read_json(temp_file)
     print(remote_files)
 
     # Prepare local path
@@ -334,7 +383,7 @@ def sync_osf(local_path, osf_id, username=None, password=None, token=None,
                 remote_file = remote_files[remote_file_path]
                 
                 # get hash 
-                local_file_hash = calculate_file_hash(local_file_path)
+                local_file_hash = calculate_md5_hash(local_file_path)
                 if not use_R:
                     remote_file_hash = remote_file.hashes.get('md5')
                 else:
@@ -412,7 +461,7 @@ def sync_osf(local_path, osf_id, username=None, password=None, token=None,
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_file = Path(temp_dir) / "osf_ids.json"
             subprocess.run(["Rscript", "get_osf_ids.R", str(temp_file)])
-            ids = io.read_json(temp_file)
+            ids = read_json(temp_file)
         
     return ids
                     
