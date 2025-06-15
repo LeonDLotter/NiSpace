@@ -27,7 +27,6 @@ def fetch_file_hashes():
     DATA_REPO, DATA_REPO_COMMIT = get_config_values()
     
     # construct github url
-    print(DATA_REPO, DATA_REPO_COMMIT)
     github_url = f"https://raw.githubusercontent.com/{DATA_REPO}/{DATA_REPO_COMMIT}/file_hashes.json"
     print(github_url)
     
