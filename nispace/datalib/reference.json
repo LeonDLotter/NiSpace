@@ -3481,42 +3481,42 @@
         "tab": {
             "Schaefer100": {
                 "host": "github-nispace",
-                "remote": "reference/cortexfeatures/tab/dset-bigbrain_parc-Schaefer100.csv.gz"
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Schaefer100.csv.gz"
             },
             "Schaefer200": {
                 "host": "github-nispace",
-                "remote": "reference/cortexfeatures/tab/dset-bigbrain_parc-Schaefer200.csv.gz"
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Schaefer200.csv.gz"
             },
             "Schaefer400": {
                 "host": "github-nispace",
-                "remote": "reference/cortexfeatures/tab/dset-bigbrain_parc-Schaefer400.csv.gz"
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Schaefer400.csv.gz"
             },
             "Glasser": {
                 "host": "github-nispace",
-                "remote": "reference/cortexfeatures/tab/dset-bigbrain_parc-Glasser.csv.gz"
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Glasser.csv.gz"
             },
             "DesikanKilliany": {
                 "host": "github-nispace",
-                "remote": "reference/cortexfeatures/tab/dset-bigbrain_parc-DesikanKilliany.csv.gz"
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-DesikanKilliany.csv.gz"
             },
             "Destrieux": {
                 "host": "github-nispace",
-                "remote": "reference/cortexfeatures/tab/dset-bigbrain_parc-Destrieux.csv.gz"
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Destrieux.csv.gz"
             }
         },
 
         "collection": {
             "All": {
                 "host": "github-nispace",
-                "remote": "reference/cortexfeatures/collection-All.collect"
+                "remote": "reference/bigbrain/collection-All.collect"
             },
             "CorticalLayers": {
                 "host": "github-nispace",
-                "remote": "reference/cortexfeatures/collection-CorticalLayers.collect"
+                "remote": "reference/bigbrain/collection-CorticalLayers.collect"
             },
             "DifferentiationGradients": {
                 "host": "github-nispace",
-                "remote": "reference/cortexfeatures/collection-DifferentiationGradients.collect"
+                "remote": "reference/bigbrain/collection-DifferentiationGradients.collect"
             }
         }
 
