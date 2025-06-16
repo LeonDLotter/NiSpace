@@ -3056,5 +3056,469 @@
             }
         }
 
+    },
+
+    "bigbrain": {
+        "map": {
+            "feature-layer1_pub-wagstyl2020": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer1_pub-wagstyl2020/feature-layer1_pub-wagstyl2020_space-fsaverage_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer1_pub-wagstyl2020/feature-layer1_pub-wagstyl2020_space-fsaverage_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer1_pub-wagstyl2020/feature-layer1_pub-wagstyl2020_space-fsLR_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer1_pub-wagstyl2020/feature-layer1_pub-wagstyl2020_space-fsLR_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsaverageOriginal": {
+                    "L": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-L_den-164k_desc-layer1.shape.gii"
+                    },
+                    "R": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-R_den-164k_desc-layer1.shape.gii"
+                    }
+                }
+            },
+            "feature-layer2_pub-wagstyl2020": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer2_pub-wagstyl2020/feature-layer2_pub-wagstyl2020_space-fsaverage_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer2_pub-wagstyl2020/feature-layer2_pub-wagstyl2020_space-fsaverage_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer2_pub-wagstyl2020/feature-layer2_pub-wagstyl2020_space-fsLR_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer2_pub-wagstyl2020/feature-layer2_pub-wagstyl2020_space-fsLR_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsaverageOriginal": {
+                    "L": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-L_den-164k_desc-layer2.shape.gii"
+                    },
+                    "R": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-R_den-164k_desc-layer1.shape.gii"
+                    }
+                }
+            },
+            "feature-layer3_pub-wagstyl2020": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer3_pub-wagstyl2020/feature-layer3_pub-wagstyl2020_space-fsaverage_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer3_pub-wagstyl2020/feature-layer3_pub-wagstyl2020_space-fsaverage_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer3_pub-wagstyl2020/feature-layer3_pub-wagstyl2020_space-fsLR_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer3_pub-wagstyl2020/feature-layer3_pub-wagstyl2020_space-fsLR_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsaverageOriginal": {
+                    "L": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-L_den-164k_desc-layer3.shape.gii"
+                    },
+                    "R": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-R_den-164k_desc-layer3.shape.gii"
+                    }
+                }
+            },
+            "feature-layer4_pub-wagstyl2020": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer4_pub-wagstyl2020/feature-layer4_pub-wagstyl2020_space-fsaverage_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer4_pub-wagstyl2020/feature-layer4_pub-wagstyl2020_space-fsaverage_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer4_pub-wagstyl2020/feature-layer4_pub-wagstyl2020_space-fsLR_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer4_pub-wagstyl2020/feature-layer4_pub-wagstyl2020_space-fsLR_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsaverageOriginal": {
+                    "L": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-L_den-164k_desc-layer4.shape.gii"
+                    },
+                    "R": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-R_den-164k_desc-layer4.shape.gii"
+                    }
+                }
+            },
+            "feature-layer5_pub-wagstyl2020": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer5_pub-wagstyl2020/feature-layer5_pub-wagstyl2020_space-fsaverage_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer5_pub-wagstyl2020/feature-layer5_pub-wagstyl2020_space-fsaverage_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer5_pub-wagstyl2020/feature-layer5_pub-wagstyl2020_space-fsLR_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer5_pub-wagstyl2020/feature-layer5_pub-wagstyl2020_space-fsLR_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsaverageOriginal": {
+                    "L": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-L_den-164k_desc-layer5.shape.gii"
+                    },
+                    "R": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-R_den-164k_desc-layer5.shape.gii"
+                    }
+                }
+            },
+            "feature-layer6_pub-wagstyl2020": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer6_pub-wagstyl2020/feature-layer6_pub-wagstyl2020_space-fsaverage_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer6_pub-wagstyl2020/feature-layer6_pub-wagstyl2020_space-fsaverage_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer6_pub-wagstyl2020/feature-layer6_pub-wagstyl2020_space-fsLR_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-layer6_pub-wagstyl2020/feature-layer6_pub-wagstyl2020_space-fsLR_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsaverageOriginal": {
+                    "L": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-L_den-164k_desc-layer6.shape.gii"
+                    },
+                    "R": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-R_den-164k_desc-layer6.shape.gii"
+                    }
+                }
+            },
+            "feature-histogradient1_pub-paquola2021": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-histogradient1_pub-paquola2021/feature-histogradient1_pub-paquola2021_space-fsaverage_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-histogradient1_pub-paquola2021/feature-histogradient1_pub-paquola2021_space-fsaverage_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-histogradient1_pub-paquola2021/feature-histogradient1_pub-paquola2021_space-fsLR_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-histogradient1_pub-paquola2021/feature-histogradient1_pub-paquola2021_space-fsLR_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsaverageOriginal": {
+                    "L": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-L_den-164k_desc-Hist_G1.shape.gii"
+                    },
+                    "R": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-R_den-164k_desc-Hist_G1.shape.gii"
+                    }
+                }
+            },
+            "feature-histogradient2_pub-paquola2021": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-histogradient2_pub-paquola2021/feature-histogradient2_pub-paquola2021_space-fsaverage_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-histogradient2_pub-paquola2021/feature-histogradient2_pub-paquola2021_space-fsaverage_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-histogradient2_pub-paquola2021/feature-histogradient2_pub-paquola2021_space-fsLR_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-histogradient2_pub-paquola2021/feature-histogradient2_pub-paquola2021_space-fsLR_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsaverageOriginal": {
+                    "L": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-L_den-164k_desc-Hist_G2.shape.gii"
+                    },
+                    "R": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-R_den-164k_desc-Hist_G2.shape.gii"
+                    }
+                }
+            },
+            "feature-microgradient1_pub-paquola2021": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-microgradient1_pub-paquola2021/feature-microgradient1_pub-paquola2021_space-fsaverage_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-microgradient1_pub-paquola2021/feature-microgradient1_pub-paquola2021_space-fsaverage_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-microgradient1_pub-paquola2021/feature-microgradient1_pub-paquola2021_space-fsLR_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-microgradient1_pub-paquola2021/feature-microgradient1_pub-paquola2021_space-fsLR_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsaverageOriginal": {
+                    "L": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-L_den-164k_desc-Micro_G1.curv"
+                    },
+                    "R": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-R_den-164k_desc-Micro_G1.curv"
+                    }
+                }
+            },
+            "feature-microgradient2_pub-paquola2021": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-microgradient2_pub-paquola2021/feature-microgradient2_pub-paquola2021_space-fsaverage_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-microgradient2_pub-paquola2021/feature-microgradient2_pub-paquola2021_space-fsaverage_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-microgradient2_pub-paquola2021/feature-microgradient2_pub-paquola2021_space-fsLR_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-microgradient2_pub-paquola2021/feature-microgradient2_pub-paquola2021_space-fsLR_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsaverageOriginal": {
+                    "L": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-L_den-164k_desc-Micro_G2.curv"
+                    },
+                    "R": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-R_den-164k_desc-Micro_G2.curv"
+                    }
+                }
+            },
+            "feature-funcgradient1_pub-paquola2021": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-funcgradient1_pub-paquola2021/feature-funcgradient1_pub-paquola2021_space-fsaverage_desc-proc_hemi-L.func.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-funcgradient1_pub-paquola2021/feature-funcgradient1_pub-paquola2021_space-fsaverage_desc-proc_hemi-R.func.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-funcgradient1_pub-paquola2021/feature-funcgradient1_pub-paquola2021_space-fsLR_desc-proc_hemi-L.func.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-funcgradient1_pub-paquola2021/feature-funcgradient1_pub-paquola2021_space-fsLR_desc-proc_hemi-R.func.gii.gz"
+                    }
+                },
+                "fsaverageOriginal": {
+                    "L": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-L_den-164k_desc-Func_G1.curv"
+                    },
+                    "R": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-R_den-164k_desc-Func_G1.curv"
+                    }
+                }
+            },
+            "feature-funcgradient2_pub-paquola2021": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-funcgradient2_pub-paquola2021/feature-funcgradient2_pub-paquola2021_space-fsaverage_desc-proc_hemi-L.func.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-funcgradient2_pub-paquola2021/feature-funcgradient2_pub-paquola2021_space-fsaverage_desc-proc_hemi-R.func.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-funcgradient2_pub-paquola2021/feature-funcgradient2_pub-paquola2021_space-fsLR_desc-proc_hemi-L.func.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-funcgradient2_pub-paquola2021/feature-funcgradient2_pub-paquola2021_space-fsLR_desc-proc_hemi-R.func.gii.gz"
+                    }
+                },
+                "fsaverageOriginal": {
+                    "L": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-L_den-164k_desc-Func_G2.curv"
+                    },
+                    "R": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-R_den-164k_desc-Func_G2.curv"
+                    }
+                }
+            },
+            "feature-funcgradient3_pub-paquola2021": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-funcgradient3_pub-paquola2021/feature-funcgradient3_pub-paquola2021_space-fsaverage_desc-proc_hemi-L.func.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-funcgradient3_pub-paquola2021/feature-funcgradient3_pub-paquola2021_space-fsaverage_desc-proc_hemi-R.func.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-funcgradient3_pub-paquola2021/feature-funcgradient3_pub-paquola2021_space-fsLR_desc-proc_hemi-L.func.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/bigbrain/map/feature-funcgradient3_pub-paquola2021/feature-funcgradient3_pub-paquola2021_space-fsLR_desc-proc_hemi-R.func.gii.gz"
+                    }
+                },
+                "fsaverageOriginal": {
+                    "L": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-L_den-164k_desc-Func_G3.curv"
+                    },
+                    "R": {
+                        "host": "url",
+                        "remote": "https://fz-juelich.sciebo.de/s/HoKucnh8zFpSbKF/download?path=%2Fspaces%2Ftpl-fsaverage&files=tpl-fsaverage_hemi-R_den-164k_desc-Func_G3.curv"
+                    }
+                }
+            }
+        },
+
+        "tab": {
+            "Schaefer100": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-bigbrain_parc-Schaefer100.csv.gz"
+            },
+            "Schaefer200": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-bigbrain_parc-Schaefer200.csv.gz"
+            },
+            "Schaefer400": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-bigbrain_parc-Schaefer400.csv.gz"
+            },
+            "Glasser": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-bigbrain_parc-Glasser.csv.gz"
+            },
+            "DesikanKilliany": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-bigbrain_parc-DesikanKilliany.csv.gz"
+            },
+            "Destrieux": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-bigbrain_parc-Destrieux.csv.gz"
+            }
+        },
+
+        "collection": {
+            "All": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/collection-All.collect"
+            },
+            "CorticalLayers": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/collection-CorticalLayers.collect"
+            },
+            "DifferentiationGradients": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/collection-DifferentiationGradients.collect"
+            }
+        }
+
     }
 }

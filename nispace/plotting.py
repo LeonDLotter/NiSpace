@@ -843,7 +843,8 @@ def heatmap(ax,
         
     return ax, collection
 
-def view_surf(data=None, parcellation=None, hemi="L", template="fsaverage", template_kwargs={}, parcellation_kwargs={},
+def view_surf(data=None, parcellation=None, hemi="L", template="fsaverage", replace_nan=0,
+              template_kwargs={}, parcellation_kwargs={},
               verbose=False, **kwargs):
     lgr.setLevel(verbose)
     
@@ -885,6 +886,10 @@ def view_surf(data=None, parcellation=None, hemi="L", template="fsaverage", temp
     elif "parc_arr" in locals():
         if len(data) == len(labels):
             data_arr = vect_to_vol_arr(data, parc_arr, np.trim_zeros(np.unique(parc_arr)))
+            # replace nan
+            if replace_nan is not False:
+                data_arr = np.nan_to_num(data_arr, replace_nan)
+            
         else:
             raise ValueError(f"Data length ({len(data)}) must match number of parcels ({len(labels)})")
     else:

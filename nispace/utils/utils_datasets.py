@@ -242,8 +242,13 @@ def _compress_gifti(file_path, save_path):
 def _get_file_ext(remote):
     remote = str(remote)
     gz = ".gz" if remote.endswith(".gz") else ""
-    ext_nogz = remote.replace(gz, "").split(".")[-1]
-    return ext_nogz + gz
+    gii_extra = ""
+    for s in [".func.", ".shape.", ".label.", ".surf."]:
+        if s in remote:
+            gii_extra = s[1:]
+            break
+    ext_nogz = remote.replace(gii_extra, "").replace(gz, "").split(".")[-1]
+    return f"{gii_extra}{ext_nogz}{gz}"
 
 
 def get_file(local_path, host, remote, 

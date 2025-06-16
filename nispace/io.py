@@ -344,6 +344,10 @@ def load_img(img, override_file_format=False):
             elif override_file_format in [".gii", ".gii.gz"]:
                 i = Path(i).rename(Path(i).with_suffix(override_file_format))
                 i = images.load_gifti(i)
+            elif i.endswith(".curv"):
+                i = nib.GiftiImage(
+                    darrays=[nib.gifti.GiftiDataArray(data=nib.freesurfer.read_morph_data(i))]
+                )
             else:
                 raise ValueError(f"File format of '{i}' not supported. Path must end with .nii(.gz) or .gii(.gz)")
         else:

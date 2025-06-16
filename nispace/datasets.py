@@ -147,7 +147,7 @@ def fetch_template(template: str = _SPACE_DEFAULT,
         tpl_file = ()
         for h in hemi:
             tpl_file += get_file(
-                map_dir / desc / f"tpl-{template}_desc-{desc}_res-{res}_hemi-{h}.surf.%s", 
+                map_dir / desc / f"tpl-{template}_desc-{desc}_res-{res}_hemi-{h}.%s", 
                 **template_lib[template][res][desc][h], 
                 **get_file_kwargs, 
             ),
@@ -294,7 +294,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
             
             # get files
             parcellation_file = get_file(
-                base_dir / f"parc-{p}_space-{space}.label.%s", **parcellation_lib[p][space]["map"],
+                base_dir / f"parc-{p}_space-{space}.%s", **parcellation_lib[p][space]["map"],
                 **get_file_kwargs,
             )
             if return_labels:
@@ -328,7 +328,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
             parcellation_file, label_file, distmat_file = (), (), ()
             for h in hemi:
                 parcellation_file += get_file(
-                    base_dir / f"parc-{p}_space-{space}_hemi-{h}.label.%s", **parcellation_lib[p][space]["map"][h],
+                    base_dir / f"parc-{p}_space-{space}_hemi-{h}.%s", **parcellation_lib[p][space]["map"][h],
                     **get_file_kwargs,
                 ),
                 if return_labels:
@@ -793,9 +793,8 @@ def _print_references(dataset: str, meta: pd.DataFrame = None):
                 if not pd.isna(note):
                     msg += f"    CAVE: {note}\n"
     
-    # mRNA
-    # TODO: make all this more general
-    elif dataset.lower() in ["mrna", "magicc", "neurosynth", "grf", "cortexfeatures", "megfeatures"]:
+    # all others
+    else:
         msg = get_ref_info(dataset)
         if meta is not None:
             if len(meta) > 0:
@@ -807,14 +806,14 @@ def _print_references(dataset: str, meta: pd.DataFrame = None):
                     msg += f"- {collection}  Source: {author}  https://doi.org/{doi}\n"
     
     # RSN
-    elif dataset.lower() == "rsn":
-        msg = get_ref_info(dataset)
-        if meta is not None:
-            if len(meta) > 0:
-                author_maxlen = max([len(x) for x in meta["author"]])
-                for pub, doi in zip(meta["author"], meta["doi"]):
-                    author = pub.capitalize().ljust(author_maxlen)
-                    msg += f"- {author}  https://doi.org/{doi}\n"
+    # elif dataset.lower() == "rsn":
+    #     msg = get_ref_info(dataset)
+    #     if meta is not None:
+    #         if len(meta) > 0:
+    #             author_maxlen = max([len(x) for x in meta["author"]])
+    #             for pub, doi in zip(meta["author"], meta["doi"]):
+    #                 author = pub.capitalize().ljust(author_maxlen)
+    #                 msg += f"- {author}  https://doi.org/{doi}\n"
 
     # print
     # if msg[-2:] != "\n":
@@ -972,7 +971,7 @@ def fetch_reference(dataset: str,
             for m in maps_avail:
                 data.append(tuple([
                     get_file(
-                        map_dir / m / f"{m}_space-{space}_hemi-{hemi}.surf.%s", **reference_lib[dataset]["map"][m][space][hemi], 
+                        map_dir / m / f"{m}_space-{space}_hemi-{hemi}.%s", **reference_lib[dataset]["map"][m][space][hemi], 
                         **get_file_kwargs,
                     )
                     for hemi in reference_lib[dataset]["map"][m][space].keys()
