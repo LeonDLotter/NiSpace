@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nispace"
-version = {attr = "nispace.__version__"}
+version = "0.0.1"  # This will be overridden by versioneer
 authors = [
     {name = "Leon D. Lotter", email = "leondlotter@gmail.com"},
 ]
