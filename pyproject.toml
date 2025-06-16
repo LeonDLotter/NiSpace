@@ -4,6 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nispace"
+version = {attr = "nispace.__version__"}
 authors = [
     {name = "Leon D. Lotter", email = "leondlotter@gmail.com"},
 ]
@@ -55,9 +56,6 @@ Repository = "https://github.com/LeonDLotter/NiSpace"
 
 [tool.setuptools.packages]
 find = {}
-
-[tool.setuptools.dynamic]
-version = {attr = "nispace.__version__"}
 
 [tool.versioneer]
 VCS = "git"
