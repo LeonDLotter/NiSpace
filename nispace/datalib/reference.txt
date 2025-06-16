@@ -79,7 +79,7 @@ GitHub repo (space = "fsLR" | "fsaverage"; recommended). Please cite the origin
 The NiSpace "bigbrain" dataset is adopted from the BigBrainWarp toolbox (https://bigbrainwarp.readthedocs.io) by Paquola et al. 
 (see below). Further information on the dataset: https://bigbrainwarp.readthedocs.io/en/latest/pages/toolbox_contents.html
 The maps are fetched directly from the BigBrainWarp Sciebo folder (space = "fsaverageOriginal") or downloaded from 
-the NiSpace-data GitHub repo (space = "fsLR" | "fsaverage"; recommended). The data is licensed under the CC BY-NC-SA 4.0 license. 
+the NiSpace-data GitHub repo (space = "fsLR" | "fsaverage"; recommended). The data is subject to a CC BY-NC-SA 4.0 license. 
 Please cite the following publication when using these maps:
 - BigBrain: Amunts et al., 2013 (https://doi.org/10.1126/science.1235381)
 - BigBrainWarp toolbox: Paquola et al., 2021 (https://doi.org/10.7554/eLife.70119)
