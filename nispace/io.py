@@ -514,3 +514,30 @@ def from_pickle(filepath, use_dill=False):
         return pkl.loads(b"".join(arr))
     else:
         raise ValueError(f"Unsupported file extension of path: {filepath}")
+    
+    
+def read_msigdb_json(json_path):
+    """
+    Read MSigDB gene set JSON file and return a "clean" dictionary of gene sets as expected for
+    collection files in NiSpace.
+    MSigDB json files can be found at https://www.gsea-msigdb.org/gsea/msigdb/human/genesets.jsp
+    after selecting a specific gene set.
+    
+    Parameters
+    ----------
+    json_path : str, os.PathLike
+        Path to MSigDB gene set JSON file.
+        
+    Returns
+    -------
+    dict
+        Dictionary of gene sets. Keys are gene set names, values are lists of gene symbols.
+        Both keys and values are sorted alphabetically.
+    """
+    in_dict = read_json(json_path)
+    gene_sets = sorted( in_dict.keys() )
+    out_dict = {
+        gene_set: sorted( in_dict[gene_set]["geneSymbols"] ) 
+        for gene_set in gene_sets
+    }
+    return out_dict

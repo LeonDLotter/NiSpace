@@ -36,7 +36,10 @@ def _check_hash(local: Union[str, Path], remote: Union[str, Path] = None,
     # hash of remote file
     if remote is None:
         remote = local
-    hash_remote = hash_lib[str(remote)]
+    remote = str(remote)
+    if remote not in hash_lib:
+        raise ValueError(f"Hash not found for {remote}. Problem with nispace updating?")
+    hash_remote = hash_lib[remote]
     
     # compare hashes
     if hash_local == hash_remote:

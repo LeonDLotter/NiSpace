@@ -1945,6 +1945,34 @@
             "SynGO": {
                 "host": "github-nispace",
                 "remote": "reference/mrna/collection-SynGO.collect"
+            },
+            "GOBiologicalProcess": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/collection-GOBiologicalProcess.collect"
+            },
+            "GOCellularComponent": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/collection-GOCellularComponent.collect"
+            },
+            "GOMolecularFunction": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/collection-GOMolecularFunction.collect"
+            },
+            "CorticalLayers": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/collection-CorticalLayers.collect"
+            },
+            "ProteinAtlas": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/collection-ProteinAtlas.collect"
+            },
+            "BrainSpan": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/collection-BrainSpan.collect"
+            },
+            "BrainSpanWeights": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/collection-BrainSpanWeights.collect"
             }
         }
     },
@@ -2011,7 +2039,36 @@
             "SynGO": {
                 "host": "github-nispace",
                 "remote": "reference/magicc/collection-SynGO.collect"
+            },
+            "GOBiologicalProcess": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-GOBiologicalProcess.collect"
+            },
+            "GOCellularComponent": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-GOCellularComponent.collect"
+            },
+            "GOMolecularFunction": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-GOMolecularFunction.collect"
+            },
+            "CorticalLayers": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-CorticalLayers.collect"
+            },
+            "ProteinAtlas": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-ProteinAtlas.collect"
+            },
+            "BrainSpan": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-BrainSpan.collect"
+            },
+            "BrainSpanWeights": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-BrainSpanWeights.collect"
             }
+
         }
     },
 

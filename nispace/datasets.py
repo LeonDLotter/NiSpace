@@ -617,6 +617,7 @@ def _apply_collection_filter(dataset: str,
                              collection: str,
                              nispace_data_dir: Union[str, pathlib.Path],
                              set_size_range: Union[None, Tuple[int, int]] = None,
+                             weight_range: Union[None, Tuple[float, float]] = None,
                              overwrite: bool = False,
                              check_file_hash: bool = True) -> List[pathlib.Path]:
     
@@ -652,8 +653,19 @@ def _apply_collection_filter(dataset: str,
                               if f_name in collection_df["map"].unique()]
         collection_df = collection_df[collection_df["map"].isin(map_names)]
     else:
-        filtered_map_files = [f for f in map_files if f in collection_df["map"].unique()]
+        filtered_map_files = list( set(map_files).intersection(set(collection_df["map"])) )
         collection_df = collection_df[collection_df["map"].isin(filtered_map_files)]
+        
+    # Apply weight filter
+    if weight_range is not None:
+        weight_range = [
+            x if x is not None else x_ 
+            for x, x_ 
+            in zip(weight_range, (-np.inf, np.inf))
+        ]
+        collection_df = collection_df[collection_df["weight"].between(*weight_range, inclusive="both")]
+        lgr.info(f"Filtered to {len(collection_df['set'].unique())} collection sets with weights between "
+                 f"{weight_range[0]} and {weight_range[1]}.")
         
     # Apply size filter
     if set_size_range is not None:
@@ -663,14 +675,19 @@ def _apply_collection_filter(dataset: str,
                 for x, x_ 
                 in zip(set_size_range, (1, np.inf))
             ]
-            lgr.info(f"Filtering to collection sets with between {set_size_range[0]} and "
-                     f"{set_size_range[1]} maps.")
             collection_df = (
                 collection_df
                 .groupby("set")
                 .filter(lambda x: set_size_range[0] <= x.shape[0] <= set_size_range[1])   
-            )         
-            filtered_map_files = [f for f in map_files if f in collection_df["map"].unique()]
+            )
+            n_sets = len(collection_df["set"].unique())
+            if n_sets == 0:
+                lgr.critical_raise(f"No collection sets found with between {set_size_range[0]} and "
+                                   f"{set_size_range[1]} maps. Adjust the 'set_size_range' parameter.",
+                                   ValueError)
+            filtered_map_files = list( set(map_files).intersection(set(collection_df["map"])) )
+            lgr.info(f"Filtered to {n_sets} collection sets with between "
+                     f"{set_size_range[0]} and {set_size_range[1]} maps.")
 
     return filtered_map_files, collection_df
 
@@ -739,7 +756,7 @@ def _load_parcellated_data(dataset: str,
     # Apply collection index (-> handles maps that are present multiple times in different sets)
     if collection_df is not None:
         maps_intersection = data.index.intersection(collection_df["map"].unique())
-        collection_df_intersection = collection_df.query("map in @maps_intersection")
+        collection_df_intersection = collection_df[collection_df["map"].isin(maps_intersection)]
         data = data.loc[collection_df_intersection["map"]]     
         data.index = pd.MultiIndex.from_frame(collection_df_intersection)
     
@@ -828,6 +845,7 @@ def fetch_reference(dataset: str,
                     space: str = _SPACE_DEFAULT,
                     collection: str = None,
                     set_size_range: Union[None, Tuple[int, int]] = None,
+                    weight_range: Union[None, Tuple[float, float]] = None,
                     parcellation: str = None,
                     standardize_parcellated: bool = False,
                     return_metadata: bool = False,
@@ -929,6 +947,7 @@ def fetch_reference(dataset: str,
         maps_avail, collection_df = _apply_collection_filter(
             dataset, maps_avail, collection, 
             set_size_range=set_size_range,
+            weight_range=weight_range,
             nispace_data_dir=nispace_data_dir, 
             overwrite=overwrite, 
             check_file_hash=check_file_hash

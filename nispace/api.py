@@ -217,7 +217,7 @@ class NiSpace:
     
     # FIT ==========================================================================================
     
-    def fit(self):
+    def fit(self, **kwargs):
         """
         "Fit" the NiSpace class instance, i.e., check input and apply parcellation if necessary. 
         Input and parameters are set on initialization.
@@ -288,7 +288,7 @@ class NiSpace:
             n_proc=self._n_proc,
             verbose=verbose,
             dtype=self._dtype,
-        )
+        ) | kwargs
         
         # reference data -> usually e.g. PET atlases
         # TODO: GSEA INPUT MANAGEMENT
@@ -1823,7 +1823,7 @@ class NiSpace:
         
     # GET ==========================================================================================
     
-    def get_x(self, X_reduction=None, verbose=None):
+    def get_x(self, X_reduction=None, verbose=None, copy=True):
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         
@@ -1841,11 +1841,11 @@ class NiSpace:
                 
         lgr.info(f"Returning X dataframe: \n{print_arg_pairs(X_reduction=X_reduction)}")
         lgr.setLevel(loglevel)
-        return out      
+        return out.copy() if copy else out      
     
     # ----------------------------------------------------------------------------------------------
     
-    def get_y(self, Y_transform=None, verbose=None):
+    def get_y(self, Y_transform=None, verbose=None, copy=True):
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         
@@ -1863,11 +1863,11 @@ class NiSpace:
                 
         lgr.info(f"Returning Y dataframe: \n{print_arg_pairs(Y_transform=Y_transform)}")
         lgr.setLevel(loglevel)
-        return out      
+        return out.copy() if copy else out      
     
     # ----------------------------------------------------------------------------------------------
          
-    def get_z(self, verbose=None):
+    def get_z(self, verbose=None, copy=True):
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         
@@ -1878,7 +1878,7 @@ class NiSpace:
             
         lgr.info("Returning Z dataframe.")
         lgr.setLevel(loglevel)
-        return out  
+        return out.copy() if copy else out  
     
     # ----------------------------------------------------------------------------------------------
    
@@ -1925,7 +1925,7 @@ class NiSpace:
                     lgr.critical_raise(f"Colocalizations for '{coloc_str}' not found! "
                                        f"Available: {available}",
                                        KeyError)
-            out[stat] = self._colocs[coloc_str].copy()
+            out[stat] = self._colocs[coloc_str].copy() if copy else self._colocs[coloc_str]
         
         if get_nulls and nulls_permute_what is None:
             lgr.error("If 'get_nulls' is True, 'nulls_permute_what' must not be None!")
@@ -1975,6 +1975,8 @@ class NiSpace:
                                 {i: nulls[i][stat][:, i_x] for i in range(n_nulls)},
                                 index=idx
                             )
+                
+        # force return as dict if requested
         if not force_dict:
             if len(out)==1:
                 out = out[stats[0]]
@@ -1992,7 +1994,7 @@ class NiSpace:
     
     def get_p_values(self, method=None, permute_what=None, stats=None, xsea=None, 
                      norm=False, mc_method=None, 
-                     X_reduction=None, Y_transform=None, force_dict=False, verbose=None): 
+                     X_reduction=None, Y_transform=None, force_dict=False, verbose=None, copy=True): 
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         
@@ -2035,7 +2037,7 @@ class NiSpace:
                 lgr.critical_raise(f"Colocalization p values for '{p_str}' not found. "
                                    f"Available: {available}",
                                    KeyError)
-            out[stat] = self._p_colocs[p_str]
+            out[stat] = self._p_colocs[p_str].copy() if copy else self._p_colocs[p_str]
                 
         if not force_dict:
             if len(out)==1:
