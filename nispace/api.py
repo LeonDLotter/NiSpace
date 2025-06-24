@@ -928,8 +928,17 @@ class NiSpace:
             if "set" not in X.index.names:
                 lgr.critical_raise("XSEA requires X data to have a MultiIndex with a 'set' level!",
                                    ValueError)
+            if "weighted" in xsea_aggregation_method and "weight" not in X.index.names:
+                lgr.warning("XSEA requires X data to have a MultiIndex with a 'weight' level! "
+                            "Will not use weights.")
+                xsea_aggregation_method = xsea_aggregation_method.replace("weighted", "")
             X_arr = {set_name: np.array(set_X, dtype=self._dtype) 
                      for set_name, set_X in X.groupby(level="set", sort=False)}
+            if "weighted" in xsea_aggregation_method:
+                X_weights = {set_name: np.array(set_X.index.get_level_values("weight"), dtype=self._dtype) 
+                             for set_name, set_X in X.groupby(level="set", sort=False)}
+            else:
+                X_weights = None
             lgr.info(f"Using {len(X_arr)} sets with between "
                      f"{X.index.get_level_values('set').value_counts().min()} and "
                      f"{X.index.get_level_values('set').value_counts().max()} samples. "
@@ -1059,7 +1068,7 @@ class NiSpace:
 
         ## run actual prediction using joblib.Parallel
         _colocs_list = Parallel(n_jobs=n_proc)(
-            delayed(_y_colocalize)(X_arr, Y_arr[i_y, :], Z_arr[i_y, :] if Z_arr is not None else None) \
+            delayed(_y_colocalize)(X_arr, Y_arr[i_y, :], Z_arr[i_y, :] if Z_arr is not None else None, X_weights) \
                 for i_y in tqdm(
                     range(Y.shape[0]), 
                     desc=f"Colocalizing ({method}, {n_proc} proc)", 
@@ -1463,6 +1472,13 @@ class NiSpace:
             def _xsea_perm_data(i):
                 return _X_null[i]
             
+        # handle weighted XSEA
+        X_weights = None
+        if "weighted" in self._xsea_aggregation_method:
+            if isinstance(_X_obs_arr, dict):
+                X_weights = {set_name: np.array(set_X.index.get_level_values("weight"), dtype=self._dtype) 
+                             for set_name, set_X in _X_obs.groupby(level="set", sort=False)}
+            
             
         ## check what permuted dataframes we have, if we dont have them, copy observed data (!)
         if (not _X_null) & (not _Y_null) & (not _Z_null):
@@ -1492,16 +1508,16 @@ class NiSpace:
         # function to perform colocalization for one X/Y/Z null array
         xsea = True if isinstance(_X_null[0], dict) else False
         #n_components = self._coloc_kwargs["n_components"]
-        def par_fun(X_null, Y_null, Z_null=None):
+        def par_fun(X_null, Y_null, Z_null=None, X_weights=None):
             # run colocalization
             if Z_null is None:
                 null_colocs_list = [
-                    _y_colocalize(X_null, Y_null[i_y, :], None)
+                    _y_colocalize(X_null, Y_null[i_y, :], None, X_weights)
                     for i_y in range(Y_null.shape[0])
                 ]
             else:
                 null_colocs_list = [
-                    _y_colocalize(X_null, Y_null[i_y, :], Z_null[i_y, :])
+                    _y_colocalize(X_null, Y_null[i_y, :], Z_null[i_y, :], X_weights)
                     for i_y in range(Y_null.shape[0])
                 ]
             # sort output with helper function, return as array
@@ -1536,7 +1552,7 @@ class NiSpace:
             )
         else:
             _colocs_null = Parallel(n_jobs=n_proc)(
-                delayed(par_fun)(_xsea_perm_data(i), _Y_null[i], _Z_null[i]) 
+                delayed(par_fun)(_xsea_perm_data(i), _Y_null[i], _Z_null[i], X_weights) 
                 for i in tqdm(
                     range(n_perm), 
                     desc=f"Null colocalizations ({method}, {n_proc} proc)", disable=not verbose

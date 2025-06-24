@@ -658,14 +658,17 @@ def _apply_collection_filter(dataset: str,
         
     # Apply weight filter
     if weight_range is not None:
-        weight_range = [
-            x if x is not None else x_ 
-            for x, x_ 
-            in zip(weight_range, (-np.inf, np.inf))
-        ]
-        collection_df = collection_df[collection_df["weight"].between(*weight_range, inclusive="both")]
-        lgr.info(f"Filtered to {len(collection_df['set'].unique())} collection sets with weights between "
-                 f"{weight_range[0]} and {weight_range[1]}.")
+        if "weight" not in collection_df.columns:
+            lgr.warning("Collection does not seem to contain weights, will not apply weight filter.")
+        else:
+            weight_range = [
+                x if x is not None else x_ 
+                for x, x_ 
+                in zip(weight_range, (-np.inf, np.inf))
+            ]
+            collection_df = collection_df[collection_df["weight"].between(*weight_range, inclusive="both")]
+            lgr.info(f"Filtered to {len(collection_df['set'].unique())} collection sets with weights between "
+                    f"{weight_range[0]} and {weight_range[1]}.")
         
     # Apply size filter
     if set_size_range is not None:

@@ -40,7 +40,7 @@ def _get_colocalize_fun(method, regr_z=True,
         
         # case simple correlation
         if "partial" not in method:
-            def _y_colocalize(X, y, z=None):  
+            def _y_colocalize(X, y, z=None, weights=None):  
                 if regr_z and z is not None:
                     y = residuals_nan(z, y)
                 parcel_mask_y = ~np.isnan(y)
@@ -67,7 +67,7 @@ def _get_colocalize_fun(method, regr_z=True,
         
         # case partial correlation
         else:
-            def _y_colocalize(X, y, z):    
+            def _y_colocalize(X, y, z, weights=None):    
                 parcel_mask_yz = ~nan_detector(y, z)
                 # iterate x (atlases/predictors)
                 _colocs = np.zeros(X.shape[0], dtype=dtype)
@@ -94,7 +94,7 @@ def _get_colocalize_fun(method, regr_z=True,
     ## case mi
     elif method == "mi":
         
-        def _y_colocalize(X, y, z=None):  
+        def _y_colocalize(X, y, z=None, weights=None):  
             if regr_z and z is not None:
                 y = residuals_nan(z, y)
             parcel_mask_y = ~np.isnan(y)
@@ -114,7 +114,7 @@ def _get_colocalize_fun(method, regr_z=True,
     ## case slr
     elif method=="slr":
         
-        def _y_colocalize(X, y, z=None):  
+        def _y_colocalize(X, y, z=None, weights=None):  
             if regr_z and z is not None:
                 y = residuals_nan(z, y)
             parcel_mask_y = ~np.isnan(y)
@@ -135,7 +135,7 @@ def _get_colocalize_fun(method, regr_z=True,
     ## case mlr
     elif method=="mlr":
         
-        def _y_colocalize(X, y, z=None):   
+        def _y_colocalize(X, y, z=None, weights=None):   
             if regr_z and z is not None:
                 y = residuals_nan(z, y)
             X_T = X.T 
@@ -165,7 +165,7 @@ def _get_colocalize_fun(method, regr_z=True,
     ## case dominance
     elif method=="dominance":
         
-        def _y_colocalize(X, y, z=None):   
+        def _y_colocalize(X, y, z=None, weights=None):   
             if regr_z and z is not None:
                 y = residuals_nan(z, y) 
             X_T = X.T 
@@ -183,7 +183,7 @@ def _get_colocalize_fun(method, regr_z=True,
     ## case pls
     elif method == "pls":
         
-        def _y_colocalize(X, y, z=None):
+        def _y_colocalize(X, y, z=None, weights=None):
             if regr_z and z is not None:
                 y = residuals_nan(z, y)
             X_T = X.T 
@@ -201,7 +201,7 @@ def _get_colocalize_fun(method, regr_z=True,
     ## case pcr
     elif method == "pcr":
         
-        def _y_colocalize(X, y, z=None):
+        def _y_colocalize(X, y, z=None, weights=None):
             if regr_z and z is not None:
                 y = residuals_nan(z, y)
             X_T = X.T 
@@ -228,7 +228,7 @@ def _get_colocalize_fun(method, regr_z=True,
         elif method=="elasticnet":
             _pred_fun = elasticnet
             
-        def _y_colocalize(X, y, z=None):
+        def _y_colocalize(X, y, z=None, weights=None):
             if regr_z and z is not None:
                 y = residuals_nan(z, y)
             X_T = X.T 
@@ -267,20 +267,37 @@ def _get_colocalize_fun(method, regr_z=True,
         elif xsea_method == "absmedian":
             def aggr(arr):
                 return np.nanmedian(np.abs(arr))
+        elif xsea_method == "weightedmean":
+            def aggr(arr, weights):
+                return np.ma.average(np.ma.array(arr, mask=np.isnan(arr)), weights=weights)
         else:
             lgr.critical_raise(f"XSEA aggregation method '{xsea_method}' not defined!",
                                ValueError)
-            
-        def _y_colocalize_xsea(X_dict, y, z=None):
-            # get coloc stats as a list of dicts, one dict per X set
-            _colocs_xsea = []
-            for set_X in X_dict.values():
-                _colocs_xsea.append(_y_colocalize(set_X, y, z))
-            # get aggregated metrics per set
-            _colocs = {}
-            for stat in _colocs_xsea[0].keys():
-                _colocs[stat] = np.array([aggr(c[stat]) for c in _colocs_xsea], dtype=dtype)
-            return _colocs
+        
+        if not "weighted" in xsea_method:
+            def _y_colocalize_xsea(X_dict, y, z=None, weights=None):
+                # get coloc stats as a list of dicts, one dict per X set
+                _colocs_xsea = []
+                for set_X in X_dict.values():
+                    _colocs_xsea.append(_y_colocalize(set_X, y, z))
+                # get aggregated metrics per set
+                _colocs = {}
+                for stat in _colocs_xsea[0].keys():
+                    _colocs[stat] = np.array([aggr(c[stat]) for c in _colocs_xsea], dtype=dtype)
+                return _colocs
+        else:
+            def _y_colocalize_xsea(X_dict, y, z=None, weights=None):
+                # get coloc stats as a list of dicts, one dict per X set
+                _colocs_xsea = []
+                _weights_xsea = []
+                for set_name, set_X in X_dict.items():
+                    _colocs_xsea.append(_y_colocalize(set_X, y, z))
+                    _weights_xsea.append(weights[set_name])
+                # get aggregated metrics per set
+                _colocs = {}
+                for stat in _colocs_xsea[0].keys():
+                    _colocs[stat] = np.array([aggr(c[stat], w) for c, w in zip(_colocs_xsea, _weights_xsea)], dtype=dtype)
+                return _colocs
             
         return _y_colocalize_xsea
 
