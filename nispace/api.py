@@ -917,6 +917,7 @@ class NiSpace:
             else:
                 X = self.get_x(X_reduction=X_reduction, verbose=False)
         X_arr = np.array(X, dtype=dtype)
+        X_weights = None
         if xsea:
             lgr.info("Will perform X-set enrichment analysis (XSEA).")
             if not isinstance(X, pd.DataFrame):
@@ -937,8 +938,6 @@ class NiSpace:
             if "weighted" in xsea_aggregation_method:
                 X_weights = {set_name: np.array(set_X.index.get_level_values("weight"), dtype=self._dtype) 
                              for set_name, set_X in X.groupby(level="set", sort=False)}
-            else:
-                X_weights = None
             lgr.info(f"Using {len(X_arr)} sets with between "
                      f"{X.index.get_level_values('set').value_counts().min()} and "
                      f"{X.index.get_level_values('set').value_counts().max()} samples. "
@@ -1474,12 +1473,12 @@ class NiSpace:
             
         # handle weighted XSEA
         X_weights = None
-        if "weighted" in self._xsea_aggregation_method:
-            if isinstance(_X_obs_arr, dict):
-                X_weights = {set_name: np.array(set_X.index.get_level_values("weight"), dtype=self._dtype) 
-                             for set_name, set_X in _X_obs.groupby(level="set", sort=False)}
-            
-            
+        if isinstance(_X_obs_arr, dict):
+            if "weighted" in self._xsea_aggregation_method:
+                if isinstance(_X_obs_arr, dict):
+                    X_weights = {set_name: np.array(set_X.index.get_level_values("weight"), dtype=self._dtype) 
+                                for set_name, set_X in _X_obs.groupby(level="set", sort=False)}
+                
         ## check what permuted dataframes we have, if we dont have them, copy observed data (!)
         if (not _X_null) & (not _Y_null) & (not _Z_null):
             lgr.critical_raise("No permuted data generated. Supported permutations ('what') are: "
