@@ -8,8 +8,12 @@ from ..plotting import catplot, nullplot, nice_stats_labels
 
 def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None, 
                       sort=False, title=None, fig=None, ax=None, figsize=None, 
-                      kwargs={}, null_kwargs={}, clean_labels=True):
-       
+                      kwargs=None, null_kwargs=None, clean_labels=True):
+    
+    # kwargs
+    kwargs = {} if kwargs is None else kwargs
+    null_kwargs = {} if null_kwargs is None else null_kwargs
+    
     # column names
     colocs_df = colocs_df.copy()
     

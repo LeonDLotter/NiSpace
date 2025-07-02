@@ -212,21 +212,37 @@ def print_significance(ax, p_values, q_values=None, coloc_values=None,
                 ax.text(s=pq_symbols[1], **kwargs)
             elif p < 0.05:
                 ax.text(s=pq_symbols[0], **kwargs)
-                
+
+
+def pivot_brainspan_result(brainspan_vector):
+    if brainspan_vector.shape != (80,):
+        raise ValueError(f"brainspan_vector must have shape (80,), not shape {brainspan_vector.shape}.")
+    elif not isinstance(brainspan_vector, pd.Series):
+        raise ValueError(f"brainspan_vector must be a pandas Series, not a {type(brainspan_vector)}.")
+    return (
+        brainspan_vector.to_frame()
+        .assign(stage=lambda x: x.index.str.split("-").str[0], 
+                region=lambda x: x.index.str.split("-").str[1])
+        .assign(stage=lambda x: pd.Categorical(x.stage, x.stage.unique()), 
+                region=lambda x: pd.Categorical(x.region, x.region.unique()))
+        .pivot_table(index="stage", columns="region", values=brainspan_vector.name, observed=False)
+    )
+
+
 
 def catplot(fig, ax, data_long, categorical_var="variable", continuous_var="value", group_var=None,
             categorical_axis="x", sort_categories=False, category_order=None,
             color_how="continuous", color_which="auto", color_center=None,
-            labels={},
-            limits={},
-            bars={},
-            violins={},    
-            scatters={},
-            dots={},
-            errorbars={},  
-            hline={},
-            vline={},
-            legend={}
+            labels=None,
+            limits=None,
+            bars=None,
+            violins=None,    
+            scatters=None,
+            dots=None,
+            errorbars=None,  
+            hline=None,
+            vline=None,
+            legend=None
             ):   
     
     # defaults, overwrite with user input
@@ -234,40 +250,42 @@ def catplot(fig, ax, data_long, categorical_var="variable", continuous_var="valu
         plot=False, label=True,
         width=0.5, agg_method="mean", dodge_width=0.5, 
         kwargs={"zorder": 10, "ec": "k", "lw": 0.7}
-    ) | bars
+    ) | ({} if bars is None else bars)
     violins = dict(
         plot=False, label=False,
         kwargs={"zorder": 20, "density_norm": "width", "cut": 0, "inner": "quart",
                 "fill": False, "edgecolor": "k", "linewidth": 0.7}
-    ) | violins
+    ) | ({} if violins is None else violins)
     scatters = dict(
         plot=True, label=False,
         size="auto", jitter_width=0.5, dodge_width=0.5,
         kwargs={"zorder": 30, "linewidth": 0.2, "alpha": 0.2}
-    ) | scatters 
+    ) | ({} if scatters is None else scatters) 
     dots = dict(
         plot=True, label=True,
         agg_method="mean", size=7, color="k", dodge_width=0.5, 
         kwargs={"zorder": 90, "facecolor": (1,1,1,0.8), "lw": 1}
-    ) | dots
+    ) | ({} if dots is None else dots)
     errorbars = dict(
         plot=True, label=True,
         agg_method="ci", dodge_width=0.5, color="k", 
         kwargs={"zorder": 100}
-    ) | errorbars
+    ) | ({} if errorbars is None else errorbars)
     hline = dict(
         plot=False, y=[0], color="k", linewidth=1, linestyle="--", zorder=-100, kwargs={}
-    ) | hline
+    ) | ({} if hline is None else hline)
     vline = dict(
         plot=False, x=[0], color="k", linewidth=1, linestyle="--", zorder=-100, kwargs={}
-    ) | vline
+    ) | ({} if vline is None else vline)
     legend = dict(
         plot=True,
         loc="center left",
         bbox_to_anchor=(1, 0.5),
         nice_labels=True,
         kwargs={}
-    ) | legend
+    ) | ({} if legend is None else legend)
+    labels = dict() | ({} if labels is None else labels)
+    limits = dict() | ({} if limits is None else limits)
     
     # orientation    
     if categorical_axis == "x":
@@ -443,12 +461,12 @@ def nullplot(fig, ax, data_long, categorical_var="variable", continuous_var="val
              categorical_axis="x", category_order=None,
              color_which="viridis_r",
              quantiles_below_median=[0.01, 0.05, 0.25],
-             bands={},
-             median_line={},
-             violins={},
-             labels={},
-             limits={},
-             legend={}
+             bands=None,
+             median_line=None,
+             violins=None,
+             labels=None,
+             limits=None,
+             legend=None
              ):   
     bands = dict(
         plot=True, label=True, label_prefix="Null percentile ",
@@ -457,25 +475,27 @@ def nullplot(fig, ax, data_long, categorical_var="variable", continuous_var="val
         edgestyle="-",
         edgealpha=0.3,
         kwargs={"zorder": -200}
-    ) | bands
+    ) | ({} if bands is None else bands)
     median_line = dict(
         plot=True, label="Null percentile 50",
         alpha=0.6,
         kwargs={"zorder": -150}
-    ) | median_line
+    ) | ({} if median_line is None else median_line)
     violins = dict(
         plot=False, label="Null distribution",
         legend=None,
         kwargs={"zorder": 100, "density_norm": "width", "cut": 0, "inner": "quart",
                 "fill": False, "edgecolor": "k", "linewidth": 1}
-    ) | violins
+    ) | ({} if violins is None else violins)
     legend = dict(
         plot=True,
         loc="center left",
         bbox_to_anchor=(1, 0.5),
         nice_labels=True,
         kwargs={}
-    ) | legend
+    ) | ({} if legend is None else legend)
+    labels = dict() | ({} if labels is None else labels)
+    limits = dict() | ({} if limits is None else limits)
     
     # orientation   
     if categorical_axis not in ["x", "y"]: 
@@ -592,12 +612,17 @@ def heatmap(ax,
             ytick_labels=None,
             legend_orientation="vertical",
             legend_colors=True,
-            legend_colors_kwargs={},
+            legend_colors_kwargs=None,
             legend_sizes=True,
-            legend_sizes_kwargs={},
+            legend_sizes_kwargs=None,
             legend_shapes=True,
-            legend_shapes_kwargs={},
+            legend_shapes_kwargs=None,
             ):
+    
+    # kwargs
+    legend_colors_kwargs = {} if legend_colors_kwargs is None else legend_colors_kwargs
+    legend_sizes_kwargs = {} if legend_sizes_kwargs is None else legend_sizes_kwargs
+    legend_shapes_kwargs = {} if legend_shapes_kwargs is None else legend_shapes_kwargs
     
     # input arrays
     arrays = [data_colors, data_sizes, data_shapes, annotation, mask]
@@ -844,9 +869,13 @@ def heatmap(ax,
     return ax, collection
 
 def view_surf(data=None, parcellation=None, hemi="L", template="fsaverage", replace_nan=0,
-              template_kwargs={}, parcellation_kwargs={},
+              template_kwargs=None, parcellation_kwargs=None,
               verbose=False, **kwargs):
     lgr.setLevel(verbose)
+    
+    # kwargs 
+    template_kwargs = {} if template_kwargs is None else template_kwargs
+    parcellation_kwargs = {} if parcellation_kwargs is None else parcellation_kwargs
     
     # parcellation and data
     if data is None and parcellation is None:

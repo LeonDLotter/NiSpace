@@ -80,6 +80,13 @@ def rho_to_z(array, replace_1=1 - np.finfo(float).eps):
     return array_z
 
 
+def z_to_rho(array):
+    """Inverse Fisher's z-transformation of correlation coefficients."""
+    array = np.array(array)
+    array_rho = np.tanh(array)
+    return array_rho
+
+
 def zscore_df(df, along="cols", force_df=True):
     """Z-standardizes array and returns pandas dataframe.
 

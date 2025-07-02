@@ -10,14 +10,33 @@ from tqdm.auto import tqdm
 from .. import lgr
 from ..utils.utils import _del_from_tuple
 
+# for backwards compatibility
+@njit(nogil=True)
+def rank_array(array):
+    return rank1d(array)
 
 @njit(cache=True, nogil=True)
-def rank_array(array):
+def rank1d(arr):
     """Rank an array. CAVE: Cannot really deal with nan's!"""
     
-    _args = array.argsort()
-    ranked = np.empty_like(array)
-    ranked[_args] = np.arange(array.size)
+    _args = arr.argsort()
+    ranked = np.empty_like(arr)
+    ranked[_args] = np.arange(arr.size)
+    
+    return ranked
+
+@njit(cache=True, nogil=True)
+def rank2d(arr):
+    """Rank an array. Handles nan's"""
+    
+    if arr.ndim == 1:
+        return rank1d(arr)
+    
+    ranked = np.full_like(arr, np.nan)
+    for i in range(arr.shape[1]):
+        v = arr[:, i]
+        nonan = ~np.isnan(v)
+        ranked[nonan, i] = rank1d(v[nonan])
     
     return ranked
 
@@ -27,8 +46,8 @@ def corr(x, y, rank=False):
     """Compute Pearson or Spearman correlation for two 1D arrays."""
     
     if rank:
-        x = rank_array(x)
-        y = rank_array(y)
+        x = rank1d(x)
+        y = rank1d(y)
     
     m_x = x.mean()
     m_y = y.mean()
@@ -37,6 +56,18 @@ def corr(x, y, rank=False):
     r = num / den
     
     return r
+
+
+@njit(cache=True, nogil=True)
+def pearson(x, y):
+    """Compute Pearson correlation for two 1D arrays."""
+    
+    m_x = x.mean()
+    m_y = y.mean()
+    num = np.sum((x - m_x) * (y - m_y))
+    den = np.sqrt(np.sum((x - m_x) ** 2) * np.sum((y - m_y) ** 2))
+    
+    return num / den
 
 
 @njit(cache=True, nogil=True)
@@ -54,9 +85,30 @@ def partialcorr(x, y, z, rank=False):
     """
     
     if rank:
-        x = rank_array(x)
-        y = rank_array(y)
-        z = rank_array(z)
+        x = rank1d(x)
+        y = rank1d(y)
+        z = rank1d(z)
+    
+    C = np.column_stack((x, y, z))
+    corr = np.corrcoef(C, rowvar=False)
+    corr_inv = np.linalg.inv(corr) # the (multiplicative) inverse of a matrix.
+    rp = -corr_inv[0,1] / (np.sqrt(corr_inv[0,0] * corr_inv[1,1]))
+    
+    return rp
+
+
+@njit(cache=True, nogil=True)
+def partialpearson(x, y, z):
+    """Computes partial Pearson correlation between {x} and {y} controlled for {z}
+
+    Args:
+        x (array-like): input vector 1
+        y (array-like): input vector 2
+        z (array-like): input array to be controlled for
+
+    Returns:
+        rp (float): partial correlation coefficient between x and y
+    """
     
     C = np.column_stack((x, y, z))
     corr = np.corrcoef(C, rowvar=False)
@@ -318,3 +370,119 @@ def ridge(x, y, cv=None, seed=None, kwargs={}):
     } 
     
     return out
+
+
+# Numba-accelerated implementation of sklearn-style SIMPLS for a single target
+# should return the same as sklearn.cross_decomposition.PLSRegression with ~5x speed-up
+@njit(fastmath=True, cache=True)
+def _simpls1_loop(X_res, y_res, n_comp):
+    """
+    SIMPLS deflation when Y has shape (n_samples,)
+    Returns W, P, Q, T_norms (x-weights, x-loadings, y-loadings, norms of T).
+    """
+    n, p = X_res.shape
+    W = np.empty((p, n_comp))
+    P = np.empty((p, n_comp))
+    Q = np.empty(n_comp)
+    V = np.empty((n_comp, p)).T # orthonormal basis for deflation, flipped to achieve order="F"
+    T_norms = np.empty(n_comp)        
+
+    for a in range(n_comp):
+        # cross-covariance vector (instead of matrix when q == 1)
+        s = X_res.T @ y_res # shape (p,)
+        r = s / np.linalg.norm(s) # first left-singular vector
+        
+        # sklearn sign convention (svd_flip) 
+        if r[np.abs(r).argmax()] < 0.0: # largest‐abs entry must be +ve
+            r *= -1.0
+
+        t = X_res @ r
+        norm_t = np.linalg.norm(t)
+        T_norms[a] = norm_t
+        t /= norm_t
+        r /= norm_t # make tᵀr == 1
+
+        p = X_res.T @ t
+        q = np.dot(y_res, t) # scalar because q == 1
+
+        W[:, a] = r
+        P[:, a] = p
+        Q[a]    = q
+
+        # orthogonalise p to build V basis
+        v = p.copy()
+        for j in range(a):
+            v -= V[:, j] * np.dot(V[:, j], p)
+        v /= np.linalg.norm(v)
+        V[:, a] = v
+
+        # deflate X and y
+        X_res -= np.outer(t, p)
+        y_res -= t * q
+
+    return W, P, Q, T_norms
+
+# full PLS function
+def fast_pls1(
+    x: np.ndarray,
+    y: np.ndarray,
+    n_components: int
+):
+    """
+    Fast PLS (SIMPLS) for a single target.
+
+    Parameters
+    ----------
+    x : (n_samples, n_features) array_like
+    y : (n_samples,) or (n_samples, 1) array_like
+    n_components : int
+        Number of latent components.
+
+    Returns
+    -------
+    coef : (n_features,) ndarray
+        Regression weights in original data units.
+    intercept : float
+    r2 : float
+        Coefficient of determination.
+    x_loadings : (n_features, n_components) ndarray
+        Same meaning as ``PLSRegression.x_loadings_`` from scikit-learn.
+    """
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64).ravel()
+    n, p = x.shape
+
+    n_components = np.minimum(n_components, p)
+
+    # centre & scale (matches sklearn default)
+    x_mean = x.mean(axis=0)
+    y_mean = y.mean()
+    xc = x - x_mean
+    yc = y - y_mean
+
+    x_std = xc.std(axis=0, ddof=1)
+    y_std = yc.std(ddof=1)
+    xc /= x_std
+    yc /= y_std
+
+    # latent variables via numba loop
+    W, P_raw, Q, t_norms = _simpls1_loop(xc.copy(), yc.copy(), n_components)
+
+    # sklearn-style loadings
+    x_loadings = P_raw / t_norms
+
+    # coefficients in scaled space, back-transform
+    inner = np.linalg.solve(P_raw.T @ W, Q) # (n_components,)
+    coef_scaled = W @ inner # (p,)
+    coef = coef_scaled * (y_std / x_std)
+    intercept = y_mean - x_mean @ coef
+
+    # get R2
+    y_pred = x @ coef + intercept
+    r2 = 1.0 - np.sum((y - y_pred) ** 2) / np.sum((y - y_mean) ** 2)
+
+    return {
+        "r2": r2,
+        "beta": coef,
+        "loadings": x_loadings,
+    }

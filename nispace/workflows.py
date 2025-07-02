@@ -47,7 +47,7 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
                 lgr.info("NiSpace object provided but .fit() was not run. Running.")
                 status["init"] = True
         else:
-            lgr.critical(f"Argument 'nispace_object' must be of type NiSpace not {type(nsp)}!")
+            lgr.critical_raise(f"Argument 'nispace_object' must be of type NiSpace not {type(nsp)}!")
           
     ## INIT
     if not status["init"]:
@@ -104,6 +104,7 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
             parcellation_labels=parcellation_labels,
             n_proc=n_proc,
             verbose=verbose,
+            return_self=True,
         ) | init_kwargs
         nsp = NiSpace(**init_kwargs)
     
@@ -134,13 +135,13 @@ def simple_colocalization(y,
                           n_proc=1,
                           verbose=True,
                           nispace_object=None, 
-                          fetch_x_kwargs={},
-                          init_kwargs={},
-                          clean_y_kwargs={},
-                          colocalize_kwargs={},
-                          permute_kwargs={},
-                          correct_p_kwargs={},
-                          plot_kwargs={}):
+                          fetch_x_kwargs=None,
+                          init_kwargs=None,
+                          clean_y_kwargs=None,
+                          colocalize_kwargs=None,
+                          permute_kwargs=None,
+                          correct_p_kwargs=None,
+                          plot_kwargs=None):
     """Simple colocalization workflow.
     
     Parameters
@@ -208,6 +209,14 @@ def simple_colocalization(y,
         The NiSpace object containing all results.
     """
     verbose = set_log(lgr, verbose)
+    # kwarg dicts
+    fetch_x_kwargs = {} if fetch_x_kwargs is None else fetch_x_kwargs
+    init_kwargs = {} if init_kwargs is None else init_kwargs
+    clean_y_kwargs = {} if clean_y_kwargs is None else clean_y_kwargs
+    colocalize_kwargs = {} if colocalize_kwargs is None else colocalize_kwargs
+    permute_kwargs = {} if permute_kwargs is None else permute_kwargs
+    correct_p_kwargs = {} if correct_p_kwargs is None else correct_p_kwargs
+    plot_kwargs = {} if plot_kwargs is None else plot_kwargs
     
     ## COMMON FUNCTIONS: COLOC METHOD VALIDATION, DATA LOADING, INIT,
     if isinstance(colocalization_method, str):
@@ -247,7 +256,7 @@ def simple_colocalization(y,
         for method in colocalization_method:
             colocalize_kwargs_curr = dict(
                 method=method,
-                Z_regression=True,
+                regress_z=True,
             ) | colocalize_kwargs
             nsp.colocalize(**colocalize_kwargs_curr)
         status["colocalize"] = True
@@ -316,15 +325,24 @@ def group_comparison(y, design,
                      n_proc=1,
                      verbose=True,
                      nispace_object=None, 
-                     fetch_x_kwargs={},
-                     init_kwargs={},
-                     clean_y_kwargs={},
-                     transform_y_kwargs={},
-                     colocalize_kwargs={},
-                     permute_kwargs={},
-                     correct_p_kwargs={},
-                     plot_kwargs={}):
+                     fetch_x_kwargs=None,
+                     init_kwargs=None,
+                     clean_y_kwargs=None,
+                     transform_y_kwargs=None,
+                     colocalize_kwargs=None,
+                     permute_kwargs=None,
+                     correct_p_kwargs=None,
+                     plot_kwargs=None):
     verbose = set_log(lgr, verbose)
+    # kwarg dicts
+    fetch_x_kwargs = {} if fetch_x_kwargs is None else fetch_x_kwargs
+    init_kwargs = {} if init_kwargs is None else init_kwargs
+    clean_y_kwargs = {} if clean_y_kwargs is None else clean_y_kwargs
+    transform_y_kwargs = {} if clean_y_kwargs is None else clean_y_kwargs
+    colocalize_kwargs = {} if colocalize_kwargs is None else colocalize_kwargs
+    permute_kwargs = {} if permute_kwargs is None else permute_kwargs
+    correct_p_kwargs = {} if correct_p_kwargs is None else correct_p_kwargs
+    plot_kwargs = {} if plot_kwargs is None else plot_kwargs
 
     ## COMMON FUNCTIONS: DATA LOADING, INIT, YCOLOC METHOD VALIDATION
     if isinstance(colocalization_method, str):
@@ -450,7 +468,7 @@ def group_comparison(y, design,
             colocalize_kwargs_curr = dict(
                 method=method,
                 Y_transform=comparison_method,
-                Z_regression=True,
+                regress_z=True,
                 verbose=verbose,
             ) | colocalize_kwargs
             nsp.colocalize(**colocalize_kwargs_curr)
@@ -528,14 +546,22 @@ def simple_xsea(y,
                 n_proc=1,
                 verbose=True,
                 nispace_object=None, 
-                fetch_x_kwargs={},
-                init_kwargs={},
-                clean_y_kwargs={},
-                colocalize_kwargs={},
-                permute_kwargs={},
-                correct_p_kwargs={},
-                plot_kwargs={}):
+                fetch_x_kwargs=None,
+                init_kwargs=None,
+                clean_y_kwargs=None,
+                colocalize_kwargs=None,
+                permute_kwargs=None,
+                correct_p_kwargs=None,
+                plot_kwargs=None):
     verbose = set_log(lgr, verbose)
+    # kwarg dicts
+    fetch_x_kwargs = {} if fetch_x_kwargs is None else fetch_x_kwargs
+    init_kwargs = {} if init_kwargs is None else init_kwargs
+    clean_y_kwargs = {} if clean_y_kwargs is None else clean_y_kwargs
+    colocalize_kwargs = {} if colocalize_kwargs is None else colocalize_kwargs
+    permute_kwargs = {} if permute_kwargs is None else permute_kwargs
+    correct_p_kwargs = {} if correct_p_kwargs is None else correct_p_kwargs
+    plot_kwargs = {} if plot_kwargs is None else plot_kwargs
     
     # GET THE BACKGROUND
     if permute_sets:

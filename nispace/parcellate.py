@@ -163,10 +163,12 @@ class Parcellater():
                              'when provided parcellation is in MNI152 space '
                              'and provided data are in surface space.')
 
+        if hemi in [("L", "R"), ["L", "R"]]:
+            hemi = None
         if hemi is not None and hemi not in self.hemi:
-            raise ValueError('Cannot parcellate data from {hemi} hemisphere '
-                             'when parcellation was provided for incompatible '
-                             'hemisphere: {self.hemi}')
+            raise ValueError(f'Cannot parcellate data from {hemi} hemisphere '
+                             f'when parcellation was provided for incompatible '
+                             f'hemisphere: {self.hemi}')
 
         if isinstance(data, np.ndarray):
             data = _array_to_gifti(data)

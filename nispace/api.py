@@ -13,7 +13,7 @@ from . import lgr
 from .io import parcellate_data, load_distmat, to_pickle, from_pickle
 from .modules.reduce_x import _reduce_dimensions
 from .modules.transform_y import _dummy_code_groups, _num_code_subjects, _get_transform_fun
-from .modules.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats
+from .modules.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats, _rank_regress
 from .modules.permute import _get_null_maps, _get_exact_p_values, _get_correct_mc_method
 from .modules.plot import _plot_categorical
 from .modules.constants import _PARCS_DEFAULT, _COLOC_METHODS
@@ -68,6 +68,7 @@ class NiSpace:
                  n_proc: int = 1, 
                  verbose: bool = True,
                  dtype: Union[type, str] = np.float32,
+                 return_self: bool = False,
                  **kwargs):
         """
         Initialize the NiSpace object. 
@@ -212,9 +213,14 @@ class NiSpace:
             "X_reduction": False, 
             "Y_transform": False,
             "xsea": False, 
+            "rank": False,
+            "zy_matched": False,
+            "regress_z": None,
         }
-    
-    
+        
+        # deprecation adjustment
+        self._return_self = return_self
+        
     # FIT ==========================================================================================
     
     def fit(self, **kwargs):
@@ -234,9 +240,12 @@ class NiSpace:
         verbose = set_log(lgr, self._verbose)
         lgr.info("*** NiSpace.fit() - Data extraction and preparation. ***")
         
+        # TODO: remove this warning in a future version and adjust most methods
+        if not self._return_self:
+            lgr.warning("In a future version, all NiSpace object methods will return the object itself "
+                        "by default. Set NiSpace(return_self=True) to disable this warning.")
+    
         ## handle integrated parcellations
-        if self._parc is None:
-            self._parc = _PARCS_DEFAULT
         if isinstance(self._parc, str):
             # check if parcellation is an integrated parcellation
             try:
@@ -291,7 +300,6 @@ class NiSpace:
         ) | kwargs
         
         # reference data -> usually e.g. PET atlases
-        # TODO: GSEA INPUT MANAGEMENT
         lgr.info("Checking input data for 'x' (should be, e.g., PET data):")
         self._X, self._parc = parcellate_data(
             self._x, 
@@ -336,9 +344,6 @@ class NiSpace:
                 **_input_kwargs
             )
             lgr.info(f"Got 'z' data for {self._Z.shape[0]} x {self._Z.shape[1]} parcels.")
-            if self._Z.shape[0] not in [1, self._Y.shape[0]]:
-                lgr.warning(f"Z data is not same shape as Y data ({self._Y.shape}) or shape "
-                            f"(1,{self._X.shape[1]}). Check if this is intended!: {self._Z.shape}")
             
         else:
             self._Z = None
@@ -515,7 +520,11 @@ class NiSpace:
                 if reduction=="fa":
                     self._dimred[reduction]["fa_method"] = fa_method
                     self._dimred[reduction]["fa_rotation"] = fa_rotation
-                
+            
+            ## return
+            if self._return_self:
+                return self
+            
         if reduction in ["pca", "ica", "fa"]:
             return _X_reduced, ev, loadings
         else:
@@ -527,10 +536,14 @@ class NiSpace:
     def clean_y(self, how, 
                 covariates_within=None, 
                 covariates_between=None, 
-                combat=False, combat_keep=None, combat_train=None, combat_model=None, combat_kwargs={},
+                within_y_specific=False,
+                combat=False, combat_keep=None, combat_train=None, combat_model=None, combat_kwargs=None,
                 n_proc=None, replace=True, verbose=None):
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info(f"*** NiSpace.clean_y() - Y covariate regression. ***")
+        
+        # kwargs
+        combat_kwargs = {} if combat_kwargs is None else combat_kwargs
         
         ## check if fit was run
         self._check_fit()
@@ -579,24 +592,37 @@ class NiSpace:
                 # check shape
                 lgr.info(f"Assuming {wcov_arr.shape[0]} 'within' covariate map(s) for "
                          f"{wcov_arr.shape[1]} parcels.")
-                if wcov_arr.shape[1] != Y.shape[1] or wcov_arr.shape[0] not in [1, Y.shape[0]]:
-                    lgr.error(f"Covariate data shape ({wcov_arr.shape}) does not match Y data! "
-                              f"Must be (n, {Y.shape[1]}) or ({Y.shape},).")
+                if wcov_arr.shape[1] != Y.shape[1]:
+                    lgr.error(f"Covariate number of parcels {wcov_arr.shape[1]} does not match Y data!")
                     wcov_arr = None
+                if within_y_specific & (wcov_arr.shape[0] != Y.shape[0]):
+                    lgr.error(f"If 'within_y_specific' is True, the number of covariate maps "
+                              f"({wcov_arr.shape[0]}) must match the number of Y maps ({Y.shape[0]})!")
+                    wcov_arr = None
+                    
             # type not known
             else:
-                lgr.critical_raise("Provided 'covariates_within' of type "
-                                   f"{type(covariates_within)} not supported!",
+                lgr.critical_raise(f"'covariates_within' of type {type(covariates_within)} not supported!",
                                    TypeError)
             # run
             if wcov_arr is not None:
-                # copy data if only one map
+                # if only one map, repeat for each input
                 if wcov_arr.shape[0] == 1:
-                    wcov_arr = np.tile(wcov_arr, (Y.shape[0], 1))
+                    lgr.info("Got one covariate map. Using this for each Y map.")
+                    wcov_arr = np.row_stack([wcov_arr] * Y.shape[0])
+                # if as many maps as subjects, match covmaps to ymaps
+                elif within_y_specific & (wcov_arr.shape[0] == Y.shape[0]):
+                    lgr.info("Got as many covariate maps as Y maps. Running y-specific regression.")
+                    pass
+                # if > 1: build 3d array, leading to all covmaps regressed from each ymap
+                else:
+                    lgr.info(f"Got {wcov_arr.shape[0]} covariate maps. Using these for each Y map.")
+                    wcov_arr = np.stack([wcov_arr.T] * Y.shape[0], axis=0)                    
+                # run
                 Y_partial = Parallel(n_jobs=n_proc)(
-                    delayed(residuals_nan)(wcov_arr[i_y, :], Y_arr[i_y, :]) for i_y in tqdm(
+                    delayed(residuals_nan)(wcov_arr[i_y], Y_arr[i_y, :]) for i_y in tqdm(
                         range(Y.shape[0]), 
-                        desc=f"Regressing within covariate(s) on Y ({n_proc} proc)", 
+                        desc=f"Regressing within covariate(s) from Y ({n_proc} proc)", 
                         disable=not verbose
                 )) 
                 Y_arr = np.array(Y_partial, dtype=self._dtype)
@@ -652,7 +678,7 @@ class NiSpace:
                 Y_partial = Parallel(n_jobs=n_proc)(
                     delayed(residuals_nan)(bcov_arr, Y_arr[:, i_p]) for i_p in tqdm(
                         range(Y.shape[1]), 
-                        desc=f"Regressing {bcov_arr.shape[1]} between covariate(s) on Y ({n_proc} proc)", 
+                        desc=f"Regressing {bcov_arr.shape[1]} between covariate(s) from Y ({n_proc} proc)", 
                         disable=not verbose
                 )) 
                 Y_arr = np.array(Y_partial, dtype=self._dtype).T
@@ -727,7 +753,7 @@ class NiSpace:
                         
         # done nothing
         if wcov_arr is None and bcov_arr is None:
-            lgr.warning("No covariate regression performed! Set 'how' to 'between' and/or 'within "
+            lgr.warning("No covariate regression performed! Set 'how' to 'between' and/or 'within' "
                         "and provide covariate arrays through 'covariates_{within|between}'!")
         
         # to df
@@ -737,6 +763,9 @@ class NiSpace:
         if replace:
             self._Y = Y
         
+        ## return
+        if self._return_self:
+            return self
         return Y
     
     
@@ -836,7 +865,10 @@ class NiSpace:
             # save transformed y
             df_str = _get_df_string("ytrans", ytrans=transform)
             self._Y_trans[df_str] = _Y_trans
-            
+        
+            ## return
+            if self._return_self:
+                return self
         return _Y_trans 
 
     
@@ -869,6 +901,10 @@ class NiSpace:
         # replace z data & return
         if replace:
             self._Z = _Z_trans
+        
+        ## return
+        if self._return_self:
+            return self
         return _Z_trans
     
     
@@ -876,15 +912,17 @@ class NiSpace:
 
     def colocalize(self, method=None, X_reduction=None, Y_transform=None, xsea=None, 
                    xsea_aggregation_method="mean",
+                   regress_z=True, zy_matched=False,
                    X=None, Y=None, Z=None, 
-                   Z_regression=True, 
                    store=True, n_proc=None, seed=None, verbose=None,
-                   dist_mat_kwargs={},
+                   dist_mat_kwargs=None,
                    force_dict=False,
                    **kwargs):
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
-        
         lgr.info("*** NiSpace.colocalize() - Estimating X & Y colocalizations. ***")
+        
+        # kwargs
+        dist_mat_kwargs = {} if dist_mat_kwargs is None else dist_mat_kwargs
         
         ## check if fit was run 
         self._check_fit()
@@ -894,20 +932,25 @@ class NiSpace:
         dtype = self._dtype
         
         ## settings
-        method, X_reduction, Y_transform, xsea = self._get_last(
+        method, X_reduction, Y_transform, xsea, rank, zy_matched, regress_z = self._get_last(
             method=method, 
             X_reduction=X_reduction, 
             Y_transform=Y_transform, 
-            xsea=xsea
+            xsea=xsea,
+            rank=kwargs.pop("rank", None),
+            zy_matched=zy_matched,
+            regress_z=regress_z,
         )
         if method is None:
             coloc_methods = ", ".join(list(_COLOC_METHODS.keys()))
-            lgr.critical_raise(f"No colocalization method defined! Supported: {coloc_methods}", 
+            lgr.critical_raise(f"No colocalization method defined! Supported:\n{coloc_methods}", 
                                ValueError)
         else:
             lgr.info(f"Running '{method}' colocalization" + \
                      (f" on '{X_reduction}'-reduced X data" if X_reduction else "") + \
                      (f" with '{Y_transform}' transform" if Y_transform else "") + ".")
+        if "spearman" in method:
+            rank = True
         
         ## get X and Y data (so this function can be run on direct X & Y input data)
         # X
@@ -968,45 +1011,70 @@ class NiSpace:
         # Z
         if not Z:
             Z = self._Z
-        if Z is None and "partial" in method:
-            temp = method.replace('partial', '')
-            lgr.error(f"Provide Z data for method '{method}'! Using method '{temp}' instead.") 
-            method = temp.copy()
-        elif not Z_regression and "partial" in method:
-            lgr.warning(f"Method '{method}' entails Z regression, will set 'Z_regression' = True.")
-            Z_regression = True
-        if Z_regression and Z is not None:
-            lgr.info(f"Will regress Z from Y {'during' if 'partial' in method else 'before'} "
-                     "colocalization calculation.")
-            Z_arr = np.array(Z, dtype=dtype)
+        # if regress_z is True, we regress Z from X and Y, if None or False, we don't regress Z
+        if Z is None or regress_z is None or regress_z == False:
+            regress_z = ""
+        if regress_z == True:
+            regress_z = "xy"
+        # partialspearman and partialpearson entail full Z regression
+        if regress_z and "partial" in method:
+            if Z is None:
+                lgr.error(f"Provide Z data for method '{method}'! Using method "
+                          f"'{method.replace('partial', '')}' instead.") 
+                method = method.replace("partial", "")
+                regress_z = ""
+            elif hasattr(self, "_clean_y_z"):
+                lgr.warning("It seems, Z-from-Y-regression was performed before. Will add X-from-Z-regression.")
+                regress_z = "x"
+            else:
+                regress_z = "xy"
+        # if zy_matched is True, we regress each Z from each Y, we cannot regress from X in that case
+        if regress_z and zy_matched:
+            if Z.shape[0] != Y_arr.shape[0]:
+                lgr.error(f"Number of Z maps ({Z.shape[0]}) must equal number of Y maps " + \
+                          f"({Y_arr.shape[0]}) if 'zy_matched' is True! Will not perform Z regression.")
+                zy_matched, regress_z = False, ""
+            elif "partial" in method:
+                lgr.warning(f"Method '{method}' is not compatible with matched Z->Y regression. "
+                            f"Will perfom semi-partial '{method.replace('partial', '')}' correlation.")
+                method = method.replace("partial", "")
+                regress_z = "y"
+            else:
+                regress_z = "y"
+        # if regression was performed in .clean_y(), we avoid to touch y again
+        if hasattr(self, "_clean_y_z"):
+            lgr.warning(f"It seems, Z-from-Y-regression was performed before. "
+                        f"{'Will only perform Z-from-X-regression.' if regress_z else 'Skipping regression.'}")
+            regress_z = regress_z.replace("y", "")
+        # if regress_z is still not False, we proceed
+        Z_arr = np.array(Z, dtype=dtype) if regress_z else None
             
-            # reasons to skip: Z regr. already performed, wrong shape
-            msg = ""
-            if hasattr(self, "_clean_y_z"):
-                msg = "It seems, Z regression was performed using NiSpace.clean_y()."
-                if "partial" in method:
-                    msg += f" Method '{method}' entails Z regression. This will result in an error."
-            elif Z_arr.shape[0] not in [1, Y_arr.shape[0]]:
-                msg = f"Number of Z maps ({Z_arr.shape[0]}) must equal number of Y maps " + \
-                      f"({Y_arr.shape[0]}) or be 1!"
-            if len(msg) > 0:
-                if Z_regression != "force":
-                    lgr.warning(msg + " Will not perform Z regression.")
-                    Z_regression, Z_arr = False, None
-                else:
-                    lgr.warning(" Forcing Z regression. Check results validity!")
-                    
-            if Z_arr is not None:
-                # if Z is one map, we assume average map (e.g., MNI152 TPM) and repeat it along ax 0
-                if Z_arr.shape[0] == 1 and Y_arr.shape[0] > 1:
-                    lgr.info("Found one Z map. Will be regressed from every Y.")
-                    Z_arr = np.tile(Z_arr, (Y_arr.shape[0], 1))
-                # if Z and Y have same amount of maps, will leave it as is
-                elif Z_arr.shape[0] == Y_arr.shape[0]:
-                    lgr.info("Found equal number of Z and Y maps. Will perform map-wise regression.")
-        else:
-            Z_regression, Z_arr = False, None
-                
+        ## Preranking and regression
+        if rank or regress_z:
+            if rank:
+                lgr.info("Pre-ranking X and Y data.")
+            if regress_z:
+                lgr.info(f"Regressing {Z_arr.shape[0]} {'Y-matched ' if zy_matched else ''}Z maps from "
+                         f"{regress_z.upper()} data.")
+            # X
+            X_arr = _rank_regress(
+                arr=X_arr, 
+                rank=rank, 
+                regress="x" in regress_z, 
+                z=Z_arr, 
+                zy_matched=zy_matched, 
+                verbose=verbose
+            )
+            # Y
+            Y_arr = _rank_regress(
+                arr=Y_arr, 
+                rank=rank, 
+                regress="y" in regress_z, 
+                z=Z_arr, 
+                zy_matched=zy_matched, 
+                verbose=verbose
+            )
+            
         ## special case regularized regression: we need euclidean distance matrices
         parcel_tr_te_splits, parcel_train_pct = None, None
         if (method in ["lasso", "ridge", "elasticnet"]):
@@ -1045,7 +1113,6 @@ class NiSpace:
                     
         # save colocalization settings
         self._coloc_kwargs = dict(
-            regr_z=Z_regression,
             xsea=xsea,
             xsea_method=xsea_aggregation_method,
             parcel_train_pct=None,
@@ -1067,7 +1134,7 @@ class NiSpace:
 
         ## run actual prediction using joblib.Parallel
         _colocs_list = Parallel(n_jobs=n_proc)(
-            delayed(_y_colocalize)(X_arr, Y_arr[i_y, :], Z_arr[i_y, :] if Z_arr is not None else None, X_weights) \
+            delayed(_y_colocalize)(X_arr, Y_arr[i_y, :], X_weights) \
                 for i_y in tqdm(
                     range(Y.shape[0]), 
                     desc=f"Colocalizing ({method}, {n_proc} proc)", 
@@ -1103,9 +1170,15 @@ class NiSpace:
                 method=method,
                 X_reduction=X_reduction,
                 Y_transform=Y_transform,
-                xsea=xsea
+                xsea=xsea,
+                rank=rank,
+                zy_matched=zy_matched,
+                regress_z=regress_z,
             )
             
+            ## return
+            if self._return_self:
+                return self
         # return dict of dfs
         if force_dict or len(_colocs) > 1:
             return _colocs
@@ -1184,11 +1257,14 @@ class NiSpace:
         lgr.info(f"Permutation of: {perm_info}.")
             
         ## settings
-        method, X_reduction, Y_transform, xsea = self._get_last(
+        method, X_reduction, Y_transform, xsea, rank, zy_matched, regress_z = self._get_last(
             method=method, 
             X_reduction=X_reduction, 
             Y_transform=Y_transform, 
-            xsea=xsea
+            xsea=xsea,
+            rank=None,
+            zy_matched=None,
+            regress_z=None,
         )
         
         # specific settings via kwargs
@@ -1478,27 +1554,75 @@ class NiSpace:
                 if isinstance(_X_obs_arr, dict):
                     X_weights = {set_name: np.array(set_X.index.get_level_values("weight"), dtype=self._dtype) 
                                 for set_name, set_X in _X_obs.groupby(level="set", sort=False)}
-                
+        
+        ## pre-rank and regress
+        if rank or regress_z:
+            if rank:
+                lgr.info("Pre-ranking X and Y (null) data.")
+            if regress_z:
+                lgr.info(f"Regressing {_Z_obs_arr.shape[0]} {'Y-matched ' if zy_matched else ''}Z "
+                         f"maps from (null) {regress_z.upper()} data.")
+            # X observed
+            _X_obs_arr = _rank_regress(
+                arr=_X_obs_arr, 
+                rank=rank, 
+                regress="x" in regress_z, 
+                z=_Z_obs_arr, 
+                zy_matched=zy_matched, 
+                verbose=verbose
+            )
+            # X null
+            if not ("sets" in what and isinstance(_X_obs_arr, dict)):
+                _X_null = _rank_regress(
+                    arr=_X_null, 
+                    rank=rank, 
+                    regress="x" in regress_z, 
+                    z=_Z_obs_arr, 
+                    zy_matched=zy_matched, 
+                    verbose=verbose,
+                    n_proc=n_proc
+                )
+            # XSEA background
+            sets_X_background = _rank_regress(
+                arr=sets_X_background, 
+                rank=rank, 
+                regress="x" in regress_z, 
+                z=_Z_obs_arr, 
+                zy_matched=zy_matched, 
+                verbose=verbose,
+            )
+            # Y observed
+            _Y_obs_arr = _rank_regress(
+                arr=_Y_obs_arr, 
+                rank=rank, 
+                regress="y" in regress_z, 
+                z=_Z_obs_arr, 
+                zy_matched=zy_matched, 
+                verbose=verbose,
+            )
+            # Y null
+            _Y_null = _rank_regress(
+                arr=_Y_null, 
+                rank=rank, 
+                regress="y" in regress_z, 
+                z=_Z_obs_arr, 
+                zy_matched=zy_matched, 
+                verbose=verbose,
+                n_proc=n_proc
+            )
+        
         ## check what permuted dataframes we have, if we dont have them, copy observed data (!)
         if (not _X_null) & (not _Y_null) & (not _Z_null):
             lgr.critical_raise("No permuted data generated. Supported permutations ('what') are: "
                                "'maps', 'groups', and 'sets'.",
                                ValueError)
+        # X
         if not _X_null:
             _X_null = [_X_obs_arr] * n_perm
+        # Y
         if not _Y_null:
             _Y_null = [_Y_trans_obs_arr if "_Y_trans_obs" in locals() else _Y_obs_arr] * n_perm
-        if not _Z_null:
-            if _Z_obs is not None:
-                if _Z_obs_arr.shape[0] == 1 and _Y_obs_arr.shape[0] > 1:
-                    _Z_obs_arr = np.tile(_Z_obs_arr, (_Y_obs_arr.shape[0], 1)).astype(self._dtype)
-                elif _Z_obs_arr.shape[0] != _Y_obs_arr.shape[0]:
-                    lgr.critical_raise(f"Z data of wrong shape ({_Z_obs_arr.shape})!",
-                                       ValueError)
-                _Z_null = [_Z_obs_arr] * n_perm
-            else:
-                _Z_null = [None] * n_perm
-                
+        
         ## run null colocalizations
         # function to perform colocalization for one y vector (= per subject); see NiSpace.colocalize()
         # the function was saved by NiSpace.colocalize()
@@ -1507,18 +1631,12 @@ class NiSpace:
         # function to perform colocalization for one X/Y/Z null array
         xsea = True if isinstance(_X_null[0], dict) else False
         #n_components = self._coloc_kwargs["n_components"]
-        def par_fun(X_null, Y_null, Z_null=None, X_weights=None):
+        def par_fun(X_null, Y_null, X_weights=None):
             # run colocalization
-            if Z_null is None:
-                null_colocs_list = [
-                    _y_colocalize(X_null, Y_null[i_y, :], None, X_weights)
-                    for i_y in range(Y_null.shape[0])
-                ]
-            else:
-                null_colocs_list = [
-                    _y_colocalize(X_null, Y_null[i_y, :], Z_null[i_y, :], X_weights)
-                    for i_y in range(Y_null.shape[0])
-                ]
+            null_colocs_list = [
+                _y_colocalize(X_null, Y_null[i_y, :], X_weights)
+                for i_y in range(Y_null.shape[0])
+            ]
             # sort output with helper function, return as array
             null_colocs = _sort_colocs(
                 method=method, 
@@ -1543,7 +1661,7 @@ class NiSpace:
         # run in parallel
         if not xsea:
             _colocs_null = Parallel(n_jobs=n_proc)(
-                delayed(par_fun)(_X_null[i], _Y_null[i], _Z_null[i]) 
+                delayed(par_fun)(_X_null[i], _Y_null[i]) 
                 for i in tqdm(
                     range(n_perm), 
                     desc=f"Null colocalizations ({method}, {n_proc} proc)", disable=not verbose
@@ -1551,7 +1669,7 @@ class NiSpace:
             )
         else:
             _colocs_null = Parallel(n_jobs=n_proc)(
-                delayed(par_fun)(_xsea_perm_data(i), _Y_null[i], _Z_null[i], X_weights) 
+                delayed(par_fun)(_xsea_perm_data(i), _Y_null[i], X_weights) 
                 for i in tqdm(
                     range(n_perm), 
                     desc=f"Null colocalizations ({method}, {n_proc} proc)", disable=not verbose
@@ -1620,8 +1738,14 @@ class NiSpace:
                 X_reduction=X_reduction, 
                 Y_transform=Y_transform, 
                 xsea=xsea,
+                rank=rank,
+                zy_matched=zy_matched,
+                regress_z=regress_z,
                 perm=perm
             )
+            ## return
+            if self._return_self:
+                return self
             # return dict of dfs
             if force_dict or len(p_data) > 1:
                 return p_data
@@ -1676,6 +1800,9 @@ class NiSpace:
         if store:
             for p_str in p_corr: 
                 self._p_colocs[p_str] = p_corr[p_str]
+            ## return
+            if self._return_self:
+                return self
         return p_corr
     
     
@@ -1690,10 +1817,14 @@ class NiSpace:
              title="auto", sort_colocs=False,
              colocalizations_dict=None, nulls_dict=None, p_dict=None, pc_dict=None, mc_method="fdr_bh",
              fig=None, ax=None, figsize=None, show=True,
-             plot_kwargs={}, nullplot_kwargs={},
+             plot_kwargs=None, nullplot_kwargs=None,
              verbose=None): 
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.plot() - Plot colocalization results. ***")
+        
+        # kwargs
+        plot_kwargs = {} if plot_kwargs is None else plot_kwargs
+        nullplot_kwargs = {} if nullplot_kwargs is None else nullplot_kwargs
         
         # check fit
         self._check_fit()

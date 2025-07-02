@@ -1,11 +1,79 @@
 import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
+from tqdm.auto import tqdm
 
 from .. import lgr
 from ..utils.utils import nan_detector
-from ..stats.coloc import (corr, partialcorr, mutualinfo, r2, mlr, dominance, pls, pcr,lasso, ridge, elasticnet)
-from ..stats.misc import residuals_nan, rho_to_z
+from ..stats.coloc import (pearson, mutualinfo, r2, mlr, dominance, fast_pls1, pcr, lasso, ridge, elasticnet, rank2d)
+from ..stats.misc import rho_to_z, residuals_nan
 from ..modules.constants import _COLOC_METHODS, _COLOC_METHODS_DROPOPT, _COLOC_METHODS_PERM
+
+
+def _rank_regress(arr, rank, regress, z=None, zy_matched=False, n_proc=1, verbose=True):
+    
+    if arr is None or (not rank and not regress):
+        return arr
+    
+    def regress_z_fun(arr, z, zy_matched):
+        if z.shape[0] == 1:
+            return np.row_stack([residuals_nan(x=z[0], y=arr[i]) for i in range(arr.shape[0])])
+        elif zy_matched:
+            return np.row_stack([residuals_nan(x=z[i], y=arr[i]) for i in range(arr.shape[0])])
+        else:
+            return np.row_stack([residuals_nan(x=z.T, y=arr[i]) for i in range(arr.shape[0])])
+    
+    # case 1: arr is array, e.g. X or Y arrays
+    if isinstance(arr, np.ndarray):
+        if rank:
+            arr_out = rank2d(arr.T).T
+        if regress:
+            arr_out = regress_z_fun(arr, z, zy_matched)
+            
+    # case 2: arr is list, e.g., X or Y null arrays
+    elif isinstance(arr, list):
+        
+        # parallelize
+        def par_fun(arr_i):
+            
+            # case 2.1: arr_i is array
+            if isinstance(arr_i, np.ndarray):
+                if rank:
+                    arr_i = rank2d(arr_i.T).T
+                if regress:
+                    arr_i = regress_z_fun(arr_i, z, zy_matched)
+                
+            # case 2.2: arr_i is dict
+            elif isinstance(arr_i, dict):
+                if rank:
+                    arr_i = {set_name: rank2d(set_arr.T).T for set_name, set_arr in arr_i.items()}
+                if regress:
+                    arr_i = {set_name: regress_z_fun(set_arr, z, zy_matched) for set_name, set_arr in arr_i.items()}
+            
+            # rest
+            else:
+                raise ValueError(f"Unsupported type: {type(arr_i)}")
+
+            return arr_i
+        
+        # run in parallel
+        arr_out = Parallel(n_jobs=n_proc)(
+            delayed(par_fun)(arr_i) 
+            for arr_i in tqdm(arr, desc=f"Processing null arrays ({n_proc} proc)", disable=not verbose)
+        )
+    
+    # case 3: arr is dict, e.g., X or Y null arrays
+    elif isinstance(arr, dict):
+        if rank:
+            arr_out = {set_name: rank2d(set_arr.T).T for set_name, set_arr in arr.items()}
+        if regress:
+            arr_out = {set_name: regress_z_fun(set_arr, z, zy_matched) for set_name, set_arr in arr.items()}
+            
+    # rest
+    else:
+        raise ValueError(f"Unsupported type: {type(arr)}")
+    
+    return arr_out   
 
 
 def _get_coloc_stats(method, permuted_only=False, drop_optional=False):
@@ -25,78 +93,42 @@ def _get_coloc_stats(method, permuted_only=False, drop_optional=False):
     return stats
 
 
-def _get_colocalize_fun(method, regr_z=True,
+def _get_colocalize_fun(method,
                         xsea=False, xsea_method="mean",
                         r_to_z=True, r_equal_one="raise", adj_r2=True, mlr_individual=False, 
                         parcel_mask_regularized=None, parcel_tr_te_splits=None, parcel_train_pct=None, 
                         n_components=1,
                         seed=None, verbose=False, dtype=np.float32, **kwargs):
    
-    ## case (partial) pearson / spearman
-    if any(m in method for m in ["pearson", "spearman"]):
+    ## case pearson / spearman
+    if method in ["pearson", "spearman", "partialpearson", "partialspearman"]:
         
-        # spearman vs pearson
-        rank = True if "spearman" in method else False
+        def _y_colocalize(X, y, weights=None):  
+            parcel_mask_y = ~np.isnan(y)
+            # iterate x (atlases/predictors)
+            _colocs = np.zeros(X.shape[0], dtype=dtype)
+            for i_x in range(X.shape[0]):
+                x = X[i_x, :]
+                parcel_mask = parcel_mask_y & ~np.isnan(x)
+                _colocs[i_x] = pearson(
+                    x=x[parcel_mask], # atlas
+                    y=y[parcel_mask], # subject
+                ) 
+            if r_equal_one == "raise":
+                if np.isclose(_colocs, 1).any():
+                    raise ValueError(f"'{method}' colocalization equal to 1 detected! Are you "
+                                        "correlating data with itself or do you have too few parcels?")
+            else:
+                _colocs[np.isclose(_colocs, 1)] = r_equal_one
+            if r_to_z:
+                _colocs = rho_to_z(_colocs)
+                
+            return {"rho": _colocs}
         
-        # case simple correlation
-        if "partial" not in method:
-            def _y_colocalize(X, y, z=None, weights=None):  
-                if regr_z and z is not None:
-                    y = residuals_nan(z, y)
-                parcel_mask_y = ~np.isnan(y)
-                # iterate x (atlases/predictors)
-                _colocs = np.zeros(X.shape[0], dtype=dtype)
-                for i_x in range(X.shape[0]):
-                    x = X[i_x, :]
-                    parcel_mask = parcel_mask_y & ~np.isnan(x)
-                    _colocs[i_x] = corr(
-                        x=x[parcel_mask], # atlas
-                        y=y[parcel_mask], # subject
-                        rank=rank
-                    ) 
-                if r_equal_one == "raise":
-                    if np.isclose(_colocs, 1).any():
-                        raise ValueError(f"'{method}' colocalization equal to 1 detected! Are you "
-                                         "correlating data with itself or do you have too few parcels?")
-                else:
-                    _colocs[np.isclose(_colocs, 1)] = r_equal_one
-                if r_to_z:
-                    _colocs = rho_to_z(_colocs)
-                    
-                return {"rho": _colocs}
-        
-        # case partial correlation
-        else:
-            def _y_colocalize(X, y, z, weights=None):    
-                parcel_mask_yz = ~nan_detector(y, z)
-                # iterate x (atlases/predictors)
-                _colocs = np.zeros(X.shape[0], dtype=dtype)
-                for i_x in range(X.shape[0]):
-                    x = X[i_x, :]
-                    parcel_mask = parcel_mask_yz & ~np.isnan(x)
-                    _colocs[i_x] = partialcorr(
-                        x=x[parcel_mask], # atlas
-                        y=y[parcel_mask], # subject
-                        z=z[parcel_mask], # data to partial out
-                        rank=rank
-                    )
-                if r_equal_one == "raise":
-                    if np.isclose(_colocs, 1).any():
-                        raise ValueError(f"'{method}' colocalization equal to 1 detected! Are you "
-                                         "correlating data with itself or do you have too few parcels?")
-                else:
-                    _colocs[np.isclose(_colocs, 1)] = r_equal_one
-                if r_to_z:
-                    _colocs = rho_to_z(_colocs)
-                    
-                return {"rho": _colocs}
-            
     ## case mi
     elif method == "mi":
         
-        def _y_colocalize(X, y, z=None, weights=None):  
-            if regr_z and z is not None:
-                y = residuals_nan(z, y)
+        def _y_colocalize(X, y, weights=None):  
             parcel_mask_y = ~np.isnan(y)
             # iterate x (atlases/predictors)
             _colocs = np.zeros(X.shape[0], dtype=dtype)
@@ -114,9 +146,7 @@ def _get_colocalize_fun(method, regr_z=True,
     ## case slr
     elif method=="slr":
         
-        def _y_colocalize(X, y, z=None, weights=None):  
-            if regr_z and z is not None:
-                y = residuals_nan(z, y)
+        def _y_colocalize(X, y, weights=None):  
             parcel_mask_y = ~np.isnan(y)
               
             # iterate x (atlases/predictors)
@@ -135,9 +165,7 @@ def _get_colocalize_fun(method, regr_z=True,
     ## case mlr
     elif method=="mlr":
         
-        def _y_colocalize(X, y, z=None, weights=None):   
-            if regr_z and z is not None:
-                y = residuals_nan(z, y)
+        def _y_colocalize(X, y, weights=None):   
             X_T = X.T 
             parcel_mask = ~nan_detector(X_T, y)
             
@@ -165,9 +193,7 @@ def _get_colocalize_fun(method, regr_z=True,
     ## case dominance
     elif method=="dominance":
         
-        def _y_colocalize(X, y, z=None, weights=None):   
-            if regr_z and z is not None:
-                y = residuals_nan(z, y) 
+        def _y_colocalize(X, y, weights=None):   
             X_T = X.T 
             parcel_mask = ~nan_detector(X_T, y)
             
@@ -183,17 +209,15 @@ def _get_colocalize_fun(method, regr_z=True,
     ## case pls
     elif method == "pls":
         
-        def _y_colocalize(X, y, z=None, weights=None):
-            if regr_z and z is not None:
-                y = residuals_nan(z, y)
+        def _y_colocalize(X, y, weights=None):
             X_T = X.T 
             parcel_mask = ~nan_detector(X_T, y)
             
-            _colocs = pls(
+            _colocs = fast_pls1(
                 x=X_T[parcel_mask, :], # atlases
                 y=y[parcel_mask], # subject    
                 n_components=n_components,
-                **kwargs
+                #**kwargs
             )
             
             return _colocs
@@ -201,9 +225,7 @@ def _get_colocalize_fun(method, regr_z=True,
     ## case pcr
     elif method == "pcr":
         
-        def _y_colocalize(X, y, z=None, weights=None):
-            if regr_z and z is not None:
-                y = residuals_nan(z, y)
+        def _y_colocalize(X, y, weights=None):
             X_T = X.T 
             parcel_mask = ~nan_detector(X_T, y)
             
@@ -228,9 +250,7 @@ def _get_colocalize_fun(method, regr_z=True,
         elif method=="elasticnet":
             _pred_fun = elasticnet
             
-        def _y_colocalize(X, y, z=None, weights=None):
-            if regr_z and z is not None:
-                y = residuals_nan(z, y)
+        def _y_colocalize(X, y, weights=None):
             X_T = X.T 
             
             _colocs = _pred_fun(
