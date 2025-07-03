@@ -3577,5 +3577,243 @@
             }
         }
 
+    },
+
+    "tpm": {
+
+        "map": {
+
+            "tissue-gm_pub-lorio2016": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-gm_pub-lorio2016/tissue-gm_pub-lorio2016_space-fsaverage_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-gm_pub-lorio2016/tissue-gm_pub-lorio2016_space-fsaverage_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-gm_pub-lorio2016/tissue-gm_pub-lorio2016_space-fsLR_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-gm_pub-lorio2016/tissue-gm_pub-lorio2016_space-fsLR_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "MNI152": {
+                    "host": "github-nispace",
+                    "remote": "reference/tpm/map/tissue-gm_pub-lorio2016/tissue-gm_pub-lorio2016_space-MNI152.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/tpm/map/tissue-gm_pub-lorio2016/tissue-gm_pub-lorio2016_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/tpm/map/tissue-gm_pub-lorio2016/tissue-gm_pub-lorio2016_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                }
+            },
+
+            "tissue-wm_pub-lorio2016": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-wm_pub-lorio2016/tissue-wm_pub-lorio2016_space-fsaverage_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-wm_pub-lorio2016/tissue-wm_pub-lorio2016_space-fsaverage_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-wm_pub-lorio2016/tissue-wm_pub-lorio2016_space-fsLR_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-wm_pub-lorio2016/tissue-wm_pub-lorio2016_space-fsLR_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "MNI152": {
+                    "host": "github-nispace",
+                    "remote": "reference/tpm/map/tissue-wm_pub-lorio2016/tissue-wm_pub-lorio2016_space-MNI152.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/tpm/map/tissue-wm_pub-lorio2016/tissue-wm_pub-lorio2016_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/tpm/map/tissue-wm_pub-lorio2016/tissue-wm_pub-lorio2016_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                }
+            },
+
+            "tissue-csf_pub-lorio2016": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-csf_pub-lorio2016/tissue-csf_pub-lorio2016_space-fsaverage_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-csf_pub-lorio2016/tissue-csf_pub-lorio2016_space-fsaverage_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-csf_pub-lorio2016/tissue-csf_pub-lorio2016_space-fsLR_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-csf_pub-lorio2016/tissue-csf_pub-lorio2016_space-fsLR_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "MNI152": {
+                    "host": "github-nispace",
+                    "remote": "reference/tpm/map/tissue-csf_pub-lorio2016/tissue-csf_pub-lorio2016_space-MNI152.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/tpm/map/tissue-csf_pub-lorio2016/tissue-csf_pub-lorio2016_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/tpm/map/tissue-csf_pub-lorio2016/tissue-csf_pub-lorio2016_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                }
+            },
+
+            "tissue-veins_pub-huck2019": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-veins_pub-huck2019/tissue-veins_pub-huck2019_space-fsaverage_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-veins_pub-huck2019/tissue-veins_pub-huck2019_space-fsaverage_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-veins_pub-huck2019/tissue-veins_pub-huck2019_space-fsLR_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-veins_pub-huck2019/tissue-veins_pub-huck2019_space-fsLR_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "MNI152": {
+                    "host": "url",
+                    "remote": "https://s3-eu-west-1.amazonaws.com/pfigshare-u-files/15347951/VENAT_DensityMap.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/tpm/map/tissue-veins_pub-huck2019/tissue-veins_pub-huck2019_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/tpm/map/tissue-veins_pub-huck2019/tissue-veins_pub-huck2019_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                }
+            },
+
+            "tissue-arteries_pub-mouches2019": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-arteries_pub-mouches2019/tissue-arteries_pub-mouches2019_space-fsaverage_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-arteries_pub-mouches2019/tissue-arteries_pub-mouches2019_space-fsaverage_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-arteries_pub-mouches2019/tissue-arteries_pub-mouches2019_space-fsLR_desc-proc_hemi-L.shape.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/tpm/map/tissue-arteries_pub-mouches2019/tissue-arteries_pub-mouches2019_space-fsLR_desc-proc_hemi-R.shape.gii.gz"
+                    }
+                },
+                "MNI152": {
+                    "host": "url",
+                    "remote": "https://s3-eu-west-1.amazonaws.com/pstorage-npg-968563215/14460467/vesselProbabilities.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/tpm/map/tissue-arteries_pub-mouches2019/tissue-arteries_pub-mouches2019_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/tpm/map/tissue-arteries_pub-mouches2019/tissue-arteries_pub-mouches2019_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                }
+            }
+
+        },
+
+        "tab": {
+            "Schaefer100": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-Schaefer100.csv.gz"
+            },
+            "Schaefer200": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-Schaefer200.csv.gz"
+            },
+            "Schaefer400": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-Schaefer400.csv.gz"
+            },
+            "TianS1": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-TianS1.csv.gz"
+            },
+            "TianS2": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-TianS2.csv.gz"
+            },
+            "TianS3": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-TianS3.csv.gz"
+            },
+            "Glasser": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-Glasser.csv.gz"
+            },
+            "DesikanKilliany": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-DesikanKilliany.csv.gz"
+            },
+            "DesikanKillianyTourville": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-DesikanKillianyTourville.csv.gz"
+            },
+            "Destrieux": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-Destrieux.csv.gz"
+            },
+            "Aseg": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-Aseg.csv.gz"
+            }
+        },
+
+        "collection": {
+            "All": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/collection-All.collect"
+            }
+        }
+        
     }
+
 }

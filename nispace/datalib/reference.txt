@@ -80,7 +80,19 @@ The NiSpace "bigbrain" dataset is adopted from the BigBrainWarp toolbox (https:/
 (see below). Further information on the dataset: https://bigbrainwarp.readthedocs.io/en/latest/pages/toolbox_contents.html
 The maps are fetched directly from the BigBrainWarp Sciebo folder (space = "fsaverageOriginal") or downloaded from 
 the NiSpace-data GitHub repo (space = "fsLR" | "fsaverage"; recommended). The data is subject to a CC BY-NC-SA 4.0 license. 
+We thank Dr. Casey Paquola for her help in providing these data.
 Please cite the following publication when using these maps:
 - BigBrain: Amunts et al., 2013 (https://doi.org/10.1126/science.1235381)
 - BigBrainWarp toolbox: Paquola et al., 2021 (https://doi.org/10.7554/eLife.70119)
 - Approximate cortical layer thickness: Wagstyl et al., 2020 (https://doi.org/10.1371/journal.pbio.3000678)
+
+
+# tpm
+The NiSpace "tpm" dataset is based on openly available tissue probability maps collected from different sources. Many of these
+maps were used in Bolt et al., 2025 (https://doi.org/10.1038/s41593-025-01945-y). Fetch the original maps (~ MNI152NLin6) by 
+requesting space = "MNI152". The processed maps (space = "MNI152NLin2009cAsym" | "MNI152NLin6Asym" | "fsaverage" | "fsLR") are 
+downloaded from the NiSpace-data GitHub repo; data was transformed to 2mm MNI152NLin6Asym using ANTs, and to fsLR/fsa using neuromaps.
+Please cite the original publication when using these maps:
+- GM/WM/CSF: Lorio et al., 2016 (https://doi.org/10.1016/j.neuroimage.2016.01.062), license: CC BY-NC-SA 4.0
+- Arteries: Mouches et al., 2019 (https://doi.org/10.1038/s41597-019-0034-5), license: CC0 1.0
+- Veins: Huck et al., 2019 (https://doi.org/10.1007/s00429-019-01919-4), license: CC BY 4.0
