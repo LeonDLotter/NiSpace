@@ -183,41 +183,54 @@ def _check_parcellation(parcellation: str, force_list: bool = False, force_str: 
     Check if a parcellation name is valid and return the correct parcellation name as a string or
     a list of strings containing a cortex-subcortex combination.
     """
+    
+    # helper function to check if an iterable of n=2 parcellations are cortex-subcortex combinations
+    def _check_cortex_subcortex(parc):
+        levels = []
+        for p in parc:
+            p_space = list(parcellation_lib[p].keys())[0]
+            levels.append(parcellation_lib[p][p_space]["level"])
+        if set(levels) != {"cortex", "subcortex"}:
+            lgr.critical_raise(f"Only cortex-subcortex combinations are allowed, not: {', '.join(levels)} ",
+                                ValueError)
+        else:
+            # if we got to here, we have a cortex-subcortex combination; now ensure correct order
+            return [parc[levels.index("cortex")], parc[levels.index("subcortex")]]
+    
     # Parcellation can be a string as it appears in parcellation_lib (e.g., "Schaefer100")
-    # OR multiple strings from parcellation_lib concatenated (e.g., "Schaefer100TianS1")
+    # OR multiple strings from parcellation_lib concatenated without (e.g., "Schaefer100TianS1")
+    # or with a space in between (e.g., "Schaefer100 TianS1")
     # (1) We check if parcellation is a string
-    assert isinstance(parcellation, str), f"Parcellation must be of type string, not {type(parcellation)}!"
+    assert isinstance(parcellation, (str)), f"Parcellation must be of type string, not {type(parcellation)}!"
     # (2) We check if it is in parcellation_lib as is
     if parcellation in parcellation_lib:
         parc = _parc_alias(parcellation)
     # (3) If not, we check if we get a partial match
     else:
         # get a list of potential partial matches 
-        parc = list(set([_parc_alias(p) for p in parcellation_lib if p in parcellation]))
+        parc_matches = list(set([_parc_alias(p) for p in parcellation_lib if p in parcellation]))
         # (3a) No match found: raise error
-        if len(parc) == 0:
+        if len(parc_matches) == 0:
             lgr.critical_raise(f"Parcellation '{parcellation}' not found.\nAvailable "
                                f"(cortex-subcortex-combinations allowed): {_print_parcellations()}",
                                ValueError)
-        # (3b) > 2 matches found: raise error
-        elif len(parc) > 2:
-            lgr.critical_raise(f"Parcellation '{parcellation}' matches more than 2 parcellations: {', '.join(parc)}.",
-                               ValueError)
+        # (3b) > 2 matches found: check if matches are contained in each other or raise error
+        elif len(parc_matches) > 2:
+            # (3b1) check if matches are contained in each other and remove the contained ones
+            parc = parc_matches.copy()
+            for p in parc_matches:
+                if any([p in p_other for p_other in set(parc_matches) - {p}]):
+                    parc.remove(p)
+            # (3b2) if still not 2, raise error
+            if len(parc) != 2:
+                lgr.critical_raise(f"Parcellation '{parcellation}' matches more than 2 parcellations: {', '.join(parc_matches)}.",
+                                   ValueError)
         # (3c) 1 match found: use it
-        elif len(parc) == 1:
-            parc = parc[0]
+        elif len(parc_matches) == 1:
+            parc = parc_matches[0]
         # (3d) 2 matches found: check if they are cortex-subcortex combinations
         else:
-            levels = []
-            for p in parc:
-                p_space = list(parcellation_lib[p].keys())[0]
-                levels.append(parcellation_lib[p][p_space]["level"])
-            if set(levels) != {"cortex", "subcortex"}:
-                lgr.critical_raise(f"Only cortex-subcortex combinations are allowed, not: {', '.join(levels)} ",
-                                   ValueError)
-            else:
-                # if we got to here, we have a cortex-subcortex combination; now ensure correct order
-                parc = [parc[levels.index("cortex")], parc[levels.index("subcortex")]]
+            parc = _check_cortex_subcortex(parc_matches)
                 
     # output format
     if force_list and not force_str and isinstance(parc, str):

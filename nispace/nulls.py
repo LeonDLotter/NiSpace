@@ -7,9 +7,8 @@ from nilearn.image import resample_img
 from neuromaps.images import load_gifti, load_nifti
 from neuromaps.nulls.nulls import batch_surrogates
 from neuromaps.nulls.nulls import _get_distmat
-from neuromaps.datasets import fetch_fsaverage
+from neuromaps.datasets import fetch_fsaverage, fetch_fslr
 from scipy.spatial.distance import cdist
-from scipy.stats import zscore
 from sklearn.preprocessing import minmax_scale
 from tqdm.auto import tqdm
 from numba import njit
@@ -371,6 +370,7 @@ def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"],
             lgr.info(f"Estimating euclidean distance matrix between surface parcels.")
             _parc_centroids = find_surf_parc_centroids(
                 parc=parc,
+                parc_space=parc_space,
                 parc_hemi=parc_hemi, 
                 parc_density=_img_density_for_neuromaps(parc), 
             )
@@ -447,8 +447,21 @@ def find_vol_parc_centroids(parc, affine=None, parcel_idc=None, return_data_spac
     return mni if not return_data_space else (mni, xyz)
 
 
-def find_surf_parc_centroids(parc, parc_hemi, parc_density="10k"):
+def find_surf_parc_centroids(parc, parc_space="fsaverage", parc_hemi=None, parc_density=None):
+    # TODO: switch template fetching to nispace after we added fsaverage and fsLR templates in all 
+    # resolutions
 
+    # check parc space
+    if "fsa" in parc_space.lower():
+        fetch_func = fetch_fsaverage
+        surf_name = "pial"
+    elif "fslr" in parc_space.lower():
+        fetch_func = fetch_fslr
+        surf_name = "midthickness"
+    else:
+        lgr.critical_raise(f"Parcellation space '{parc_space}' not supported. "
+                           f"Choose one of 'fsaverage' or 'fsLR'.", ValueError)
+    
     # get parcellation
     if isinstance(parc_hemi, str):
         parc_hemi = [parc_hemi]
@@ -469,9 +482,13 @@ def find_surf_parc_centroids(parc, parc_hemi, parc_density="10k"):
         lgr.critical_raise(f"Parcellation must be provided as (tuple/list of) path(s) or Gifti image(s), "
                            f"not {type(parc)}!",
                            TypeError)
+    
+    # guess parc_density if None
+    if parc_density is None:
+        parc_density = _img_density_for_neuromaps(parc)
 
     # get standard surface
-    surfaces = fetch_fsaverage(parc_density)["pial"]
+    surfaces = fetch_func(parc_density)[surf_name]
     if (len(parc_hemi)==1) & (parc_hemi[0]=="L"):
         surfaces = load_gifti(surfaces[0]),
     elif (len(parc_hemi)==1) & (parc_hemi[0]=="R"):
@@ -494,7 +511,7 @@ def find_surf_parc_centroids(parc, parc_hemi, parc_density="10k"):
             parcel = coords[np.argmin(cdist(coords, parcel), axis=0)[0]]
             centroids.append(parcel)
             
-    return np.row_stack(centroids)    
+    return np.row_stack(centroids)       
 
 
 def generate_null_maps(method, data, parcellation, dist_mat=None, 

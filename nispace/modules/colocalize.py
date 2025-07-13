@@ -290,28 +290,31 @@ def _get_colocalize_fun(method,
         elif xsea_method == "weightedmean":
             def aggr(arr, weights):
                 return np.ma.average(np.ma.array(arr, mask=np.isnan(arr)), weights=weights)
+        elif xsea_method == "weightedabsmean":
+            def aggr(arr, weights):
+                return np.ma.average(np.ma.array(np.abs(arr), mask=np.isnan(arr)), weights=weights)
         else:
             lgr.critical_raise(f"XSEA aggregation method '{xsea_method}' not defined!",
                                ValueError)
         
         if not "weighted" in xsea_method:
-            def _y_colocalize_xsea(X_dict, y, z=None, weights=None):
+            def _y_colocalize_xsea(X_dict, y, weights=None):
                 # get coloc stats as a list of dicts, one dict per X set
                 _colocs_xsea = []
                 for set_X in X_dict.values():
-                    _colocs_xsea.append(_y_colocalize(set_X, y, z))
+                    _colocs_xsea.append(_y_colocalize(set_X, y))
                 # get aggregated metrics per set
                 _colocs = {}
                 for stat in _colocs_xsea[0].keys():
                     _colocs[stat] = np.array([aggr(c[stat]) for c in _colocs_xsea], dtype=dtype)
                 return _colocs
         else:
-            def _y_colocalize_xsea(X_dict, y, z=None, weights=None):
+            def _y_colocalize_xsea(X_dict, y, weights):
                 # get coloc stats as a list of dicts, one dict per X set
                 _colocs_xsea = []
                 _weights_xsea = []
                 for set_name, set_X in X_dict.items():
-                    _colocs_xsea.append(_y_colocalize(set_X, y, z))
+                    _colocs_xsea.append(_y_colocalize(set_X, y))
                     _weights_xsea.append(weights[set_name])
                 # get aggregated metrics per set
                 _colocs = {}

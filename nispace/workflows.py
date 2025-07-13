@@ -54,6 +54,7 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
         
         # check provided data
         # parcellation
+        parc_integrated = None
         if isinstance(parcellation, str):
             # check if parcellation is an integrated parcellation
             try:
@@ -62,8 +63,7 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
             # if not, check if it's a path to a parcellation file
             except ValueError:
                 lgr.info(f"Input '{parcellation}' not recognized as integrated parcellation. "
-                         "Checking if path to parcellation file.")
-                parc_integrated = None
+                         "Checking if (path to) parcellation file.")
             
         # y
         if y is None:
@@ -100,7 +100,7 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
             y=y,
             z=z,
             standardize=standardize,
-            parcellation=parc_integrated,
+            parcellation=parc_integrated if parc_integrated is not None else parcellation,
             parcellation_labels=parcellation_labels,
             n_proc=n_proc,
             verbose=verbose,
