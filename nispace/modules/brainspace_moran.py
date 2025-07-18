@@ -46,19 +46,13 @@ from sklearn.base import BaseEstimator
 #from ..gradient.utils import is_symmetric, make_symmetric
 
 
-def compute_mem(w, n_ring=1, spectrum='nonzero', tol=1e-10):
+def compute_mem(w, spectrum='nonzero', tol=1e-6):
     """ Compute Moran eigenvectors map.
 
     Parameters
     ----------
-    w : BSPolyData, ndarray or sparse matrix, shape = (n_vertices, n_vertices)
-        Spatial weight matrix or surface. If surface, the weight matrix is
-        built based on the inverse geodesic distance between each vertex
-        and the vertices in its `n_ring`.
-        # NISPACE-EDIT: MUST BE SYMMETRIC MATRIX, removed surface and sparse matrix support
-    n_ring : int, optional
-        Neighborhood size to build the weight matrix. Only used if user
-        provides a surface mesh. Default is 1.
+    w : ndarray, shape = (n_vertices, n_vertices)
+        Spatial weight matrix.
     spectrum : {'all', 'nonzero'}, optional
         Eigenvalues/vectors to select. If 'all', recover all eigenvectors
         except the smallest one. Otherwise, select all except non-zero
@@ -92,6 +86,7 @@ def compute_mem(w, n_ring=1, spectrum='nonzero', tol=1e-10):
     if spectrum not in ['all', 'nonzero']:
         raise ValueError("Unknown autocor '{0}'.".format(spectrum))
 
+    # NISPACE: removed surface and sparse matrix support
     # # If surface is provided instead of affinity
     # if not (isinstance(w, np.ndarray) or ssp.issparse(w)):
     #     w = me.get_ring_distance(w, n_ring=n_ring, metric='geodesic')
@@ -102,23 +97,24 @@ def compute_mem(w, n_ring=1, spectrum='nonzero', tol=1e-10):
     #     w = make_symmetric(w, check=False, sparse_format='coo')
 
     # Doubly centering weight matrix
-    if ssp.issparse(w):
-        m = w.mean(axis=0).A
-        wc = w.mean() - m - m.T
+    # if ssp.issparse(w):
+    #     print("NISPACE: sparse matrix support removed")
+    #     m = w.mean(axis=0).A
+    #     wc = w.mean() - m - m.T
 
-        if not ssp.isspmatrix_coo(w):
-            w_format = w.format
-            w = w.tocoo(copy=False)
-            row, col = w.row, w.col
-            w = getattr(w, 'to' + w_format)(copy=False)
-        else:
-            row, col = w.row, w.col
-        wc[row, col] += w.data
+    #     if not ssp.isspmatrix_coo(w):
+    #         w_format = w.format
+    #         w = w.tocoo(copy=False)
+    #         row, col = w.row, w.col
+    #         w = getattr(w, 'to' + w_format)(copy=False)
+    #     else:
+    #         row, col = w.row, w.col
+    #     wc[row, col] += w.data
 
-    else:
-        m = w.mean(axis=0, keepdims=True)
-        wc = w.mean() - m - m.T
-        wc += w
+    # else:
+    m = w.mean(axis=0, keepdims=True)
+    wc = w.mean() - m - m.T
+    wc += w
 
     # when using float64, eigh is unstable for sparse matrices
     ev, mem = np.linalg.eigh(wc.astype(np.float32))
@@ -156,9 +152,22 @@ def compute_mem(w, n_ring=1, spectrum='nonzero', tol=1e-10):
     return mem, ev
 
 
+def _rand_orthogonal(m, rng):
+    """Haar-random m x m orthogonal matrix."""
+    H = rng.standard_normal((m, m))
+    Q, _ = np.linalg.qr(H) # QR -> orthonormal columns
+    # make determinant +1  (optional)
+    if np.linalg.det(Q) < 0:
+        Q[:, 0] *= -1
+    return Q
 
-def moran_randomization(x, mem, n_rep=100, procedure='singleton', joint=False,
-                        random_state=None):
+
+def moran_randomization(x, mem, mev,
+                        n_nulls=1000,
+                        procedure='singleton',   # + 'rotate'
+                        joint=False,
+                        tol_block=1e-3,
+                        seed=None):
     """ Generate random samples from `x` based on Moran spectral randomization.
 
     Parameters
@@ -169,16 +178,19 @@ def moran_randomization(x, mem, n_rep=100, procedure='singleton', joint=False,
     mem : 2D ndarray, shape = (n_vertices, nv)
         Moran eigenvectors map, where `nv` is the number of eigenvectors
         arranged in columns.
-    n_rep : int, optional
-        Number of random samples. Default is 100.
-    procedure : {'singleton, 'pair'}, optional
+    n_nulls : int, optional
+        Number of random samples. Default is 1000.
+    procedure : {'singleton, 'pair', 'rotate'}, optional
         Procedure to generate the random samples. Default is 'singleton'.
     joint : boolean, optional
         If True variables are randomized jointly. Otherwise, each variable is
         randomized separately. Default is False.
-    random_state : int or None, optional
+    tol_block : float, optional
+        Minimum value for an eigenvalue to be considered non-zero.
+        Default is 1e-3.
+    seed : int or None, optional
         Random state. Default is None.
-
+    
     Returns
     -------
     output : ndarray, shape = (n_rep, n_vertices, n_feat)
@@ -196,51 +208,79 @@ def moran_randomization(x, mem, n_rep=100, procedure='singleton', joint=False,
       randomization methods. Methods in Ecology and Evolution, 6(10):1169-78.
 
     """
-
+    
+    x = np.asarray(x)
     if x.ndim == 1:
-        x = np.atleast_2d(x).T
+        x = x[:, None] # (N, 1)
 
     procedure = procedure.lower()
-    if procedure not in ['singleton', 'pair']:
-        raise ValueError("Unknown procedure '{0}'".format(procedure))
+    if procedure not in ['singleton', 'pair', 'rotate']:
+        raise ValueError(f"Unknown procedure '{procedure}'")
 
-    rs = check_random_state(random_state)
-
+    rng = np.random.default_rng(seed)
+    n_v, n_f = x.shape
     n_comp = mem.shape[1]
-    n_rows = x.shape[0]
-    n_cols = 1 if joint else x.shape[1]
+    n_cols = 1 if joint else n_f
 
-    rxv = 1 - cdist(x.T, mem.T, 'correlation').T
-    if procedure == 'singleton':
-        rxv2 = rxv * rs.choice([-1., 1.], size=(n_rep, n_comp, n_cols))
+    # ---- coefficient representation --------------------------------------------------------------
+    coeff = mem.T @ (x - x.mean(0)) / x.std(0, ddof=1) # (n_comp, n_f)
 
-    else:  # pair
-        n_pairs = n_comp // 2
-        n_top = 2 * n_pairs
-        is_odd = n_top != n_comp
+    out = np.empty((n_nulls, n_v, n_f), dtype=np.float32)
 
-        rsq = rxv ** 2
-        rxv2 = np.empty((n_rep,) + rxv.shape)
-        for i in range(n_rep):
-            p = rs.permutation(n_comp)
-            # ia, ib = p[:n_top:2], p[1:n_top:2]
-            ia, ib = p[:n_pairs], p[n_pairs:n_top]
+    # ---- pre-compute degeneration blocks ---------------------------------------------------------
+    blocks, start = [], 0
+    for i in range(1, n_comp):
+        if abs(mev[i] - mev[i-1]) > tol_block:
+            blocks.append(np.arange(start, i))
+            start = i
+    blocks.append(np.arange(start, n_comp))
 
-            if is_odd:  # singleton method for last item
-                rxv2[i, p[-1]] = rxv[p[-1]] * rs.choice([-1, 1], size=n_cols)
+    # ---- null loop -------------------------------------------------------------------------------
+    for r in range(n_nulls):
+        C = coeff.copy()
 
-            phi = rs.uniform(0, 2 * np.pi, size=(n_pairs, n_cols))
+        # ---- random ±1 with optional broadcasting ------------------------------------------------
+        if procedure in ('singleton', 'pair'):
+            signs = rng.choice([-1., 1.], size=(n_comp, n_cols))
             if joint:
-                phi = phi + np.arctan2(rxv[ia], rxv[ib])
-            rxv2[i, ia] = rxv2[i, ib] = np.sqrt(rsq[ia] + rsq[ib])
-            rxv2[i, ia] *= np.cos(phi)
-            rxv2[i, ib] *= np.sin(phi)
+                signs = np.broadcast_to(signs, (n_comp, n_f))
+            C *= signs
 
-    x_mean = x.mean(axis=0)
-    x_std = x.std(axis=0, ddof=1)
-    sim = x_mean + (mem @ rxv2) * (np.sqrt(n_rows - 1) * x_std)
+            # ---- optional 'pair' mixing ----------------------------------------------------------
+            if procedure == 'pair':
+                pairs  = rng.permutation(n_comp)[: (n_comp // 2) * 2].reshape(-1, 2)
+                phi    = rng.uniform(0, 2 * np.pi, size=(pairs.shape[0], n_cols))
+                if joint:
+                    phi = phi + np.arctan2(C[pairs[:, 0]], C[pairs[:, 1]])
+                    phi = np.broadcast_to(phi, (pairs.shape[0], n_f))
 
-    return sim.squeeze()
+                for (a, b), ang in zip(pairs, phi):
+                    A, B = C[[a, b]]
+                    C[a] =  np.cos(ang) * A + np.sin(ang) * B
+                    C[b] = -np.sin(ang) * A + np.cos(ang) * B
+
+        # ---- 'rotate' ----------------------------------------------------------------------------
+        else:  
+            #n_blk, n_flip = 0, 0
+            for blk in blocks:
+                m = len(blk)
+                if m == 1: # singleton -> fallback to sign flip
+                    s = rng.choice([-1, 1], size=(1, n_cols))
+                    if joint:
+                        s = np.broadcast_to(s, (1, n_f))
+                    C[blk] *= s
+                    #n_flip += 1
+                else: # rotate block
+                    R = _rand_orthogonal(m, rng) # (m, m)
+                    C[blk] = R @ C[blk]   
+                    #n_blk += 1
+            #print(f"rotations: {n_blk}/{len(blocks)}, sign flips: {n_flip}/{len(blocks)}")
+            
+        # ---- back-projection ---------------------------------------------------------------------
+        sim = mem @ C * x.std(0, ddof=1) + x.mean(0)
+        out[r] = sim
+
+    return out.squeeze() # (n_rep, n_v) or (n_rep, n_v, n_feat)
 
 
 
@@ -258,15 +298,15 @@ class MoranRandomization(BaseEstimator):
     joint : boolean, optional
         If True variables are randomized jointly. Otherwise, each variable is
         randomized separately. Default is False.
-    n_rep : int, optional
-        Number of randomizations. Default is 100.
-    n_ring : int, optional
-        Neighborhood size to build the weight matrix. Only used if user provides
-        a surface mesh. Default is 1.
+    n_nulls : int, optional
+        Number of randomizations. Default is 1000.
     tol : float, optional
         Minimum value for an eigenvalue to be considered non-zero.
-        Default is 1e-10.
-    random_state : int or None, optional
+        Default is 1e-6.
+    tol_block : float, optional
+        Minimum value for an eigenvalue to be considered non-zero.
+        Default is 1e-3.
+    seed : int or None, optional
         Random state. Default is None.
 
     Attributes
@@ -283,15 +323,15 @@ class MoranRandomization(BaseEstimator):
     """
 
     def __init__(self, procedure='singleton', spectrum='nonzero', joint=False,
-                 n_rep=100, n_ring=1, tol=1e-10, random_state=None):
+                 n_nulls=1000, tol=1e-6, tol_block=1e-3, seed=None):
 
         self.procedure = procedure
         self.spectrum = spectrum
         self.joint = joint
-        self.n_rep = n_rep
-        self.n_ring = n_ring
+        self.n_nulls = n_nulls
         self.tol = tol
-        self.random_state = random_state
+        self.tol_block = tol_block
+        self.seed = seed
 
 
     def fit(self, w):
@@ -332,7 +372,8 @@ class MoranRandomization(BaseEstimator):
 
         """
 
-        rand = moran_randomization(x, self.mem_, n_rep=self.n_rep,
+        rand = moran_randomization(x, self.mem_, self.mev_, n_nulls=self.n_nulls,
                                    procedure=self.procedure, joint=self.joint,
-                                   random_state=self.random_state)
+                                   tol_block=self.tol_block,
+                                   seed=self.seed)
         return rand

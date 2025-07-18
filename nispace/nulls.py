@@ -261,10 +261,10 @@ def nulls_moran(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
     dist_mat **= -1
     # null maps
     null_data[:, mask] = MoranRandomization(
-        joint=True, 
-        tol=1e-6, 
-        n_rep=n_nulls, 
-        random_state=seed,
+        procedure=kwargs.pop("procedure", "singleton"),
+        joint=kwargs.pop("joint", True),
+        seed=seed, 
+        n_nulls=n_nulls,
         **kwargs
     ).fit(dist_mat).randomize(data_1d)
     # return
