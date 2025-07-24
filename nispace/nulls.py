@@ -3,8 +3,8 @@ import numpy as np
 import pandas as pd
 import warnings
 from joblib import Parallel, delayed
-from nilearn.image import resample_img
-from neuromaps.images import load_gifti, load_nifti
+from nilearn.image import resample_img, coord_transform
+from neuromaps.images import load_gifti, load_nifti, load_data
 from neuromaps.nulls.nulls import batch_surrogates
 from neuromaps.nulls.nulls import _get_distmat
 from neuromaps.datasets import fetch_fsaverage, fetch_fslr
@@ -53,7 +53,16 @@ def _img_space_for_neuromaps(img):
     if isinstance(img, nib.Nifti1Image):
         return "mni152"
     elif isinstance(img, tuple):
-        return "fsaverage"
+        density = _img_density_for_neuromaps(img[0])
+        if density in ['3k', '10k', '41k']:
+            return "fsaverage"
+        elif density in ['4k', '8k', '32k']:
+            return "fslr"
+        elif density == '164k':
+            lgr.warning("Identified surface image with 164k density, assuming fsLR but could be fsaverage!")
+            return "fslr"
+        else:
+            lgr.critical_raise(f"Identified surface image with unknown density {density}!")
     else:
         raise ValueError(f"Provide input of type nib.Nifti1Image or (tuple of) nib.GiftiImage(s)!")
 
@@ -106,6 +115,64 @@ def correlate_hemis_parc(data, parc_idc_lh=None, parc_idc_rh=None, l2rmap=None, 
         notnan = ~(np.isnan(lh) | np.isnan(rh))
         r.append(corr(lh[notnan], rh[notnan], rank=rank))
     return np.array(r)
+
+
+def find_parcel_hemispheres(parcellation):
+    
+    # easy: surface
+    if isinstance(parcellation, tuple):
+        
+        # load data
+        data_lh, data_rh =  load_data(parcellation[0]), load_data(parcellation[1])
+        
+        # get labels and indices
+        labels_lh, labels_rh = np.trim_zeros(np.unique(data_lh)), np.trim_zeros(np.unique(data_rh))
+        labels_all = np.concatenate([labels_lh, labels_rh])
+        
+        # get indices
+        idc_all = np.arange(len(labels_all))
+        idc_lh = idc_all[np.isin(labels_all, labels_lh)]
+        idc_rh = idc_all[np.isin(labels_all, labels_rh)]
+    
+    # complicated: volume
+    elif isinstance(parcellation, nib.Nifti1Image):
+        
+        # load data
+        data = load_data(parcellation)
+        data_flat = data[data != 0].flatten()
+        
+        # get labels 
+        labels_all = np.trim_zeros(np.unique(data))
+
+        # get MNI coordinates
+        ijk = np.argwhere(data != 0)
+        x, y, z = coord_transform(ijk[:,0], ijk[:,1], ijk[:,2], parcellation.affine)
+        
+        # check for every label if the majority of voxels is in the left or right hemisphere
+        labels_lh, labels_rh = [], []
+        idc_lh, idc_rh = [], []
+        for idx, lab in enumerate(labels_all):
+            lr = (x[data_flat == lab] > 0).mean()
+            if lr < 0.5:
+                labels_lh.append(lab)
+                idc_lh.append(idx)
+            else:
+                labels_rh.append(lab)
+                idc_rh.append(idx)
+                
+        # return indices and labels
+        idc_lh, idc_rh = np.array(idc_lh, dtype=int), np.array(idc_rh, dtype=int)
+        labels_lh, labels_rh = np.array(labels_lh, dtype=int), np.array(labels_rh, dtype=int)
+    
+    # one gifti
+    elif isinstance(parcellation, nib.GiftiImage):
+        idc_lh, idc_rh, labels_lh, labels_rh = [None] * 4
+        
+    else:
+        raise ValueError(f"Parcellation type {type(parcellation)} not supported.")
+    
+    return (idc_lh, idc_rh), (labels_lh, labels_rh)
+
 
 # @njit(cache=True)
 # def _apply_l2rmap(data_1d, l2rmap, parc_idc_lh, parc_idc_rh):
@@ -670,13 +737,13 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
     # check symmetry settings
     if lr_mirror_dist_mat and not parc_symmetric:
         lgr.warning("Left-right mirroring of distance matrix (lr_mirror_dist_mat) requested, but "
-                    "parcellation may not be symmetric. Check if your parcellation is symmetric and "
-                    "set 'parc_symmetric' to True. Be careful, this might lead to unexpected results!")
+                    "parcellation may not be symmetric.\nCheck if your parcellation is symmetric and "
+                    "set 'parc_symmetric' to True.\nBe careful, this might lead to unexpected results!")
         lr_mirror_dist_mat = False
     if lr_mirror_null_maps and not parc_symmetric and l2rmap is None:
         lgr.warning("Left-right mirroring of null maps ('lr_mirror_null_maps') requested, but "
-                    "'parc_symmetric' is False and no left-to-right mapping df ('l2rmap') provided. "
-                    "Check if your parcellation is symmetric and set 'parc_symmetric' to True. "
+                    "'parc_symmetric' is False\nand no left-to-right mapping df ('l2rmap') provided. "
+                    "Check if your parcellation is symmetric and set 'parc_symmetric' to True.\n"
                     "Be careful, this might lead to unexpected results!")
         lr_mirror_null_maps = False
     

@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 import os
 
+from requests import Session
+
 from . import lgr, __commit__
 from .modules.constants import _PARC_DEFAULT, _SPACE_DEFAULT
 from .stats.misc import zscore_df
@@ -178,7 +180,8 @@ def _parc_symmetric(parc_labels):
 def _print_parcellations():
     return ", ".join([p for p in parcellation_lib.keys() if "alias" not in parcellation_lib[p]])
 
-def _check_parcellation(parcellation: str, force_list: bool = False, force_str: bool = False):
+def _check_parcellation(parcellation: str, force_list: bool = False, force_str: bool = False,
+                        raise_not_found=True):
     """
     Check if a parcellation name is valid and return the correct parcellation name as a string or
     a list of strings containing a cortex-subcortex combination.
@@ -211,9 +214,12 @@ def _check_parcellation(parcellation: str, force_list: bool = False, force_str: 
         parc_matches = list(set([_parc_alias(p) for p in parcellation_lib if p in parcellation]))
         # (3a) No match found: raise error
         if len(parc_matches) == 0:
-            lgr.critical_raise(f"Parcellation '{parcellation}' not found.\nAvailable "
-                               f"(cortex-subcortex-combinations allowed): {_print_parcellations()}",
-                               ValueError)
+            if raise_not_found:
+                lgr.critical_raise(f"Parcellation '{parcellation}' not found.\nAvailable "
+                                   f"(cortex-subcortex-combinations allowed): {_print_parcellations()}",
+                                   FileNotFoundError)
+            else:
+                return 
         # (3b) > 2 matches found: check if matches are contained in each other or raise error
         elif len(parc_matches) > 2:
             # (3b1) check if matches are contained in each other and remove the contained ones
@@ -223,7 +229,8 @@ def _check_parcellation(parcellation: str, force_list: bool = False, force_str: 
                     parc.remove(p)
             # (3b2) if still not 2, raise error
             if len(parc) != 2:
-                lgr.critical_raise(f"Parcellation '{parcellation}' matches more than 2 parcellations: {', '.join(parc_matches)}.",
+                lgr.critical_raise(f"Parcellation '{parcellation}' matches more than 2 parcellations: "
+                                   "{', '.join(parc_matches)}.",
                                    ValueError)
         # (3c) 1 match found: use it
         elif len(parc_matches) == 1:
@@ -257,6 +264,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
     """
     Fetch a parcellation.
     """
+    # TODO: CHANGE TO RETURNING PARCELLATION INSTANCE. ADOPT ALL OCCURENCES IN CODE
     verbose = set_log(lgr, verbose)
     
     # check parcellation and return correct name or list of two names
@@ -453,6 +461,12 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
 
 def fetch_collection(collection: Union[str, pathlib.Path, np.ndarray, pd.DataFrame, pd.Series, list],
                      dataset: str = None,
+                     maps: list = None,
+                     set_size_range: Union[None, Tuple[int, int]] = None,
+                     weight_range: Union[None, Tuple[float, float]] = None,
+                     weight_quantile: float = None,
+                     set_specificity: float = None,
+                     return_maps: bool = False,
                      nispace_data_dir: Union[str, pathlib.Path] = None,
                      overwrite: bool = False,
                      check_file_hash: bool = True,
@@ -521,10 +535,31 @@ def fetch_collection(collection: Union[str, pathlib.Path, np.ndarray, pd.DataFra
     # Load collection file; 1-column df (= maps) or 2-column df (= set and maps)
     collection_df = _load_collection(collection_file)
     
-    # return
-    return collection_df
-        
+    # apply filters
+    collection_df, maps_avail = _apply_collection_filter(
+        collection_df=collection_df,
+        maps=maps,
+        set_size_range=set_size_range,
+        weight_range=weight_range,
+        weight_quantile=weight_quantile,
+        set_specificity=set_specificity
+    )
     
+    # return
+    return collection_df if not return_maps else (collection_df, maps_avail)
+        
+
+def apply_collection(data: pd.DataFrame, collection: pd.DataFrame):
+    if not np.isin(["map", "set"], ["map", "set", "weight"]).all():
+        lgr.critical_raise("collection must have at least a 'set' and a 'map' column.")
+    
+    maps_intersection = data.index.intersection(collection["map"].unique())
+    collection_df_intersection = collection[collection["map"].isin(maps_intersection)]
+    data_out = data.copy()
+    data_out = data_out.loc[collection_df_intersection["map"]]     
+    data_out.index = pd.MultiIndex.from_frame(collection_df_intersection)
+    return data_out
+
 
 # REFERENCE DATA - PRIVATE =========================================================================
 
@@ -625,51 +660,82 @@ def _load_collection(collection_path):
     return collection.reset_index(drop=True)
 
 
-def _apply_collection_filter(dataset: str,
-                             map_files: List[Union[str, pathlib.Path]], 
-                             collection: str,
-                             nispace_data_dir: Union[str, pathlib.Path],
+def _apply_collection_filter(#dataset: str,
+                             collection_df: pd.DataFrame,
+                             maps: List[Union[str, pathlib.Path]] = None, 
+                             #collection: str,
+                             #nispace_data_dir: Union[str, pathlib.Path],
                              set_size_range: Union[None, Tuple[int, int]] = None,
                              weight_range: Union[None, Tuple[float, float]] = None,
-                             overwrite: bool = False,
-                             check_file_hash: bool = True) -> List[pathlib.Path]:
+                             weight_quantile: Union[None, float] = None,
+                             set_specificity: Union[None, float] = None,
+                             #overwrite: bool = False,
+                             #check_file_hash: bool = True
+                             ) -> List[pathlib.Path]:
     
-    # base dir
-    base_dir = pathlib.Path(nispace_data_dir) / "reference" / dataset
+    # # base dir
+    # base_dir = pathlib.Path(nispace_data_dir) / "reference" / dataset
     
-    # Check if path to custom file
-    collection_path = pathlib.Path(collection)
-    if not collection_path.exists():
-        # If not exists, search integrated collections
-        if collection in reference_lib[dataset]["collection"]:
-            collection_path = base_dir / f"collection-{collection}.collect"
-            collection_file = get_file(
-                collection_path, **reference_lib[dataset]["collection"][collection],
-                overwrite=overwrite, hash_check=check_file_hash,
-            )
-        else:
-            lgr.warning(f"Collection '{collection}' not found! Available: "
-                        f"{keys2str(reference_lib[dataset]['collection'])}")
-            return map_files, None
+    # # Check if path to custom file
+    # collection_path = pathlib.Path(collection)
+    # if not collection_path.exists():
+    #     # If not exists, search integrated collections
+    #     if collection in reference_lib[dataset]["collection"]:
+    #         collection_path = base_dir / f"collection-{collection}.collect"
+    #         collection_file = get_file(
+    #             collection_path, **reference_lib[dataset]["collection"][collection],
+    #             overwrite=overwrite, hash_check=check_file_hash,
+    #         )
+    #     else:
+    #         lgr.warning(f"Collection '{collection}' not found! Available: "
+    #                     f"{keys2str(reference_lib[dataset]['collection'])}")
+    #         return map_files, None
 
-    # Load collection file; 1-column df (= maps) or 2-column df (= set and maps)
-    collection_df = _load_collection(collection_file)
-    lgr.debug(f"Collection df shape: {collection_df.shape}; "
-              f"index names: {collection_df.index.names}; "
-              f"column names: {collection_df.columns.names}")
-
-    # Apply collection filter
-    lgr.info(f"Applying collection filter from: {collection_file}.")
-    if isinstance(map_files[0], pathlib.Path):
-        map_names = [_rm_ext(f.name) for f in map_files]
-        filtered_map_files = [f for f, f_name in zip(map_files, map_names) 
+    # # Load collection file; 1-column df (= maps) or 2-column df (= set and maps)
+    # collection_df = _load_collection(collection_file)
+    # lgr.debug(f"Collection df shape: {collection_df.shape}; "
+    #           f"index names: {collection_df.index.names}; "
+    #           f"column names: {collection_df.columns.names}")
+    
+    # Apply maps filter
+    lgr.info(f"Filtering maps by collection.")
+    if maps is None:
+        filtered_map_files = collection_df["map"].unique()
+    elif isinstance(maps[0], pathlib.Path):
+        map_names = [_rm_ext(f.name) for f in maps]
+        filtered_map_files = [f for f, f_name in zip(maps, map_names) 
                               if f_name in collection_df["map"].unique()]
         collection_df = collection_df[collection_df["map"].isin(map_names)]
     else:
-        filtered_map_files = list( set(map_files).intersection(set(collection_df["map"])) )
+        filtered_map_files = list( set(maps).intersection(set(collection_df["map"])) )
         collection_df = collection_df[collection_df["map"].isin(filtered_map_files)]
-        
-    # Apply weight filter
+    
+    # Apply
+    if set_specificity is not None:
+        n_sets = len(collection_df["set"].unique())
+        collection_df = (
+            collection_df
+            .groupby("map")
+            .filter(lambda x: x.shape[0] <= n_sets * set_specificity)
+            .reset_index(drop=True)
+        )
+        lgr.info(f"Keeping maps occuring in <= {set_specificity:.02%} of "
+                 f"{collection_df['set'].nunique()} retained sets.")
+    
+    # Apply weight quantile filter
+    if weight_quantile is not None:
+        if "weight" not in collection_df.columns:
+            lgr.warning("Collection does not seem to contain weights, will not apply weight filter.")
+        else:
+            collection_df = (
+                collection_df
+                .groupby("set", sort=False)
+                .apply(lambda x: x[x.weight >= x.weight.quantile(0.9)])   
+                .reset_index(drop=True)
+            )
+            lgr.info(f"Filtered to maps with weights >= quantile {weight_quantile} within each set.")
+            
+    # Apply absolute weight filter
     if weight_range is not None:
         if "weight" not in collection_df.columns:
             lgr.warning("Collection does not seem to contain weights, will not apply weight filter.")
@@ -693,19 +759,20 @@ def _apply_collection_filter(dataset: str,
             ]
             collection_df = (
                 collection_df
-                .groupby("set")
-                .filter(lambda x: set_size_range[0] <= x.shape[0] <= set_size_range[1])   
+                .groupby("set", sort=False)
+                .filter(lambda x: set_size_range[0] <= x.shape[0] <= set_size_range[1]) 
+                .reset_index(drop=True)  
             )
             n_sets = len(collection_df["set"].unique())
             if n_sets == 0:
                 lgr.critical_raise(f"No collection sets found with between {set_size_range[0]} and "
                                    f"{set_size_range[1]} maps. Adjust the 'set_size_range' parameter.",
                                    ValueError)
-            filtered_map_files = list( set(map_files).intersection(set(collection_df["map"])) )
+            filtered_map_files = list( set(filtered_map_files).intersection(set(collection_df["map"])) )
             lgr.info(f"Filtered to {n_sets} collection sets with between "
                      f"{set_size_range[0]} and {set_size_range[1]} maps.")
 
-    return filtered_map_files, collection_df
+    return collection_df, filtered_map_files
 
 
 def _load_parcellated_data(dataset: str, 
@@ -771,10 +838,7 @@ def _load_parcellated_data(dataset: str,
     
     # Apply collection index (-> handles maps that are present multiple times in different sets)
     if collection_df is not None:
-        maps_intersection = data.index.intersection(collection_df["map"].unique())
-        collection_df_intersection = collection_df[collection_df["map"].isin(maps_intersection)]
-        data = data.loc[collection_df_intersection["map"]]     
-        data.index = pd.MultiIndex.from_frame(collection_df_intersection)
+        data = apply_collection(data, collection_df)
     
     # Standardize
     if standardize:
@@ -862,6 +926,8 @@ def fetch_reference(dataset: str,
                     collection: str = None,
                     set_size_range: Union[None, Tuple[int, int]] = None,
                     weight_range: Union[None, Tuple[float, float]] = None,
+                    weight_quantile: Union[None, float] = None,
+                    set_specificity: Union[None, float] = None,
                     parcellation: str = None,
                     standardize_parcellated: bool = False,
                     return_metadata: bool = False,
@@ -884,7 +950,7 @@ def fetch_reference(dataset: str,
             lgr.critical_raise(f"Dataset '{dataset}' is only available as parcellated data, choose a parcellation!",
                                ValueError)
     else:
-        lgr.critical_raise(f"Invalid dataset type; expecting string.",
+        lgr.critical_raise(f"Invalid dataset type; expecting string or pandas DataFrame/Series, got {type(dataset)}",
                            TypeError)
     lgr.info(f"Loading {dataset} maps.")
     
@@ -902,7 +968,6 @@ def fetch_reference(dataset: str,
     
     # Check if parcellation is defined correctly and load map lists
     if parcellation is not None:
-                
         # check parcellation and return correct name or list of two names
         parc = _check_parcellation(parcellation)
         
@@ -960,13 +1025,18 @@ def fetch_reference(dataset: str,
     if collection == "All":
         collection = None
     if collection:
-        maps_avail, collection_df = _apply_collection_filter(
-            dataset, maps_avail, collection, 
+        collection_df, maps_avail = fetch_collection(
+            collection,
+            dataset, 
+            maps_avail, 
+            return_maps=True,
             set_size_range=set_size_range,
             weight_range=weight_range,
-            nispace_data_dir=nispace_data_dir, 
+            weight_quantile=weight_quantile,
+            set_specificity=set_specificity,
             overwrite=overwrite, 
-            check_file_hash=check_file_hash
+            check_file_hash=check_file_hash,
+            verbose=verbose            
         )
     else:
         collection_df = None

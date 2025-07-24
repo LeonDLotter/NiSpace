@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 from . import lgr
 from .io import parcellate_data, load_distmat, to_pickle, from_pickle
+from .modules.parcellation import Parcellation
 from .modules.reduce_x import _reduce_dimensions
 from .modules.transform_y import _dummy_code_groups, _num_code_subjects, _get_transform_fun
 from .modules.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats, _rank_regress
@@ -18,7 +19,7 @@ from .modules.permute import _get_null_maps, _get_exact_p_values, _get_correct_m
 from .modules.plot import _plot_categorical
 from .modules.constants import _PARCS_DEFAULT, _COLOC_METHODS
 from .datasets import fetch_parcellation, fetch_template, _check_parcellation
-from .nulls import get_distance_matrix
+from .nulls import get_distance_matrix, find_parcel_hemispheres
 from .stats.coloc import *
 from .stats.misc import mc_correction, residuals_nan, zscore_df, permute_groups
 from .cv import _get_dist_dep_splits, _get_rand_splits
@@ -164,10 +165,11 @@ class NiSpace:
                                f"len==3! Is {type(data_space)} with len({len(data_space)}).",
                                ValueError)
         self._data_space = data_space
+        # TODO: CREATE PARCELLATION CLASS OBJECT HERE; REQUIRES CLASS TO ACCEPT NISPACE INTEGR PARCS
         if "parc" in kwargs and parcellation is None:
             parcellation = kwargs.pop("parc")
-        self._parc = parcellation
-        self._parc_info = {
+        self._parc = {
+            "parc": parcellation,
             "labels": parcellation_labels,
             "space": parcellation_space,
             "hemi": parcellation_hemi,
@@ -245,54 +247,72 @@ class NiSpace:
             lgr.warning("In a future version, all NiSpace object methods will return the object itself "
                         "by default. Set NiSpace(return_self=True) to disable this warning.")
     
-        ## handle integrated parcellations
-        if isinstance(self._parc, str):
+        ## handle parcellation
+        
+        # integrated parcellation
+        if isinstance(self._parc["parc"], str):
             # check if parcellation is an integrated parcellation
-            try:
-                self._parc = _check_parcellation(self._parc, force_str=True)
-            except ValueError:
-                pass
-            if self._parc is not None:
-                try:
-                    parc, labels, space, density, symmetric, l2rmap, dist_mat = fetch_parcellation(
-                        parcellation=self._parc,
-                        space=self._parc_info["space"],
-                        return_space=True,
-                        return_resolution=True,
-                        return_symmetric=True,
-                        return_l2rmap=True,
-                        return_dist_mat=True,
-                        return_loaded=True
-                    )
-                    if isinstance(dist_mat, tuple):
-                        if all([d is None for d in dist_mat]):
-                            dist_mat = None
-                    self._parc = parc
-                    self._parc_info["labels"] = labels
-                    self._parc_info["space"] = space
-                    self._parc_info["symmetric"] = symmetric
-                    self._parc_info["l2rmap"] = l2rmap
-                    #self._parc_info["density"] = density
-                    self._parc_info["hemi"] = ("L", "R") if space=="fsaverage" else None
-                    self._parc_dist_mat["null_maps"] = dist_mat
-                    if not isinstance(dist_mat, tuple):
-                        self._parc_dist_mat["cv"] = dist_mat
-                    self._parc_info["idc_lh"] = [i for i, l in enumerate(labels) if "hemi-L" in l]
-                    self._parc_info["idc_rh"] = [i for i, l in enumerate(labels) if "hemi-R" in l]
-                    self._parc_info["idc_sc"] = [] # TODO: add cortex/subcortex idc management
-                    for idc in ["idc_lh", "idc_rh", "idc_sc"]:
-                        if len(self._parc_info[idc]) == 0:
-                            self._parc_info[idc] = None
-                    lgr.info("Loaded integrated parcellation with pre-calculated distance matrix.")
-                except FileNotFoundError:
-                    pass
+            parc_integrated = _check_parcellation(self._parc["parc"], force_str=True, raise_not_found=False)
+            if parc_integrated is not None:
+                parc, labels, space, density, symmetric, l2rmap, dist_mat = fetch_parcellation(
+                    parcellation=parc_integrated,
+                    space=self._parc["space"],
+                    return_space=True,
+                    return_resolution=True,
+                    return_symmetric=True,
+                    return_l2rmap=True,
+                    return_dist_mat=True,
+                    return_loaded=True
+                )
+                if isinstance(dist_mat, tuple):
+                    if all([d is None for d in dist_mat]):
+                        dist_mat = None
+                self._parc = Parcellation(
+                    parcellation=parc,
+                    labels=labels,
+                    space=space,
+                    resolution=density,
+                    symmetric=symmetric,
+                    left2right_mapping=l2rmap,
+                    dist_mat=dist_mat
+                ).fit()
+                # self._parc = parc
+                # self._parc_info["labels"] = labels
+                # self._parc_info["space"] = space
+                # self._parc_info["symmetric"] = symmetric
+                # self._parc_info["l2rmap"] = l2rmap
+                # #self._parc_info["density"] = density
+                # self._parc_info["hemi"] = ("L", "R") if space=="fsaverage" else None
+                # TODO: BUILD ALSO DIST MATRICES INTO PARCELLATION INSTANCE
+                self._parc_dist_mat["null_maps"] = dist_mat
+                if not isinstance(dist_mat, tuple):
+                    self._parc_dist_mat["cv"] = dist_mat
+                # self._parc_info["idc_lh"] = [i for i, l in enumerate(labels) if "hemi-L" in l]
+                # self._parc_info["idc_rh"] = [i for i, l in enumerate(labels) if "hemi-R" in l]
+                # self._parc_info["idc_sc"] = [] # TODO: add cortex/subcortex idc management
+                # for idc in ["idc_lh", "idc_rh", "idc_sc"]:
+                #     if len(self._parc_info[idc]) == 0:
+                #         self._parc_info[idc] = None
+                lgr.info("Loaded integrated parcellation with pre-calculated distance matrix.")
+                
+        # custom parcellation
+        if self._parc is not None and not isinstance(self._parc, Parcellation):
+            self._parc = Parcellation(
+                parcellation=self._parc["parc"],
+                labels=self._parc["labels"],
+                space=self._parc["space"],
+                symmetric=self._parc["symmetric"],
+                left2right_mapping=self._parc["l2rmap"],
+                dist_mat=self._parc_dist_mat["null_maps"]
+            ).fit()
 
         ## extract input data
+        # TODO: PARCELLATE_DATA SHOULD ACCEPT PARCELLATION OBJECTS; STRIP SEPARATE ARGS HERE
         _input_kwargs = dict(
-            parcellation=self._parc, 
-            parc_labels=self._parc_info["labels"],
-            parc_hemi=self._parc_info["hemi"],
-            parc_space=self._parc_info["space"],
+            parcellation=self._parc._image_obj, 
+            parc_labels=self._parc._labels,
+            parc_hemi=self._parc._hemi,
+            parc_space=self._parc._space,
             resampling_target=self._resampl_target,
             n_proc=self._n_proc,
             verbose=verbose,
@@ -301,11 +321,10 @@ class NiSpace:
         
         # reference data -> usually e.g. PET atlases
         lgr.info("Checking input data for 'x' (should be, e.g., PET data):")
-        self._X, self._parc = parcellate_data(
+        self._X = parcellate_data(
             self._x, 
             data_labels=self._x_lab,
             data_space=self._data_space[0], 
-            return_parc=True,
             **_input_kwargs
         )
         lgr.info(f"Got 'x' data for {self._X.shape[0]} x {self._X.shape[1]} parcels.")
@@ -355,22 +374,22 @@ class NiSpace:
         if self._Z is not None:
             if self._X.shape[1] != self._Z.shape[1]:
                 lgr.critical_raise("Got differing numbers of parcels in 'x'/'y' & 'z' data!", 
-                                   ValueError)
+                                   ValueError)          
         
-        ## check distance matrix
-        if self._parc_dist_mat["null_maps"] is not None:
-            dist_mat = load_distmat(self._parc_dist_mat["null_maps"])
-            if not isinstance(dist_mat, tuple):
-                dist_mat = dist_mat, 
-            for d in dist_mat:
-                if d.shape[0] != d.shape[1] != (self._X.shape[1] if len(dist_mat) == 1 
-                                                else self._X.shape[1] / 2):
-                    lgr.warning(f"Provided distance matrix shape {d.shape} is not symmetric or "
-                                f"does not fit with number of parcels in data ({self._X.shape[1]})!"
-                                " Ignoring provided matrix.")
-                    dist_mat = None
-                    break
-            self._parc_dist_mat["null_maps"] = dist_mat[0] if len(dist_mat) == 1 else dist_mat
+        # ## check distance matrix
+        # if self._parc_dist_mat["null_maps"] is not None:
+        #     dist_mat = load_distmat(self._parc_dist_mat["null_maps"])
+        #     if not isinstance(dist_mat, tuple):
+        #         dist_mat = dist_mat, 
+        #     for d in dist_mat:
+        #         if d.shape[0] != d.shape[1] != (self._X.shape[1] if len(dist_mat) == 1 
+        #                                         else self._X.shape[1] / 2):
+        #             lgr.warning(f"Provided distance matrix shape {d.shape} is not symmetric or "
+        #                         f"does not fit with number of parcels in data ({self._X.shape[1]})!"
+        #                         " Ignoring provided matrix.")
+        #             dist_mat = None
+        #             break
+        #     self._parc_dist_mat["null_maps"] = dist_mat[0] if len(dist_mat) == 1 else dist_mat
             
         ## check data indices
         if all(self._X.columns != self._Y.columns):
@@ -1098,7 +1117,7 @@ class NiSpace:
                         **dist_mat_kwargs
                     )
                     
-                if any([s in self._parc_info["space"].lower() for s in ["mni", "fsa"]]):
+                if any([s in self._parc._space.lower() for s in ["mni", "fsa"]]):
                     lgr.info("Calculating distance-dependent parcel splits.")
                     self.parcel_tr_te_splits_works = _get_dist_dep_splits(
                         dist_mat=euclidean_dist_mat[np.ix_(self._no_nan, self._no_nan)], 
@@ -1283,10 +1302,10 @@ class NiSpace:
             "use_existing_maps": True,
             "null_maps": maps_nulls,
             "null_method": maps_method,
-            "parc_idc_lh": self._parc_info["idc_lh"], 
-            "parc_idc_rh": self._parc_info["idc_rh"], 
-            "parc_idc_sc": self._parc_info["idc_sc"] if maps_separate_sc else None, 
-            "l2rmap": self._parc_info["l2rmap"],
+            #"parc_idc_lh": self._parc._idc_byhemi["L"], 
+            #"parc_idc_rh": self._parc._idc_byhemi["R"], 
+            #"parc_idc_sc": None, #TODO: fix: self._parc._idc_sc if maps_separate_sc else None, 
+            #"l2rmap": self._parc._l2rmap,
             "lr_mirror_dist_mat": False, 
             "lr_mirror_null_maps": True,
             "cx_sc_minmax_scale": False,
@@ -1411,7 +1430,7 @@ class NiSpace:
                     data_obs=data_obs,
                     dist_mat=dist_mat,
                     parc=self._parc,
-                    parc_kwargs=self._parc_info,
+                    #parc_kwargs=self._parc_info,
                     #standardize=False,
                     standardize=standardize_nulls,
                     n_perm=n_perm, 

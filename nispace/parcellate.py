@@ -16,7 +16,7 @@ from neuromaps.resampling import resample_images
 from neuromaps.transforms import _check_hemi, _estimate_density
 from neuromaps.nulls.spins import parcels_to_vertices
 
-# monkey fix to neuromaps ALIAS
+# monkey patch to neuromaps ALIAS
 ALIAS = dict(
     fslr='fsLR', fsavg='fsaverage', 
     mni152='MNI152', mni='MNI152', 
@@ -26,7 +26,6 @@ ALIAS = dict(
 )
 
 from nispace.utils.utils import get_background_value, vol_to_vect_arr
-
 
 def _gifti_to_array(gifti):
     """ Converts tuple of `gifti` to numpy array
