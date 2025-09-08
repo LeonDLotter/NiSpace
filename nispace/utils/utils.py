@@ -307,7 +307,7 @@ def parc_vect_to_vol(vect, parc):
     # check data
     if isinstance(vect, (list, set, tuple, pd.Series)):
         vect = np.array(vect)
-    elif isinstance(vect, (np.ndarray, pd.DataFrame())):
+    elif isinstance(vect, (np.ndarray, pd.DataFrame)):
         if len(vect.shape) > 1:
             print("Input vector should be 1d-array/list-like. Will flatten and hope for the best.")
         vect = np.array(vect).flatten()

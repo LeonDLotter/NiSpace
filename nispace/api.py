@@ -10,7 +10,7 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 
 from . import lgr
-from .io import parcellate_data, load_distmat, to_pickle, from_pickle
+from .io import parcellate_data, to_pickle, from_pickle
 from .modules.parcellation import Parcellation
 from .modules.reduce_x import _reduce_dimensions
 from .modules.transform_y import _dummy_code_groups, _num_code_subjects, _get_transform_fun
@@ -19,7 +19,7 @@ from .modules.permute import _get_null_maps, _get_exact_p_values, _get_correct_m
 from .modules.plot import _plot_categorical
 from .modules.constants import _PARCS_DEFAULT, _COLOC_METHODS
 from .datasets import fetch_parcellation, fetch_template, _check_parcellation
-from .nulls import get_distance_matrix, find_parcel_hemispheres
+from .nulls import get_distance_matrix
 from .stats.coloc import *
 from .stats.misc import mc_correction, residuals_nan, zscore_df, permute_groups
 from .cv import _get_dist_dep_splits, _get_rand_splits
@@ -1106,9 +1106,8 @@ class NiSpace:
                 lgr.info("Fetching euclidean distance matrix for regularized regression "
                          "colocalization with n(parcel)-fold CV.")
                 
-                if self._zscore != False:
+                if self._zscore:
                     lgr.warning("Input data was Z-standardized, which might lead to leakage in CV!")
-                
                 
                 if euclidean_dist_mat is None:
                     euclidean_dist_mat = self._get_dist_mat(
@@ -2393,29 +2392,27 @@ class NiSpace:
     # ----------------------------------------------------------------------------------------------
         
     def _get_dist_mat(self, dist_mat_type, centroids=False, parc_resample=2, 
-                      n_proc=None, store=True, verbose=None):
+                      n_proc=None, store=True, verbose=None, force_generate=False):
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         
         if dist_mat_type not in ["cv", "null_maps"]:
             lgr.critical_raise(f"dist_mat_type = '{dist_mat_type}' not defined",
                                ValueError)
+        
+        dist_mat_dict = self._parc_dist_mat
+        generate_dist_mat = True
+        if not force_generate and dist_mat_type in dist_mat_dict:
+            dist_mat = dist_mat_dict[dist_mat_type]
+            if dist_mat is not None:
+                generate_dist_mat = False
             
-        if hasattr(self, "_parc_dist_mat"):
-            if dist_mat_type in self._parc_dist_mat:
-                dist_mat = self._parc_dist_mat[dist_mat_type]
-                _generate_dist_mat = False
-            else:
-                _generate_dist_mat = True
-        else:
-            self._parc_dist_mat = {}
-            _generate_dist_mat = True
-            
-        if _generate_dist_mat:
+        if generate_dist_mat:
+            # TODO: ADD SUPPORT FOR PARCELLATION OBJECTS TO DISTANCE MATRIX GENERATION
             dist_mat = get_distance_matrix(
-                parc=self._parc, 
-                parc_space=self._parc_info["space"],
-                parc_hemi=self._parc_info["hemi"],
+                parc=self._parc._source,
+                parc_space=self._parc._space,
+                parc_hemi=self._parc._hemi,
                 #parc_density=self._parc_info["density"],
                 parc_resample=parc_resample,
                 centroids=centroids,

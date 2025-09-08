@@ -370,6 +370,7 @@ def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"],
                         parc_resample=2, centroids=False, surf_euclidean=False,
                         n_proc=1, verbose=True, dtype=np.float32):
     verbose = set_log(lgr, verbose)
+    # TODO: ADD SUPPORT FOR PARCELLATION OBJECTS TO DISTANCE MATRIX GENERATION
     
     ## generate distance matrix
     # case volumetric 
