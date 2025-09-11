@@ -210,14 +210,14 @@ class Parcellater():
             # we use an intermediate pandas array because indexing is simple here
             if fill_dropped:
                 # indices 
-                idc_orig = self.parcellation_idc      
-                idc_resampled = np.array(masker.labels_)
+                idc_orig = np.asarray(self.parcellation_idc).astype(np.int32)      
+                idc_resampled = np.asarray(masker.labels_).astype(np.int32)
                 # new array with original indices
                 parcellated_series = pd.Series(index=idc_orig)
                 # write data into original positions, leaving dropped parcels with nan
                 parcellated_series.loc[idc_resampled] = parcellated
                 # replace np array
-                parcellated = np.array(parcellated_series)
+                parcellated = np.asarray(parcellated_series)
                 # save stuff
                 self._parc_idc = idc_resampled
                 self._parc_idc_dropped = list( set(idc_orig) ^ set(idc_resampled) )  
