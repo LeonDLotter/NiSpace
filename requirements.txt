@@ -8,8 +8,8 @@ numba>=0.58.0
 numpy>=1.23.0
 pandas>=2.0.0
 nibabel>=4.0.0
-nilearn>=0.10.0
-neuromaps @ git+https://github.com/netneurolab/neuromaps@a89b6990d6a5d76c42d833e03c8cf99fc6c352fd
+nilearn>=0.10.0,<=0.12.1
+neuromaps @ git+https://github.com/netneurolab/neuromaps@f0ed67c44d633061b93c6d337a1b233f6895c408
 scipy>=1.6.0
 statsmodels>=0.14.0
 scikit-learn>=1.5.0

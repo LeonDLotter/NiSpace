@@ -212,6 +212,7 @@ class Parcellater():
                 # indices 
                 idc_orig = np.asarray(self.parcellation_idc).astype(np.int32)      
                 idc_resampled = np.asarray(masker.labels_).astype(np.int32)
+                idc_resampled = idc_resampled[idc_resampled != 0] # indices in masker include bg 0
                 # new array with original indices
                 parcellated_series = pd.Series(index=idc_orig)
                 # write data into original positions, leaving dropped parcels with nan
