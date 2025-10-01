@@ -34,7 +34,7 @@ dependencies = [
     "numpy>=1.23.0",
     "pandas>=2.0.0",
     "nibabel>=4.0.0",
-    "nilearn>=0.10.0",
+    "nilearn>=0.10.0,<=0.12.1",
     "neuromaps @ git+https://github.com/netneurolab/neuromaps@a89b6990d6a5d76c42d833e03c8cf99fc6c352fd",
     "scipy>=1.6.0",
     "statsmodels>=0.14.0",

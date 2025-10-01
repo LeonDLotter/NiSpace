@@ -247,7 +247,8 @@ def _mirror_parc_maps(data, parc_idc_lh, parc_idc_rh,
         
         # parcellation data
         if resample_vol is not None:
-            parc = resample_img(parc, target_affine=np.eye(3) * resample_vol, interpolation="nearest")
+            parc = resample_img(parc, target_affine=np.eye(3) * resample_vol, interpolation="nearest",
+                                force_resample=True, copy_header=True)
         parc_data = parc.get_fdata()
         idc_all = np.trim_zeros(np.unique(parc_data))
         idc_left = idc_all[parc_idc_lh]
@@ -385,7 +386,8 @@ def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"],
             parc = resample_img(
                 parc, 
                 target_affine=np.diag([parc_resample] * 3), 
-                interpolation="nearest"
+                interpolation="nearest",
+                force_resample=True, copy_header=True
             )
         parc_data = parc.get_fdata()
         parc_affine = parc.affine
