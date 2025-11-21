@@ -1839,6 +1839,14 @@
             "Aseg": {
                 "host": "github-nispace",
                 "remote": "reference/pet/tab/dset-pet_parc-Aseg.csv.gz"
+            },
+            "HarvardOxfordCortical": {
+                "host": "github-nispace",
+                "remote": "reference/pet/tab/dset-pet_parc-HarvardOxfordCortical.csv.gz"
+            },
+            "HarvardOxfordSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/pet/tab/dset-pet_parc-HarvardOxfordSubcortical.csv.gz"
             }
         },
 
@@ -1914,6 +1922,14 @@
             "Aseg": {
                 "host": "github-nispace",
                 "remote": "reference/mrna/tab/dset-mrna_parc-Aseg.csv.gz"
+            },
+            "HarvardOxfordCortical": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/tab/dset-mrna_parc-HarvardOxfordCortical.csv.gz"
+            },
+            "HarvardOxfordSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/tab/dset-mrna_parc-HarvardOxfordSubcortical.csv.gz"
             }
         },
 
@@ -2008,6 +2024,10 @@
             "Destrieux": {
                 "host": "github-nispace",
                 "remote": "reference/magicc/tab/dset-magicc_parc-Destrieux.csv.gz"
+            },
+            "HarvardOxfordCortical": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-HarvardOxfordCortical.csv.gz"
             }
         },
 
@@ -2080,88 +2100,480 @@
         },
 
         "map": {
-            "nw-Aud": {
+            "nw-Auditory_pub-dworetsky2021": {
                 "MNI152": {
-                    "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_Aud_MNI_333.nii"]
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Auditory_pub-dworetsky2021/nw-Auditory_pub-dworetsky2021_space-MNI152.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Auditory_pub-dworetsky2021/nw-Auditory_pub-dworetsky2021_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Auditory_pub-dworetsky2021/nw-Auditory_pub-dworetsky2021_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Auditory_pub-dworetsky2021/nw-Auditory_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Auditory_pub-dworetsky2021/nw-Auditory_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Auditory_pub-dworetsky2021/nw-Auditory_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Auditory_pub-dworetsky2021/nw-Auditory_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    }
                 }
             },
-            "nw-CO": {
+            "nw-Cinguloopercular_pub-dworetsky2021": {
                 "MNI152": {
-                    "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_CO_MNI_333.nii"]
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Cinguloopercular_pub-dworetsky2021/nw-Cinguloopercular_pub-dworetsky2021_space-MNI152.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Cinguloopercular_pub-dworetsky2021/nw-Cinguloopercular_pub-dworetsky2021_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Cinguloopercular_pub-dworetsky2021/nw-Cinguloopercular_pub-dworetsky2021_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Cinguloopercular_pub-dworetsky2021/nw-Cinguloopercular_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Cinguloopercular_pub-dworetsky2021/nw-Cinguloopercular_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Cinguloopercular_pub-dworetsky2021/nw-Cinguloopercular_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Cinguloopercular_pub-dworetsky2021/nw-Cinguloopercular_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    }
                 }
             },
-            "nw-DAN": {
+            "nw-DefaultMode_pub-dworetsky2021": {
                 "MNI152": {
-                    "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_DAN_MNI_333.nii"]
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-DefaultMode_pub-dworetsky2021/nw-DefaultMode_pub-dworetsky2021_space-MNI152.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-DefaultMode_pub-dworetsky2021/nw-DefaultMode_pub-dworetsky2021_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-DefaultMode_pub-dworetsky2021/nw-DefaultMode_pub-dworetsky2021_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-DefaultMode_pub-dworetsky2021/nw-DefaultMode_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-DefaultMode_pub-dworetsky2021/nw-DefaultMode_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-DefaultMode_pub-dworetsky2021/nw-DefaultMode_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-DefaultMode_pub-dworetsky2021/nw-DefaultMode_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    }
                 }
             },
-            "nw-DMN": {
+            "nw-DorsalAttention_pub-dworetsky2021": {
                 "MNI152": {
-                    "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_DMN_MNI_333.nii"]
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-DorsalAttention_pub-dworetsky2021/nw-DorsalAttention_pub-dworetsky2021_space-MNI152.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-DorsalAttention_pub-dworetsky2021/nw-DorsalAttention_pub-dworetsky2021_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-DorsalAttention_pub-dworetsky2021/nw-DorsalAttention_pub-dworetsky2021_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-DorsalAttention_pub-dworetsky2021/nw-DorsalAttention_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-DorsalAttention_pub-dworetsky2021/nw-DorsalAttention_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-DorsalAttention_pub-dworetsky2021/nw-DorsalAttention_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-DorsalAttention_pub-dworetsky2021/nw-DorsalAttention_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    }
                 }
             },
-            "nw-FP": {
+            "nw-Frontoparietal_pub-dworetsky2021": {
                 "MNI152": {
-                    "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_FP_MNI_333.nii"]
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Frontoparietal_pub-dworetsky2021/nw-Frontoparietal_pub-dworetsky2021_space-MNI152.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Frontoparietal_pub-dworetsky2021/nw-Frontoparietal_pub-dworetsky2021_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Frontoparietal_pub-dworetsky2021/nw-Frontoparietal_pub-dworetsky2021_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Frontoparietal_pub-dworetsky2021/nw-Frontoparietal_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Frontoparietal_pub-dworetsky2021/nw-Frontoparietal_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Frontoparietal_pub-dworetsky2021/nw-Frontoparietal_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Frontoparietal_pub-dworetsky2021/nw-Frontoparietal_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    }
                 }
             },
-            "nw-MTL": {
+            "nw-Language_pub-dworetsky2021": {
                 "MNI152": {
-                    "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_MTL_MNI_333.nii"]
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Language_pub-dworetsky2021/nw-Language_pub-dworetsky2021_space-MNI152.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Language_pub-dworetsky2021/nw-Language_pub-dworetsky2021_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Language_pub-dworetsky2021/nw-Language_pub-dworetsky2021_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Language_pub-dworetsky2021/nw-Language_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Language_pub-dworetsky2021/nw-Language_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Language_pub-dworetsky2021/nw-Language_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Language_pub-dworetsky2021/nw-Language_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    }
                 }
             },
-            "nw-PMN": {
+            "nw-MedialTemporal_pub-dworetsky2021": {
                 "MNI152": {
-                    "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_PMN_MNI_333.nii"]
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-MedialTemporal_pub-dworetsky2021/nw-MedialTemporal_pub-dworetsky2021_space-MNI152.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-MedialTemporal_pub-dworetsky2021/nw-MedialTemporal_pub-dworetsky2021_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-MedialTemporal_pub-dworetsky2021/nw-MedialTemporal_pub-dworetsky2021_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-MedialTemporal_pub-dworetsky2021/nw-MedialTemporal_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-MedialTemporal_pub-dworetsky2021/nw-MedialTemporal_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-MedialTemporal_pub-dworetsky2021/nw-MedialTemporal_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-MedialTemporal_pub-dworetsky2021/nw-MedialTemporal_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    }
                 }
             },
-            "nw-PON": {
+            "nw-Parietomedial_pub-dworetsky2021": {
                 "MNI152": {
-                    "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_PON_MNI_333.nii"]
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Parietomedial_pub-dworetsky2021/nw-Parietomedial_pub-dworetsky2021_space-MNI152.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Parietomedial_pub-dworetsky2021/nw-Parietomedial_pub-dworetsky2021_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Parietomedial_pub-dworetsky2021/nw-Parietomedial_pub-dworetsky2021_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Parietomedial_pub-dworetsky2021/nw-Parietomedial_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Parietomedial_pub-dworetsky2021/nw-Parietomedial_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Parietomedial_pub-dworetsky2021/nw-Parietomedial_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Parietomedial_pub-dworetsky2021/nw-Parietomedial_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    }
                 }
             },
-            "nw-SMd": {
+            "nw-Parietooccipital_pub-dworetsky2021": {
                 "MNI152": {
-                    "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_SMd_MNI_333.nii"]
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Parietooccipital_pub-dworetsky2021/nw-Parietooccipital_pub-dworetsky2021_space-MNI152.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Parietooccipital_pub-dworetsky2021/nw-Parietooccipital_pub-dworetsky2021_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Parietooccipital_pub-dworetsky2021/nw-Parietooccipital_pub-dworetsky2021_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Parietooccipital_pub-dworetsky2021/nw-Parietooccipital_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Parietooccipital_pub-dworetsky2021/nw-Parietooccipital_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Parietooccipital_pub-dworetsky2021/nw-Parietooccipital_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Parietooccipital_pub-dworetsky2021/nw-Parietooccipital_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    }
                 }
             },
-            "nw-SMl": {
+            "nw-Salience_pub-dworetsky2021": {
                 "MNI152": {
-                    "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_SMl_MNI_333.nii"]
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Salience_pub-dworetsky2021/nw-Salience_pub-dworetsky2021_space-MNI152.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Salience_pub-dworetsky2021/nw-Salience_pub-dworetsky2021_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Salience_pub-dworetsky2021/nw-Salience_pub-dworetsky2021_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Salience_pub-dworetsky2021/nw-Salience_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Salience_pub-dworetsky2021/nw-Salience_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Salience_pub-dworetsky2021/nw-Salience_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Salience_pub-dworetsky2021/nw-Salience_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    }
                 }
             },
-            "nw-Sal": {
+            "nw-SomatomotorDorsal_pub-dworetsky2021": {
                 "MNI152": {
-                    "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_Sal_MNI_333.nii"]
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-SomatomotorDorsal_pub-dworetsky2021/nw-SomatomotorDorsal_pub-dworetsky2021_space-MNI152.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-SomatomotorDorsal_pub-dworetsky2021/nw-SomatomotorDorsal_pub-dworetsky2021_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-SomatomotorDorsal_pub-dworetsky2021/nw-SomatomotorDorsal_pub-dworetsky2021_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-SomatomotorDorsal_pub-dworetsky2021/nw-SomatomotorDorsal_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-SomatomotorDorsal_pub-dworetsky2021/nw-SomatomotorDorsal_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-SomatomotorDorsal_pub-dworetsky2021/nw-SomatomotorDorsal_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-SomatomotorDorsal_pub-dworetsky2021/nw-SomatomotorDorsal_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    }
                 }
             },
-            "nw-Tpole": {
+            "nw-SomatomotorLateral_pub-dworetsky2021": {
                 "MNI152": {
-                    "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_Tpole_MNI_333.nii"]
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-SomatomotorLateral_pub-dworetsky2021/nw-SomatomotorLateral_pub-dworetsky2021_space-MNI152.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-SomatomotorLateral_pub-dworetsky2021/nw-SomatomotorLateral_pub-dworetsky2021_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-SomatomotorLateral_pub-dworetsky2021/nw-SomatomotorLateral_pub-dworetsky2021_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-SomatomotorLateral_pub-dworetsky2021/nw-SomatomotorLateral_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-SomatomotorLateral_pub-dworetsky2021/nw-SomatomotorLateral_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-SomatomotorLateral_pub-dworetsky2021/nw-SomatomotorLateral_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-SomatomotorLateral_pub-dworetsky2021/nw-SomatomotorLateral_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    }
                 }
             },
-            "nw-VAN": {
+            "nw-TemporalPole_pub-dworetsky2021": {
                 "MNI152": {
-                    "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_VAN_MNI_333.nii"]
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-TemporalPole_pub-dworetsky2021/nw-TemporalPole_pub-dworetsky2021_space-MNI152.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-TemporalPole_pub-dworetsky2021/nw-TemporalPole_pub-dworetsky2021_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-TemporalPole_pub-dworetsky2021/nw-TemporalPole_pub-dworetsky2021_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-TemporalPole_pub-dworetsky2021/nw-TemporalPole_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-TemporalPole_pub-dworetsky2021/nw-TemporalPole_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-TemporalPole_pub-dworetsky2021/nw-TemporalPole_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-TemporalPole_pub-dworetsky2021/nw-TemporalPole_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    }
                 }
             },
-            "nw-Vis": {
+            "nw-Visual_pub-dworetsky2021": {
                 "MNI152": {
-                    "host": "github",
-                    "remote": ["GrattonLab/Dworetsky_etal_ConsensusNetworks", "bf9a6c7e227b616a1fe811fd9eca780e4d94e0c1", "NetworkTemplates/MNI/volTemplate_Vis_MNI_333.nii"]
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Visual_pub-dworetsky2021/nw-Visual_pub-dworetsky2021_space-MNI152.nii.gz"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Visual_pub-dworetsky2021/nw-Visual_pub-dworetsky2021_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/rsn/map/nw-Visual_pub-dworetsky2021/nw-Visual_pub-dworetsky2021_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Visual_pub-dworetsky2021/nw-Visual_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Visual_pub-dworetsky2021/nw-Visual_pub-dworetsky2021_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Visual_pub-dworetsky2021/nw-Visual_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/pet/map/nw-Visual_pub-dworetsky2021/nw-Visual_pub-dworetsky2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    }
                 }
             }
         },
@@ -2190,6 +2602,10 @@
             "Destrieux": {
                 "host": "github-nispace",
                 "remote": "reference/rsn/tab/dset-rsn_parc-Destrieux.csv.gz"
+            },
+            "HarvardOxfordCortical": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-HarvardOxfordCortical.csv.gz"
             }
         },
 
@@ -2243,6 +2659,14 @@
             "Aseg": {
                 "host": "github-nispace",
                 "remote": "reference/grf/tab/dset-grf_parc-Aseg.csv.gz"
+            },
+            "HarvardOxfordCortical": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-HarvardOxfordCortical.csv.gz"
+            },
+            "HarvardOxfordSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-HarvardOxfordSubcortical.csv.gz"
             }
         },
 
@@ -2313,6 +2737,14 @@
             "Aseg": {
                 "host": "github-nispace",
                 "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Aseg.csv.gz"
+            },
+            "HarvardOxfordCortical": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-HarvardOxfordCortical.csv.gz"
+            },
+            "HarvardOxfordSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-HarvardOxfordSubcortical.csv.gz"
             }
         },
 
@@ -3091,6 +3523,10 @@
             "Destrieux": {
                 "host": "github-nispace",
                 "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Destrieux.csv.gz"
+            },
+            "HarvardOxfordCortical": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-HarvardOxfordCortical.csv.gz"
             }
         },
 
@@ -3559,6 +3995,10 @@
             "Destrieux": {
                 "host": "github-nispace",
                 "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Destrieux.csv.gz"
+            },
+            "HarvardOxfordCortical": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-HarvardOxfordCortical.csv.gz"
             }
         },
 
@@ -3804,6 +4244,14 @@
             "Aseg": {
                 "host": "github-nispace",
                 "remote": "reference/tpm/tab/dset-tpm_parc-Aseg.csv.gz"
+            },
+            "HarvardOxfordCortical": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-HarvardOxfordCortical.csv.gz"
+            },
+            "HarvardOxfordSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-HarvardOxfordSubcortical.csv.gz"
             }
         },
 

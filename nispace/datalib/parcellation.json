@@ -554,6 +554,7 @@
     },
 
     "DesikanKilliany": {
+
         "MNI152NLin2009cAsym": {
             "level": "cortex",
             "map": {
@@ -569,6 +570,7 @@
                 "remote": "parcellation/DesikanKilliany/MNI152NLin2009cAsym/parc-DesikanKilliany_space-MNI152NLin2009cAsym.dist.csv.gz"
             }
         },
+
         "MNI152NLin6Asym": {
             "level": "cortex",
             "map": {
@@ -584,6 +586,7 @@
                 "remote": "parcellation/DesikanKilliany/MNI152NLin6Asym/parc-DesikanKilliany_space-MNI152NLin6Asym.dist.csv.gz"
             }
         },
+
         "fsaverage": {
             "level": "cortex",
             "map": {
@@ -617,6 +620,7 @@
                 }
             }
         },
+
         "fsLR": {
             "level": "cortex",
             "map": {
@@ -656,6 +660,7 @@
     },
 
     "DesikanKillianyTourville": {
+
         "MNI152NLin2009cAsym": {
             "level": "cortex",
             "map": {
@@ -671,6 +676,7 @@
                 "remote": "parcellation/DesikanKillianyTourville/MNI152NLin2009cAsym/parc-DesikanKillianyTourville_space-MNI152NLin2009cAsym.dist.csv.gz"
             }
         },
+
         "MNI152NLin6Asym": {
             "level": "cortex",
             "map": {
@@ -693,6 +699,7 @@
     },
 
     "Destrieux": {
+
         "MNI152NLin2009cAsym": {
             "level": "cortex",
             "map": {
@@ -708,6 +715,7 @@
                 "remote": "parcellation/Destrieux/MNI152NLin2009cAsym/parc-Destrieux_space-MNI152NLin2009cAsym.dist.csv.gz"
             }
         },
+
         "MNI152NLin6Asym": {
             "level": "cortex",
             "map": {
@@ -723,6 +731,7 @@
                 "remote": "parcellation/Destrieux/MNI152NLin6Asym/parc-Destrieux_space-MNI152NLin6Asym.dist.csv.gz"
             }
         },
+
         "fsaverage": {
             "level": "cortex",
             "map": {
@@ -756,6 +765,7 @@
                 }
             }
         },
+
         "fsLR": {
             "level": "cortex",
             "map": {
@@ -792,7 +802,7 @@
     },
 
     "Aseg": {
-        
+
         "MNI152NLin2009cAsym": {
             "level": "subcortex",
             "map": {
@@ -825,6 +835,150 @@
             }
         }
     
+    },
+
+    "HarvardOxfordCortical": {
+
+        "MNI152NLin2009cAsym": {
+            "level": "cortex",
+            "map": {
+                "host": "github-nispace",
+                "remote": "parcellation/HarvardOxfordCortical/MNI152NLin2009cAsym/parc-HarvardOxfordCortical_space-MNI152NLin2009cAsym.label.nii.gz"
+            },
+            "label": {
+                "host": "github-nispace",
+                "remote": "parcellation/HarvardOxfordCortical/MNI152NLin2009cAsym/parc-HarvardOxfordCortical_space-MNI152NLin2009cAsym.label.txt"
+            },
+            "distmat": {
+                "host": "github-nispace",
+                "remote": "parcellation/HarvardOxfordCortical/MNI152NLin2009cAsym/parc-HarvardOxfordCortical_space-MNI152NLin2009cAsym.dist.csv.gz"
+            }
+        },
+
+        "MNI152NLin6Asym": {
+            "level": "cortex",
+            "map": {
+                "host": "github-nispace",
+                "remote": "parcellation/HarvardOxfordCortical/MNI152NLin6Asym/parc-HarvardOxfordCortical_space-MNI152NLin6Asym.label.nii.gz"
+            },
+            "label": {
+                "host": "github-nispace",
+                "remote": "parcellation/HarvardOxfordCortical/MNI152NLin6Asym/parc-HarvardOxfordCortical_space-MNI152NLin6Asym.label.txt"
+            },
+            "distmat": {
+                "host": "github-nispace",
+                "remote": "parcellation/HarvardOxfordCortical/MNI152NLin6Asym/parc-HarvardOxfordCortical_space-MNI152NLin6Asym.dist.csv.gz"
+            }
+        },
+
+        "fsaverage": {
+            "level": "cortex",
+            "map": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/HarvardOxfordCortical/fsaverage/parc-HarvardOxfordCortical_space-fsaverage_hemi-L.label.gii.gz"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/HarvardOxfordCortical/fsaverage/parc-HarvardOxfordCortical_space-fsaverage_hemi-R.label.gii.gz"
+                }
+            },
+            "label": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/HarvardOxfordCortical/fsaverage/parc-HarvardOxfordCortical_space-fsaverage_hemi-L.label.txt"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/HarvardOxfordCortical/fsaverage/parc-HarvardOxfordCortical_space-fsaverage_hemi-R.label.txt"
+                }
+            },
+            "distmat": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/HarvardOxfordCortical/fsaverage/parc-HarvardOxfordCortical_space-fsaverage_hemi-L.dist.csv.gz"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/HarvardOxfordCortical/fsaverage/parc-HarvardOxfordCortical_space-fsaverage_hemi-R.dist.csv.gz"
+                }
+            }
+        },
+
+        "fsLR": {
+            "level": "cortex",
+            "map": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/HarvardOxfordCortical/fsLR/parc-HarvardOxfordCortical_space-fsLR_hemi-L.label.gii.gz"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/HarvardOxfordCortical/fsLR/parc-HarvardOxfordCortical_space-fsLR_hemi-R.label.gii.gz"
+                }
+            },
+            "label": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/HarvardOxfordCortical/fsLR/parc-HarvardOxfordCortical_space-fsLR_hemi-L.label.txt"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/HarvardOxfordCortical/fsLR/parc-DestriHarvardOxfordCortical_space-fsLR_hemi-R.label.txt"
+                }
+            },
+            "distmat": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/HarvardOxfordCortical/fsLR/parc-HarvardOxfordCortical_space-fsLR_hemi-L.dist.csv.gz"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "parcellation/HarvardOxfordCortical/fsLR/parc-HarvardOxfordCortical_space-fsLR_hemi-R.dist.csv.gz"
+                }
+            }
+        }
+    },
+    "HOC": {
+        "alias": "HarvardOxfordCortical"
+    },
+
+    "HarvardOxfordSubcortical": {
+
+        "MNI152NLin2009cAsym": {
+            "level": "subcortex",
+            "map": {
+                "host": "github-nispace",
+                "remote": "parcellation/HarvardOxfordSubcortical/MNI152NLin2009cAsym/parc-HarvardOxfordSubcortical_space-MNI152NLin2009cAsym.label.nii.gz"
+            },
+            "label": {
+                "host": "github-nispace",
+                "remote": "parcellation/HarvardOxfordSubcortical/MNI152NLin2009cAsym/parc-HarvardOxfordSubcortical_space-MNI152NLin2009cAsym.label.txt"
+            },
+            "distmat": {
+                "host": "github-nispace",
+                "remote": "parcellation/HarvardOxfordSubcortical/MNI152NLin2009cAsym/parc-HarvardOxfordSubcortical_space-MNI152NLin2009cAsym.dist.csv.gz"
+            }
+        },
+
+        "MNI152NLin6Asym": {
+            "level": "subcortex",
+            "map": {
+                "host": "github-nispace",
+                "remote": "parcellation/HarvardOxfordSubcortical/MNI152NLin6Asym/parc-HarvardOxfordSubcortical_space-MNI152NLin6Asym.label.nii.gz"
+            },
+            "label": {
+                "host": "github-nispace",
+                "remote": "parcellation/HarvardOxfordSubcortical/MNI152NLin6Asym/parc-HarvardOxfordSubcortical_space-MNI152NLin6Asym.label.txt"
+            },
+            "distmat": {
+                "host": "github-nispace",
+                "remote": "parcellation/HarvardOxfordSubcortical/MNI152NLin6Asym/parc-HarvardOxfordSubcortical_space-MNI152NLin6Asym.dist.csv.gz"
+            }
+        }
+    },
+    "HOS": {
+        "alias": "HarvardOxfordSubcortical"
     }
 
 }
