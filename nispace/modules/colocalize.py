@@ -289,10 +289,10 @@ def _get_colocalize_fun(method,
                 return np.nanmedian(np.abs(arr))
         elif xsea_method == "weightedmean":
             def aggr(arr, weights):
-                return np.ma.average(np.ma.array(arr, mask=np.isnan(arr)), weights=weights)
+                return np.ma.average(np.ma.array(arr, mask=np.isnan(arr)), weights=weights, axis=0)
         elif xsea_method == "weightedabsmean":
             def aggr(arr, weights):
-                return np.ma.average(np.ma.array(np.abs(arr), mask=np.isnan(arr)), weights=weights)
+                return np.ma.average(np.ma.array(np.abs(arr), mask=np.isnan(arr)), weights=weights, axis=0)
         else:
             lgr.critical_raise(f"XSEA aggregation method '{xsea_method}' not defined!",
                                ValueError)
@@ -319,7 +319,12 @@ def _get_colocalize_fun(method,
                 # get aggregated metrics per set
                 _colocs = {}
                 for stat in _colocs_xsea[0].keys():
-                    _colocs[stat] = np.array([aggr(c[stat], w) for c, w in zip(_colocs_xsea, _weights_xsea)], dtype=dtype)
+                    # nothing to aggregate (mostly r2 -> 1 value per set)
+                    if _colocs_xsea[0][stat].ndim == 0:
+                        _colocs[stat] = np.array([c[stat] for c in _colocs_xsea], dtype=dtype)
+                    # weighted aggregation
+                    else:
+                        _colocs[stat] = np.array([aggr(c[stat], w) for c, w in zip(_colocs_xsea, _weights_xsea)], dtype=dtype)
                 return _colocs
             
         return _y_colocalize_xsea

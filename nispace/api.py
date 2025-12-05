@@ -992,7 +992,7 @@ class NiSpace:
                 lgr.critical_raise("XSEA requires X data to have a MultiIndex with a 'set' level!",
                                    ValueError)
             if "weighted" in xsea_aggregation_method and "weight" not in X.index.names:
-                lgr.warning("XSEA requires X data to have a MultiIndex with a 'weight' level! "
+                lgr.warning("Weighted XSEA requires X data to have a MultiIndex with a 'weight' level! "
                             "Will not use weights.")
                 xsea_aggregation_method = xsea_aggregation_method.replace("weighted", "")
             X_arr = {set_name: np.array(set_X, dtype=self._dtype) 
