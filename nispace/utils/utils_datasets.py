@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import shutil
+from threading import local
 import requests
 import numpy as np
 import tempfile
@@ -203,7 +204,8 @@ def download_file(host: Literal["url", "github", "github-nispace", "github-nispa
         path = fetch_annotation(source=source, desc=tracer, space=space, hemi=hemi)
         # should be a string or pathlib.Path
         if isinstance(path, (str, Path)):
-            return Path(path)
+            shutil.copy(path, save_path)
+            return Path(save_path)
         else: 
             raise ValueError(f"Unexpected neuromaps output for "
                              f"source={source}, desc={tracer}, space={space}, hemi={hemi}: {path}")
@@ -255,6 +257,7 @@ def _get_file_ext(remote):
 
 
 def get_file(local_path, host, remote, 
+             ext=None,
              osf_config_file=None,
              github_config_file=None,
              hash_check=True,
@@ -263,11 +266,14 @@ def get_file(local_path, host, remote,
     # local path
     local_path = Path(local_path)
     # infer file extension if necessary
-    if local_path.name.endswith(".%s"):
+    if local_path.name.endswith(".%s") and not ext:
         ext = _get_file_ext(remote)
         local_path = local_path.parent / (local_path.name % ext)
+    elif ext:
+        local_path = local_path.parent / (local_path.stem + f".{ext.lstrip('.')}")
+    # check if directory
     if local_path.is_dir():
-        raise ValueError(f"'local_path' must be a file path, not a directory path; not '{local_path}'.")
+        raise ValueError(f"'local_path' must be a file path, not a directory path: '{local_path}'.")
     
     redownload = False
     msg = "Downloading"
@@ -294,13 +300,14 @@ def get_file(local_path, host, remote,
             local_path.parent.mkdir(parents=True)
         tmp_path = download_file(
             host, remote, 
+            save_path=local_path,
             osf_config_file=osf_config_file,
             github_config_file=github_config_file
         )
 
         # save
-        shutil.copy(tmp_path, local_path)
-        tmp_path.unlink()
+        #shutil.copy(tmp_path, local_path)
+        #tmp_path.unlink()
             
     return local_path
 

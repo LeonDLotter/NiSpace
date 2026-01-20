@@ -374,7 +374,12 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
             elif return_l2rmap and symmetric:
                 l2rmap_file = None
             if len(parcellation_file) == 1:
-                parcellation_file, label_file, distmat_file, l2rmap_file = parcellation_file[0], label_file[0], distmat_file[0], None
+                parcellation_file = parcellation_file[0]
+                if return_labels:
+                    label_file = label_file[0]
+                if return_dist_mat:
+                    distmat_file = distmat_file[0]
+                l2rmap_file = None
             
         # return      
         
