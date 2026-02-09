@@ -162,7 +162,7 @@ class NiSpace:
             pass
         else:
             lgr.critical_raise("'data_space' must be a string, a list with len==1 or a list with "
-                               f"len==3! Is {type(data_space)} with len({len(data_space)}).",
+                               f"len==3! Is {type(data_space)}.",
                                ValueError)
         self._data_space = data_space
         # TODO: CREATE PARCELLATION CLASS OBJECT HERE; REQUIRES CLASS TO ACCEPT NISPACE INTEGR PARCS

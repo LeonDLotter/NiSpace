@@ -11,8 +11,11 @@ from .modules.constants import (_PARC_DEFAULT,
 from .datasets import fetch_reference, reference_lib, _check_parcellation
 
 def _workflow_base(x, y, z, x_collection, #x_load_nulls,
-                   standardize,
+                   space,
+                   data_space,
+                   parcellation_space, 
                    parcellation, parcellation_labels,
+                   standardize,
                    colocalization_method,
                    n_proc, verbose,
                    nispace_object, 
@@ -48,7 +51,12 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
                 status["init"] = True
         else:
             lgr.critical_raise(f"Argument 'nispace_object' must be of type NiSpace not {type(nsp)}!")
-          
+            
+    # space
+    # TODO: make this nicer, check for space in parcellation part, intelligently select space
+    data_space = space if not data_space else data_space
+    parcellation_space = space if not parcellation_space else parcellation_space  
+        
     ## INIT
     if not status["init"]:
         
@@ -93,7 +101,7 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
                 lgr.error(f"'x' must be one of: '{list(reference_lib.keys())}' not '{x}'!")
         else:
             null_maps = None
-        
+            
         # init
         init_kwargs = dict(
             x=x,
@@ -102,10 +110,13 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
             standardize=standardize,
             parcellation=parc_integrated if parc_integrated is not None else parcellation,
             parcellation_labels=parcellation_labels,
+            parcellation_space=parcellation_space,
+            data_space=data_space,
             n_proc=n_proc,
             verbose=verbose,
             return_self=True,
         ) | init_kwargs
+        print("parcellation_space", parcellation_space, "data_space", data_space)
         nsp = NiSpace(**init_kwargs)
     
     ## FIT
@@ -122,6 +133,9 @@ def simple_colocalization(y,
                           z=None, 
                           x_collection=None,
                           standardize="xz",
+                          space="MNI152NLin2009cAsym",
+                          data_space=None,
+                          parcellation_space=None,
                           parcellation=_PARC_DEFAULT,
                           parcellation_labels=None,
                           y_covariates=None,
@@ -224,6 +238,9 @@ def simple_colocalization(y,
     status, nsp, null_maps = _workflow_base(
         x=x, y=y, z=z, 
         x_collection=x_collection, 
+        space=space,
+        data_space=data_space,
+        parcellation_space=parcellation_space,
         #x_load_nulls=x_load_nulls,
         standardize=standardize,
         parcellation=parcellation,
@@ -312,6 +329,9 @@ def group_comparison(y, design,
                      z=None, 
                      x_collection=None,
                      standardize="xz",
+                     space="MNI152NLin2009cAsym",
+                     data_space=None,
+                     parcellation_space=None,
                      parcellation=_PARC_DEFAULT,
                      parcellation_labels=None,
                      colocalization_method="spearman",
@@ -351,6 +371,9 @@ def group_comparison(y, design,
         x=x, y=y, z=z, 
         x_collection=x_collection, 
         #x_load_nulls=False,
+        space=space,
+        data_space=data_space,
+        parcellation_space=parcellation_space,
         standardize=standardize,
         parcellation=parcellation,
         parcellation_labels=parcellation_labels,
@@ -532,6 +555,9 @@ def simple_xsea(y,
                 x_collection=None,
                 x_background=None,
                 standardize="xz",
+                space="MNI152NLin2009cAsym",
+                data_space=None,
+                parcellation_space=None,
                 parcellation=_PARC_DEFAULT,
                 parcellation_labels=None,
                 y_covariates=None,
