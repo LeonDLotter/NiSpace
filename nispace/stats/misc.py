@@ -326,7 +326,7 @@ def null_to_p(test_value, null_array, tail="two", fit_norm=False):
     if tail not in {"two", "upper", "lower"}:
         raise ValueError('Argument "tail" must be one of ["two", "upper", "lower"]')
 
-    return_first = isinstance(test_value, (float, int))
+    return_first = isinstance(test_value, (float, int, np.floating, np.integer))
     test_value = np.atleast_1d(test_value)
     null_array = np.array(null_array)
 

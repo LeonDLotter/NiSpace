@@ -708,11 +708,16 @@ def _apply_collection_filter(#dataset: str,
         filtered_map_files = collection_df["map"].unique()
     elif isinstance(maps[0], pathlib.Path):
         map_names = [_rm_ext(f.name) for f in maps]
-        filtered_map_files = [f for f, f_name in zip(maps, map_names) 
-                              if f_name in collection_df["map"].unique()]
+        filtered_map_files = [
+            maps[map_names.index(f_name)] for f_name in collection_df["map"].unique()
+            if f_name in map_names
+        ]
         collection_df = collection_df[collection_df["map"].isin(map_names)]
     else:
-        filtered_map_files = list( set(maps).intersection(set(collection_df["map"])) )
+        filtered_map_files = [
+            f_name for f_name in collection_df["map"].unique() 
+            if any(m == f_name for m in maps)
+        ]
         collection_df = collection_df[collection_df["map"].isin(filtered_map_files)]
     
     # Apply
@@ -1063,8 +1068,9 @@ def fetch_reference(dataset: str,
     # Fetch paths to maps if no 'parcellation' is specified
     else:
         # get kwargs
-        get_file_kwargs = dict(overwrite=overwrite, hash_check=check_file_hash,
-                               osf_config_file=osf_config_file, github_config_file=github_config_file)
+        get_file_kwargs = dict(
+            overwrite=overwrite, hash_check=check_file_hash,
+            osf_config_file=osf_config_file, github_config_file=github_config_file)
         
         # MNI: one file per map
         if "mni152" in space.lower():

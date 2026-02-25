@@ -147,7 +147,7 @@ def _get_exact_p_values(method, colocs_obs, colocs_null,
             for y in range(p.shape[0]):
                 obs = colocs_obs[stat][y, x]
                 null = [colocs_null[i][stat][y, x] for i in range(len(colocs_null))]
-                # get p value
+                # get p values
                 p[y, x] = null_to_p(obs, null, tail=p_tails[stat], fit_norm=False)
                 p_norm[y, x] = null_to_p(obs, null, tail=p_tails[stat], fit_norm=True)
         # save data

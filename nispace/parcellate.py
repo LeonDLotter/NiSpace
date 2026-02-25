@@ -181,7 +181,8 @@ class Parcellater():
                                      resampling=self._resampling,
                                      method=resampling_method)
         self._parc = parc
-        self._parc_idc = np.trim_zeros(np.unique(load_data(self.parcellation)))
+        self._parc_arr = load_data(parc)
+        self._parc_idc = np.trim_zeros(np.unique(self._parc_arr))
         self._parc_idc_dropped = []
         self._parc_idc_bg = []
         self._parc_idc_excl = []
@@ -191,37 +192,46 @@ class Parcellater():
                 or (self.resampling_target == 'parcellation'
                     and self._volumetric)):
             data = nib.concat_images([nib.squeeze_image(data)])
-            if ignore_background_data:
-                if background_value is None:
-                    background_value = get_background_value(data)
-                    mask_img = math_img(f"data != {background_value}", data=data)
-                else:
-                    mask_img = new_img_like(data, data.get_fdata() != background_value)
-            else:
-                mask_img = None
+            # if ignore_background_data:
+            #     if background_value is None:
+            #         background_value = get_background_value(data)
+            #     if background_value in [np.nan, "nan"]:
+            #         mask_img = math_img("~np.isnan(data)", data=data)
+            #     else:
+            #         mask_img = math_img(f"data != {background_value}", data=data)
+            #     #     background_value = "np.nan" if np.isnan(background_value) else background_value
+            #     #     mask_img = math_img(f"data != {background_value}", data=data)
+            #     # else:
+            #     #     mask_img = new_img_like(data, data.get_fdata() != background_value)
+            # else:
+            #     mask_img = None
+            if ignore_background_data and background_value is None:
+                background_value = get_background_value(data)
                 
             # parcellate
-            masker = NiftiLabelsMasker(
-                parc, mask_img=mask_img, resampling_target=None
-            )
-            parcellated = masker.fit_transform(data).squeeze()
+            darr = data.get_fdata()
+            parcellated = vol_to_vect_arr(darr, self._parc_arr, self._parc_idc, background_value)
+            # masker = NiftiLabelsMasker(
+            #     parc, mask_img=mask_img, resampling_target=None
+            # )
+            # parcellated = masker.fit_transform(data).squeeze()
             
             # take care of parcels dropped by nilearn
             # we use an intermediate pandas array because indexing is simple here
-            if fill_dropped:
-                # indices 
-                idc_orig = np.asarray(self.parcellation_idc).astype(np.int32)      
-                idc_resampled = np.asarray(masker.labels_).astype(np.int32)
-                idc_resampled = idc_resampled[idc_resampled != 0] # indices in masker include bg 0
-                # new array with original indices
-                parcellated_series = pd.Series(index=idc_orig)
-                # write data into original positions, leaving dropped parcels with nan
-                parcellated_series.loc[idc_resampled] = parcellated
-                # replace np array
-                parcellated = np.asarray(parcellated_series)
-                # save stuff
-                self._parc_idc = idc_resampled
-                self._parc_idc_dropped = list( set(idc_orig) ^ set(idc_resampled) )  
+            # if fill_dropped:
+            #     # indices 
+            #     idc_orig = np.asarray(self.parcellation_idc).astype(np.int32)      
+            #     idc_resampled = np.asarray(masker.labels_).astype(np.int32)
+            #     idc_resampled = idc_resampled[idc_resampled != 0] # indices in masker include bg 0
+            #     # new array with original indices
+            #     parcellated_series = pd.Series(index=idc_orig)
+            #     # write data into original positions, leaving dropped parcels with nan
+            #     parcellated_series.loc[idc_resampled] = parcellated
+            #     # replace np array
+            #     parcellated = np.array(parcellated_series)
+            #     # save stuff
+            #     self._parc_idc = idc_resampled
+            #     self._parc_idc_dropped = list( set(idc_orig) ^ set(idc_resampled) )  
             
         else:
             if not self._volumetric:

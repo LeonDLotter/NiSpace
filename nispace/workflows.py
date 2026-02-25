@@ -116,7 +116,6 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
             verbose=verbose,
             return_self=True,
         ) | init_kwargs
-        print("parcellation_space", parcellation_space, "data_space", data_space)
         nsp = NiSpace(**init_kwargs)
     
     ## FIT
