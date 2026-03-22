@@ -254,13 +254,14 @@ class NiSpace:
             # check if parcellation is an integrated parcellation
             parc_integrated = _check_parcellation(self._parc["parc"], force_str=True, raise_not_found=False)
             if parc_integrated is not None:
-                parc, labels, space, density, symmetric, l2rmap, dist_mat = fetch_parcellation(
+                parc, labels, space, density, symmetric, l2rmap, lrcorr, dist_mat = fetch_parcellation(
                     parcellation=parc_integrated,
                     space=self._parc["space"],
                     return_space=True,
                     return_resolution=True,
                     return_symmetric=True,
                     return_l2rmap=True,
+                    return_lrcorr=True,
                     return_dist_mat=True,
                     return_loaded=True
                 )
@@ -274,6 +275,7 @@ class NiSpace:
                     resolution=density,
                     symmetric=symmetric,
                     left2right_mapping=l2rmap,
+                    lrcorr=lrcorr,
                     dist_mat=dist_mat
                 ).fit()
                 # self._parc = parc
@@ -1297,16 +1299,14 @@ class NiSpace:
         # null maps generation
         maps_separate_sc = kwargs.pop("maps_separate_sc", False)
         maps_kwargs = {
-            "nispace_nulls": self._nulls, 
+            "nispace_nulls": self._nulls,
             "use_existing_maps": True,
             "null_maps": maps_nulls,
             "null_method": maps_method,
-            #"parc_idc_lh": self._parc._idc_byhemi["L"], 
-            #"parc_idc_rh": self._parc._idc_byhemi["R"], 
-            #"parc_idc_sc": None, #TODO: fix: self._parc._idc_sc if maps_separate_sc else None, 
-            #"l2rmap": self._parc._l2rmap,
-            "lr_mirror_dist_mat": False, 
-            "lr_mirror_null_maps": True,
+            "parc_idc_lh": self._parc._idc_byhemi["L"],
+            "parc_idc_rh": self._parc._idc_byhemi["R"],
+            "parc_idc_sc": None,
+            "lr_mirror_dist_mat": self._parc._symmetric,
             "cx_sc_minmax_scale": False,
             "parc_resample": 2,
         }

@@ -108,6 +108,74 @@ def morans_i_fast(weightmat, data):
 #     return morans_i
 
 
+def variogram_sa(data, distmat, n_bins=25, return_variogram=False):
+    """Spatial autocorrelation scalar consistent with Burt2018/Burt2020 (brainsmash).
+
+    Both variogram-based null methods implicitly define SA via the empirical
+    semivariogram: γ(d) = ½·E[(xᵢ−xⱼ)² | dist(i,j)≈d].  High SA means γ rises
+    slowly from zero (nearby parcels nearly identical) toward the sill var(x).
+
+    The scalar returned is 1 − mean(γ_norm) where γ_norm = γ(d) / var(x),
+    averaged uniformly across distance bins.  Range [0, 1]; 1 = perfectly
+    autocorrelated, 0 = no autocorrelation.  Bins are percentile-based (equal
+    number of pairs per bin), matching brainsmash's binning convention.
+
+    Parameters
+    ----------
+    data : (N,) array_like
+    distmat : (N, N) array_like
+    n_bins : int
+        Number of distance bins.
+    return_variogram : bool
+        If True, also return (bin_centers, gamma_norm).
+
+    Returns
+    -------
+    sa : float
+    bin_centers : (n_bins,) ndarray  [only if return_variogram=True]
+    gamma_norm  : (n_bins,) ndarray  [only if return_variogram=True]
+    """
+    data = np.asarray(data, dtype=float).ravel()
+    distmat = np.asarray(distmat, dtype=float)
+
+    # drop NaN
+    notnan = ~np.isnan(data)
+    data = data[notnan]
+    distmat = distmat[np.ix_(notnan, notnan)]
+
+    # upper triangle (excluding diagonal)
+    i_idx, j_idx = np.triu_indices(len(data), k=1)
+    d = distmat[i_idx, j_idx]
+    sq_diff = (data[i_idx] - data[j_idx]) ** 2
+
+    # remove pairs where distance is 0 or NaN
+    valid = (d > 0) & np.isfinite(d)
+    d, sq_diff = d[valid], sq_diff[valid]
+
+    # percentile-based bin edges (equal pairs per bin, same as brainsmash)
+    edges = np.percentile(d, np.linspace(0, 100, n_bins + 1))
+    edges = np.unique(edges)
+
+    gamma, centers = [], []
+    for lo, hi in zip(edges[:-1], edges[1:]):
+        sel = (d >= lo) & (d < hi)
+        if sel.sum() > 1:
+            gamma.append(sq_diff[sel].mean() / 2)   # semivariogram value
+            centers.append((lo + hi) / 2)
+
+    gamma = np.array(gamma)
+    centers = np.array(centers)
+
+    sill = np.var(data, ddof=1)
+    gamma_norm = gamma / sill if sill > 0 else np.ones_like(gamma)
+
+    sa = float(1.0 - gamma_norm.mean())
+
+    if return_variogram:
+        return sa, centers, gamma_norm
+    return sa
+
+
 def mantel(data, distmat, spearman=False):
     data = np.array(data).squeeze()
     distmat = np.array(distmat)

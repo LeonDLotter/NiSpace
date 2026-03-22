@@ -247,7 +247,7 @@ def _check_parcellation(parcellation: str, force_list: bool = False, force_str: 
     return parc
                 
 
-def fetch_parcellation(parcellation: str = _PARC_DEFAULT, 
+def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                        space: str = None,
                        hemi: Union[List[str], str] = ["L", "R"],
                        return_labels: bool = True,
@@ -255,8 +255,10 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                        return_resolution: bool = False,
                        return_symmetric: bool = False,
                        return_l2rmap: bool = False,
+                       return_lrcorr: bool = False,
                        return_dist_mat: bool = False,
                        return_loaded: bool = True,
+                       lrcorr_threshold: float = 0.0,
                        nispace_data_dir: Union[str, pathlib.Path] = None,
                        overwrite: bool = False,
                        check_file_hash: bool = True,
@@ -280,9 +282,10 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
     nispace_data_dir = os.getenv('NISPACE_DATA_DIR')
     
     # function to load individual parcellation and associated data
-    def load_parc(p, space=space, hemi=hemi, return_labels=return_labels, return_space=return_space, 
-                  return_resolution=return_resolution, return_symmetric=return_symmetric, return_l2rmap=return_l2rmap, 
-                  return_dist_mat=return_dist_mat, return_loaded=return_loaded, 
+    def load_parc(p, space=space, hemi=hemi, return_labels=return_labels, return_space=return_space,
+                  return_resolution=return_resolution, return_symmetric=return_symmetric, return_l2rmap=return_l2rmap,
+                  return_lrcorr=return_lrcorr,
+                  return_dist_mat=return_dist_mat, return_loaded=return_loaded,
                   nispace_data_dir=nispace_data_dir, overwrite=overwrite, check_file_hash=check_file_hash):
         
         # Check space
@@ -299,7 +302,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
         base_dir = pathlib.Path(nispace_data_dir) / "parcellation" / p / space
         
         # Symmetry
-        if "l2rmap" in parcellation_lib[p][space]:
+        if "l2rmap" in parcellation_lib[p][space] or "lrcorr" in parcellation_lib[p][space]:
             symmetric = False
         else:
             symmetric = True
@@ -330,6 +333,13 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                 )
             elif return_l2rmap and symmetric:
                 l2rmap_file = None
+            if return_lrcorr and not symmetric and "lrcorr" in parcellation_lib[p][space]:
+                lrcorr_file = get_file(
+                    base_dir / f"parc-{p}_space-{space}.lrcorr.csv.gz", **parcellation_lib[p][space]["lrcorr"],
+                    **get_file_kwargs,
+                )
+            else:
+                lrcorr_file = None
             if return_dist_mat:
                 distmat_file = get_file(
                     base_dir / f"parc-{p}_space-{space}.dist.csv.gz", **parcellation_lib[p][space]["distmat"],
@@ -373,6 +383,13 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                 )
             elif return_l2rmap and symmetric:
                 l2rmap_file = None
+            if return_lrcorr and not symmetric and "lrcorr" in parcellation_lib[p][space]:
+                lrcorr_file = get_file(
+                    base_dir / f"parc-{p}_space-{space}.lrcorr.csv.gz", **parcellation_lib[p][space]["lrcorr"],
+                    **get_file_kwargs,
+                )
+            else:
+                lrcorr_file = None
             if len(parcellation_file) == 1:
                 parcellation_file = parcellation_file[0]
                 if return_labels:
@@ -401,7 +418,10 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
             out["sym"] = symmetric
         # l2rmap
         if return_l2rmap:
-            out["l2rmap"] = load_l2rmap(l2rmap_file) if return_loaded else l2rmap_file
+            out["l2rmap"] = load_l2rmap(l2rmap_file, threshold=lrcorr_threshold) if return_loaded else l2rmap_file
+        # lrcorr
+        if return_lrcorr:
+            out["lrcorr"] = load_l2rmap(lrcorr_file, threshold=lrcorr_threshold) if return_loaded else lrcorr_file
         # distmat
         if return_dist_mat:
             out["distmat"] = load_distmat(distmat_file) if return_loaded else distmat_file
@@ -437,6 +457,9 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
     # symmetric
     if return_symmetric:
         out["sym"] = True if out_cortex["sym"] and out_subcortex["sym"] else False
+    # lrcorr (merged case: just use cortex lrcorr, subcortex is symmetric)
+    if return_lrcorr:
+        out["lrcorr"] = out_cortex.get("lrcorr", None)
     # l2rmap
     if return_l2rmap:
         if out_cortex["l2rmap"] is None and out_subcortex["l2rmap"] is None:

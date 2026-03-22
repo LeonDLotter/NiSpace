@@ -13,10 +13,10 @@ class Parcellation():
     """
     """
     
-    def __init__(self, parcellation, space=None, labels=None, resolution=None, hemi=None, 
-                 symmetric=False, left2right_mapping=None,
+    def __init__(self, parcellation, space=None, labels=None, resolution=None, hemi=None,
+                 symmetric=False, left2right_mapping=None, lrcorr=None,
                  labels_lh=None, labels_rh=None, labels_img_lh=None, labels_img_rh=None,
-                 idc_lh=None, idc_rh=None, dist_mat=None, 
+                 idc_lh=None, idc_rh=None, dist_mat=None,
                  ):
         
         self._source = parcellation
@@ -30,6 +30,7 @@ class Parcellation():
         self._idc_byhemi = {"L": idc_lh, "R": idc_rh}
         self._dist_mat = dist_mat
         self._l2rmap = left2right_mapping
+        self._lrcorr = lrcorr
         
     def fit(self):
         

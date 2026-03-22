@@ -18,6 +18,10 @@
             "l2rmap": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer100/MNI152NLin2009cAsym/parc-Schaefer100_space-MNI152NLin2009cAsym.l2rmap.csv.gz"
+            },
+            "lrcorr": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer100/MNI152NLin2009cAsym/parc-Schaefer100_space-MNI152NLin2009cAsym.lrcorr.csv.gz"
             }
         },
 
@@ -38,6 +42,10 @@
             "l2rmap": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer100/MNI152NLin6Asym/parc-Schaefer100_space-MNI152NLin6Asym.l2rmap.csv.gz"
+            },
+            "lrcorr": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer100/MNI152NLin6Asym/parc-Schaefer100_space-MNI152NLin6Asym.lrcorr.csv.gz"
             }
         },
 
@@ -76,6 +84,10 @@
             "l2rmap": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer100/fsaverage/parc-Schaefer100_space-fsaverage.l2rmap.csv.gz"
+            },
+            "lrcorr": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer100/fsaverage/parc-Schaefer100_space-fsaverage.lrcorr.csv.gz"
             }
         },
 
@@ -114,6 +126,10 @@
             "l2rmap": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer100/fsLR/parc-Schaefer100_space-fsLR.l2rmap.csv.gz"
+            },
+            "lrcorr": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer100/fsLR/parc-Schaefer100_space-fsLR.lrcorr.csv.gz"
             }
         }
 
@@ -138,6 +154,10 @@
             "l2rmap": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer200/MNI152NLin2009cAsym/parc-Schaefer200_space-MNI152NLin2009cAsym.l2rmap.csv.gz"
+            },
+            "lrcorr": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer200/MNI152NLin2009cAsym/parc-Schaefer200_space-MNI152NLin2009cAsym.lrcorr.csv.gz"
             }
         },
 
@@ -158,6 +178,10 @@
             "l2rmap": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer200/MNI152NLin6Asym/parc-Schaefer200_space-MNI152NLin6Asym.l2rmap.csv.gz"
+            },
+            "lrcorr": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer200/MNI152NLin6Asym/parc-Schaefer200_space-MNI152NLin6Asym.lrcorr.csv.gz"
             }
         },
 
@@ -196,6 +220,10 @@
             "l2rmap": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer200/fsaverage/parc-Schaefer200_space-fsaverage.l2rmap.csv.gz"
+            },
+            "lrcorr": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer200/fsaverage/parc-Schaefer200_space-fsaverage.lrcorr.csv.gz"
             }
         },
 
@@ -234,6 +262,10 @@
             "l2rmap": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer200/fsLR/parc-Schaefer200_space-fsLR.l2rmap.csv.gz"
+            },
+            "lrcorr": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer200/fsLR/parc-Schaefer200_space-fsLR.lrcorr.csv.gz"
             }
         }
 
@@ -258,6 +290,10 @@
             "l2rmap": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer400/MNI152NLin2009cAsym/parc-Schaefer400_space-MNI152NLin2009cAsym.l2rmap.csv.gz"
+            },
+            "lrcorr": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer400/MNI152NLin2009cAsym/parc-Schaefer400_space-MNI152NLin2009cAsym.lrcorr.csv.gz"
             }
         },
 
@@ -278,6 +314,10 @@
             "l2rmap": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer400/MNI152NLin6Asym/parc-Schaefer400_space-MNI152NLin6Asym.l2rmap.csv.gz"
+            },
+            "lrcorr": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer400/MNI152NLin6Asym/parc-Schaefer400_space-MNI152NLin6Asym.lrcorr.csv.gz"
             }
         },
 
@@ -316,6 +356,10 @@
             "l2rmap": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer400/fsaverage/parc-Schaefer400_space-fsaverage.l2rmap.csv.gz"
+            },
+            "lrcorr": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer400/fsaverage/parc-Schaefer400_space-fsaverage.lrcorr.csv.gz"
             }
         },
 
@@ -354,11 +398,15 @@
             "l2rmap": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer400/fsLR/parc-Schaefer400_space-fsLR.l2rmap.csv.gz"
+            },
+            "lrcorr": {
+                "host": "github-nispace",
+                "remote": "parcellation/Schaefer400/fsLR/parc-Schaefer400_space-fsLR.lrcorr.csv.gz"
             }
         }
 
     },
-    
+
     "TianS1": {
         
         "MNI152NLin2009cAsym": {

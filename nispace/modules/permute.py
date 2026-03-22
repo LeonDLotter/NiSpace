@@ -13,7 +13,7 @@ from ..modules.constants import _P_TAILS
 def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=True, standardize=True,
                    n_perm=1000, null_method="moran",
                    dist_mat=None, parc=None, centroids=False, parc_resample=2,
-                   lr_mirror_dist_mat=False, lr_mirror_null_maps=False,
+                   lr_mirror_dist_mat=False,
                    cx_sc_minmax_scale=False,
                    seed=None, n_proc=-1, dtype=np.float32, verbose=True):
     
@@ -73,8 +73,6 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
             parc_idc_rh=parc._idc_byhemi["R"],
             parc_idc_sc=None, #parc._idc_byhemi,
             lr_mirror_dist_mat=lr_mirror_dist_mat,
-            lr_mirror_null_maps=lr_mirror_null_maps,
-            l2rmap=parc._l2rmap,
             cx_sc_minmax_scale=cx_sc_minmax_scale,
             n_proc=n_proc, 
             seed=seed, 
