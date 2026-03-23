@@ -37,90 +37,103 @@ Implementation of Moran spectral randomization.
 
 import numpy as np
 import scipy.sparse as ssp
+import scipy.linalg
+from scipy.sparse.linalg import eigsh, LinearOperator
 from scipy.spatial.distance import cdist
 
 from sklearn.utils import check_random_state
 from sklearn.base import BaseEstimator
 
-#from ..mesh import mesh_elements as me
-#from ..gradient.utils import is_symmetric, make_symmetric
 
-
-def compute_mem(w, spectrum='nonzero', tol=1e-6):
+def compute_mem(w, spectrum='nonzero', tol=1e-6, n_components=None):
     """ Compute Moran eigenvectors map.
 
     Parameters
     ----------
-    w : ndarray, shape = (n_vertices, n_vertices)
-        Spatial weight matrix.
+    w : ndarray or sparse matrix, shape = (n_vertices, n_vertices)
+        Spatial weight matrix. Accepts dense ndarray or any scipy sparse
+        format. Sparse input triggers memory-efficient truncated
+        eigendecomposition (requires ``n_components``).
     spectrum : {'all', 'nonzero'}, optional
         Eigenvalues/vectors to select. If 'all', recover all eigenvectors
         except the smallest one. Otherwise, select all except non-zero
-        eigenvectors. Default is 'nonzero'.
+        eigenvectors. Default is 'nonzero'. Ignored when ``n_components``
+        is set (truncated path always returns nonzero eigenvectors).
     tol : float, optional
         Minimum value for an eigenvalue to be considered non-zero.
-        Default is 1e-10.
+        Default is 1e-6.
+    n_components : int or None, optional
+        If set, compute only the top ``n_components`` eigenvectors via
+        truncated eigendecomposition. Required for sparse input.
+        Default is None (full decomposition, dense only).
 
     Returns
     -------
-    w : 1D ndarray, shape (n_components,)
-        Eigenvalues in descending order. With ``n_components = n_vertices - 1``
-        if ``spectrum == 'all'`` and ``n_components = n_vertices - n_zero`` if
-        ``spectrum == 'nonzero'``, and `n_zero` is number of zero eigenvalues.
     mem : 2D ndarray, shape (n_vertices, n_components)
-        Eigenvectors of the weight matrix in same order.
-
-    See Also
-    --------
-    :func:`.moran_randomization`
-    :class:`.MoranRandomization`
+        Eigenvectors of the weight matrix in descending eigenvalue order.
+    ev : 1D ndarray, shape (n_components,)
+        Eigenvalues in descending order.
 
     References
     ----------
     * Wagner H.H. and Dray S. (2015). Generating spatially constrained
       null models for irregularly spaced data using Moran spectral
       randomization methods. Methods in Ecology and Evolution, 6(10):1169-78.
-
     """
 
     if spectrum not in ['all', 'nonzero']:
-        raise ValueError("Unknown autocor '{0}'.".format(spectrum))
+        raise ValueError("Unknown spectrum '{0}'.".format(spectrum))
 
-    # NISPACE: removed surface and sparse matrix support
-    # # If surface is provided instead of affinity
-    # if not (isinstance(w, np.ndarray) or ssp.issparse(w)):
-    #     w = me.get_ring_distance(w, n_ring=n_ring, metric='geodesic')
-    #     w.data **= -1  # inverse of distance
-    #     # w /= np.nansum(w, axis=1, keepdims=True)  # normalize rows
+    n = w.shape[0]
 
-    # if not is_symmetric(w):
-    #     w = make_symmetric(w, check=False, sparse_format='coo')
+    if ssp.issparse(w):
+        # Sparse path: use a LinearOperator for doubly-centered matvec so
+        # we never materialize the dense Wc (n x n) matrix.
+        # Wc @ v = W@v - sum(v)*m - dot(m,v)*ones + grand_mean*sum(v)*ones
+        # where m = column-mean vector (1D, length n).
+        if n_components is None:
+            raise ValueError("'n_components' must be set for sparse weight matrices.")
+        w = w.astype(np.float64)
+        m = np.asarray(w.mean(axis=0)).ravel()          # (n,)
+        grand_mean = m.mean()
+        ones = np.ones(n, dtype=np.float64)
 
-    # Doubly centering weight matrix
-    # if ssp.issparse(w):
-    #     print("NISPACE: sparse matrix support removed")
-    #     m = w.mean(axis=0).A
-    #     wc = w.mean() - m - m.T
+        def _matvec(v):
+            v = np.asarray(v, dtype=np.float64)
+            sv = v.sum()
+            return (w @ v) - sv * m - np.dot(m, v) * ones + grand_mean * sv * ones
 
-    #     if not ssp.isspmatrix_coo(w):
-    #         w_format = w.format
-    #         w = w.tocoo(copy=False)
-    #         row, col = w.row, w.col
-    #         w = getattr(w, 'to' + w_format)(copy=False)
-    #     else:
-    #         row, col = w.row, w.col
-    #     wc[row, col] += w.data
+        op = LinearOperator((n, n), matvec=_matvec, dtype=np.float64)
+        ev, mem = eigsh(op, k=n_components, which='LM')
+        # sort descending
+        order = np.argsort(ev)[::-1]
+        ev, mem = ev[order], mem[:, order]
+        # drop near-zero eigenvalues
+        mask_nonzero = np.abs(ev) >= tol
+        ev, mem = ev[mask_nonzero], mem[:, mask_nonzero]
+        return mem.astype(np.float32), ev.astype(np.float32)
 
-    # else:
+    # Dense path
     m = w.mean(axis=0, keepdims=True)
     wc = w.mean() - m - m.T
     wc += w
 
-    # when using float64, eigh is unstable for sparse matrices
+    if n_components is not None:
+        # Truncated dense: compute only top n_components eigenvectors
+        wc32 = wc.astype(np.float32)
+        n_comp = min(n_components, n - 1)
+        ev, mem = scipy.linalg.eigh(
+            wc32, subset_by_index=[n - n_comp, n - 1]
+        )
+        ev, mem = ev[::-1], mem[:, ::-1]
+        mask_nonzero = np.abs(ev) >= tol
+        ev, mem = ev[mask_nonzero], mem[:, mask_nonzero]
+        return mem, ev
+
+    # Full dense decomposition (original path)
     ev, mem = np.linalg.eigh(wc.astype(np.float32))
     ev, mem = ev[::-1], mem[:, ::-1]
 
-    # Remove zero eigen-value/vector
     ev_abs = np.abs(ev)
     mask_zero = ev_abs < tol
     n_zero = np.count_nonzero(mask_zero)
@@ -128,10 +141,8 @@ def compute_mem(w, spectrum='nonzero', tol=1e-6):
     if n_zero == 0:
         raise ValueError('Weight matrix has no zero eigenvalue.')
 
-    # Multiple zero eigenvalues
     if spectrum == 'all':
         if n_zero > 1:
-            n = w.shape[0]
             memz = np.hstack([mem[:, mask_zero], np.ones((n, 1))])
             q, _ = np.linalg.qr(memz)
             mem[:, mask_zero] = q[:, :-1]
@@ -139,12 +150,12 @@ def compute_mem(w, spectrum='nonzero', tol=1e-6):
         else:
             idx_zero = ev_abs.argmin()
 
-        ev[idx_zero:-1] = ev[idx_zero+1:]
+        ev[idx_zero:-1] = ev[idx_zero + 1:]
         mem[:, idx_zero:-1] = mem[:, idx_zero + 1:]
         ev = ev[:-1]
         mem = mem[:, :-1]
 
-    else:  # only nonzero
+    else:  # nonzero only
         mask_nonzero = ~mask_zero
         ev = ev[mask_nonzero]
         mem = mem[:, mask_nonzero]
@@ -323,7 +334,8 @@ class MoranRandomization(BaseEstimator):
     """
 
     def __init__(self, procedure='singleton', spectrum='nonzero', joint=False,
-                 n_nulls=1000, tol=1e-6, tol_block=1e-3, seed=None):
+                 n_nulls=1000, tol=1e-6, tol_block=1e-3, n_components=None,
+                 seed=None):
 
         self.procedure = procedure
         self.spectrum = spectrum
@@ -331,6 +343,7 @@ class MoranRandomization(BaseEstimator):
         self.n_nulls = n_nulls
         self.tol = tol
         self.tol_block = tol_block
+        self.n_components = n_components
         self.seed = seed
 
 
@@ -352,7 +365,8 @@ class MoranRandomization(BaseEstimator):
         """
 
         self.mem_, self.mev_ = compute_mem(w, spectrum=self.spectrum,
-                                           tol=self.tol)
+                                           tol=self.tol,
+                                           n_components=self.n_components)
         return self
 
 

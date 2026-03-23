@@ -276,7 +276,8 @@ class NiSpace:
                     symmetric=symmetric,
                     left2right_mapping=l2rmap,
                     lrcorr=lrcorr,
-                    dist_mat=dist_mat
+                    dist_mat=dist_mat,
+                    name=parc_integrated,
                 ).fit()
                 # self._parc = parc
                 # self._parc_info["labels"] = labels
@@ -1309,6 +1310,7 @@ class NiSpace:
             "lr_mirror_dist_mat": self._parc._symmetric,
             "cx_sc_minmax_scale": False,
             "parc_resample": 2,
+            "parc_name": self._parc._name,
         }
         for k in [k for k in kwargs.keys() if k.startswith("maps_")]:
             maps_kwargs[k.removeprefix("maps_")] = kwargs.pop(k)

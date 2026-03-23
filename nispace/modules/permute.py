@@ -13,8 +13,9 @@ from ..modules.constants import _P_TAILS
 def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=True, standardize=True,
                    n_perm=1000, null_method="moran",
                    dist_mat=None, parc=None, centroids=False, parc_resample=2,
-                   lr_mirror_dist_mat=False,
+                   lr_mirror_dist_mat=False, hemi_split=True,
                    cx_sc_minmax_scale=False,
+                   parc_name=None,
                    seed=None, n_proc=-1, dtype=np.float32, verbose=True):
     
     # case null maps given
@@ -73,9 +74,11 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
             parc_idc_rh=parc._idc_byhemi["R"],
             parc_idc_sc=None, #parc._idc_byhemi,
             lr_mirror_dist_mat=lr_mirror_dist_mat,
+            hemi_split=hemi_split,
             cx_sc_minmax_scale=cx_sc_minmax_scale,
-            n_proc=n_proc, 
-            seed=seed, 
+            parc_name=parc_name,
+            n_proc=n_proc,
+            seed=seed,
             verbose=verbose
         )
             

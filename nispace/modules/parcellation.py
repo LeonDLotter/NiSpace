@@ -16,10 +16,11 @@ class Parcellation():
     def __init__(self, parcellation, space=None, labels=None, resolution=None, hemi=None,
                  symmetric=False, left2right_mapping=None, lrcorr=None,
                  labels_lh=None, labels_rh=None, labels_img_lh=None, labels_img_rh=None,
-                 idc_lh=None, idc_rh=None, dist_mat=None,
+                 idc_lh=None, idc_rh=None, dist_mat=None, name=None,
                  ):
-        
+
         self._source = parcellation
+        self._name = name
         self._space = space
         self._hemi = hemi
         self._resolution = resolution

@@ -178,23 +178,8 @@ def find_parcel_hemispheres(parcellation):
     return (idc_lh, idc_rh), (labels_lh, labels_rh)
 
 
-
-
-
-def _avg_dist_mats(D1, D2, null_fun):
-    """Average two distance matrices in the space appropriate for null_fun.
-    - Moran uses W=1/D internally → average in weight space (harmonic mean of D).
-    - Burt2018/2020 use D directly for variogram bins → average in distance space (arithmetic mean).
-    """
-    if null_fun.__name__ == "nulls_moran":
-        with np.errstate(divide='ignore', invalid='ignore'):
-            W_avg = (np.where(D1 > 0, 1.0/D1, 0.0) +
-                     np.where(D2 > 0, 1.0/D2, 0.0)) / 2
-        return np.where(W_avg > 0, 1.0/W_avg, 0.0)
-    else:
-        return (D1 + D2) / 2
-
-
+def _avg_dist_mats(D1, D2):
+    return (D1 + D2) / 2
 
 
 def nulls_burt2020(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
@@ -514,7 +499,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
                        parc_space=None, parc_hemi=None, parc_symmetric=False,
                        n_nulls=1000, parc_resample=2, centroids=False,
                        parc_idc_lh=None, parc_idc_rh=None, parc_idc_sc=None,
-                       lr_mirror_dist_mat=False,
+                       lr_mirror_dist_mat=False, hemi_split=True,
                        cx_sc_minmax_scale=False,
                        dtype=float,
                        n_proc=1, seed=None, verbose=True,
@@ -670,6 +655,12 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
                     "parcellation may not be symmetric.\nCheck if your parcellation is symmetric and "
                     "set 'parc_symmetric' to True.\nBe careful, this might lead to unexpected results!")
         lr_mirror_dist_mat = False
+    # for symmetric parcellations with hemisphere indices: default to whole-brain run + LR mirroring
+    if parc_symmetric and parc_idc_lh is not None and parc_idc_rh is not None:
+        if hemi_split:
+            hemi_split = False
+        if not lr_mirror_dist_mat:
+            lr_mirror_dist_mat = True
     # check if separate indices for hemispheres are provided as tuple of arrays
     if parc_idc_lh is not None and parc_idc_rh is not None:
         if not isinstance(parc_idc_lh, (list, np.ndarray)) or not isinstance(parc_idc_rh, (list, np.ndarray)):
@@ -702,6 +693,18 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
         if len(parc_idc_cx) == 0:
             parc_idc_sc, parc_idc_cx = None, None
             
+    # if hemi_split=False and dist_mat is a surface tuple, flatten to block-diagonal single matrix
+    if not hemi_split and isinstance(dist_mat, tuple):
+        n_blocks = [d.shape[0] for d in dist_mat]
+        n_total = sum(n_blocks)
+        D_full = np.zeros((n_total, n_total), dtype=dtype)
+        offset = 0
+        for d in dist_mat:
+            n = d.shape[0]
+            D_full[offset:offset+n, offset:offset+n] = d
+            offset += n
+        dist_mat = D_full
+
     # get all index lists according to which we want to split the data and distance matrix
     if isinstance(dist_mat, tuple): # surface input
         split_by_idc = (
@@ -713,6 +716,8 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
             np.arange(data.shape[1]), # whole dataset
         )
         lr_mirror_dist_mat = False
+    elif not hemi_split: # hemi_split=False: run as one whole-brain block regardless of idc
+        split_by_idc = (np.arange(data.shape[1]),)
     elif parc_idc_lh is not None and parc_idc_sc is not None: # hemis + sc given
         lgr.info("Generating null data separately for left and right cortex and subcortex.")
         split_by_idc = (
@@ -779,16 +784,24 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
     # mirror distance matrix if requested
     if lr_mirror_dist_mat and dist_mat is not None:
         lgr.info("Left-right averaging distance matrices to generate symmetrized null maps.")
-        if len(dist_mat_split) == 2:
-            avg = _avg_dist_mats(dist_mat_split[0], dist_mat_split[1], null_fun)
+        if len(dist_mat_split) == 1 and parc_idc_lh is not None and parc_idc_rh is not None:
+            # hemi_split=False: patch the LH and RH diagonal blocks of the full dist_mat
+            lh, rh = np.array(parc_idc_lh), np.array(parc_idc_rh)
+            d = dist_mat_split[0].copy()
+            avg_cx = _avg_dist_mats(d[np.ix_(lh, lh)], d[np.ix_(rh, rh)])
+            d[np.ix_(lh, lh)] = avg_cx
+            d[np.ix_(rh, rh)] = avg_cx
+            dist_mat_split = (d,)
+        elif len(dist_mat_split) == 2:
+            avg = _avg_dist_mats(dist_mat_split[0], dist_mat_split[1])
             dist_mat_split = (avg, avg)
             if not np.allclose(dist_mat_split[0], dist_mat_split[1]):
                 lgr.critical_raise("Left-right averaged whole-hemisphere distance matrices are not equal! "
                                    "Check if 'parc_idc_lh' and 'parc_idc_rh' are correctly defined.",
                                    ValueError)
         elif len(dist_mat_split) == 4:
-            avg_cx = _avg_dist_mats(dist_mat_split[0], dist_mat_split[1], null_fun)
-            avg_sc = _avg_dist_mats(dist_mat_split[2], dist_mat_split[3], null_fun)
+            avg_cx = _avg_dist_mats(dist_mat_split[0], dist_mat_split[1])
+            avg_sc = _avg_dist_mats(dist_mat_split[2], dist_mat_split[3])
             dist_mat_split = (avg_cx, avg_cx, avg_sc, avg_sc)
             if not (np.allclose(dist_mat_split[0], dist_mat_split[1]) and np.allclose(dist_mat_split[2], dist_mat_split[3])):
                 lgr.critical_raise("Left-right averaged cortical and subcortical distance matrices are not equal! "
