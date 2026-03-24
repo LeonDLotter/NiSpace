@@ -1307,7 +1307,7 @@ class NiSpace:
             "parc_idc_lh": self._parc._idc_byhemi["L"],
             "parc_idc_rh": self._parc._idc_byhemi["R"],
             "parc_idc_sc": None,
-            "lr_mirror_dist_mat": self._parc._symmetric,
+            "lr_mirror_dist_mat": False,
             "cx_sc_minmax_scale": False,
             "parc_resample": 2,
             "parc_name": self._parc._name,

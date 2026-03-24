@@ -13,11 +13,11 @@ from ..modules.constants import _P_TAILS
 def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=True, standardize=True,
                    n_perm=1000, null_method="moran",
                    dist_mat=None, parc=None, centroids=False, parc_resample=2,
-                   lr_mirror_dist_mat=False, hemi_split=True,
+                   lr_mirror_dist_mat=False, split_hemi=None, split_cxsc=False,
                    cx_sc_minmax_scale=False,
                    parc_name=None,
                    seed=None, n_proc=-1, dtype=np.float32, verbose=True):
-    
+
     # case null maps given
     if null_maps is not None:
         if not isinstance(null_maps, dict):
@@ -25,7 +25,7 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
             null_maps = None
         else:
             lgr.info(f"Using provided null maps.")
-        
+
     # case null maps not given but existing
     elif (null_maps is None) & (use_existing_maps==True):
         try:
@@ -34,7 +34,7 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
             lgr.info(f"Found existing null maps.")
         except:
             lgr.info("No null maps found.")
-            
+
     # check existing null maps
     if null_maps is not None:
         if not all([x in null_maps.keys() for x in data_obs.index]):
@@ -47,34 +47,36 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
         if null_method_stored != null_method:
             lgr.warning("Null method changed. Will re-generate.")
             null_maps = None
-                
+
     # datatype
     if null_maps is not None:
         for k in null_maps.keys():
             null_maps[k] = null_maps[k].astype(dtype)
-    
+
     # case null maps not given & not existing
     if null_maps is None:
         lgr.info(f"Generating null maps (n = {n_perm}, null_method = '{null_method}').")
-        
-        # null data for all maps 
+
+        idc_lh, idc_rh = parc._idc_byhemi["L"], parc._idc_byhemi["R"]
+
+        # null data for all maps
         null_maps, dist_mat = generate_null_maps(
             method=null_method,
-            data=data_obs, 
+            data=data_obs,
             parcellation=parc._image_obj,
-            parc_space=parc._space, 
-            parc_hemi=parc._hemi, 
+            parc_space=parc._space,
+            parc_hemi=parc._hemi,
             parc_symmetric=parc._symmetric,
             parc_resample=parc_resample,
-            #parc_density=parc_kwargs["density"], 
-            n_nulls=n_perm, 
-            centroids=centroids, 
-            dist_mat=dist_mat, 
-            parc_idc_lh=parc._idc_byhemi["L"],
-            parc_idc_rh=parc._idc_byhemi["R"],
-            parc_idc_sc=None, #parc._idc_byhemi,
+            n_nulls=n_perm,
+            centroids=centroids,
+            dist_mat=dist_mat,
+            parc_idc_lh=idc_lh,
+            parc_idc_rh=idc_rh,
+            parc_idc_sc=None,
             lr_mirror_dist_mat=lr_mirror_dist_mat,
-            hemi_split=hemi_split,
+            split_hemi=split_hemi,
+            split_cxsc=split_cxsc,
             cx_sc_minmax_scale=cx_sc_minmax_scale,
             parc_name=parc_name,
             n_proc=n_proc,
