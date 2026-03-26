@@ -808,12 +808,13 @@ def _apply_collection_filter(#dataset: str,
     return collection_df, filtered_map_files
 
 
-def _load_parcellated_data(dataset: str, 
-                           nispace_data_dir: Union[str, pathlib.Path], 
-                           parc: Union[str, List[str]], 
+def _load_parcellated_data(dataset: str,
+                           nispace_data_dir: Union[str, pathlib.Path],
+                           parc: Union[str, List[str]],
                            map_files: List[str],
                            collection_df: pd.DataFrame,
                            standardize: bool,
+                           set_size_range: Union[None, Tuple[int, int]] = None,
                            merge_how: str = "inner",
                            overwrite: bool = False,
                            check_file_hash: bool = True,
@@ -872,7 +873,17 @@ def _load_parcellated_data(dataset: str,
     # Apply collection index (-> handles maps that are present multiple times in different sets)
     if collection_df is not None:
         data = apply_collection(data, collection_df)
-    
+        # Re-apply set size filter: maps missing from parcellated CSV can silently reduce set sizes
+        if set_size_range is not None and "set" in data.index.names:
+            size_range = [
+                x if x is not None else x_
+                for x, x_ in zip(set_size_range, (1, np.inf))
+            ]
+            set_counts = data.index.get_level_values("set").value_counts()
+            valid_sets = set_counts[(set_counts >= size_range[0]) & (set_counts <= size_range[1])].index
+            data = data[data.index.get_level_values("set").isin(valid_sets)]
+            lgr.debug(f"After parcellated-data set size filter: {len(valid_sets)} sets remaining.")
+
     # Standardize
     if standardize:
         lgr.info("Standardizing parcellated data.")
@@ -1077,11 +1088,12 @@ def fetch_reference(dataset: str,
     # Load tabulated data if 'parcellation' is specified
     if parcellation:
         data = _load_parcellated_data(
-            dataset=dataset, 
-            parc=parc, 
-            map_files=maps_avail, 
+            dataset=dataset,
+            parc=parc,
+            map_files=maps_avail,
             collection_df=collection_df,
             standardize=standardize_parcellated,
+            set_size_range=set_size_range,
             nispace_data_dir=nispace_data_dir,
             overwrite=overwrite,
             check_file_hash=check_file_hash,
