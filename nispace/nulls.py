@@ -501,6 +501,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
                        parc_idc_lh=None, parc_idc_rh=None, parc_idc_sc=None,
                        lr_mirror_dist_mat=False, split_hemi=None, split_cxsc=False,
                        cx_sc_minmax_scale=False,
+                       parc_name=None,
                        dtype=float,
                        n_proc=1, seed=None, verbose=True,
                        **kwargs):
