@@ -555,237 +555,81 @@ class NiSpace:
     
     # CLEAN ========================================================================================
     
-    def clean_y(self, how, 
-                covariates_within=None, 
-                covariates_between=None, 
+    def clean_y(self, how,
+                covariates_within=None,
+                covariates_between=None,
                 within_y_specific=False,
-                combat=False, combat_keep=None, combat_train=None, combat_model=None, combat_kwargs=None,
+                combat=False, combat_protect=None, combat_keep=None,
+                combat_train=None, combat_model=None, combat_kwargs=None,
+                plot_design_between=False,
                 n_proc=None, replace=True, verbose=None):
+        from .modules.clean_y import _clean_y_within, _clean_y_between
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
-        lgr.info(f"*** NiSpace.clean_y() - Y covariate regression. ***")
-        
-        # kwargs
-        combat_kwargs = {} if combat_kwargs is None else combat_kwargs
-        
-        ## check if fit was run
+        lgr.info("*** NiSpace.clean_y() - Y covariate regression. ***")
         self._check_fit()
-        
-        ## number of runners
+        if combat_keep is not None:
+            lgr.warning("'combat_keep' is deprecated and will be ignored. All regression covariates "
+                        "are now automatically protected during ComBat harmonization.")
         n_proc = self._n_proc if n_proc is None else n_proc
-        
-        ## Y data
-        Y = self._Y
-        Y_arr = np.array(Y)
-        
-        ## clean
+        combat_kwargs = {} if combat_kwargs is None else combat_kwargs
+
         if isinstance(how, str):
             how = [how]
-        msg = (f"Input '{how}' of type '{type(how)}' for argument 'how' not known! " 
-               "Must be (list-like of) 'within' for regression within maps/subjects " 
-               "(e.g., GM TPM) or 'between' for regression across maps/subjects.")
-        if not isinstance(how, (list, tuple, set)):
-            lgr.critical_raise(msg, TypeError)
-        if not all(h in ["within", "between"] for h in how):
-            lgr.critical_raise(msg, ValueError)
-        wcov_arr, bcov_arr = None, None
-        
-        # regression within subjects (across parcels)
+        if not isinstance(how, (list, tuple, set)) or \
+                not all(h in ["within", "between"] for h in how):
+            lgr.critical_raise(
+                f"'how' must be (list of) 'within' and/or 'between', got {how!r}.", ValueError)
+
+        Y = self._Y
+        Y_arr = np.array(Y)
+        did_within = did_between = False
+
+        # within: regression across parcels per map
         if "within" in how and covariates_within is not None:
             lgr.info("Performing covariate regression within map/subjects (e.g., grey matter maps).")
-            # use Z data
-            if isinstance(covariates_within, str):
-                if covariates_within in ["z", "Z"]:
-                    lgr.info("Using Z data for 'within' covariate regression.")
-                    if self._Z is not None:
-                        wcov_arr = np.array(self._Z)
-                        self._clean_y_z = True
-                    else:
-                        lgr.critical_raise("Provide Z data at initialization for Z regression!",
-                                           ValueError)
-                else:
-                    lgr.error(f"'within' covariate {covariates_within} not defined! "
-                              "Pass 'Z' if you want to regress Z data, or provide a custom array.")
-            # use other data
-            elif isinstance(covariates_within, (np.ndarray, pd.Series, pd.DataFrame)):
-                wcov_arr = np.array(covariates_within, dtype=self._dtype)
-                # ensure 2d in NiSpace format
-                if wcov_arr.ndim == 1:
-                    wcov_arr = wcov_arr[np.newaxis, :]
-                # check shape
-                lgr.info(f"Assuming {wcov_arr.shape[0]} 'within' covariate map(s) for "
-                         f"{wcov_arr.shape[1]} parcels.")
-                if wcov_arr.shape[1] != Y.shape[1]:
-                    lgr.error(f"Covariate number of parcels {wcov_arr.shape[1]} does not match Y data!")
-                    wcov_arr = None
-                if within_y_specific & (wcov_arr.shape[0] != Y.shape[0]):
-                    lgr.error(f"If 'within_y_specific' is True, the number of covariate maps "
-                              f"({wcov_arr.shape[0]}) must match the number of Y maps ({Y.shape[0]})!")
-                    wcov_arr = None
-                    
-            # type not known
-            else:
-                lgr.critical_raise(f"'covariates_within' of type {type(covariates_within)} not supported!",
-                                   TypeError)
-            # run
-            if wcov_arr is not None:
-                # if only one map, repeat for each input
-                if wcov_arr.shape[0] == 1:
-                    lgr.info("Got one covariate map. Using this for each Y map.")
-                    wcov_arr = np.row_stack([wcov_arr] * Y.shape[0])
-                # if as many maps as subjects, match covmaps to ymaps
-                elif within_y_specific & (wcov_arr.shape[0] == Y.shape[0]):
-                    lgr.info("Got as many covariate maps as Y maps. Running y-specific regression.")
-                    pass
-                # if > 1: build 3d array, leading to all covmaps regressed from each ymap
-                else:
-                    lgr.info(f"Got {wcov_arr.shape[0]} covariate maps. Using these for each Y map.")
-                    wcov_arr = np.stack([wcov_arr.T] * Y.shape[0], axis=0)                    
-                # run
-                Y_partial = Parallel(n_jobs=n_proc)(
-                    delayed(residuals_nan)(wcov_arr[i_y], Y_arr[i_y, :]) for i_y in tqdm(
-                        range(Y.shape[0]), 
-                        desc=f"Regressing within covariate(s) from Y ({n_proc} proc)", 
-                        disable=not verbose
-                )) 
-                Y_arr = np.array(Y_partial, dtype=self._dtype)
-                
-        # regression/harmonization across subjects
+            Y_arr, used_z, did_within = _clean_y_within(
+                Y_arr=Y_arr,
+                covariates_within=covariates_within,
+                Z=self._Z,
+                n_maps=Y.shape[0],
+                n_parcels=Y.shape[1],
+                within_y_specific=within_y_specific,
+                n_proc=n_proc,
+                dtype=self._dtype,
+                verbose=verbose,
+            )
+            if used_z:
+                self._clean_y_z = True
+
+        # between: ComBat harmonization and/or regression across subjects
         if "between" in how and covariates_between is not None:
             lgr.info("Performing covariate regression between maps/subjects (e.g., age, sex, site).")
-            # process data
-            if isinstance(covariates_between, (np.ndarray, pd.Series, pd.DataFrame)):
-                bcov_arr = np.array(covariates_between, dtype=self._dtype)
-                # ensure 2d in NiSpace format
-                if bcov_arr.ndim == 1:
-                    bcov_arr = bcov_arr[:, np.newaxis]
-                # check shape
-                lgr.info(f"Assuming {bcov_arr.shape[1]} 'between' covariate(s) for "
-                         f"{bcov_arr.shape[0]} maps/subjects.")
-                if bcov_arr.shape[0] != Y.shape[0]:
-                    lgr.error(f"Covariate data shape does not match Y data! Must be ({Y.shape[0]},n).")
-                    bcov_arr = None
-                # get cov names as a list; all strings are lowercase only, returns [None] if ndarray
-                bcov_names = lower(get_column_names(covariates_between, force_list=True))
-                # if combat requested, check for site variable
-                if combat:
-                    if (bcov_names == [None]) or ("site" not in bcov_names):
-                        lgr.warning("For ComBat harmonization, provide between_covariates as a "
-                                    "DataFrame with one column named - or Series of name - 'site'.")
-                        lgr.warning("Not performing ComBat harmonization.")
-                        combat = False
-                    else:
-                        # split into site covariate and other covariate arrays
-                        bcov_site = bcov_arr[:, np.array(bcov_names) == "site"]
-                        if combat_keep is not None and isinstance(combat_keep, (str, list, tuple, set, np.ndarray)):
-                            if isinstance(combat_keep, str):
-                                combat_keep = [combat_keep]
-                            else:
-                                combat_keep = list(combat_keep)
-                            bcov_keep = bcov_arr[:, np.isin(bcov_names, combat_keep)]
-                            bcov_arr = bcov_arr[:, ~np.isin(bcov_names, combat_keep + ["site"])]
-                        else:
-                            lgr.warning("With ComBat harmonization, you might want to define some "
-                                        "covariates to retain: pass a list-like via 'combat_keep'.")
-                            bcov_keep = None
-                            bcov_arr = bcov_arr[:, np.array(bcov_names) != "site"]
-                    
-            # type not known
-            else:
-                lgr.critical_raise(f"Provided 'covariates_between' of type "
-                                   f"{type(covariates_between)} not supported!",
-                                   TypeError)
-                            
-            # run everything instead of combat 
-            if bcov_arr is not None:
-                Y_partial = Parallel(n_jobs=n_proc)(
-                    delayed(residuals_nan)(bcov_arr, Y_arr[:, i_p]) for i_p in tqdm(
-                        range(Y.shape[1]), 
-                        desc=f"Regressing {bcov_arr.shape[1]} between covariate(s) from Y ({n_proc} proc)", 
-                        disable=not verbose
-                )) 
-                Y_arr = np.array(Y_partial, dtype=self._dtype).T
-                
-                # COMBAT
-                if combat:
-                    lgr.info("Performing combat harmonization, retaining "
-                             f"{bcov_keep.shape[1] if bcov_keep is not None else 0} covariates.")
-                    # covariate df
-                    combat_covariates = pd.DataFrame(bcov_site, columns=["SITE"])
-                    if bcov_keep is not None:
-                        combat_covariates = pd.concat(
-                            [combat_covariates, pd.DataFrame(bcov_keep, columns=combat_keep)], 
-                            axis=1
-                        )
-                    # missings warning
-                    Y_arr_isnan = np.isnan(Y_arr)
-                    if Y_arr_isnan.any().any():
-                        lgr.warning("Detected missing values in Y data, which is not supported with "
-                                    "ComBat harmonization. Missing values will be imputed with "
-                                    "map-wise medians and replaced by nan after harmonization. "
-                                    "CAVE: experimental feature!")
-                        Y_arr = np.apply_along_axis(
-                            lambda x: np.where(np.isnan(x), np.nanmedian(x), x), 
-                            axis=1, 
-                            arr=Y_arr,
-                        )
-                    # y train index
-                    if isinstance(combat_train, (list, tuple, set, np.ndarray, pd.Series)):
-                        if len(combat_train) == Y.shape[0]:
-                            if all(i in {True, False, 0, 1} for i in combat_train):
-                                idx_train = np.array(combat_train).astype(bool)
-                    if (combat_train is not None) and ("idx_train" not in locals()):
-                        lgr.warning(f"'combat_train' must be boolean vector of length {Y.shape[0]}! "
-                                    "Setting 'combat_train' to None.")
-                        combat_train = None
-                    # apply
-                    from neuroHarmonize import harmonizationLearn, harmonizationApply
-                    if combat_model is None:
-                        if combat_train is None:
-                            combat_model, Y_arr = harmonizationLearn(
-                                data=Y_arr, 
-                                covars=combat_covariates,
-                                **combat_kwargs
-                            )
-                        else:
-                            lgr.info(f"Training model on {idx_train.sum()} subjects.")
-                            temp = np.zeros(Y_arr.shape)
-                            combat_model, temp[idx_train, :] = harmonizationLearn(
-                                data=Y_arr[idx_train, :], 
-                                covars=combat_covariates.loc[idx_train, :],
-                                **combat_kwargs
-                            )
-                            lgr.info(f"Applying model to {(~idx_train).sum()} subjects.")
-                            temp[~idx_train, :] = harmonizationApply(
-                                data=Y_arr[~idx_train, :],
-                                covars=combat_covariates.loc[~idx_train, :],
-                                model=combat_model
-                            )
-                            Y_arr = temp
-                    else:
-                        Y_arr = harmonizationApply(
-                            data=Y_arr,
-                            covars=combat_covariates,
-                            model=combat_model
-                        )
-                    # put back the original nan values
-                    Y_arr[Y_arr_isnan] = np.nan
-                    # store
-                    self._clean_y_combat_model = combat_model
-                    self._clean_y_combat_cov = combat_covariates
-                        
-        # done nothing
-        if wcov_arr is None and bcov_arr is None:
+            Y_arr, combat_model, combat_covariates = _clean_y_between(
+                Y_arr=Y_arr,
+                covariates_between=covariates_between,
+                n_subjects=Y.shape[0],
+                combat=combat,
+                combat_protect=combat_protect,
+                combat_train=combat_train,
+                combat_model=combat_model,
+                combat_kwargs=combat_kwargs,
+                plot_design_between=plot_design_between,
+                n_proc=n_proc,
+                dtype=self._dtype,
+                verbose=verbose,
+            )
+            did_between = True
+            if combat_model is not None:
+                self._clean_y_combat_model = combat_model
+                self._clean_y_combat_cov = combat_covariates
+
+        if not did_within and not did_between:
             lgr.warning("No covariate regression performed! Set 'how' to 'between' and/or 'within' "
                         "and provide covariate arrays through 'covariates_{within|between}'!")
-        
-        # to df
+
         Y = pd.DataFrame(Y_arr, columns=Y.columns, index=Y.index, dtype=self._dtype)
-        
-        ## save
         if replace:
             self._Y = Y
-        
-        ## return
         if self._return_self:
             return self
         return Y

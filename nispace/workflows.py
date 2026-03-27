@@ -336,7 +336,7 @@ def group_comparison(y, design,
                      colocalization_method="spearman",
                      comparison_method=None,
                      paired=False,
-                     plot_design=True,
+                     plot_design_between=True,
                      combat=False,
                      plot=True,
                      n_perm=10000,
@@ -439,33 +439,22 @@ def group_comparison(y, design,
         lgr.critical_raise(f"The number of rows in design matrix {design.shape[0]} must equal "
                            f"the length of the y data {len(y)}!",
                            ValueError)
-    # plot
-    if plot_design:
-        plot_design_matrix(design)
-        plt.title("Design matrix")
-        plt.ylabel("Y maps")
-        plt.show()
     
     ## CLEAN Y
     if not status["clean_y"] and \
         ((not paired and design.shape[1] > 1) or (paired and design.shape[1] > 2)):
-        if combat and not paired:
-            y_covariates = design
-            combat_keep = ["groups"]
-        elif combat and paired:
-            y_covariates = design
-            combat_keep = ["groups", "subjects"]
-        elif not combat and not paired:
-            y_covariates = design.iloc[:, 1:]
-            combat_keep = None
-        elif not combat and paired:
-            y_covariates = design.iloc[:, 2:]
-            combat_keep = None
+        if not paired:
+            y_covariates = design.iloc[:, 1:]       # exclude groups
+            combat_protect = design[["groups"]]
+        else:
+            y_covariates = design.iloc[:, 2:]       # exclude groups and subjects
+            combat_protect = design[["groups", "subjects"]]
         clean_y_kwargs = dict(
             how="between",
             covariates_between=y_covariates,
             combat=combat,
-            combat_keep=combat_keep,
+            combat_protect=combat_protect if combat else None,
+            plot_design_between=plot_design_between
         ) | clean_y_kwargs
         nsp.clean_y(**clean_y_kwargs)
         status["clean_y"] = True
