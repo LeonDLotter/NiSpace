@@ -3,7 +3,9 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from ..stats.effectsize import *
+from ..stats.effectsize import (cohen_nan_fast, cohen_paired_nan_fast, hedges_nan_fast,
+                                zscore_nan_fast, rzscore_nan_fast,
+                                prc_fast)
 
 
 def _dummy_code_groups(groups):
@@ -122,12 +124,16 @@ def _get_transform_fun(formula, return_df=True, return_paired=False,
         "elemdiff(*,*)": elem_diff,
         "meandiff(*,*)": mean0_diff,
         "center(*,*)": center0,
-        "cohen(*,*)": cohen_nan,
-        "pairedcohen(*,*)": cohen_paired_nan,
-        "hedges(*,*)": hedges_nan,
-        "zscore(*)": zscore_nan,
-        "zscore(*,*)": zscore_nan,
-        "prc(*,*)": prc
+        "cohen(*,*)": cohen_nan_fast,
+        "pairedcohen(*,*)": cohen_paired_nan_fast,
+        "hedges(*,*)": hedges_nan_fast,
+        "zscore(*)": zscore_nan_fast,
+        "zscore(*,*)": zscore_nan_fast,
+        "robustzscore(*)": rzscore_nan_fast,
+        "robustzscore(*,*)": rzscore_nan_fast,
+        "rzscore(*)": rzscore_nan_fast,
+        "rzscore(*,*)": rzscore_nan_fast,
+        "prc(*,*)": prc_fast
     }
     
     # validate the formula
