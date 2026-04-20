@@ -6,6 +6,7 @@ from nilearn.image import resample_img, coord_transform
 from neuromaps.images import load_gifti, load_nifti, load_data
 from neuromaps.nulls.nulls import batch_surrogates
 from neuromaps.nulls.nulls import _get_distmat
+from neuromaps.nulls.spins import gen_spinsamples, get_parcel_centroids
 from neuromaps.datasets import fetch_fsaverage, fetch_fslr
 from scipy.spatial.distance import cdist
 from sklearn.preprocessing import minmax_scale
@@ -250,6 +251,15 @@ def nulls_random(data_1d, dist_mat=None, n_nulls=1000, seed=None):
     return null_data.astype(data_1d.dtype)
 
 
+_SPIN_METHODS = {"alexander_bloch", "spin", "vasa", "hungarian"}
+
+_SPIN_METHOD_MAP = {
+    "alexander_bloch": "original",
+    "spin": "original",
+    "vasa": "vasa",
+    "hungarian": "hungarian",
+}
+
 _NULL_METHODS = {
     # Random
     "random": nulls_random,
@@ -262,15 +272,82 @@ _NULL_METHODS = {
     "variogram": nulls_burt2020,
     # Smoothing-method from Burt2018 -> volumetric and surface
     "burt2018": nulls_burt2018,
-    # TODO: add spin methods
-}    
+    # Spin tests -> surface only
+    "alexander_bloch": None,  # handled via spin code path
+    "spin": None,
+    "vasa": None,
+    "hungarian": None,
+}
+
+
+def generate_spins(parc, parc_space, n_perm=1000, method="original", seed=None):
+    """Generate spin resampling indices for a bilateral surface parcellation.
+
+    Returns a tuple (spins_lh, spins_rh) of int32 arrays with shape (n_parcels_hemi, n_perm),
+    where RH indices are local to [0, n_rh).
+    """
+    if not isinstance(parc, tuple):
+        lgr.critical_raise(
+            "Spin tests require a bilateral surface parcellation (tuple of two GiftiImages).",
+            ValueError
+        )
+
+    if "fsa" in parc_space.lower():
+        fetch_func = fetch_fsaverage
+    elif "fslr" in parc_space.lower():
+        fetch_func = fetch_fslr
+    else:
+        lgr.critical_raise(
+            f"Spin tests require 'fsaverage' or 'fsLR' parcellation space, got '{parc_space}'.",
+            ValueError
+        )
+
+    density = _img_density_for_neuromaps(parc)
+    spheres = fetch_func(density)["sphere"]
+
+    centroids, hemiid = get_parcel_centroids(
+        surfaces=(spheres[0], spheres[1]),
+        parcellation=(parc[0], parc[1]),
+        method="surface",
+    )
+
+    spins = gen_spinsamples(
+        coords=centroids,
+        hemiid=hemiid,
+        n_rotate=n_perm,
+        method=method,
+        seed=seed,
+        verbose=False,
+    )
+
+    n_lh = int((hemiid == 0).sum())
+    spins_lh = spins[:n_lh, :].astype(np.int32)
+    spins_rh = (spins[n_lh:, :] - n_lh).astype(np.int32)
+    return spins_lh, spins_rh
+
+
+def apply_spins(data_1d, spins_lh, spins_rh, idc_lh, idc_rh, n_perm=None):
+    """Apply precomputed spin indices to a 1D data array.
+
+    Returns null_data of shape (n_perm, n_parcels).
+    """
+    if n_perm is None:
+        n_perm = spins_lh.shape[1]
+    n_parcels = len(data_1d)
+    null_data = np.full((n_perm, n_parcels), np.nan, dtype=data_1d.dtype)
+    data_lh = data_1d[idc_lh]
+    data_rh = data_1d[idc_rh]
+    for k in range(n_perm):
+        null_data[k, idc_lh] = data_lh[spins_lh[:, k]]
+        null_data[k, idc_rh] = data_rh[spins_rh[:, k]]
+    return null_data
 
 
 def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"], 
                         parc_resample=2, centroids=False, surf_euclidean=False,
                         n_proc=1, verbose=True, dtype=np.float32):
     verbose = set_log(lgr, verbose)
-    # TODO: ADD SUPPORT FOR PARCELLATION OBJECTS TO DISTANCE MATRIX GENERATION
+    # TODO: ADD SUPPORT FOR PARCELLATION OBJECTS 
     
     ## generate distance matrix
     # case volumetric 
@@ -495,7 +572,7 @@ def find_surf_parc_centroids(parc, parc_space="fsaverage", parc_hemi=None, parc_
 
 
 
-def generate_null_maps(method, data, parcellation, dist_mat=None,
+def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
                        parc_space=None, parc_hemi=None, parc_symmetric=False,
                        n_nulls=1000, parc_resample=2, centroids=False,
                        parc_idc_lh=None, parc_idc_rh=None, parc_idc_sc=None,
@@ -507,7 +584,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
                        **kwargs):
     if verbose is False:
         set_log(lgr, verbose)
-    
+
     ## Checks
     # null method
     if method not in _NULL_METHODS:
@@ -515,10 +592,10 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
                            ValueError)
     null_fun = _NULL_METHODS[method]
     random_nulls = False
-    if null_fun.__name__ == "nulls_burt2020" and not _BRAINSMASH_AVAILABLE:
+    if null_fun is not None and null_fun.__name__ == "nulls_burt2020" and not _BRAINSMASH_AVAILABLE:
         lgr.critical_raise("Null method 'burt2020' requires brainsmash! Run 'pip install brainsmash'!",
                            ImportError)
-    elif null_fun.__name__ == "nulls_random":
+    elif null_fun is not None and null_fun.__name__ == "nulls_random":
         random_nulls = True
         
     # input data
@@ -539,7 +616,64 @@ def generate_null_maps(method, data, parcellation, dist_mat=None,
     # print
     lgr.info(f"Null map generation: Assuming n = {n_data} data vector(s) for "
              f"n = {data.shape[1]} parcels.")
-    
+
+    ## spin nulls -> separate code path, bypass dist_mat entirely
+    if method in _SPIN_METHODS:
+        spin_method = _SPIN_METHOD_MAP[method]
+
+        # validate: bilateral surface parcellation required
+        if not isinstance(parcellation, tuple):
+            lgr.critical_raise(
+                f"Null method '{method}' requires a bilateral surface parcellation. "
+                f"Volumetric and single-hemisphere parcellations are not supported.",
+                ValueError
+            )
+
+        # validate: hemisphere indices required
+        if parc_idc_lh is None or parc_idc_rh is None:
+            lgr.critical_raise(
+                f"Null method '{method}' requires 'parc_idc_lh' and 'parc_idc_rh'.",
+                ValueError
+            )
+        idc_lh = np.array(parc_idc_lh)
+        idc_rh = np.array(parc_idc_rh)
+
+        # use precomputed spins only for alexander_bloch/spin; vasa/hungarian always generate
+        if spin_mat is not None and spin_method == "original":
+            if isinstance(spin_mat, tuple) and len(spin_mat) == 2:
+                spins_lh, spins_rh = spin_mat
+                lgr.info("Using provided precomputed spin matrix.")
+            else:
+                lgr.warning("Provided 'spin_mat' must be a tuple (spins_lh, spins_rh). Regenerating.")
+                spin_mat = None
+        if spin_mat is None or spin_method != "original":
+            lgr.info(f"Generating spin samples (method='{spin_method}', n={n_nulls}).")
+            spins_lh, spins_rh = generate_spins(
+                parc=parcellation,
+                parc_space=parc_space,
+                n_perm=n_nulls,
+                method=spin_method,
+                seed=seed,
+            )
+            spin_mat = (spins_lh, spins_rh)
+
+        # apply spins to each data row
+        nulls = {}
+        for i, lab in enumerate(tqdm(data_labs,
+                                     desc="Spin null maps",
+                                     disable=not verbose)):
+            nulls[lab] = apply_spins(
+                data_1d=data[i, :].astype(dtype),
+                spins_lh=spins_lh,
+                spins_rh=spins_rh,
+                idc_lh=idc_lh,
+                idc_rh=idc_rh,
+                n_perm=n_nulls,
+            )
+
+        lgr.info("Null data generation finished.")
+        return nulls, spin_mat
+
     ## random nulls -> no distmat
     if random_nulls:
         dist_mat = (None, None) if isinstance(dist_mat, tuple) else None

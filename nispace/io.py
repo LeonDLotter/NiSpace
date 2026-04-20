@@ -440,6 +440,28 @@ def load_distmat(distmat):
     return distmat_load[0] if len(distmat_load) == 1 else tuple(distmat_load)
 
 
+def load_spinmat(spinmat):
+    if spinmat is None or (isinstance(spinmat, tuple) and all(s is None for s in spinmat)):
+        return spinmat
+    if isinstance(spinmat, (str, Path, np.ndarray)):
+        spinmat = (spinmat,)
+    elif isinstance(spinmat, list):
+        spinmat = tuple(spinmat)
+    elif isinstance(spinmat, tuple):
+        pass
+    else:
+        raise ValueError("Input must be path, ndarray, or list/tuple thereof")
+    loaded = []
+    for s in spinmat:
+        if isinstance(s, np.ndarray):
+            loaded.append(s)
+        elif isinstance(s, (str, Path)):
+            loaded.append(np.load(Path(s), allow_pickle=False, mmap_mode='c'))
+        else:
+            raise ValueError(f"Unsupported spinmat element type: {type(s)}")
+    return loaded[0] if len(loaded) == 1 else tuple(loaded)
+
+
 def to_pickle(obj, filepath, use_dill=False):
     """
     Pickle, compress, and save to a file.

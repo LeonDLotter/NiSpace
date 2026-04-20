@@ -11,7 +11,7 @@ from .modules.constants import _PARC_DEFAULT, _SPACE_DEFAULT
 from .stats.misc import zscore_df
 from .utils.utils import _rm_ext, set_log, merge_parcellations
 from .utils.utils_datasets import get_file
-from .io import read_json, write_json, load_img, load_distmat, load_labels, load_l2rmap
+from .io import read_json, write_json, load_img, load_distmat, load_spinmat, load_labels, load_l2rmap
 from .nulls import _img_density_for_neuromaps
 
 # Set the default nispace data directory environment variable
@@ -257,6 +257,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                        return_l2rmap: bool = False,
                        return_lrcorr: bool = False,
                        return_dist_mat: bool = False,
+                       return_spin_mat: bool = False,
                        return_loaded: bool = True,
                        lrcorr_threshold: float = 0.0,
                        nispace_data_dir: Union[str, pathlib.Path] = None,
@@ -285,7 +286,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
     def load_parc(p, space=space, hemi=hemi, return_labels=return_labels, return_space=return_space,
                   return_resolution=return_resolution, return_symmetric=return_symmetric, return_l2rmap=return_l2rmap,
                   return_lrcorr=return_lrcorr,
-                  return_dist_mat=return_dist_mat, return_loaded=return_loaded,
+                  return_dist_mat=return_dist_mat, return_spin_mat=return_spin_mat, return_loaded=return_loaded,
                   nispace_data_dir=nispace_data_dir, overwrite=overwrite, check_file_hash=check_file_hash):
         
         # Check space
@@ -315,7 +316,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
         
         # volume
         if "mni" in space.lower():
-            
+
             # get files
             parcellation_file = get_file(
                 base_dir / f"parc-{p}_space-{space}.%s", **parcellation_lib[p][space]["map"],
@@ -345,6 +346,8 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                     base_dir / f"parc-{p}_space-{space}.dist.csv.gz", **parcellation_lib[p][space]["distmat"],
                     **get_file_kwargs,
                 )
+            if return_spin_mat:
+                spinmat_file = None  # spin tests not available for volumetric parcellations
         
         # surface
         else:
@@ -356,7 +359,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                 raise ValueError(f"hemi = '{hemi}' not defined. Choose one of 'L', 'R', or ['L', 'R']!")
 
             # get files
-            parcellation_file, label_file, distmat_file = (), (), ()
+            parcellation_file, label_file, distmat_file, spinmat_file = (), (), (), ()
             for h in hemi:
                 parcellation_file += get_file(
                     base_dir / f"parc-{p}_space-{space}_hemi-{h}.%s", **parcellation_lib[p][space]["map"][h],
@@ -376,6 +379,14 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                             base_dir / f"parc-{p}_space-{space}_hemi-{h}.dist.csv.gz", **parcellation_lib[p][space]["distmat"][h],
                             **get_file_kwargs,
                         ),
+                if return_spin_mat:
+                    if "spinmat" in parcellation_lib[p][space]:
+                        spinmat_file += get_file(
+                            base_dir / f"parc-{p}_space-{space}_hemi-{h}.spin.npy", **parcellation_lib[p][space]["spinmat"][h],
+                            **get_file_kwargs,
+                        ),
+                    else:
+                        spinmat_file += None,
             if return_l2rmap and not symmetric:
                 l2rmap_file = get_file(
                     base_dir / f"parc-{p}_space-{space}.l2rmap.csv.gz", **parcellation_lib[p][space]["l2rmap"],
@@ -390,12 +401,16 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                 )
             else:
                 lrcorr_file = None
+            if return_spin_mat and "spinmat" not in parcellation_lib[p][space]:
+                lgr.info(f"No pre-computed spin matrix available for '{p}' in '{space}' space.")
             if len(parcellation_file) == 1:
                 parcellation_file = parcellation_file[0]
                 if return_labels:
                     label_file = label_file[0]
                 if return_dist_mat:
                     distmat_file = distmat_file[0]
+                if return_spin_mat:
+                    spinmat_file = spinmat_file[0]
                 l2rmap_file = None
             
         # return      
@@ -425,7 +440,10 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
         # distmat
         if return_dist_mat:
             out["distmat"] = load_distmat(distmat_file) if return_loaded else distmat_file
-        
+        # spinmat
+        if return_spin_mat:
+            out["spinmat"] = load_spinmat(spinmat_file) if return_loaded else spinmat_file
+
         return out
     
     # run load_parc for a single parcellation
@@ -480,7 +498,10 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
     if return_dist_mat:
         lgr.info("Distance matrices for merged parcellations are currently not available. Returning None.")
         out["distmat"] = None
-    
+    # spinmat
+    if return_spin_mat:
+        out["spinmat"] = None
+
     # return
     if len(out) == 1:
         return list(out.values())[0]

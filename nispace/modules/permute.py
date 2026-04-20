@@ -12,7 +12,7 @@ from ..modules.constants import _P_TAILS
 
 def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=True, standardize=True,
                    n_perm=1000, null_method="moran",
-                   dist_mat=None, parc=None, centroids=False, parc_resample=2,
+                   dist_mat=None, spin_mat=None, parc=None, centroids=False, parc_resample=2,
                    lr_mirror_dist_mat=False, split_hemi=None, split_cxsc=False,
                    cx_sc_minmax_scale=False,
                    parc_name=None,
@@ -59,8 +59,17 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
 
         idc_lh, idc_rh = parc._idc_byhemi["L"], parc._idc_byhemi["R"]
 
+        # for spin methods, check for cached spins
+        from ..nulls import _SPIN_METHODS
+        if null_method in _SPIN_METHODS:
+            if spin_mat is None:
+                try:
+                    spin_mat = nispace_nulls.get("maps_spin", None)
+                except Exception:
+                    pass
+
         # null data for all maps
-        null_maps, dist_mat = generate_null_maps(
+        null_maps, result_mat = generate_null_maps(
             method=null_method,
             data=data_obs,
             parcellation=parc._image_obj,
@@ -71,6 +80,7 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
             n_nulls=n_perm,
             centroids=centroids,
             dist_mat=dist_mat,
+            spin_mat=spin_mat,
             parc_idc_lh=idc_lh,
             parc_idc_rh=idc_rh,
             parc_idc_sc=None,
@@ -83,6 +93,12 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
             seed=seed,
             verbose=verbose
         )
+
+        # cache spin or dist mat
+        if null_method in _SPIN_METHODS:
+            nispace_nulls["maps_spin"] = result_mat
+        else:
+            dist_mat = result_mat
             
     # standardize
     if standardize:

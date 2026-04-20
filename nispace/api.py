@@ -65,6 +65,9 @@ class NiSpace:
                  parcellation_idc_rh: Sequence[int] = None,
                  parcellation_idc_sc: Sequence[int] = None,
                  parcellation_dist_mat: Union[np.ndarray, pd.DataFrame] = None,
+                 parcellation_spin_mat: np.ndarray = None,
+                 load_dist_mat: bool = True,
+                 load_spin_mat: bool = True,
                  resampling_target: Literal["data", "parcellation"] = "data",
                  n_proc: int = 1, 
                  verbose: bool = True,
@@ -185,6 +188,9 @@ class NiSpace:
         }
         if not isinstance(parcellation_dist_mat, tuple):
             self._parc_dist_mat["cv"] = parcellation_dist_mat
+        self._parc_spin_mat = parcellation_spin_mat
+        self._load_dist_mat = load_dist_mat
+        self._load_spin_mat = load_spin_mat
         self._resampl_target = resampling_target
         self._n_proc = n_proc
         self._drop_nan = drop_nan
@@ -254,20 +260,37 @@ class NiSpace:
             # check if parcellation is an integrated parcellation
             parc_integrated = _check_parcellation(self._parc["parc"], force_str=True, raise_not_found=False)
             if parc_integrated is not None:
-                parc, labels, space, density, symmetric, l2rmap, lrcorr, dist_mat = fetch_parcellation(
+                _fp_kwargs = dict(
                     parcellation=parc_integrated,
                     space=self._parc["space"],
+                    return_labels=True,
                     return_space=True,
                     return_resolution=True,
                     return_symmetric=True,
                     return_l2rmap=True,
                     return_lrcorr=True,
-                    return_dist_mat=True,
-                    return_loaded=True
+                    return_dist_mat=self._load_dist_mat,
+                    return_spin_mat=self._load_spin_mat,
+                    return_loaded=True,
                 )
-                if isinstance(dist_mat, tuple):
-                    if all([d is None for d in dist_mat]):
-                        dist_mat = None
+                _fp_result = fetch_parcellation(**_fp_kwargs)
+                _fp_keys = ["parc", "label", "space", "res", "sym", "l2rmap", "lrcorr"]
+                if self._load_dist_mat:
+                    _fp_keys.append("distmat")
+                if self._load_spin_mat:
+                    _fp_keys.append("spinmat")
+                _fp = dict(zip(_fp_keys, _fp_result if isinstance(_fp_result, tuple) else (_fp_result,)))
+                parc      = _fp["parc"]
+                labels    = _fp["label"]
+                space     = _fp["space"]
+                density   = _fp["res"]
+                symmetric = _fp["sym"]
+                l2rmap    = _fp["l2rmap"]
+                lrcorr    = _fp.get("lrcorr")
+                dist_mat  = _fp.get("distmat", None)
+                spin_mat  = _fp.get("spinmat", None)
+                if isinstance(dist_mat, tuple) and all(d is None for d in dist_mat):
+                    dist_mat = None
                 self._parc = Parcellation(
                     parcellation=parc,
                     labels=labels,
@@ -277,26 +300,22 @@ class NiSpace:
                     left2right_mapping=l2rmap,
                     lrcorr=lrcorr,
                     dist_mat=dist_mat,
+                    spin_mat=spin_mat,
                     name=parc_integrated,
                 ).fit()
-                # self._parc = parc
-                # self._parc_info["labels"] = labels
-                # self._parc_info["space"] = space
-                # self._parc_info["symmetric"] = symmetric
-                # self._parc_info["l2rmap"] = l2rmap
-                # #self._parc_info["density"] = density
-                # self._parc_info["hemi"] = ("L", "R") if space=="fsaverage" else None
                 # TODO: BUILD ALSO DIST MATRICES INTO PARCELLATION INSTANCE
                 self._parc_dist_mat["null_maps"] = dist_mat
                 if not isinstance(dist_mat, tuple):
                     self._parc_dist_mat["cv"] = dist_mat
-                # self._parc_info["idc_lh"] = [i for i, l in enumerate(labels) if "hemi-L" in l]
-                # self._parc_info["idc_rh"] = [i for i, l in enumerate(labels) if "hemi-R" in l]
-                # self._parc_info["idc_sc"] = [] # TODO: add cortex/subcortex idc management
-                # for idc in ["idc_lh", "idc_rh", "idc_sc"]:
-                #     if len(self._parc_info[idc]) == 0:
-                #         self._parc_info[idc] = None
-                lgr.info("Loaded integrated parcellation with pre-calculated distance matrix.")
+                if self._parc_spin_mat is None:
+                    self._parc_spin_mat = spin_mat
+                _loaded = []
+                if dist_mat is not None:
+                    _loaded.append("distance matrix")
+                if spin_mat is not None:
+                    _loaded.append("spin matrix")
+                lgr.info(f"Loaded integrated parcellation"
+                         + (f" with pre-computed {' and '.join(_loaded)}." if _loaded else "."))
                 
         # custom parcellation
         if self._parc is not None and not isinstance(self._parc, Parcellation):
@@ -1148,6 +1167,7 @@ class NiSpace:
             "use_existing_maps": True,
             "null_maps": maps_nulls,
             "null_method": maps_method,
+            "spin_mat": None,
             "lr_mirror_dist_mat": False,
             "cx_sc_minmax_scale": False,
             "parc_resample": 2,
@@ -1155,6 +1175,9 @@ class NiSpace:
         }
         for k in [k for k in kwargs.keys() if k.startswith("maps_")]:
             maps_kwargs[k.removeprefix("maps_")] = kwargs.pop(k)
+        # pass precomputed spin matrix only for alexander_bloch/spin
+        if maps_kwargs["null_method"] in {"alexander_bloch", "spin"}:
+            maps_kwargs["spin_mat"] = self._parc_spin_mat
         # groups permutation
         groups_kwargs = {
             "paired": "auto",
@@ -1287,6 +1310,11 @@ class NiSpace:
                 self._nulls["maps_null_method"] = maps_kwargs["null_method"]
                 self._nulls["maps_null"] = maps_nulls
                 self._nulls["maps_null_which"] = XY
+                # cache newly generated spin matrix for reuse
+                if maps_kwargs["null_method"] in {"alexander_bloch", "spin"} \
+                        and self._parc_spin_mat is None \
+                        and self._nulls.get("maps_spin") is not None:
+                    self._parc_spin_mat = self._nulls["maps_spin"]
 
                 # sort null map data into lists of length n_perm, each element being one 
                 # permuted array of observed values 

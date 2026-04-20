@@ -12,11 +12,11 @@ from ..io import load_distmat, load_img, load_labels
 class Parcellation():
     """
     """
-    
+
     def __init__(self, parcellation, space=None, labels=None, resolution=None, hemi=None,
                  symmetric=False, left2right_mapping=None, lrcorr=None,
                  labels_lh=None, labels_rh=None, labels_img_lh=None, labels_img_rh=None,
-                 idc_lh=None, idc_rh=None, dist_mat=None, name=None,
+                 idc_lh=None, idc_rh=None, dist_mat=None, spin_mat=None, name=None,
                  ):
 
         self._source = parcellation
@@ -30,6 +30,7 @@ class Parcellation():
         self._symmetric = symmetric
         self._idc_byhemi = {"L": idc_lh, "R": idc_rh}
         self._dist_mat = dist_mat
+        self._spin_mat = spin_mat
         self._l2rmap = left2right_mapping
         self._lrcorr = lrcorr
         
@@ -77,4 +78,7 @@ class Parcellation():
                 n_proc=n_proc
             )
             return self._dist_mat
+
+    def get_spin_mat(self):
+        return self._spin_mat
             

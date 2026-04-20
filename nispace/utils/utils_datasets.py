@@ -51,13 +51,16 @@ def _check_hash(local: Union[str, Path], remote: Union[str, Path] = None,
         return False
      
     
-def download(url, path=None, headers=None):
-    r = requests.get(url, headers=headers)
+def download(url, path=None, headers=None, suffix=""):
+    from urllib.parse import urlparse
+    r = requests.get(url, headers=headers, stream=True)
     r.raise_for_status()
     if path is None:
-        path = Path(tempfile.gettempdir()) / Path(url).name
-    with open(str(path), "wb") as f:
-        f.write(r.content)
+        name = Path(urlparse(url).path).name
+        path = Path(tempfile.gettempdir()) / (name + suffix)
+    with open(path, "wb") as f:
+        for chunk in r.iter_content(chunk_size=8192):
+            f.write(chunk)
     return path
 
 
