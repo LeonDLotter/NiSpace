@@ -17,56 +17,71 @@ def rank_array(array):
 
 @njit(cache=True, nogil=True)
 def rank1d(arr):
-    """Rank an array. CAVE: Cannot really deal with nan's!"""
-    
+    """Rank a 1D array using mid-ranks (average rank) for tied values.
+    Constant arrays receive identical ranks -> zero variance -> NaN correlation.
+    CAVE: does not handle nan's; strip them before calling."""
+
+    n = arr.size
     _args = arr.argsort()
-    ranked = np.empty_like(arr)
-    ranked[_args] = np.arange(arr.size)
-    
+    ranked = np.empty(n, dtype=np.float64)
+
+    i = 0
+    while i < n:
+        # find the end of the current run of equal values
+        j = i + 1
+        while j < n and arr[_args[j]] == arr[_args[i]]:
+            j += 1
+        # assign the average (mid) rank to all tied elements
+        mid = (i + j - 1) * 0.5
+        for k in range(i, j):
+            ranked[_args[k]] = mid
+        i = j
+
     return ranked
 
 @njit(cache=True, nogil=True)
 def rank2d(arr):
-    """Rank an array. Handles nan's"""
-    
+    """Rank a 2D array column-wise using mid-ranks. Handles nan's."""
+
     if arr.ndim == 1:
         return rank1d(arr)
-    
-    ranked = np.full_like(arr, np.nan)
+
+    ranked = np.full(arr.shape, np.nan, dtype=np.float64)
     for i in range(arr.shape[1]):
         v = arr[:, i]
         nonan = ~np.isnan(v)
         ranked[nonan, i] = rank1d(v[nonan])
-    
+
     return ranked
 
 
 @njit(cache=True, nogil=True)
 def corr(x, y, rank=False):
     """Compute Pearson or Spearman correlation for two 1D arrays."""
-    
+
     if rank:
         x = rank1d(x)
         y = rank1d(y)
-    
+
     m_x = x.mean()
     m_y = y.mean()
     num = np.sum((x - m_x) * (y - m_y))
     den = np.sqrt(np.sum((x - m_x) ** 2) * np.sum((y - m_y) ** 2))
-    r = num / den
-    
-    return r
+    if den == 0.0:
+        return np.nan
+    return num / den
 
 
 @njit(cache=True, nogil=True)
 def pearson(x, y):
     """Compute Pearson correlation for two 1D arrays."""
-    
+
     m_x = x.mean()
     m_y = y.mean()
     num = np.sum((x - m_x) * (y - m_y))
     den = np.sqrt(np.sum((x - m_x) ** 2) * np.sum((y - m_y) ** 2))
-    
+    if den == 0.0:
+        return np.nan
     return num / den
 
 

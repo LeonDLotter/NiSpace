@@ -37,6 +37,7 @@ def nice_stats_labels(string, add_dollars=True):
         "lasso": "Lasso",
         "elasticnet": "ElasticNet",
         "meandiff": "Mean Difference",
+        "elemdiff": "Elementwise Difference",
         "zscore": "Z score",
         "pairedcohen": "Paired Cohen's d",
         "pairedhedges": "Paired Hedges' g",

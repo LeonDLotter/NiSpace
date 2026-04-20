@@ -307,7 +307,7 @@ def prc(a, b):
 
     # Calculate percentage change
     # Use np.where to avoid division by zero
-    p = np.where(a != 0, (b - a) / a * 100, np.nan)
+    p = np.where(a != 0, (a - b) / a * 100, np.nan)
 
     return p
 
@@ -318,5 +318,51 @@ def prc_fast(a, b):
     for i in range(n_rows):
         for j in range(n_cols):
             ai = a[i, j]
-            result[i, j] = np.nan if ai == 0.0 else (b[i, j] - ai) / ai * 100.0
+            result[i, j] = np.nan if ai == 0.0 else (ai - b[i, j]) / ai * 100.0
+    return result
+
+
+# ---------------------------------------------------
+# Log fold change: log((a+c) / (b+c))
+# c = shift to ensure all values are positive.
+# For raw positive data (e.g. CT in mm): c = 0.
+# For z-scored / residual data with negatives: c is
+# auto-computed as |global_min| + eps.
+# Symmetric under permutation regardless of c:
+#   swap(a,b) -> log((b+c)/(a+c)) = -logfc(a,b)  ✓
+# -> null distribution is always exactly 0-centered.
+# ---------------------------------------------------
+def logfc_nan(a, b):
+    a = np.array(a, dtype=float)
+    b = np.array(b, dtype=float)
+    if a.shape != b.shape:
+        raise ValueError("Arrays 'a' and 'b' must have the same shape.")
+    global_min = min(np.nanmin(a), np.nanmin(b))
+    shift = max(0.0, -global_min) + 1e-6
+    return np.where(np.isnan(a) | np.isnan(b), np.nan, np.log((a + shift) / (b + shift)))
+
+@njit(cache=True, nogil=True)
+def logfc_fast(a, b):
+    # compute global min over both arrays (ignoring NaN) to derive shift
+    global_min = np.inf
+    n_rows, n_cols = a.shape
+    for i in range(n_rows):
+        for j in range(n_cols):
+            v = a[i, j]
+            if not np.isnan(v) and v < global_min:
+                global_min = v
+            v = b[i, j]
+            if not np.isnan(v) and v < global_min:
+                global_min = v
+    shift = -global_min + 1e-6 if global_min < 0.0 else 0.0
+
+    result = np.empty((n_rows, n_cols), dtype=np.float64)
+    for i in range(n_rows):
+        for j in range(n_cols):
+            ai = a[i, j]
+            bi = b[i, j]
+            if np.isnan(ai) or np.isnan(bi):
+                result[i, j] = np.nan
+            else:
+                result[i, j] = np.log((ai + shift) / (bi + shift))
     return result

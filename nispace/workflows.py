@@ -567,6 +567,7 @@ def simple_xsea(y,
                 permute_kwargs=None,
                 correct_p_kwargs=None,
                 plot_kwargs=None):
+    # TODO: space=doesnt raises an error for parcellation fetching but works with group_comparison 
     verbose = set_log(lgr, verbose)
     # kwarg dicts
     fetch_x_kwargs = {} if fetch_x_kwargs is None else fetch_x_kwargs
