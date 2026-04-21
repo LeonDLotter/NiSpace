@@ -16,6 +16,7 @@ def _rank_regress(arr, rank, regress, z=None, zy_matched=False, n_proc=1, verbos
         return arr
     
     def regress_z_fun(arr, z, zy_matched):
+        z = z.astype(arr.dtype)
         if z.shape[0] == 1:
             return np.row_stack([residuals_nan(x=z[0], y=arr[i]) for i in range(arr.shape[0])])
         elif zy_matched:

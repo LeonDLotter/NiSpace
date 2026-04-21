@@ -289,7 +289,6 @@ class NiSpace:
                     self._parc_dist_mat["cv"] = dm
                 if self._parc_spin_mat is None:
                     self._parc_spin_mat = parc_obj.get_spin_mat()
-                lgr.info(f"Loaded integrated parcellation '{parc_integrated}' in space '{active_space}'.")
                 
         # custom parcellation (string file path not matched as integrated)
         if self._parc is not None and not isinstance(self._parc, Parcellation):

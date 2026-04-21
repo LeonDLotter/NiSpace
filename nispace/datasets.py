@@ -1017,6 +1017,7 @@ def fetch_reference(dataset: str,
                     maps: Union[None, str, List[str], Dict[str, Union[str, list]]] = None,
                     space: str = _SPACE_DEFAULT,
                     collection: str = None,
+                    sets: Union[None, str, List[str]] = None,
                     set_size_range: Union[None, Tuple[int, int]] = None,
                     weight_range: Union[None, Tuple[float, float]] = None,
                     weight_quantile: Union[None, float] = None,
@@ -1133,6 +1134,25 @@ def fetch_reference(dataset: str,
         )
     else:
         collection_df = None
+
+    # Filter by 'sets'
+    if sets is not None:
+        if collection_df is None or "set" not in collection_df.columns:
+            lgr.warning(f"'sets={sets}' filter ignored: no collection with sets is loaded.")
+        else:
+            if isinstance(sets, str):
+                sets = [sets]
+            avail_sets = collection_df["set"].unique().tolist()
+            missing = [s for s in sets if s not in avail_sets]
+            if missing:
+                show = avail_sets[:20]
+                lgr.critical_raise(
+                    f"Set(s) {missing} not found in collection. Available ({len(avail_sets)}): {show}"
+                    + (" ..." if len(avail_sets) > 20 else ""),
+                    ValueError
+                )
+            collection_df = collection_df[collection_df["set"].isin(sets)]
+            maps_avail = collection_df["map"].tolist()
 
     # Load tabulated data if 'parcellation' is specified
     if parcellation:
