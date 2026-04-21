@@ -180,25 +180,20 @@ def _get_exact_p_values(method, colocs_obs, colocs_null,
     # calculate exact p values
     lgr.info(f"Calculating exact p-values (tails = {p_tails}).")
     # iterate results metrics
-    p_data, p_data_norm = dict(), dict()
+    p_data = dict()
     for stat in stats:
         p = np.zeros(colocs_obs[stat].shape, dtype=dtype)
-        p_norm = p.copy()
         # iterate predictors (columns)
         for x in range(p.shape[1]):
             # iterate targets (rows)
             for y in range(p.shape[0]):
                 obs = colocs_obs[stat][y, x]
                 null = [colocs_null[i][stat][y, x] for i in range(len(colocs_null))]
-                # get p values
-                p[y, x] = null_to_p(obs, null, tail=p_tails[stat], fit_norm=False)
-                p_norm[y, x] = null_to_p(obs, null, tail=p_tails[stat], fit_norm=True)
-        # save data
+                p[y, x] = null_to_p(obs, null, tail=p_tails[stat])
         p_data[stat] = p
-        p_data_norm[stat] = p_norm
-        
+
     # return (also expose resolved p_tails for storage by caller)
-    return p_data, p_data_norm, p_tails
+    return p_data, p_tails
 
 
 _MC_METHOD_ALIASES = {

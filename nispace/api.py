@@ -1556,7 +1556,7 @@ class NiSpace:
             
         ## calculate exact p values
         # get values
-        p_data, p_data_norm, p_tails_resolved = _get_exact_p_values(
+        p_data, p_tails_resolved = _get_exact_p_values(
             method=method,
             xsea_aggr=self._xsea_aggregation_method if xsea else None,
             colocs_obs=_colocs_obs,
@@ -1585,7 +1585,6 @@ class NiSpace:
             else:
                 rows = _Y_obs.index
             p_data[stat] = pd.DataFrame(p_data[stat], columns=cols, index=rows)
-            p_data_norm[stat] = pd.DataFrame(p_data_norm[stat], columns=cols, index=rows)
         
         # save and return
         if store:    
@@ -1601,7 +1600,6 @@ class NiSpace:
                     perm=perm
                 )
                 self._p_colocs[df_str] = p_data[stat]
-                self._p_colocs[df_str.replace("norm-false", "norm-true")] = p_data_norm[stat]
             df_str = _get_df_string(
                 "null", 
                 xdimred=X_reduction, 
@@ -1632,10 +1630,10 @@ class NiSpace:
                 return p_data[list(p_data.keys())[0]]
         else:
             if force_dict or len(p_data) > 1:
-                return p_data, p_data_norm, _colocs_null
+                return p_data, _colocs_null
             else:
                 k = list(p_data.keys())[0]
-                return p_data[k], p_data_norm[k], _colocs_null[k]
+                return p_data[k], _colocs_null[k]
     
     
     # CORRECT ======================================================================================
@@ -2085,8 +2083,8 @@ class NiSpace:
                 
                 out_null = dict()
                 n_nulls = len(nulls)
-                idx = self.get_p_values(method, nulls_permute_what, _COLOC_METHODS[method][0], 
-                                        xsea, norm=False,
+                idx = self.get_p_values(method, nulls_permute_what, _COLOC_METHODS[method][0],
+                                        xsea,
                                         X_reduction=X_reduction,
                                         Y_transform=Y_transform,
                                         verbose=False).index
@@ -2122,8 +2120,8 @@ class NiSpace:
     
     # ----------------------------------------------------------------------------------------------
     
-    def get_p_values(self, method=None, permute_what=None, stats=None, xsea=None, 
-                     norm=False, mc_method=None, 
+    def get_p_values(self, method=None, permute_what=None, stats=None, xsea=None,
+                     mc_method=None,
                      X_reduction=None, Y_transform=None, force_dict=False, verbose=None, copy=True): 
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
@@ -2149,14 +2147,13 @@ class NiSpace:
         out = dict()
         for stat in stats:
             p_str = _get_df_string(
-                "p", 
+                "p",
                 xdimred=X_reduction,
                 ytrans=Y_transform,
-                method=method, 
+                method=method,
                 stat=stat,
                 xsea=xsea,
                 perm=permute_what,
-                norm=norm,
                 mc=mc_method,
             )
             if p_str not in self._p_colocs.keys():
@@ -2173,8 +2170,8 @@ class NiSpace:
             if len(out)==1:
                 out = out[list(out.keys())[0]]
         
-        string = print_arg_pairs(method=method, permute_what=permute_what, xsea=xsea, 
-                                 mc_method=mc_method, norm=norm, 
+        string = print_arg_pairs(method=method, permute_what=permute_what, xsea=xsea,
+                                 mc_method=mc_method,
                                  X_reduction=X_reduction, Y_transform=Y_transform)
         lgr.info(f"Returning p values: \n{string}")
         lgr.setLevel(loglevel)

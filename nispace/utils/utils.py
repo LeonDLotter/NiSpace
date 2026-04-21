@@ -68,12 +68,12 @@ def _lower_strip_ws(string):
         raise TypeError("Provide string input!")
     
 
-_DF_STRING_FIELDS = ["xdimred", "ytrans", "coloc", "stat", "xsea", "perm", "norm", "mc"]
+_DF_STRING_FIELDS = ["xdimred", "ytrans", "coloc", "stat", "xsea", "perm", "mc"]
 
 def _parse_df_string(df_str):
     """Reverse of _get_df_string: parse a key string back into its component fields.
 
-    Returns a dict with any subset of: xdimred, ytrans, coloc, stat, xsea, perm, norm, mc.
+    Returns a dict with any subset of: xdimred, ytrans, coloc, stat, xsea, perm, mc.
     """
     result = {}
     for i, field in enumerate(_DF_STRING_FIELDS):
@@ -101,7 +101,7 @@ def _parse_bool(s):
     return s
 
 
-def _get_df_string(kind, xdimred=None, ytrans=None, method=None, stat=None, xsea=False, perm=None, norm=False, mc=None):
+def _get_df_string(kind, xdimred=None, ytrans=None, method=None, stat=None, xsea=False, perm=None, mc=None):
     
     if kind=="ytrans":
         df_str = f"ytrans-{ytrans}"
@@ -128,7 +128,7 @@ def _get_df_string(kind, xdimred=None, ytrans=None, method=None, stat=None, xsea
             if "sets" in perm:
                 xsea = True
             df_str = (f"xdimred-{xdimred}_ytrans-{ytrans}_coloc-{method}_stat-{stat}_xsea-{xsea}_"
-                      f"perm-{perm}_norm-{norm}_mc-{mc}")
+                      f"perm-{perm}_mc-{mc}")
         else:
             raise ValueError("Provide method, stat, and perm!")
     
