@@ -365,6 +365,152 @@ def null_to_p(test_value, null_array, tail="two", fit_norm=False):
     return result[0] if return_first else result
 
 
+def compute_meff(X, method="galwey"):
+    """Effective number of independent tests from data matrix via eigendecomposition.
+
+    Parameters
+    ----------
+    X : array-like, shape (n_maps, n_features)
+    method : "galwey" (default) or "li_ji"
+        Galwey (2009) Genet Epidemiol 33:559; Li & Ji (2005) Ann Hum Genet 69:519.
+
+    Returns
+    -------
+    float
+    """
+    X = np.array(X, dtype=float)
+    # drop parcel columns that contain any NaN (NaN propagates through corrcoef → eigvalsh fails)
+    X = X[:, ~np.isnan(X).any(axis=0)]
+    if X.shape[1] < 2:
+        raise ValueError(f"compute_meff: fewer than 2 non-NaN parcels after dropping NaNs "
+                         f"(got {X.shape[1]}).")
+    corr = np.corrcoef(X)
+    eigenvalues = np.linalg.eigvalsh(corr)
+    eigenvalues = eigenvalues[eigenvalues > 0]
+    if method == "galwey":
+        meff = np.sum(np.sqrt(eigenvalues)) ** 2 / np.sum(eigenvalues)
+    elif method == "li_ji":
+        meff = np.sum((eigenvalues >= 1).astype(float) + (eigenvalues - np.floor(eigenvalues)))
+    else:
+        raise ValueError(f"method must be 'galwey' or 'li_ji', not '{method}'")
+    return float(meff)
+
+
+def meff_sidak_correction(p_array, meff, alpha=0.05, dtype=None):
+    """Sidak correction using Meff effective number of tests.
+
+    p_corr = 1 - (1 - p)^meff
+    """
+    p = np.array(p_array, dtype=float)
+    p_corr = np.clip(1.0 - (1.0 - p) ** meff, 0.0, 1.0)
+    reject = p_corr <= alpha
+    if isinstance(p_array, pd.DataFrame):
+        p_corr = pd.DataFrame(p_corr, index=p_array.index, columns=p_array.columns, dtype=dtype)
+        reject = pd.DataFrame(reject, index=p_array.index, columns=p_array.columns, dtype=dtype)
+    elif isinstance(p_array, pd.Series):
+        p_corr = pd.Series(p_corr, index=p_array.index, name=p_array.name, dtype=dtype)
+        reject = pd.Series(reject, index=p_array.index, name=p_array.name, dtype=dtype)
+    return p_corr, reject
+
+
+def _null_stats_to_array(null_colocs, stat):
+    """Stack per-permutation null statistic dicts into (n_perm, n_Y, n_X) array."""
+    return np.stack([null_colocs[i][stat] for i in range(len(null_colocs))], axis=0)
+
+
+def _signed_stats(obs, null_arr, tail):
+    """Apply tail direction: return (obs_cmp, null_cmp) ready for >= comparison."""
+    if tail == "two":
+        return np.abs(obs), np.abs(null_arr)
+    elif tail == "upper":
+        return obs, null_arr
+    elif tail == "lower":
+        return -obs, -null_arr
+    raise ValueError(f"tail must be 'two', 'upper', or 'lower', not '{tail}'")
+
+
+def _df_like(array, template, dtype):
+    """Wrap array in DataFrame/Series matching template's index/columns."""
+    if isinstance(template, pd.DataFrame):
+        return pd.DataFrame(array, index=template.index, columns=template.columns, dtype=dtype)
+    elif isinstance(template, pd.Series):
+        return pd.Series(array, index=template.index, name=template.name, dtype=dtype)
+    return array
+
+
+def maxT_correction(obs_stats, null_colocs, stat, tail="two", how="r", alpha=0.05, dtype=None):
+    """Max-T FWER correction (Westfall & Young 1993).
+
+    Parameters
+    ----------
+    obs_stats : DataFrame or array, shape (n_Y, n_X)
+    null_colocs : list[n_perm] of {stat: (n_Y, n_X) array}
+    stat : key to extract from null_colocs dicts
+    tail : "two" | "upper" | "lower"
+    how : "r" — per-Y row, max across X (default); "a" — global max across Y×X
+    """
+    obs = np.array(obs_stats, dtype=float)
+    null_arr = _null_stats_to_array(null_colocs, stat).astype(float)  # (n_perm, n_Y, n_X)
+    obs_cmp, null_cmp = _signed_stats(obs, null_arr, tail)
+
+    if how == "r":
+        null_max = null_cmp.max(axis=2)  # (n_perm, n_Y)
+        # broadcast: null_max[:, y] >= obs_cmp[y, x] for each x
+        p = np.mean(null_max[:, :, np.newaxis] >= obs_cmp[np.newaxis, :, :], axis=0)
+    elif how == "a":
+        null_max = null_cmp.max(axis=(1, 2))  # (n_perm,)
+        p = np.mean(null_max[:, np.newaxis, np.newaxis] >= obs_cmp[np.newaxis, :, :], axis=0)
+    else:
+        raise ValueError(f"how='{how}' not supported for maxT. Use 'r' or 'a'.")
+
+    p = np.clip(p, 0.0, 1.0)
+    reject = p <= alpha
+    return _df_like(p, obs_stats, dtype), _df_like(reject, obs_stats, dtype)
+
+
+def step_maxT_correction(obs_stats, null_colocs, stat, tail="two", how="r", alpha=0.05, dtype=None):
+    """Step-down Max-T FWER correction (Westfall & Young 1993).
+
+    Enforces monotonicity on sorted max-T p-values for increased power over plain maxT.
+    """
+    obs = np.array(obs_stats, dtype=float)
+    n_Y, n_X = obs.shape
+    null_arr = _null_stats_to_array(null_colocs, stat).astype(float)  # (n_perm, n_Y, n_X)
+    obs_cmp, null_cmp = _signed_stats(obs, null_arr, tail)
+
+    def _step_down_1d(obs_1d, null_2d):
+        # obs_1d: (n,); null_2d: (n_perm, n)
+        order = np.argsort(obs_1d)[::-1]
+        obs_s = obs_1d[order]
+        null_s = null_2d[:, order]  # (n_perm, n)
+        # step-down max: null_max_j[perm] = max(null_s[perm, j:])
+        # vectorised via reverse cumulative max
+        null_rev_cummax = np.maximum.accumulate(null_s[:, ::-1], axis=1)[:, ::-1]  # (n_perm, n)
+        p_s = np.mean(null_rev_cummax >= obs_s[np.newaxis, :], axis=0)
+        # enforce monotonicity (step-down)
+        p_s = np.maximum.accumulate(p_s)
+        # restore original order
+        p_out = np.empty_like(p_s)
+        p_out[order] = p_s
+        return p_out
+
+    if how == "r":
+        p = np.zeros_like(obs)
+        for y in range(n_Y):
+            p[y, :] = _step_down_1d(obs_cmp[y, :], null_cmp[:, y, :])
+    elif how == "a":
+        obs_flat = obs_cmp.flatten()
+        null_flat = null_cmp.reshape(len(null_colocs), -1)
+        p_flat = _step_down_1d(obs_flat, null_flat)
+        p = p_flat.reshape(n_Y, n_X)
+    else:
+        raise ValueError(f"how='{how}' not supported for step_maxT. Use 'r' or 'a'.")
+
+    p = np.clip(p, 0.0, 1.0)
+    reject = p <= alpha
+    return _df_like(p, obs_stats, dtype), _df_like(reject, obs_stats, dtype)
+
+
 def mc_correction(p_array, alpha=0.05, method="fdr_bh", how="array", dtype=None):
     
     # prepare data

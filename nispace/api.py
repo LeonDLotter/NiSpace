@@ -15,17 +15,21 @@ from .modules.parcellation import Parcellation
 from .modules.reduce_x import _reduce_dimensions
 from .modules.transform_y import _dummy_code_groups, _num_code_subjects, _get_transform_fun
 from .modules.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats, _rank_regress
-from .modules.permute import _get_null_maps, _get_exact_p_values, _get_correct_mc_method
+from .modules.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_method,
+                               _EMPIRICAL_MC_METHODS)
 from .modules.plot import _plot_categorical
 from .modules.constants import _PARCS_DEFAULT, _COLOC_METHODS
 from .datasets import fetch_parcellation, fetch_template, _check_parcellation
 from .nulls import get_distance_matrix
 from .stats.coloc import *
-from .stats.misc import mc_correction, residuals_nan, zscore_df, permute_groups
+from .stats.misc import (mc_correction, residuals_nan, zscore_df, permute_groups,
+                          compute_meff, meff_sidak_correction,
+                          maxT_correction, step_maxT_correction)
 from .cv import _get_dist_dep_splits, _get_rand_splits
 from .plotting import nice_stats_labels
 from .utils.utils import (set_log, fill_nan, _get_df_string, _lower_strip_ws, mean_by_set_df,
-                          get_column_names, lower, print_arg_pairs)
+                          get_column_names, lower, print_arg_pairs,
+                          _parse_df_string, _parse_bool)
 
 
 # ==================================================================================================
@@ -1552,13 +1556,13 @@ class NiSpace:
             
         ## calculate exact p values
         # get values
-        p_data, p_data_norm = _get_exact_p_values(
-            method=method, 
+        p_data, p_data_norm, p_tails_resolved = _get_exact_p_values(
+            method=method,
             xsea_aggr=self._xsea_aggregation_method if xsea else None,
-            colocs_obs=_colocs_obs, 
-            colocs_null=_colocs_null, 
-            p_tails=p_tails, 
-            verbose=verbose, 
+            colocs_obs=_colocs_obs,
+            colocs_null=_colocs_null,
+            p_tails=p_tails,
+            verbose=verbose,
             dtype=dtype
         )
         # to dataframe
@@ -1607,6 +1611,7 @@ class NiSpace:
                 perm=perm
             )
             self._nulls["_colocs"][df_str] = _colocs_null
+            self._nulls[f"p_tails_{df_str}"] = p_tails_resolved
             self._set_last(
                 method=method, 
                 X_reduction=X_reduction, 
@@ -1635,48 +1640,151 @@ class NiSpace:
     
     # CORRECT ======================================================================================
 
-    def correct_p(self, method=None, 
-                  mc_alpha=0.05, mc_method="fdr_bh", mc_dimension="array", store=True, verbose=None):
+    def correct_p(self, mc_method="meff",
+                  mc_alpha=0.05, mc_dimension="array", coloc_method=None, store=True, verbose=None):
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.correct_p() - Correct p values for multiple comparisons. ***")
-        
-        # get p data depending
-        #p_value_dict = self._p_colocs
-        
+
         # list of all p-value df keys, only uncorrected p-values
         p_strs = [k for k in self._p_colocs if "mc-none" in k]
-        if method is not None:
-            p_strs = [s for s in p_strs if f"method-{method}" in s]
+        if coloc_method is not None:
+            p_strs = [s for s in p_strs if f"coloc-{coloc_method}" in s]
 
-        # get dimension of array to correct along
+        # resolve mc method name (aliases → canonical)
+        mc_method = _get_correct_mc_method(mc_method)
+        lgr.info(f"Correction method: '{mc_method}', alpha: {mc_alpha}, dimension: '{mc_dimension}'.")
+
+        # mc_dimension → how
         if mc_dimension in ["x", "X", "c", "col", "cols", "column", "columns"]:
             how = "c"
         elif mc_dimension in ["y", "Y", "r", "row", "rows"]:
             how = "r"
         else:
             how = "a"
-            
-        # mc method
-        mc_method = _get_correct_mc_method(mc_method)
-        lgr.info(f"Correction method: '{mc_method}', alpha: {mc_alpha}, dimension: '{mc_dimension}'.")
 
-        # get p values, mc function passes keywords to statsmodels.multitest
+        # key suffix (strips _ and - so it's safe as a key fragment)
+        mc_key = mc_method.replace("_", "").replace("-", "").lower()
+
         p_corr = dict()
-        for p_str in p_strs:
-            p_str_mc = p_str.replace("mc-none", f"mc-{mc_method.replace('_', '').replace('-', '')}")
-            p_corr[p_str_mc], _ = mc_correction(
-                self._p_colocs[p_str], 
-                alpha=mc_alpha, 
-                method=mc_method, 
-                how=how, 
-                dtype=self._dtype
-            )
+
+        if mc_method in _EMPIRICAL_MC_METHODS:
+            for p_str in p_strs:
+                fields   = _parse_df_string(p_str)
+                xdimred  = _parse_bool(fields.get("xdimred", False))
+                ytrans   = _parse_bool(fields.get("ytrans", False))
+                coloc    = fields.get("coloc")
+                stat     = fields.get("stat")
+                xsea     = _parse_bool(fields.get("xsea", False))
+                perm     = fields.get("perm")
+
+                p_str_mc = p_str.replace("mc-none", f"mc-{mc_key}")
+                p_values = self._p_colocs[p_str]
+
+                # ── Meff + Sidak ──────────────────────────────────────────────
+                if mc_method in {"meff_galwey", "meff_li_ji"}:
+                    if how == "c":
+                        lgr.warning("mc_dimension='x'/'c' is not meaningful for 'meff' "
+                                    "(Meff is defined over X maps). Ignoring.")
+                    meff_variant = "galwey" if mc_method == "meff_galwey" else "li_ji"
+                    X_data = np.array(self.get_x(X_reduction=xdimred, verbose=False))
+                    # for XSEA: use per-set mean map so Meff reflects set-level independence
+                    if xsea and hasattr(self._X.index, "get_level_values"):
+                        set_labels = self._X.index.get_level_values("set")
+                        X_data = np.array(
+                            pd.DataFrame(X_data, index=self._X.index)
+                            .groupby(set_labels).mean()
+                        )
+                    meff_x = compute_meff(X_data, method=meff_variant)
+                    lgr.info(f"Meff_X ({meff_variant}) = {meff_x:.2f} "
+                             f"(from {X_data.shape[0]} maps).")
+
+                    n_y_rows = p_values.shape[0]
+                    if how == "a" and n_y_rows > 1:
+                        # joint correction across X and Y: meff_total = meff_X * meff_Y
+                        Y_data = np.array(self.get_y(Y_transform=ytrans, verbose=False))
+                        meff_y = compute_meff(Y_data, method=meff_variant)
+                        meff = meff_x * meff_y
+                        lgr.info(f"Meff_Y ({meff_variant}) = {meff_y:.2f} "
+                                 f"(from {n_y_rows} maps). Meff_total = {meff:.2f}.")
+                        lgr.warning(
+                            f"Joint Meff correction (Meff_X × Meff_Y = {meff:.2f}) assumes all "
+                            "Y maps are related entities examined together (e.g., disorder effect "
+                            "size maps). It is NOT valid for individual subject maps. "
+                            "Use mc_dimension='y' for independent per-Y correction."
+                        )
+                    else:
+                        meff = meff_x
+
+                    p_corr[p_str_mc], _ = meff_sidak_correction(
+                        p_values, meff=meff, alpha=mc_alpha, dtype=self._dtype
+                    )
+
+                # ── Max-T / Step-down Max-T ───────────────────────────────────
+                elif mc_method in {"maxT", "step_maxT"}:
+                    # warn if scale comparability assumption may be violated
+                    if stat in {"beta", "individual"} and "x" not in (self._zscore or ""):
+                        lgr.warning(
+                            f"maxT on stat='{stat}' assumes regression coefficients are on a "
+                            "comparable scale across X maps, but X was not z-scored "
+                            f"(standardize='{self._zscore}'). Max-T results may be unreliable. "
+                            "Re-run with standardize='x' (or 'xz') to satisfy this assumption."
+                        )
+                    # maxT corrects across X (columns) per Y row — override "array" default
+                    how_maxt = how if how != "a" else "r"
+                    if how == "a":
+                        lgr.info("mc_dimension not explicitly set to 'y'; defaulting to per-Y "
+                                 "(max across X) for maxT.")
+                    elif how == "c":
+                        lgr.critical_raise(
+                            "mc_dimension='x' (per-X column) is not supported for maxT. "
+                            "Use mc_dimension='y' (per-Y row, default) or 'array' (global).",
+                            ValueError
+                        )
+                    # get null key and null colocs
+                    null_str = _get_df_string(
+                        "null", xdimred=xdimred, ytrans=ytrans,
+                        method=coloc, xsea=xsea, perm=perm
+                    )
+                    if null_str not in self._nulls["_colocs"]:
+                        lgr.critical_raise(
+                            f"Null colocalizations for '{null_str}' not found. "
+                            "Run permute() first.",
+                            KeyError
+                        )
+                    null_colocs = self._nulls["_colocs"][null_str]
+                    # get observed statistics (not p-values)
+                    obs_stats = self.get_colocalizations(
+                        method=coloc, stats=[stat],
+                        X_reduction=xdimred, Y_transform=ytrans,
+                        xsea=xsea, force_dict=True, verbose=False
+                    )[stat]
+                    # get tail (use stored resolved p_tails if available, else default)
+                    p_tails_stored = self._nulls.get(f"p_tails_{null_str}", {})
+                    tail = p_tails_stored.get(stat, "two")
+                    correction_fn = maxT_correction if mc_method == "maxT" else step_maxT_correction
+                    p_corr[p_str_mc], _ = correction_fn(
+                        obs_stats, null_colocs, stat=stat,
+                        tail=tail, how=how_maxt,
+                        alpha=mc_alpha, dtype=self._dtype
+                    )
+
+        else:
+            # statsmodels path
+            for p_str in p_strs:
+                p_str_mc = p_str.replace("mc-none", f"mc-{mc_key}")
+                p_corr[p_str_mc], _ = mc_correction(
+                    self._p_colocs[p_str],
+                    alpha=mc_alpha,
+                    method=mc_method,
+                    how=how,
+                    dtype=self._dtype
+                )
+
         # save and return
         if store:
             for p_str in p_corr:
                 self._p_colocs[p_str] = p_corr[p_str]
             self._set_last(mc_method=mc_method)
-            ## return
             if self._return_self:
                 return self
         return p_corr

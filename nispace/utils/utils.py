@@ -68,6 +68,39 @@ def _lower_strip_ws(string):
         raise TypeError("Provide string input!")
     
 
+_DF_STRING_FIELDS = ["xdimred", "ytrans", "coloc", "stat", "xsea", "perm", "norm", "mc"]
+
+def _parse_df_string(df_str):
+    """Reverse of _get_df_string: parse a key string back into its component fields.
+
+    Returns a dict with any subset of: xdimred, ytrans, coloc, stat, xsea, perm, norm, mc.
+    """
+    result = {}
+    for i, field in enumerate(_DF_STRING_FIELDS):
+        marker = f"{field}-"
+        if marker not in df_str:
+            continue
+        idx = df_str.index(marker)
+        value_start = idx + len(marker)
+        value_end = len(df_str)
+        for next_field in _DF_STRING_FIELDS[i + 1:]:
+            pos = df_str.find(f"_{next_field}-", value_start)
+            if pos != -1:
+                value_end = pos
+                break
+        result[field] = df_str[value_start:value_end]
+    return result
+
+
+def _parse_bool(s):
+    """Convert "true"/"false" string to bool, pass other values through."""
+    if s == "true":
+        return True
+    if s == "false":
+        return False
+    return s
+
+
 def _get_df_string(kind, xdimred=None, ytrans=None, method=None, stat=None, xsea=False, perm=None, norm=False, mc=None):
     
     if kind=="ytrans":

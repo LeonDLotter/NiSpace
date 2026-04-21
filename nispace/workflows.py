@@ -130,7 +130,7 @@ def simple_colocalization(y,
                           parcellation_labels=None,
                           y_covariates=None,
                           colocalization_method="spearman",
-                          mc_method="fdr_bh",
+                          mc_method="meff",
                           p_from_average_y=False,
                           plot=True,
                           combat=False,
@@ -286,11 +286,13 @@ def simple_colocalization(y,
         status["permute"] = True  
     
     ## CORRECT
+    # normalize mc_method to list; explicit override inside correct_p_kwargs takes precedence
+    mc_methods = ([mc_method] if isinstance(mc_method, str) else list(mc_method))
+    if "mc_method" in correct_p_kwargs:
+        mc_methods = [correct_p_kwargs.pop("mc_method")]
     if not status["correct_p"]:
-        correct_p_kwargs = dict(
-            mc_method=mc_method,
-        ) | correct_p_kwargs
-        nsp.correct_p(**correct_p_kwargs)
+        for mc_m in mc_methods:
+            nsp.correct_p(**{"mc_method": mc_m} | correct_p_kwargs)
         status["correct_p"] = True
 
     ## VIZ
@@ -307,11 +309,17 @@ def simple_colocalization(y,
               for method in colocalization_method}
     p_values = {method: nsp.get_p_values(method, permuted)
                 for method in colocalization_method}
-    p_fdr_values = {method: nsp.get_p_values(method, permuted, mc_method=mc_method)
-                    for method in colocalization_method}
-    if len(colocalization_method)==1:
+    p_fdr_values = {
+        mc_m: {method: nsp.get_p_values(method, permuted, mc_method=mc_m)
+               for method in colocalization_method}
+        for mc_m in mc_methods
+    }
+    if len(colocalization_method) == 1:
         k = colocalization_method[0]
-        colocs, p_values, p_fdr_values = colocs[k], p_values[k], p_fdr_values[k]
+        colocs, p_values = colocs[k], p_values[k]
+        p_fdr_values = {mc_m: p_fdr_values[mc_m][k] for mc_m in mc_methods}
+    if len(mc_methods) == 1:
+        p_fdr_values = p_fdr_values[mc_methods[0]]
 
     return colocs, p_values, p_fdr_values, nsp
     
@@ -328,7 +336,7 @@ def group_comparison(y, design,
                      parcellation_labels=None,
                      colocalization_method="spearman",
                      comparison_method=None,
-                     mc_method="fdr_bh",
+                     mc_method="meff",
                      paired=False,
                      plot_design_between=True,
                      combat=False,
@@ -497,12 +505,12 @@ def group_comparison(y, design,
         status["permute"] = True  
     
     ## CORRECT
+    mc_methods = ([mc_method] if isinstance(mc_method, str) else list(mc_method))
+    if "mc_method" in correct_p_kwargs:
+        mc_methods = [correct_p_kwargs.pop("mc_method")]
     if not status["correct_p"]:
-        correct_p_kwargs = dict(
-            mc_method=mc_method,
-            verbose=verbose,
-        ) | correct_p_kwargs
-        nsp.correct_p(**correct_p_kwargs)
+        for mc_m in mc_methods:
+            nsp.correct_p(**{"mc_method": mc_m, "verbose": verbose} | correct_p_kwargs)
         status["correct_p"] = True
 
     ## VIZ
@@ -521,13 +529,18 @@ def group_comparison(y, design,
               for method in colocalization_method}
     p_values = {method: nsp.get_p_values(method, permute_what, Y_transform=comparison_method)
                 for method in colocalization_method}
-    p_fdr_values = {method: nsp.get_p_values(method, permute_what, Y_transform=comparison_method,
-                                             mc_method=mc_method)
-                    for method in colocalization_method}
-    if len(colocalization_method)==1:
-        colocs, p_values, p_fdr_values = (colocs[colocalization_method[0]],
-                                          p_values[colocalization_method[0]],
-                                          p_fdr_values[colocalization_method[0]])
+    p_fdr_values = {
+        mc_m: {method: nsp.get_p_values(method, permute_what, Y_transform=comparison_method,
+                                        mc_method=mc_m)
+               for method in colocalization_method}
+        for mc_m in mc_methods
+    }
+    if len(colocalization_method) == 1:
+        k = colocalization_method[0]
+        colocs, p_values = colocs[k], p_values[k]
+        p_fdr_values = {mc_m: p_fdr_values[mc_m][k] for mc_m in mc_methods}
+    if len(mc_methods) == 1:
+        p_fdr_values = p_fdr_values[mc_methods[0]]
 
     return colocs, p_values, p_fdr_values, nsp
     
@@ -545,7 +558,7 @@ def simple_xsea(y,
                 parcellation_labels=None,
                 y_covariates=None,
                 colocalization_method="spearman",
-                mc_method="fdr_bh",
+                mc_method="meff",
                 xsea_aggregation_method="mean",
                 permute_sets=False,
                 p_from_average_y=False,

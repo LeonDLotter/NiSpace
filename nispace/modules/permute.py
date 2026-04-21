@@ -197,22 +197,37 @@ def _get_exact_p_values(method, colocs_obs, colocs_null,
         p_data[stat] = p
         p_data_norm[stat] = p_norm
         
-    # return
-    return p_data, p_data_norm
+    # return (also expose resolved p_tails for storage by caller)
+    return p_data, p_data_norm, p_tails
 
 
 _MC_METHOD_ALIASES = {
     # shorthand
     "fdr": "fdr_bh",
     "bonf": "bonferroni",
-    # stripped variants of multi-word methods (underscore/dash removed)
+    # stripped variants of multi-word statsmodels methods (underscore/dash removed)
     "fdrbh": "fdr_bh",
     "fdrby": "fdr_by",
     "fdrtsbh": "fdr_tsbh",
     "fdrtsbky": "fdr_tsbky",
     "holmsidak": "holm-sidak",
     "simeshochberg": "simes-hochberg",
+    # empirical methods — case-insensitive aliases
+    "meff": "meff_galwey",
+    "meff_galwey": "meff_galwey",
+    "meffgalwey": "meff_galwey",
+    "meff_liji": "meff_li_ji",
+    "meffliji": "meff_li_ji",
+    "meff_li_ji": "meff_li_ji",
+    "maxt": "maxT",
+    "maxT": "maxT",
+    "step_maxt": "step_maxT",
+    "stepmaxt": "step_maxT",
+    "step_maxT": "step_maxT",
 }
+
+# empirical methods handled internally — NOT passed to statsmodels
+_EMPIRICAL_MC_METHODS = {"meff_galwey", "meff_li_ji", "maxT", "step_maxT"}
 
 def _get_correct_mc_method(mc_method):
     return _MC_METHOD_ALIASES.get(mc_method, mc_method)
