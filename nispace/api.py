@@ -168,21 +168,33 @@ class NiSpace:
                                f"len==3! Is {type(data_space)}.",
                                ValueError)
         self._data_space = data_space
-        # TODO: CREATE PARCELLATION CLASS OBJECT HERE; REQUIRES CLASS TO ACCEPT NISPACE INTEGR PARCS
         if "parc" in kwargs and parcellation is None:
             parcellation = kwargs.pop("parc")
-        self._parc = {
-            "parc": parcellation,
-            "labels": parcellation_labels,
-            "space": parcellation_space,
-            "hemi": parcellation_hemi,
-            "symmetric": parcellation_symmetric,
-            "l2rmap": parcellation_l2rmap,
-            "idc_lh": parcellation_idc_lh,
-            "idc_rh": parcellation_idc_rh,
-            "idc_sc": parcellation_idc_sc,
-            #"density": parcellation_density,
-        }
+        # custom image/path parcellations are built immediately; integrated strings
+        # and already-constructed Parcellation objects are handled in fit()
+        if parcellation is not None and not isinstance(parcellation, (str, Parcellation)):
+            self._parc = Parcellation.from_path(
+                source=parcellation,
+                space=parcellation_space,
+                labels=parcellation_labels,
+                dist_mat=parcellation_dist_mat,
+                spin_mat=parcellation_spin_mat,
+                symmetric=parcellation_symmetric,
+                l2rmap=parcellation_l2rmap,
+                hemi=parcellation_hemi,
+            )
+        else:
+            self._parc = {
+                "parc": parcellation,
+                "labels": parcellation_labels,
+                "space": parcellation_space,
+                "hemi": parcellation_hemi,
+                "symmetric": parcellation_symmetric,
+                "l2rmap": parcellation_l2rmap,
+                "idc_lh": parcellation_idc_lh,
+                "idc_rh": parcellation_idc_rh,
+                "idc_sc": parcellation_idc_sc,
+            }
         self._parc_dist_mat = {
             "null_maps": parcellation_dist_mat
         }
@@ -260,81 +272,40 @@ class NiSpace:
             # check if parcellation is an integrated parcellation
             parc_integrated = _check_parcellation(self._parc["parc"], force_str=True, raise_not_found=False)
             if parc_integrated is not None:
-                _fp_kwargs = dict(
+                # fetch full multi-space Parcellation (space=None → Parcellation object)
+                parc_obj = fetch_parcellation(
                     parcellation=parc_integrated,
-                    space=self._parc["space"],
-                    return_labels=True,
-                    return_space=True,
-                    return_resolution=True,
-                    return_symmetric=True,
-                    return_l2rmap=True,
-                    return_lrcorr=True,
                     return_dist_mat=self._load_dist_mat,
                     return_spin_mat=self._load_spin_mat,
-                    return_loaded=True,
                 )
-                _fp_result = fetch_parcellation(**_fp_kwargs)
-                _fp_keys = ["parc", "label", "space", "res", "sym", "l2rmap", "lrcorr"]
-                if self._load_dist_mat:
-                    _fp_keys.append("distmat")
-                if self._load_spin_mat:
-                    _fp_keys.append("spinmat")
-                _fp = dict(zip(_fp_keys, _fp_result if isinstance(_fp_result, tuple) else (_fp_result,)))
-                parc      = _fp["parc"]
-                labels    = _fp["label"]
-                space     = _fp["space"]
-                density   = _fp["res"]
-                symmetric = _fp["sym"]
-                l2rmap    = _fp["l2rmap"]
-                lrcorr    = _fp.get("lrcorr")
-                dist_mat  = _fp.get("distmat", None)
-                spin_mat  = _fp.get("spinmat", None)
-                if isinstance(dist_mat, tuple) and all(d is None for d in dist_mat):
-                    dist_mat = None
-                self._parc = Parcellation(
-                    parcellation=parc,
-                    labels=labels,
-                    space=space,
-                    resolution=density,
-                    symmetric=symmetric,
-                    left2right_mapping=l2rmap,
-                    lrcorr=lrcorr,
-                    dist_mat=dist_mat,
-                    spin_mat=spin_mat,
-                    name=parc_integrated,
-                ).fit()
-                # TODO: BUILD ALSO DIST MATRICES INTO PARCELLATION INSTANCE
-                self._parc_dist_mat["null_maps"] = dist_mat
-                if not isinstance(dist_mat, tuple):
-                    self._parc_dist_mat["cv"] = dist_mat
+                # activate space that matches the requested data space
+                active_space = parc_obj.get_image_for_dataspace(self._parc["space"])
+                parc_obj.set_active_space(active_space)
+                self._parc = parc_obj
+                # populate dist_mat dict from Parcellation for backward compat
+                dm = parc_obj.get_dist_mat(compute_if_missing=False)
+                self._parc_dist_mat["null_maps"] = dm
+                if not isinstance(dm, tuple):
+                    self._parc_dist_mat["cv"] = dm
                 if self._parc_spin_mat is None:
-                    self._parc_spin_mat = spin_mat
-                _loaded = []
-                if dist_mat is not None:
-                    _loaded.append("distance matrix")
-                if spin_mat is not None:
-                    _loaded.append("spin matrix")
-                lgr.info(f"Loaded integrated parcellation"
-                         + (f" with pre-computed {' and '.join(_loaded)}." if _loaded else "."))
+                    self._parc_spin_mat = parc_obj.get_spin_mat()
+                lgr.info(f"Loaded integrated parcellation '{parc_integrated}' in space '{active_space}'.")
                 
-        # custom parcellation
+        # custom parcellation (string file path not matched as integrated)
         if self._parc is not None and not isinstance(self._parc, Parcellation):
-            self._parc = Parcellation(
-                parcellation=self._parc["parc"],
-                labels=self._parc["labels"],
+            self._parc = Parcellation.from_path(
+                source=self._parc["parc"],
                 space=self._parc["space"],
+                labels=self._parc["labels"],
+                dist_mat=self._parc_dist_mat["null_maps"],
                 symmetric=self._parc["symmetric"],
-                left2right_mapping=self._parc["l2rmap"],
-                dist_mat=self._parc_dist_mat["null_maps"]
-            ).fit()
+                l2rmap=self._parc["l2rmap"],
+                hemi=self._parc["hemi"],
+            )
 
         ## extract input data
-        # TODO: PARCELLATE_DATA SHOULD ACCEPT PARCELLATION OBJECTS; STRIP SEPARATE ARGS HERE
         _input_kwargs = dict(
-            parcellation=self._parc._image_obj, 
-            parc_labels=self._parc._labels,
-            parc_hemi=self._parc._hemi,
-            parc_space=self._parc._space,
+            parcellation=self._parc,
             resampling_target=self._resampl_target,
             n_proc=self._n_proc,
             verbose=verbose,
@@ -375,8 +346,8 @@ class NiSpace:
             if isinstance(self._z, str):
                 if self._z in ["GM", "GMV", "gm", "gmv"]:
                     lgr.info("Using standard grey matter probability map as 'z' for GMV-control.")
-                    # TODO: should be MNI152NLin6Asym space when a surface parcellation is used
-                    self._z = [fetch_template("MNI152NLin2009cAsym", desc="gmprob")]
+                    gm_template = "MNI152NLin6Asym" if self._parc._is_surface else "MNI152NLin2009cAsym"
+                    self._z = [fetch_template(gm_template, desc="gmprob")]
                     self._z_lab = ["gm"]
             self._Z = parcellate_data(
                 self._z, 
@@ -982,7 +953,7 @@ class NiSpace:
                         **dist_mat_kwargs
                     )
                     
-                if any([s in self._parc._space.lower() for s in ["mni", "fsa"]]):
+                if any([s in (self._parc._space or "").lower() for s in ["mni", "fsa"]]):
                     lgr.info("Calculating distance-dependent parcel splits.")
                     self.parcel_tr_te_splits_works = _get_dist_dep_splits(
                         dist_mat=euclidean_dist_mat[np.ix_(self._no_nan, self._no_nan)], 
@@ -1072,9 +1043,9 @@ class NiSpace:
    
     # PERMUTE ======================================================================================
     
-    def permute(self, what, method=None, X_reduction=None, Y_transform=None, xsea=None, 
-                n_perm=10000, 
-                maps_which="X", maps_nulls=None, maps_method="moran", dist_mat=None,
+    def permute(self, what, method=None, X_reduction=None, Y_transform=None, xsea=None,
+                n_perm=10000,
+                maps_which="X", maps_nulls=None, maps_method=None, dist_mat=None,
                 sets_X_background=None,
                 p_tails=None, p_from_average_y_coloc="auto",
                 n_proc=None, seed=None, store=True, verbose=None, force_dict=False,
@@ -1175,9 +1146,23 @@ class NiSpace:
         }
         for k in [k for k in kwargs.keys() if k.startswith("maps_")]:
             maps_kwargs[k.removeprefix("maps_")] = kwargs.pop(k)
-        # pass precomputed spin matrix only for alexander_bloch/spin
+        # resolve null_method and null_space from parcellation when not explicitly set
+        # TODO: combined spin+moran: get_null_space() currently returns a single (space, method).
+        # For combined parcellations it should return a split strategy and permute() should
+        # pass a sc-only dist_mat to _get_null_maps alongside the cx spin path.
+        if maps_kwargs["null_method"] is None:
+            null_space, null_method = self._parc.get_null_space()
+            maps_kwargs["null_method"] = null_method
+            lgr.info(f"Using default null method '{null_method}' "
+                     f"(parcellation null space: '{null_space}').")
+        else:
+            null_space, _ = self._parc.get_null_space()
+        # pass precomputed spin matrix for the resolved null space
         if maps_kwargs["null_method"] in {"alexander_bloch", "spin"}:
-            maps_kwargs["spin_mat"] = self._parc_spin_mat
+            maps_kwargs["spin_mat"] = (
+                self._parc_spin_mat
+                or self._parc.get_spin_mat(null_space)
+            )
         # groups permutation
         groups_kwargs = {
             "paired": "auto",
@@ -2279,12 +2264,11 @@ class NiSpace:
                 generate_dist_mat = False
             
         if generate_dist_mat:
-            # TODO: ADD SUPPORT FOR PARCELLATION OBJECTS TO DISTANCE MATRIX GENERATION
+            null_space, _ = self._parc.get_null_space()
             dist_mat = get_distance_matrix(
-                parc=self._parc._source,
-                parc_space=self._parc._space,
-                parc_hemi=self._parc._hemi,
-                #parc_density=self._parc_info["density"],
+                parc=self._parc.get_image(null_space),
+                parc_space=null_space,
+                parc_hemi=self._parc.get_hemi(null_space),
                 parc_resample=parc_resample,
                 centroids=centroids,
                 surf_euclidean=True if dist_mat_type=="cv" else False,

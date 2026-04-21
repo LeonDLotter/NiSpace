@@ -52,31 +52,22 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
         else:
             lgr.critical_raise(f"Argument 'nispace_object' must be of type NiSpace not {type(nsp)}!")
             
-    # space
-    # TODO: make this nicer, check for space in parcellation part, intelligently select space
+    # space: data_space and parcellation_space default to the shared space arg
     data_space = space if not data_space else data_space
-    parcellation_space = space if not parcellation_space else parcellation_space  
-        
+    parcellation_space = space if not parcellation_space else parcellation_space
+
     ## INIT
     if not status["init"]:
-        
-        # check provided data
-        # parcellation
+
+        # resolve integrated parcellation name (needed for fetch_reference below)
         parc_integrated = None
         if isinstance(parcellation, str):
-            # check if parcellation is an integrated parcellation
             parc_integrated = _check_parcellation(parcellation, force_str=True, raise_not_found=False)
-            if parc_integrated is not None:
-                lgr.info(f"Using integrated parcellation {parcellation}.")
-            # if not, check if it's a path to a parcellation file
-            else:
-                lgr.info(f"Input '{parcellation}' not recognized as integrated parcellation. "
-                         "Checking if (path to) parcellation file.")
-            
+
         # y
         if y is None:
             lgr.error("You must provide 'y' data: (list) of volumetric/surface or pre-parcellated data!")
-            
+
         # x
         if isinstance(x, str):
             x = x.lower()
@@ -101,14 +92,14 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
                 lgr.error(f"'x' must be one of: '{list(reference_lib.keys())}' not '{x}'!")
         else:
             null_maps = None
-            
-        # init
+
+        # init — pass parcellation as-is; api.fit() resolves integrated names and spaces
         init_kwargs = dict(
             x=x,
             y=y,
             z=z,
             standardize=standardize,
-            parcellation=parc_integrated if parc_integrated is not None else parcellation,
+            parcellation=parcellation,
             parcellation_labels=parcellation_labels,
             parcellation_space=parcellation_space,
             data_space=data_space,
@@ -567,7 +558,6 @@ def simple_xsea(y,
                 permute_kwargs=None,
                 correct_p_kwargs=None,
                 plot_kwargs=None):
-    # TODO: space=doesnt raises an error for parcellation fetching but works with group_comparison 
     verbose = set_log(lgr, verbose)
     # kwarg dicts
     fetch_x_kwargs = {} if fetch_x_kwargs is None else fetch_x_kwargs

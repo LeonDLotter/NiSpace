@@ -267,7 +267,6 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
     """
     Fetch a parcellation.
     """
-    # TODO: CHANGE TO RETURNING PARCELLATION INSTANCE. ADOPT ALL OCCURENCES IN CODE
     verbose = set_log(lgr, verbose)
     
     # check parcellation and return correct name or list of two names
@@ -446,6 +445,35 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
 
         return out
     
+    # ---- NEW PATH: space=None → return multi-space Parcellation object ----
+    if space is None:
+        from .modules.parcellation import Parcellation
+        if isinstance(parc, list):
+            return Parcellation.from_nispace_library(
+                parc,
+                [parcellation_lib[parc[0]], parcellation_lib[parc[1]]],
+                nispace_data_dir,
+                load_dist_mat=return_dist_mat,
+                load_spin_mat=return_spin_mat,
+                lrcorr_threshold=lrcorr_threshold,
+                overwrite=overwrite,
+                check_file_hash=check_file_hash,
+                verbose=verbose,
+            )
+        else:
+            return Parcellation.from_nispace_library(
+                parc,
+                parcellation_lib[parc],
+                nispace_data_dir,
+                load_dist_mat=return_dist_mat,
+                load_spin_mat=return_spin_mat,
+                lrcorr_threshold=lrcorr_threshold,
+                overwrite=overwrite,
+                check_file_hash=check_file_hash,
+                verbose=verbose,
+            )
+
+    # ---- LEGACY PATH: space explicitly given → return tuple of values ----
     # run load_parc for a single parcellation
     if isinstance(parc, str):
         out = load_parc(parc)
@@ -453,7 +481,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
             return list(out.values())[0]
         else:
             return tuple(out.values())
-    
+
     # run load_parc for 2 parcellations
     out_cortex = load_parc(parc[0])
     out_subcortex = load_parc(parc[1])

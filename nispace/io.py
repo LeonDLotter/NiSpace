@@ -82,7 +82,15 @@ def parcellate_data(data,
     It also manages different parcellation formats and resampling targets.
     """
     verbose = set_log(lgr, verbose)
-    
+
+    # unpack Parcellation object into flat args (lazy import avoids circular dependency)
+    from .modules.parcellation import Parcellation
+    if isinstance(parcellation, Parcellation):
+        parc_labels = parc_labels if parc_labels is not None else parcellation._labels
+        parc_hemi   = parc_hemi   if parc_hemi   is not None else parcellation._hemi
+        parc_space  = parc_space  if parc_space  is not None else parcellation._space
+        parcellation = parcellation._image_obj
+
     ## put data into list
     if isinstance(data, Path):
         data = str(data)

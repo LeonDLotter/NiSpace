@@ -58,8 +58,11 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
         lgr.info(f"Generating null maps (n = {n_perm}, null_method = '{null_method}').")
 
         idc_lh, idc_rh = parc._idc_byhemi["L"], parc._idc_byhemi["R"]
+        parc_img      = parc._image_obj
+        parc_space_   = parc._space
+        parc_hemi_    = parc._hemi
 
-        # for spin methods, check for cached spins
+        # for spin methods: resolve surface image and cached spin matrix
         from ..nulls import _SPIN_METHODS
         if null_method in _SPIN_METHODS:
             if spin_mat is None:
@@ -67,14 +70,35 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
                     spin_mat = nispace_nulls.get("maps_spin", None)
                 except Exception:
                     pass
+            # get surface image (may differ from the active MNI image for MNI-primary parcs)
+            surf_img, surf_spin_mat, surf_space = parc.get_surface_for_spins()
+            if surf_img is not None:
+                parc_img     = surf_img
+                parc_space_  = surf_space
+                parc_hemi_   = ("L", "R")
+                # for combined parcellations use cx-only hemisphere indices
+                if parc._is_combined and parc._cx_idc_lh is not None:
+                    idc_lh = parc._cx_idc_lh
+                    idc_rh = parc._cx_idc_rh
+                    # TODO: combined spin+moran: after spin fills cx null maps, run moran
+                    # separately for sc parcels (parc_idc_sc) and merge both into the output.
+                    # Currently parc_idc_sc=None below, so sc parcels get no null variation.
+                if spin_mat is None and surf_spin_mat is not None:
+                    spin_mat = surf_spin_mat
+            else:
+                lgr.warning(
+                    f"Spin method '{null_method}' requested but no surface data found for "
+                    f"parcellation '{parc._name}'. Falling back to 'moran'."
+                )
+                null_method = "moran"
 
         # null data for all maps
         null_maps, result_mat = generate_null_maps(
             method=null_method,
             data=data_obs,
-            parcellation=parc._image_obj,
-            parc_space=parc._space,
-            parc_hemi=parc._hemi,
+            parcellation=parc_img,
+            parc_space=parc_space_,
+            parc_hemi=parc_hemi_,
             parc_symmetric=parc._symmetric,
             parc_resample=parc_resample,
             n_nulls=n_perm,

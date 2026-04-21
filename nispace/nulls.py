@@ -3,11 +3,12 @@ import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
 from nilearn.image import resample_img, coord_transform
-from neuromaps.images import load_gifti, load_nifti, load_data
+from neuromaps.images import load_gifti, load_nifti, load_data, PARCIGNORE
 from neuromaps.nulls.nulls import batch_surrogates
-from neuromaps.nulls.nulls import _get_distmat
 from neuromaps.nulls.spins import gen_spinsamples, get_parcel_centroids
-from neuromaps.datasets import fetch_fsaverage, fetch_fslr
+from neuromaps.datasets import fetch_atlas
+from neuromaps.points import make_surf_graph
+from scipy.sparse.csgraph import dijkstra
 from scipy.spatial.distance import cdist
 from sklearn.preprocessing import minmax_scale
 from tqdm.auto import tqdm
@@ -32,8 +33,92 @@ from .utils.utils import set_log
 def _dist_mat_from_coords(coords, dtype=np.float32):
     dist_mat = np.zeros((coords.shape[0], coords.shape[0]), dtype=dtype)
     for i, row in enumerate(coords):
-        dist_mat[i] = cdist(row[None], coords).astype(dtype)   
+        dist_mat[i] = cdist(row[None], coords).astype(dtype)
     return dist_mat
+
+
+def _surf_geodesic_row(i, parcel_verts, all_parcel_verts, graph, n_parcels, centroids, dtype):
+    """Compute one row of the geodesic parcel-parcel distance matrix (upper triangle).
+
+    Default (centroids=False): multi-source Dijkstra from all vertices of parcel i,
+    then average distances to all vertices of each parcel j >= i.
+    Centroids (centroids=True): single-source Dijkstra from the centroid vertex of
+    parcel i, then read off distances to centroid vertices of parcels j >= i.
+    """
+    src = parcel_verts[i] if not centroids else parcel_verts[i][:1]
+    dists = dijkstra(graph, directed=False, indices=src)  # (n_src, n_verts)
+    if dists.ndim == 1:
+        dists = dists[np.newaxis, :]
+    row = np.zeros(n_parcels, dtype=dtype)
+    for j in range(i, n_parcels):
+        tgt = all_parcel_verts[j] if not centroids else all_parcel_verts[j][:1]
+        row[j] = dists[:, tgt].mean()
+    return row
+
+
+def _surf_dist_hemi(gifti_surf, gifti_parc, medial_gifti, centroids, n_proc, dtype, verbose, hemi=""):
+    """Geodesic parcel-parcel distance matrix for one hemisphere.
+
+    Mirrors the volumetric voxel-to-voxel path:
+    - build graph once
+    - one Parallel job per parcel (upper triangle only)
+    - mirror to fill lower triangle
+    """
+    vert, faces = load_gifti(gifti_surf).agg_data()
+    labels = load_gifti(gifti_parc).agg_data()
+    if labels.ndim > 1:
+        labels = labels.squeeze()
+    labels = labels.astype(int)
+
+    # medial-wall mask: True = exclude vertex
+    medial_mask = np.zeros(len(vert), dtype=bool)
+    if medial_gifti is not None:
+        mw = load_gifti(medial_gifti).agg_data()
+        if mw.ndim > 1:
+            mw = mw.squeeze()
+        medial_mask = ~mw.astype(bool)
+
+    # build graph with medial wall excluded
+    graph = make_surf_graph(vert, faces, mask=medial_mask)
+
+    # collect vertex indices per parcel (all parcels; medial-wall parcels fall back to all vertices)
+    parc_ids = list(np.trim_zeros(np.unique(labels)))
+    n_parcels = len(parc_ids)
+
+    def _parcel_verts(pid, require_non_medial=True):
+        verts = np.where((labels == pid) & ~medial_mask)[0] if require_non_medial \
+                else np.where(labels == pid)[0]
+        if len(verts) == 0:
+            verts = np.where(labels == pid)[0]
+            lgr.warning(f"Parcel {pid} has no non-medial-wall vertices; "
+                        "it will be kept but distances may be unreliable.")
+        return verts
+
+    if centroids:
+        # snap centroid: vertex within parcel closest to coordinate mean
+        parcel_verts = []
+        for pid in parc_ids:
+            verts_idx = _parcel_verts(pid)
+            mean_coord = vert[verts_idx].mean(axis=0)
+            snap = verts_idx[np.argmin(np.linalg.norm(vert[verts_idx] - mean_coord, axis=1))]
+            parcel_verts.append(np.array([snap]))
+    else:
+        parcel_verts = [_parcel_verts(pid) for pid in parc_ids]
+
+    hemi_tag = f" {hemi}" if hemi else ""
+    mode_tag = "centroid" if centroids else "vertex-to-vertex"
+    lgr.info(f"Estimating geodesic distance matrix: {hemi_tag + ', ' if hemi_tag else ''}{n_parcels} surface parcels, "
+             f"{mode_tag} mode, {n_proc} proc.")
+
+    dist_rows = Parallel(n_jobs=n_proc)(
+        delayed(_surf_geodesic_row)(i, parcel_verts, parcel_verts, graph, n_parcels, centroids, dtype)
+        for i in tqdm(range(n_parcels), desc=f"Distance matrix{hemi_tag} ({n_proc} proc)", disable=not verbose)
+    )
+
+    dist = np.array(dist_rows, dtype=dtype)
+    dist = dist + dist.T
+    np.fill_diagonal(dist, 0)
+    return dist
 
 def _img_density_for_neuromaps(img):
     if isinstance(img, nib.GiftiImage):
@@ -280,6 +365,19 @@ _NULL_METHODS = {
 }
 
 
+def _get_surface_atlas(parc_space, density):
+    """Return (atlas_bundle, surf_key) for a supported surface space."""
+    if "fsa" in parc_space.lower():
+        return fetch_atlas("fsaverage", density), "pial"
+    elif "fslr" in parc_space.lower():
+        return fetch_atlas("fsLR", density), "midthickness"
+    else:
+        lgr.critical_raise(
+            f"Surface space '{parc_space}' not supported. Use 'fsaverage' or 'fsLR'.",
+            ValueError,
+        )
+
+
 def generate_spins(parc, parc_space, n_perm=1000, method="original", seed=None):
     """Generate spin resampling indices for a bilateral surface parcellation.
 
@@ -292,18 +390,9 @@ def generate_spins(parc, parc_space, n_perm=1000, method="original", seed=None):
             ValueError
         )
 
-    if "fsa" in parc_space.lower():
-        fetch_func = fetch_fsaverage
-    elif "fslr" in parc_space.lower():
-        fetch_func = fetch_fslr
-    else:
-        lgr.critical_raise(
-            f"Spin tests require 'fsaverage' or 'fsLR' parcellation space, got '{parc_space}'.",
-            ValueError
-        )
-
     density = _img_density_for_neuromaps(parc)
-    spheres = fetch_func(density)["sphere"]
+    atlas, _ = _get_surface_atlas(parc_space, density)
+    spheres = atlas["sphere"]
 
     centroids, hemiid = get_parcel_centroids(
         surfaces=(spheres[0], spheres[1]),
@@ -347,21 +436,20 @@ def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"],
                         parc_resample=2, centroids=False, surf_euclidean=False,
                         n_proc=1, verbose=True, dtype=np.float32):
     verbose = set_log(lgr, verbose)
-    # TODO: ADD SUPPORT FOR PARCELLATION OBJECTS 
-    
+
     ## generate distance matrix
-    # case volumetric 
+    # case volumetric
     if "mni" in parc_space.lower():
         # get parcellation data
         parc = load_nifti(parc)
-        if parc_resample:
+        if parc_resample and not isinstance(parc_resample, str):
             if parc_resample is True:
                 parc_resample = 3
-            lgr.info(f"Downsampling volumetric parcellation to voxelsize of {parc_resample} "
+            lgr.info(f"Resampling volumetric parcellation to voxelsize of {parc_resample} "
                       "for distance matrix generation.")
             parc = resample_img(
-                parc, 
-                target_affine=np.diag([parc_resample] * 3), 
+                parc,
+                target_affine=np.diag([parc_resample] * 3),
                 interpolation="nearest",
                 force_resample=True, copy_header=True
             )
@@ -373,34 +461,36 @@ def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"],
         parc_data_m = parc_data * mask
 
         # case distances between volumetric parcel centroids
-        if centroids:  
+        if centroids:
+            lgr.info(f"Estimating euclidean distance matrix: {n_parcels} volumetric parcels, centroid mode.")
             # get centroids
             ijk = find_vol_parc_centroids(parc_data_m, affine=parc_affine, parcel_idc=parcels)
             # get distances
             dist = _dist_mat_from_coords(ijk, dtype)
-            
-        # case mean distances between parcel-wise voxels 
+
+        # case mean distances between parcel-to-parcel voxels
         else:
             # get parcel-wise coordinates in world space
             ijk_parcels = dict()
             for i_parcel in parcels:
                 xyz_parcel = np.column_stack(np.where(parc_data_m==i_parcel))
                 ijk_parcels[i_parcel] = nib.affines.apply_affine(parc_affine, xyz_parcel)
-                
+
             def mni_dist(i, i_parcel):
                 dist_i = np.zeros(n_parcels, dtype=dtype)
                 j = i
                 for _ in range(n_parcels - j):
-                    dist_i[j] = cdist(ijk_parcels[i_parcel], ijk_parcels[parcels[j]]) \
-                        .mean().astype(dtype)
+                    dist_i[j] = \
+                        cdist(ijk_parcels[i_parcel], ijk_parcels[parcels[j]]).mean().astype(dtype)
                     j += 1
                 return dist_i
-            
-            lgr.info(f"Estimating euclidean distance matrix between {n_parcels} volumetric parcels.")
+
+            lgr.info(f"Estimating euclidean distance matrix: {n_parcels} volumetric parcels, "
+                     f"voxel-to-voxel mode, {n_proc} proc.")
             dist_list = Parallel(n_jobs=n_proc)(
                 delayed(mni_dist)(i, i_parcel) for i, i_parcel in enumerate(tqdm(
-                    parcels, 
-                    desc=f"Running ({n_proc} proc)", disable=not verbose
+                    parcels,
+                    desc=f"Distance matrix ({n_proc} proc)", disable=not verbose
                 ))
             )
             dist = np.r_[dist_list]
@@ -411,52 +501,44 @@ def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"],
     
     # case surface
     elif parc_space in ["fsaverage", "fsLR", "fsa", "fslr"]:
-        
-        if surf_euclidean & ("fsa" in parc_space):
-            lgr.info(f"Estimating euclidean distance matrix between surface parcels.")
+
+        if parc_resample and isinstance(parc_resample, str):
+            from neuromaps.transforms import fsaverage_to_fsaverage, fslr_to_fslr
+            current_density = _img_density_for_neuromaps(parc[0] if isinstance(parc, tuple) else parc)
+            if current_density != parc_resample:
+                lgr.info(f"Resampling surface parcellation from {current_density} to {parc_resample} density "
+                         "for distance matrix generation.")
+                resample_fn = fsaverage_to_fsaverage if "fsa" in parc_space.lower() else fslr_to_fslr
+                parc = resample_fn(parc, parc_resample, method="nearest")
+                    
+
+        if surf_euclidean:
             _parc_centroids = find_surf_parc_centroids(
                 parc=parc,
                 parc_space=parc_space,
-                parc_hemi=parc_hemi, 
-                parc_density=_img_density_for_neuromaps(parc), 
+                parc_hemi=parc_hemi,
+                parc_density=_img_density_for_neuromaps(parc),
             )
+            n_parcels_surf = len(_parc_centroids)
+            lgr.info(f"Estimating euclidean distance matrix: {n_parcels_surf} surface parcels, centroid mode.")
             dist = _dist_mat_from_coords(_parc_centroids, dtype=dtype)
-            
-        elif surf_euclidean & ("fsa" not in parc_space):
-            lgr.warning("Distance matrix generation currently not implemented for surface " 
-                        "spaces other than fsaverage. Will use random splits!")
-        
-        # TODO: implement fsLR distance matrix
-        elif "fsLR" in parc_space.lower():
-            lgr.critical_raise(
-                "Distance matrix generation currently not implemented for fsLR space. "
-                "Use 'fsaverage' instead!",
-                ValueError
-            )
+
         else:
-            lgr.info(f"Estimating geodesic distance matrix between surface parcels.")
-            def surf_dist(i_hemi, hemi):
-                dist = _get_distmat(
-                    hemi, 
-                    atlas=parc_space, 
-                    density=_img_density_for_neuromaps(parc[i_hemi]), 
-                    parcellation=parc[i_hemi] if len(parc_hemi) > 1 else parc,
-                    n_proc=n_proc
+            density = _img_density_for_neuromaps(parc[0] if isinstance(parc, tuple) else parc)
+            atlas, surf_key = _get_surface_atlas(parc_space, density)
+
+            hemis = parc_hemi if isinstance(parc_hemi, (list, tuple)) else [parc_hemi]
+            dist_hemis = []
+            for i_hemi, hemi in enumerate(hemis):
+                surf_path   = getattr(atlas[surf_key], hemi)
+                medial_path = getattr(atlas["medial"], hemi)
+                parc_h = parc[i_hemi] if isinstance(parc, tuple) else parc
+                dist_hemis.append(
+                    _surf_dist_hemi(surf_path, parc_h, medial_path,
+                                    centroids, n_proc, dtype, verbose, hemi=hemi)
                 )
-                return(dist)
-            
-            dist = Parallel(n_jobs=n_proc)(
-                delayed(surf_dist)(i, h) for i, h in enumerate(tqdm(
-                    parc_hemi, 
-                    desc=f"Calculating distance matrix ({n_proc} proc)", 
-                    disable=not verbose
-                ))
-            )
-            
-            if isinstance(parc, tuple):
-                dist = tuple(dist)
-            else:
-                dist = dist[0]
+
+            dist = tuple(dist_hemis) if isinstance(parc, tuple) else dist_hemis[0]
 
     # case other
     else:
@@ -499,19 +581,6 @@ def find_vol_parc_centroids(parc, affine=None, parcel_idc=None, return_data_spac
 
 
 def find_surf_parc_centroids(parc, parc_space="fsaverage", parc_hemi=None, parc_density=None, snap=True):
-    # TODO: switch template fetching to nispace after we added fsaverage and fsLR templates in all 
-    # resolutions
-
-    # check parc space
-    if "fsa" in parc_space.lower():
-        fetch_func = fetch_fsaverage
-        surf_name = "pial"
-    elif "fslr" in parc_space.lower():
-        fetch_func = fetch_fslr
-        surf_name = "midthickness"
-    else:
-        lgr.critical_raise(f"Parcellation space '{parc_space}' not supported. "
-                           f"Choose one of 'fsaverage' or 'fsLR'.", ValueError)
     
     # get parcellation
     if isinstance(parc_hemi, str):
@@ -539,7 +608,8 @@ def find_surf_parc_centroids(parc, parc_space="fsaverage", parc_hemi=None, parc_
         parc_density = _img_density_for_neuromaps(parc)
 
     # get standard surface
-    surfaces = fetch_func(parc_density)[surf_name]
+    atlas, surf_key = _get_surface_atlas(parc_space, parc_density)
+    surfaces = atlas[surf_key]
     if (len(parc_hemi)==1) & (parc_hemi[0]=="L"):
         surfaces = load_gifti(surfaces[0]),
     elif (len(parc_hemi)==1) & (parc_hemi[0]=="R"):
@@ -672,6 +742,8 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
             )
 
         lgr.info("Null data generation finished.")
+        # TODO: combined spin+moran: instead of returning here, continue to the moran
+        # path for parc_idc_sc parcels, merge spin nulls (cx) + moran nulls (sc), then return.
         return nulls, spin_mat
 
     ## random nulls -> no distmat
