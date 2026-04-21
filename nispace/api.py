@@ -229,13 +229,14 @@ class NiSpace:
         
         # defaults for get functions (IMPORTANT: this determines what coloc and get function will do!)
         self._last_settings = {
-            "method": None, 
-            "X_reduction": False, 
+            "method": None,
+            "X_reduction": False,
             "Y_transform": False,
-            "xsea": False, 
+            "xsea": False,
             "rank": False,
             "zy_matched": False,
             "regress_z": None,
+            "mc_method": None,
         }
         
         # deprecation adjustment
@@ -1657,7 +1658,8 @@ class NiSpace:
             
         # mc method
         mc_method = _get_correct_mc_method(mc_method)
-        
+        lgr.info(f"Correction method: '{mc_method}', alpha: {mc_alpha}, dimension: '{mc_dimension}'.")
+
         # get p values, mc function passes keywords to statsmodels.multitest
         p_corr = dict()
         for p_str in p_strs:
@@ -1671,8 +1673,9 @@ class NiSpace:
             )
         # save and return
         if store:
-            for p_str in p_corr: 
+            for p_str in p_corr:
                 self._p_colocs[p_str] = p_corr[p_str]
+            self._set_last(mc_method=mc_method)
             ## return
             if self._return_self:
                 return self
@@ -2025,15 +2028,15 @@ class NiSpace:
             perm=permute_what
         )
         
+        if mc_method is not None:
+            mc_method = _get_correct_mc_method(mc_method).replace("-", "").replace("_", "")
+
         self._check_permute(method, permute_what, mc_method, xsea, stats, X_reduction, Y_transform)
-        
+
         if stats is None:
             stats = _get_coloc_stats(method, permuted_only=True)
         elif isinstance(stats, str):
             stats = [stats]
-        
-        if mc_method is not None:
-            mc_method = mc_method.replace("-", "").replace("_", "")
         
         out = dict()
         for stat in stats:
@@ -2068,8 +2071,20 @@ class NiSpace:
         lgr.info(f"Returning p values: \n{string}")
         lgr.setLevel(loglevel)
         return out
-        
-        
+
+    # ----------------------------------------------------------------------------------------------
+
+    def get_corrected_p_values(self, mc_method=None, **kwargs):
+        mc_method = self._get_last(mc_method=mc_method)
+        if mc_method is None:
+            lgr.critical_raise(
+                "No corrected p values found. Run correct_p() first.",
+                ValueError
+            )
+        mc_method = _get_correct_mc_method(mc_method)
+        return self.get_p_values(mc_method=mc_method, **kwargs)
+
+
     # SAVE, LOAD, COPY =============================================================================
 
     def to_pickle(self, filepath, save_nulls=True, verbose=None):

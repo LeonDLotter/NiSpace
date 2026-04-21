@@ -118,9 +118,9 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
     return status, nsp, null_maps
        
        
-def simple_colocalization(y, 
-                          x="PET", 
-                          z=None, 
+def simple_colocalization(y,
+                          x="PET",
+                          z=None,
                           x_collection=None,
                           standardize="xz",
                           space="MNI152NLin2009cAsym",
@@ -130,6 +130,7 @@ def simple_colocalization(y,
                           parcellation_labels=None,
                           y_covariates=None,
                           colocalization_method="spearman",
+                          mc_method="fdr_bh",
                           p_from_average_y=False,
                           plot=True,
                           combat=False,
@@ -138,7 +139,7 @@ def simple_colocalization(y,
                           #x_load_nulls=True,
                           n_proc=1,
                           verbose=True,
-                          nispace_object=None, 
+                          nispace_object=None,
                           fetch_x_kwargs=None,
                           init_kwargs=None,
                           clean_y_kwargs=None,
@@ -287,10 +288,11 @@ def simple_colocalization(y,
     ## CORRECT
     if not status["correct_p"]:
         correct_p_kwargs = dict(
+            mc_method=mc_method,
         ) | correct_p_kwargs
         nsp.correct_p(**correct_p_kwargs)
         status["correct_p"] = True
-        
+
     ## VIZ
     if plot:
         for method in colocalization_method:
@@ -299,13 +301,13 @@ def simple_colocalization(y,
                 permute_what=permuted,
             ) | plot_kwargs
             nsp.plot(**plot_kwargs_curr)
-        
+
     ## RETURN
-    colocs = {method: nsp.get_colocalizations(method) 
+    colocs = {method: nsp.get_colocalizations(method)
               for method in colocalization_method}
-    p_values = {method: nsp.get_p_values(method, permuted) 
+    p_values = {method: nsp.get_p_values(method, permuted)
                 for method in colocalization_method}
-    p_fdr_values = {method: nsp.get_p_values(method, permuted, mc_method="fdrbh") 
+    p_fdr_values = {method: nsp.get_p_values(method, permuted, mc_method=mc_method)
                     for method in colocalization_method}
     if len(colocalization_method)==1:
         k = colocalization_method[0]
@@ -314,9 +316,9 @@ def simple_colocalization(y,
     return colocs, p_values, p_fdr_values, nsp
     
         
-def group_comparison(y, design, 
-                     x="PET", 
-                     z=None, 
+def group_comparison(y, design,
+                     x="PET",
+                     z=None,
                      x_collection=None,
                      standardize="xz",
                      space="MNI152NLin2009cAsym",
@@ -326,6 +328,7 @@ def group_comparison(y, design,
                      parcellation_labels=None,
                      colocalization_method="spearman",
                      comparison_method=None,
+                     mc_method="fdr_bh",
                      paired=False,
                      plot_design_between=True,
                      combat=False,
@@ -334,7 +337,7 @@ def group_comparison(y, design,
                      seed=None,
                      n_proc=1,
                      verbose=True,
-                     nispace_object=None, 
+                     nispace_object=None,
                      fetch_x_kwargs=None,
                      init_kwargs=None,
                      clean_y_kwargs=None,
@@ -496,11 +499,12 @@ def group_comparison(y, design,
     ## CORRECT
     if not status["correct_p"]:
         correct_p_kwargs = dict(
+            mc_method=mc_method,
             verbose=verbose,
         ) | correct_p_kwargs
         nsp.correct_p(**correct_p_kwargs)
         status["correct_p"] = True
-        
+
     ## VIZ
     if plot:
         for method in colocalization_method:
@@ -511,26 +515,26 @@ def group_comparison(y, design,
                 verbose=verbose,
             ) | plot_kwargs
             nsp.plot(**plot_kwargs_curr)
-        
+
     ## RETURN
-    colocs = {method: nsp.get_colocalizations(method, Y_transform=comparison_method) 
+    colocs = {method: nsp.get_colocalizations(method, Y_transform=comparison_method)
               for method in colocalization_method}
-    p_values = {method: nsp.get_p_values(method, permute_what, Y_transform=comparison_method) 
+    p_values = {method: nsp.get_p_values(method, permute_what, Y_transform=comparison_method)
                 for method in colocalization_method}
-    p_fdr_values = {method: nsp.get_p_values(method, permute_what, Y_transform=comparison_method, 
-                                             mc_method="fdrbh") 
+    p_fdr_values = {method: nsp.get_p_values(method, permute_what, Y_transform=comparison_method,
+                                             mc_method=mc_method)
                     for method in colocalization_method}
     if len(colocalization_method)==1:
-        colocs, p_values, p_fdr_values = (colocs[colocalization_method[0]], 
-                                          p_values[colocalization_method[0]], 
+        colocs, p_values, p_fdr_values = (colocs[colocalization_method[0]],
+                                          p_values[colocalization_method[0]],
                                           p_fdr_values[colocalization_method[0]])
-        
+
     return colocs, p_values, p_fdr_values, nsp
     
 
-def simple_xsea(y, 
-                x="mRNA", 
-                z=None, 
+def simple_xsea(y,
+                x="mRNA",
+                z=None,
                 x_collection=None,
                 x_background=None,
                 standardize="xz",
@@ -541,6 +545,7 @@ def simple_xsea(y,
                 parcellation_labels=None,
                 y_covariates=None,
                 colocalization_method="spearman",
+                mc_method="fdr_bh",
                 xsea_aggregation_method="mean",
                 permute_sets=False,
                 p_from_average_y=False,
@@ -550,7 +555,7 @@ def simple_xsea(y,
                 seed=None,
                 n_proc=1,
                 verbose=True,
-                nispace_object=None, 
+                nispace_object=None,
                 fetch_x_kwargs=None,
                 init_kwargs=None,
                 clean_y_kwargs=None,
@@ -582,14 +587,15 @@ def simple_xsea(y,
     
     ## We go the easy way and just call .simple_colocalization() with some kwargs:
     colocs, p_values, p_fdr_values, nsp = simple_colocalization(
-        y=y, 
-        x=x, z=z, 
+        y=y,
+        x=x, z=z,
         x_collection=x_collection,
         standardize=standardize,
         parcellation=parcellation,
         parcellation_labels=parcellation_labels,
         y_covariates=y_covariates,
         colocalization_method=colocalization_method,
+        mc_method=mc_method,
         p_from_average_y=p_from_average_y,
         plot=plot,
         combat=combat,
@@ -597,7 +603,7 @@ def simple_xsea(y,
         seed=seed,
         n_proc=n_proc,
         verbose=verbose,
-        nispace_object=nispace_object, 
+        nispace_object=nispace_object,
         fetch_x_kwargs=fetch_x_kwargs,
         init_kwargs=init_kwargs,
         clean_y_kwargs=clean_y_kwargs,

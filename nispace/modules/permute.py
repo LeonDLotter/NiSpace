@@ -201,17 +201,18 @@ def _get_exact_p_values(method, colocs_obs, colocs_null,
     return p_data, p_data_norm
 
 
+_MC_METHOD_ALIASES = {
+    # shorthand
+    "fdr": "fdr_bh",
+    "bonf": "bonferroni",
+    # stripped variants of multi-word methods (underscore/dash removed)
+    "fdrbh": "fdr_bh",
+    "fdrby": "fdr_by",
+    "fdrtsbh": "fdr_tsbh",
+    "fdrtsbky": "fdr_tsbky",
+    "holmsidak": "holm-sidak",
+    "simeshochberg": "simes-hochberg",
+}
+
 def _get_correct_mc_method(mc_method):
-    
-    if mc_method=="fdr":
-        mc_method = "fdr_bh"
-    elif mc_method in ["fdrbh", "fdrby", "fdrtsbh", "fdrtsbky"]:
-        mc_method = f"{mc_method[:3]}_{mc_method[3:]}" 
-    elif mc_method=="holmsidak":
-        mc_method = "holm-sidak"
-    elif mc_method=="simeshochberg":
-        mc_method = "simes-hochberg"
-    else:
-        mc_method = mc_method
-    
-    return mc_method
+    return _MC_METHOD_ALIASES.get(mc_method, mc_method)
