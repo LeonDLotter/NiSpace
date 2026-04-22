@@ -1746,7 +1746,10 @@ class NiSpace:
                     if null_str not in self._nulls["_colocs"]:
                         lgr.critical_raise(
                             f"Null colocalizations for '{null_str}' not found. "
-                            "Run permute() first.",
+                            f"'{mc_method}' requires the full null distributions. "
+                            "Either re-run permute(), or reload the object with save_nulls=True "
+                            "(note: correct_p('maxT'/'step_maxT') should be called before saving "
+                            "without nulls).",
                             KeyError
                         )
                     null_colocs = self._nulls["_colocs"][null_str]
@@ -2201,7 +2204,10 @@ class NiSpace:
         filepath : str
             Filepath to save the NiSpace object to.
         save_nulls : bool, optional
-            Whether to save the nulls. Defaults to True.
+            Whether to save the null distributions. Defaults to True. If False, null
+            colocalizations are dropped, which substantially reduces file size but prevents
+            running correct_p('maxT') or correct_p('step_maxT') after reloading. Call those
+            corrections before saving if you intend to drop nulls.
         verbose : bool, optional
         """
         loglevel = lgr.getEffectiveLevel()

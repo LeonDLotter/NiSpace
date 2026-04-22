@@ -208,8 +208,8 @@ def simple_colocalization(y,
         Colocalization values for each method.
     p_values : dict or array
         Uncorrected p-values for each method.
-    p_fdr_values : dict or array
-        FDR-corrected p-values for each method.
+    pc_values : dict or array
+        Corrected p-values according to mc_mehtod for each colocalization method.
     nsp : NiSpace
         The NiSpace object containing all results.
     """
@@ -309,7 +309,7 @@ def simple_colocalization(y,
               for method in colocalization_method}
     p_values = {method: nsp.get_p_values(method, permuted)
                 for method in colocalization_method}
-    p_fdr_values = {
+    pc_values = {
         mc_m: {method: nsp.get_p_values(method, permuted, mc_method=mc_m)
                for method in colocalization_method}
         for mc_m in mc_methods
@@ -317,11 +317,11 @@ def simple_colocalization(y,
     if len(colocalization_method) == 1:
         k = colocalization_method[0]
         colocs, p_values = colocs[k], p_values[k]
-        p_fdr_values = {mc_m: p_fdr_values[mc_m][k] for mc_m in mc_methods}
+        pc_values = {mc_m: pc_values[mc_m][k] for mc_m in mc_methods}
     if len(mc_methods) == 1:
-        p_fdr_values = p_fdr_values[mc_methods[0]]
+        pc_values = pc_values[mc_methods[0]]
 
-    return colocs, p_values, p_fdr_values, nsp
+    return colocs, p_values, pc_values, nsp
     
         
 def group_comparison(y, design,
@@ -529,7 +529,7 @@ def group_comparison(y, design,
               for method in colocalization_method}
     p_values = {method: nsp.get_p_values(method, permute_what, Y_transform=comparison_method)
                 for method in colocalization_method}
-    p_fdr_values = {
+    pc_values = {
         mc_m: {method: nsp.get_p_values(method, permute_what, Y_transform=comparison_method,
                                         mc_method=mc_m)
                for method in colocalization_method}
@@ -538,11 +538,11 @@ def group_comparison(y, design,
     if len(colocalization_method) == 1:
         k = colocalization_method[0]
         colocs, p_values = colocs[k], p_values[k]
-        p_fdr_values = {mc_m: p_fdr_values[mc_m][k] for mc_m in mc_methods}
+        pc_values = {mc_m: pc_values[mc_m][k] for mc_m in mc_methods}
     if len(mc_methods) == 1:
-        p_fdr_values = p_fdr_values[mc_methods[0]]
+        pc_values = pc_values[mc_methods[0]]
 
-    return colocs, p_values, p_fdr_values, nsp
+    return colocs, p_values, pc_values, nsp
     
 
 def simple_xsea(y,
@@ -599,7 +599,7 @@ def simple_xsea(y,
             lgr.warning(f"Could not fetch background dataset for input x!")
     
     ## We go the easy way and just call .simple_colocalization() with some kwargs:
-    colocs, p_values, p_fdr_values, nsp = simple_colocalization(
+    colocs, p_values, pc_values, nsp = simple_colocalization(
         y=y,
         x=x, z=z,
         x_collection=x_collection,
@@ -633,4 +633,4 @@ def simple_xsea(y,
         plot_kwargs=plot_kwargs
     )
     
-    return colocs, p_values, p_fdr_values, nsp
+    return colocs, p_values, pc_values, nsp
