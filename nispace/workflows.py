@@ -463,6 +463,7 @@ def group_comparison(y, design,
         clean_y_kwargs = dict(
             how="between",
             covariates_between=y_covariates,
+            protect=combat_protect,
             combat=combat,
             combat_protect=combat_protect if combat else None,
             plot_design_between=plot_design_between

@@ -6,7 +6,7 @@ from nilearn.plotting import plot_design_matrix
 from tqdm.auto import tqdm
 
 from .. import lgr
-from ..stats.misc import residuals_nan, zscore_df
+from ..stats.misc import residuals_nan, partial_residuals_nan, zscore_df
 from ..utils.utils import set_log
 
 
@@ -55,6 +55,7 @@ def _encode(df, cont_cols, cols_to_encode, dtype=np.float32):
 
 
 def _clean_y_between(Y_arr, covariates_between, n_subjects,
+                     protect,
                      combat, combat_protect, combat_train, combat_model, combat_kwargs,
                      plot_design_between, n_proc, dtype, verbose):
     """
@@ -175,16 +176,36 @@ def _clean_y_between(Y_arr, covariates_between, n_subjects,
         Y_arr[Y_arr_isnan] = np.nan
         Y_arr = Y_arr.astype(dtype)
 
+    # --- encode protect for OLS (analogous to combat_protect for ComBat) ---
+    protect_arr = None
+    if protect is not None:
+        prot_df = _normalize_cov_df(protect, n_subjects, "protect")
+        prot_cat, prot_cont = _detect_categoricals(prot_df)
+        prot_encoded = _encode(prot_df, prot_cont, prot_cat, dtype=dtype)
+        if not prot_encoded.empty:
+            protect_arr = prot_encoded.values.astype(dtype)
+            lgr.info(f"Protecting {protect_arr.shape[1]} variable(s) during regression: "
+                     f"{list(prot_encoded.columns)}.")
+
     # --- regression (after ComBat if both requested) ---
     if not bcov_encoded.empty:
         reg_arr = bcov_encoded.values.astype(dtype)
         lgr.info(f"Regressing {reg_arr.shape[1]} between covariate(s) from Y.")
-        Y_partial = Parallel(n_jobs=n_proc)(
-            delayed(residuals_nan)(reg_arr, Y_arr[:, i_p]) for i_p in tqdm(
-                range(Y_arr.shape[1]),
-                desc=f"Regressing {reg_arr.shape[1]} between covariate(s) from Y ({n_proc} proc)",
-                disable=not verbose
-            ))
+        if protect_arr is not None:
+            Y_partial = Parallel(n_jobs=n_proc)(
+                delayed(partial_residuals_nan)(reg_arr, protect_arr, Y_arr[:, i_p]) for i_p in tqdm(
+                    range(Y_arr.shape[1]),
+                    desc=f"Regressing {reg_arr.shape[1]} between covariate(s) from Y, "
+                         f"protecting {protect_arr.shape[1]} variable(s) ({n_proc} proc)",
+                    disable=not verbose
+                ))
+        else:
+            Y_partial = Parallel(n_jobs=n_proc)(
+                delayed(residuals_nan)(reg_arr, Y_arr[:, i_p]) for i_p in tqdm(
+                    range(Y_arr.shape[1]),
+                    desc=f"Regressing {reg_arr.shape[1]} between covariate(s) from Y ({n_proc} proc)",
+                    disable=not verbose
+                ))
         Y_arr = np.array(Y_partial, dtype=dtype).T
 
     return Y_arr, combat_model, combat_covariates

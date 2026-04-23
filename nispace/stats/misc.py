@@ -20,7 +20,7 @@ def np_any_axis1(x):
 
 @njit(cache=True, nogil=True)
 def residuals(x, y, decenter=False):
-    """Compute residuals for Regression with dependent variable y and independent variable(s) x. 
+    """Compute residuals for Regression with dependent variable y and independent variable(s) x.
     Requires numpy arrays with columns as independent variables.
 
     Args:
@@ -68,7 +68,38 @@ def residuals_nan(x, y, decenter=False):
         
     resid = np.full(y.shape, np.nan, dtype=y.dtype)
     resid[~nan_mask] = y_ - y_hat
-        
+
+    return resid
+
+
+@njit(cache=True, nogil=True)
+def partial_residuals_nan(x_nuisance, x_protect, y):
+    """Partial residuals: regress x_nuisance from y while controlling for x_protect.
+
+    Fits a joint model [x_nuisance | x_protect | intercept] so that nuisance
+    coefficients are estimated controlling for the protected variables, then
+    removes only the nuisance component. The protected effects (e.g. group
+    differences) are preserved in the returned values.
+
+    Args:
+        x_nuisance (numpy.ndarray): shape (n, p) — confounds to remove
+        x_protect  (numpy.ndarray): shape (n, q) — variables to control for but keep
+        y          (numpy.ndarray): shape (n,)
+
+    Returns:
+        numpy.ndarray: shape (n,), NaN where input had NaN
+    """
+    nan_mask = np_any_axis1(np.isnan(np.column_stack((x_nuisance, x_protect, y))))
+    xn = x_nuisance[~nan_mask]
+    xp = x_protect[~nan_mask]
+    y_ = y[~nan_mask]
+
+    X_full = np.column_stack((xn, xp, np.ones(xn.shape[0], dtype=xn.dtype)))
+    n_nuisance = x_nuisance.shape[1]
+    beta = np.linalg.pinv((X_full.T).dot(X_full)).dot(X_full.T.dot(y_))
+
+    resid = np.full(y.shape, np.nan, dtype=y.dtype)
+    resid[~nan_mask] = y_ - xn.dot(beta[:n_nuisance])
     return resid
 
 
