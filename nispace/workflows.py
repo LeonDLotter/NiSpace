@@ -131,6 +131,7 @@ def simple_colocalization(y,
                           y_covariates=None,
                           colocalization_method="spearman",
                           mc_method="meff",
+                          normalize_colocalizations=True,
                           p_from_average_y=False,
                           plot=True,
                           combat=False,
@@ -295,6 +296,13 @@ def simple_colocalization(y,
             nsp.correct_p(**{"mc_method": mc_m} | correct_p_kwargs)
         status["correct_p"] = True
 
+    ## ZSCORE
+    if normalize_colocalizations:
+        try:
+            nsp.normalize_colocalizations()
+        except Exception as e:
+            lgr.warning(f"normalize_colocalizations() failed: {e}")
+
     ## VIZ
     if plot:
         for method in colocalization_method:
@@ -337,6 +345,7 @@ def group_comparison(y, design,
                      colocalization_method="spearman",
                      comparison_method=None,
                      mc_method="meff",
+                     normalize_colocalizations=True,
                      paired=False,
                      plot_design_between=True,
                      combat=False,
@@ -513,6 +522,13 @@ def group_comparison(y, design,
             nsp.correct_p(**{"mc_method": mc_m, "verbose": verbose} | correct_p_kwargs)
         status["correct_p"] = True
 
+    ## ZSCORE
+    if normalize_colocalizations:
+        try:
+            nsp.normalize_colocalizations()
+        except Exception as e:
+            lgr.warning(f"normalize_colocalizations() failed: {e}")
+
     ## VIZ
     if plot:
         for method in colocalization_method:
@@ -559,6 +575,7 @@ def simple_xsea(y,
                 y_covariates=None,
                 colocalization_method="spearman",
                 mc_method="meff",
+                normalize_colocalizations=True,
                 xsea_aggregation_method="mean",
                 permute_sets=False,
                 p_from_average_y=False,
@@ -609,6 +626,7 @@ def simple_xsea(y,
         y_covariates=y_covariates,
         colocalization_method=colocalization_method,
         mc_method=mc_method,
+        normalize_colocalizations=normalize_colocalizations,
         p_from_average_y=p_from_average_y,
         plot=plot,
         combat=combat,

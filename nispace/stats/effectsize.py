@@ -253,7 +253,12 @@ def rzscore_nan(a, b=None):
     else:
         med = np.nanmedian(a, axis=0)
         mad = np.nanmedian(np.abs(a - med), axis=0)
-    return (a - med) / (1.4826 * mad)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        result = (a - med) / (1.4826 * mad)
+    zero_mad = np.atleast_1d(mad == 0)
+    if np.any(zero_mad):
+        result = np.where(zero_mad, np.nan, result)
+    return result
 
 @njit(cache=True, nogil=True)
 def _nanmedian_1d(arr):
@@ -293,7 +298,12 @@ def _col_robust_stats(arr):
 def rzscore_nan_fast(a, b=None):
     ref = a if b is None else b
     medians, mads = _col_robust_stats(ref)
-    return (a - medians) / (1.4826 * mads)    # numpy broadcast: row-major, SIMD-friendly
+    with np.errstate(divide="ignore", invalid="ignore"):
+        result = (a - medians) / (1.4826 * mads)
+    zero_mad = mads == 0
+    if np.any(zero_mad):
+        result[:, zero_mad] = np.nan
+    return result
 
 
 # ---------------------------------------------------

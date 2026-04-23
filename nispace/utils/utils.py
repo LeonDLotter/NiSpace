@@ -131,7 +131,16 @@ def _get_df_string(kind, xdimred=None, ytrans=None, method=None, stat=None, xsea
                       f"perm-{perm}_mc-{mc}")
         else:
             raise ValueError("Provide method, stat, and perm!")
-    
+
+    elif kind=="z":
+        if (method is not None) & (stat is not None) & (perm is not None):
+            if "sets" in perm:
+                xsea = True
+            df_str = (f"xdimred-{xdimred}_ytrans-{ytrans}_coloc-{method}_stat-{stat}_xsea-{xsea}_"
+                      f"perm-{perm}")
+        else:
+            raise ValueError("Provide method, stat, and perm!")
+
     else:
         raise ValueError(f"Kind {kind} not defined!")
         

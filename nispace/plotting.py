@@ -162,57 +162,169 @@ def linewidth_from_data_units(linewidth, axis, reference='x'):
     return linewidth * (length / value_range)
 
 
-def print_significance(ax, p_values, q_values=None, coloc_values=None, 
-                       bold_labels=True,
-                       pq_symbols=["☆", "★"],
-                       pq_size=12,
-                       pq_positions=None,
-                       pq_positions_pad=0,
-                       categorical_axis="y"):
-    
+def print_significance(ax, p_values, q_values=None, coloc_values=None,
+                       mode=True, mc_method=None,
+                       symbols=("☆", "★"), symbol_size=12, text_size=8,
+                       pad_frac=0.02, bold_labels=True, categorical_axis="y"):
+    """Annotate a categorical axis plot with significance markers or p-value text.
+
+    Parameters
+    ----------
+    mode : True / "stars" / "text" / "both" / False
+        True/"stars": draw ☆/★ symbols. "text": draw numeric p-value. "both": both.
+    mc_method : str or None
+        Name of the MC correction method, used for legend labels.
+
+    Returns
+    -------
+    (handles, labels) : lists for legend integration.
+    """
+    if mode is False:
+        return [], []
+
+    mode = "stars" if mode is True else mode
     p_values = np.array(p_values).flatten()
-    if q_values is not None:
-        q_values = np.array(q_values).flatten()
-    else:
-        q_values = p_values
-    
-    if coloc_values is None and pq_positions is None:
-        pq_symbols = None
-    if pq_symbols is not None:
-        if pq_positions is None:
-            pq_pos_min = np.array(coloc_values).min(axis=0)
-            pq_pos_max = np.array(coloc_values).max(axis=0)
-            pq_pos_mean = np.array(coloc_values).mean(axis=0)
-            pq_positions = [mi - pq_positions_pad if mu < 0 else ma + pq_positions_pad 
-                            for mu, mi, ma in zip(pq_pos_mean, pq_pos_min, pq_pos_max)]
-        else:
-            pq_positions += pq_positions_pad
-    else:
-        pq_positions = [None] * len(p_values)
-            
-    if categorical_axis=="y":
-        labs = ax.get_yticklabels()
-    else:
-        labs = ax.get_xticklabels()
-    lab_positions = np.array([lab.get_position() for lab in labs])
-    
-    for l, l_pos, pq_pos, p, q in zip(labs, lab_positions, pq_positions, p_values, q_values):
-        
+    q_values = p_values if q_values is None else np.array(q_values).flatten()
+    has_q = not np.array_equal(p_values, q_values)
+
+    # continuous axis direction
+    cont_on_x = (categorical_axis == "y")  # bars extend horizontally
+    get_lim = ax.get_xlim if cont_on_x else ax.get_ylim
+    set_lim = ax.set_xlim if cont_on_x else ax.set_ylim
+
+    # per-element anchor = mean coloc value (determines side)
+    col_means = np.array(coloc_values).flatten()
+    span = get_lim()[1] - get_lim()[0]
+    pad = pad_frac * span
+
+    # tick label objects — one per X element (categorical axis)
+    labs = ax.get_yticklabels() if categorical_axis == "y" else ax.get_xticklabels()
+
+    # build annotation list aligned to tick order
+    # seaborn may reverse or reorder categories; match by label text
+    col_means_map = {}  # label text → mean coloc
+    p_map = {}
+    q_map = {}
+    # coloc_values is assumed aligned to p_values order (colocs_df column order)
+    # but labs order may differ — we zip labs with the arrays assuming same order
+    for i, lab in enumerate(labs):
+        if i < len(col_means):
+            col_means_map[lab.get_text()] = col_means[i]
+            p_map[lab.get_text()] = p_values[i]
+            q_map[lab.get_text()] = q_values[i]
+
+    def _fmt_p(pval):
+        return "< 0.001" if pval < 0.001 else f"{pval:.3f}"
+
+    handles, labels_out = [], []
+
+    # --- pass 1: collect annotations and apply label weights ---
+    _to_draw = []  # (cat_coord, pos, mean, ha, ann_str, size)
+    _n_total  = sum(1 for txt in (lab.get_text() for lab in labs) if txt in p_map)
+    _n_p_sig  = sum(1 for txt in p_map if p_map[txt] < 0.05)
+    _n_q_sig  = sum(1 for txt in q_map if q_map[txt] < 0.05) if has_q else 0
+    _any_open   = False  # any ☆ drawn
+    _any_filled = False  # any ★ drawn
+    _any_text   = False  # any number drawn
+
+    _mc_str = f"p_{mc_method}" if mc_method else "p_corrected"
+    _q_str = f"{_n_q_sig}/{_n_total} {_mc_str} < 0.05" if has_q else f"0/{_n_total} {_mc_str} < 0.05 (no correction applied)"
+    lgr.info(
+        f"Significance annotation: {_n_p_sig}/{_n_total} p_uncorrected < 0.05, {_q_str}"
+    )
+
+    for lab in labs:
+        txt = lab.get_text()
+        if txt not in p_map:
+            continue
+
+        p = p_map[txt]
+        q = q_map[txt]
+        mean = col_means_map[txt]
+
+        # bold tick label — only for MC-corrected significance
         if bold_labels:
-            if q < 0.05:
-                l.set_weight("bold")
+            lab.set_weight("bold" if (has_q and q < 0.05) else "normal")
+
+        ann_parts = []
+        if mode in ("stars", "both"):
+            if has_q and q < 0.05:
+                ann_parts.append(symbols[1])
+                _any_filled = True
             elif p < 0.05:
-                l.set_weight("semibold")
+                ann_parts.append(symbols[0])
+                _any_open = True
+        if mode == "text":
+            if p < 0.05:
+                ann_parts.append(_fmt_p(q if (has_q and q < 0.05) else p))
+                _any_text = True
+        elif mode == "both":
+            if p < 0.05:
+                ann_parts.append(_fmt_p(p))  # always uncorrected alongside stars
+                _any_text = True
+        if not ann_parts:
+            continue
+
+        pos = mean + pad if mean >= 0 else mean - pad
+        ha = "left" if mean >= 0 else "right"
+        l_pos = lab.get_position()
+        cat_coord = l_pos[0] if categorical_axis == "x" else l_pos[1]
+        size = symbol_size if mode == "stars" else text_size
+        _to_draw.append((cat_coord, pos, mean, ha, " ".join(ann_parts), size))
+
+    # --- axis limit expansion ---
+    # seaborn auto-margins are ~5% of data range; stars need 4×pad to reliably
+    # exceed that; text strings are wider so use 8×pad for text/both modes
+    _exp = (8 if mode in ("text", "both") else 4) * pad
+    if _to_draw:
+        curr = list(get_lim())
+        for _, pos, mean, *_ in _to_draw:
+            if mean >= 0:
+                curr[1] = max(curr[1], pos + _exp)
             else:
-                l.set_weight("normal")
-        
-        if pq_pos is not None:
-            kwargs = {"x": l_pos[0], "y": pq_pos} if categorical_axis=="x" else {"x": pq_pos, "y": l_pos[1]}
-            kwargs |= {"ha": "center", "va": "center", "size": pq_size}
-            if q < 0.05:
-                ax.text(s=pq_symbols[1], **kwargs)
-            elif p < 0.05:
-                ax.text(s=pq_symbols[0], **kwargs)
+                curr[0] = min(curr[0], pos - _exp)
+        set_lim(curr)
+
+    # --- pass 2: draw ---
+    for cat_coord, pos, mean, ha, ann_str, size in _to_draw:
+        if cont_on_x:
+            ax.text(pos, cat_coord, ann_str, ha=ha, va="center", size=size, clip_on=False)
+        else:
+            ax.text(cat_coord, pos, ann_str, ha="center",
+                    va="bottom" if mean >= 0 else "top", size=size, clip_on=False)
+
+    # build legend proxy handles using Line2D with custom math-text markers
+    _p_unc = r"$p_{\mathrm{uncorrected}}$"
+    if mc_method:
+        _mc_sub = mc_method.replace("_", "-")
+        _p_mc = rf"$p_{{\mathrm{{{_mc_sub}}}}}$"
+    else:
+        _p_mc = _p_unc
+    _star_size = symbol_size * 0.75
+    if mode in ("stars", "both"):
+        if _any_open:
+            h_open = mpl.lines.Line2D(
+                [], [], linestyle="none", marker=f"${symbols[0]}$",
+                markersize=_star_size, markeredgewidth=0.1, color="k"
+            )
+            handles.append(h_open)
+            labels_out.append(f"{_p_unc} < 0.05")
+        if _any_filled:
+            h_filled = mpl.lines.Line2D(
+                [], [], linestyle="none", marker=f"${symbols[1]}$",
+                markersize=_star_size, markeredgewidth=0.1, color="k"
+            )
+            handles.append(h_filled)
+            labels_out.append(f"{_p_mc} < 0.05")
+    if mode in ("text", "both") and _any_text:
+        h_txt = mpl.lines.Line2D(
+            [], [], linestyle="none", marker=r"$0.001$",
+            markersize=24, markeredgewidth=0, color="k"
+        )
+        handles.append(h_txt)
+        labels_out.append(f"{_p_unc}")
+
+    return handles, labels_out
 
 
 def pivot_brainspan_result(brainspan_vector):
@@ -237,12 +349,14 @@ def catplot(fig, ax, data_long, categorical_var="variable", continuous_var="valu
             labels=None,
             limits=None,
             bars=None,
-            violins=None,    
+            violins=None,
             scatters=None,
             dots=None,
-            errorbars=None,  
+            errorbars=None,
             hline=None,
             vline=None,
+            hlines=None,
+            vlines=None,
             legend=None
             ):   
     
@@ -424,14 +538,35 @@ def catplot(fig, ax, data_long, categorical_var="variable", continuous_var="valu
             if isinstance(hvline[xy], (int, float)):
                 hvline[xy] = [hvline[xy]]
             for hvline_xy in hvline[xy]:
-                kws = dict(c=hvline["color"], lw=hvline["linewidth"], ls=hvline["linestyle"], 
-                           zorder=hvline["zorder"], 
+                kws = dict(c=hvline["color"], lw=hvline["linewidth"], ls=hvline["linestyle"],
+                           zorder=hvline["zorder"],
                            **hvline["kwargs"])
                 if xy == "y":
                     ax.axhline(hvline_xy, **kws)
                 else:
                     ax.axvline(hvline_xy, **kws)
-                    
+
+    ## MULTI-STYLE REFERENCE LINES (hlines / vlines — list of per-line dicts)
+    _ref_handles, _ref_labels = [], []
+    for specs, draw_fn in [(hlines, ax.axhline), (vlines, ax.axvline)]:
+        if not specs:
+            continue
+        for spec in specs:
+            pos = spec.get("y", spec.get("x", 0))
+            kws = dict(
+                color=spec.get("color", "dimgrey"),
+                linewidth=spec.get("linewidth", 1),
+                linestyle=spec.get("linestyle", "--"),
+                zorder=spec.get("zorder", -100),
+            )
+            h = draw_fn(pos, **kws)
+            label = spec.get("label")
+            if label:
+                _ref_handles.append(h)
+                _ref_labels.append(label)
+    if _ref_handles:
+        ax.legend(handles=_ref_handles, labels=_ref_labels)
+
     ## LIMITS
     plot = plot.limit(**limits)
                    

@@ -24,7 +24,8 @@ from .nulls import get_distance_matrix
 from .stats.coloc import *
 from .stats.misc import (mc_correction, residuals_nan, zscore_df, permute_groups,
                           compute_meff, meff_sidak_correction,
-                          maxT_correction, step_maxT_correction)
+                          maxT_correction, step_maxT_correction, _null_stats_to_array)
+from .stats.effectsize import rzscore_nan, zscore_nan
 from .cv import _get_dist_dep_splits, _get_rand_splits
 from .plotting import nice_stats_labels
 from .utils.utils import (set_log, fill_nan, _get_df_string, _lower_strip_ws, mean_by_set_df,
@@ -230,7 +231,8 @@ class NiSpace:
             "_colocs": {}
         }
         self._p_colocs = {}
-        
+        self._z_colocs = {}
+
         # defaults for get functions (IMPORTANT: this determines what coloc and get function will do!)
         self._last_settings = {
             "method": None,
@@ -1789,74 +1791,186 @@ class NiSpace:
             if self._return_self:
                 return self
         return p_corr
-    
-    
+
+    # ----------------------------------------------------------------------------------------------
+
+    def normalize_colocalizations(self, coloc_method=None, z_method="robust", store=True,
+                                  verbose=None):
+        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
+        lgr.info("*** NiSpace.normalize_colocalizations() - Normalize colocalizations against null "
+                 "distribution. ***")
+        lgr.info(f"Z-score method: {'robust (median/MAD)' if z_method == 'robust' else 'standard (mean/SD)'}.")
+
+        if not self._nulls["_colocs"]:
+            lgr.critical_raise(
+                "No null colocalizations found. "
+                "Run permute() first, or reload the object with save_nulls=True "
+                "(note: normalize_colocalizations() should be called before saving without nulls).",
+                ValueError
+            )
+
+        score_fn = rzscore_nan if z_method == "robust" else zscore_nan
+
+        null_keys = list(self._nulls["_colocs"].keys())
+        if coloc_method is not None:
+            null_keys = [k for k in null_keys if f"coloc-{coloc_method.lower()}" in k]
+
+        for null_str in null_keys:
+            fields  = _parse_df_string(null_str)
+            xdimred = _parse_bool(fields.get("xdimred", False))
+            ytrans  = _parse_bool(fields.get("ytrans", False))
+            coloc   = fields.get("coloc")
+            xsea    = _parse_bool(fields.get("xsea", False))
+            perm    = fields.get("perm")
+
+            null_colocs = self._nulls["_colocs"][null_str]
+            stats = _get_coloc_stats(coloc, permuted_only=True)
+
+            for stat in stats:
+                obs_dict = self.get_colocalizations(
+                    method=coloc, stats=[stat],
+                    X_reduction=xdimred, Y_transform=ytrans,
+                    xsea=xsea, force_dict=True, verbose=False
+                )
+                if stat not in obs_dict:
+                    continue
+                obs_df = obs_dict[stat]
+
+                null_arr = _null_stats_to_array(null_colocs, stat).astype(float)
+                z_arr = score_fn(np.array(obs_df, dtype=float), null_arr)
+                z_df = pd.DataFrame(z_arr, index=obs_df.index, columns=obs_df.columns,
+                                    dtype=self._dtype)
+
+                if store:
+                    z_str = _get_df_string(
+                        "z",
+                        xdimred=xdimred, ytrans=ytrans,
+                        method=coloc, stat=stat,
+                        xsea=xsea, perm=perm
+                    )
+                    self._z_colocs[z_str] = z_df
+                    lgr.info(f"Stored normalized colocalizations: {z_str}")
+
+        if self._return_self:
+            return self
+        return self
+
+
     # PLOT ====================================================================================
 
     def plot(self, kind="categorical",
-             method=None, stats=None, 
+             method=None, stats=None,
              X_reduction=None, Y_transform=None,
              xsea=None,
              Y_labels=None, X_labels=None,
-             plot_nulls=True, plot_p=True, permute_what=None,
-             title="auto", sort_colocs=False,
-             colocalizations_dict=None, nulls_dict=None, p_dict=None, pc_dict=None, mc_method="fdr_bh",
+             values="coloc", mc_method=None,
+             plot_nulls=True, annot_p=True, permute_what=None,
+             title="auto", sort_by=None, sort_colocs=False,
+             colocalizations_dict=None, nulls_dict=None, p_dict=None, pc_dict=None,
              fig=None, ax=None, figsize=None, show=True,
              plot_kwargs=None, nullplot_kwargs=None,
              verbose=None): 
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.plot() - Plot colocalization results. ***")
-        
+
         # kwargs
         plot_kwargs = {} if plot_kwargs is None else plot_kwargs
         nullplot_kwargs = {} if nullplot_kwargs is None else nullplot_kwargs
-        
+
         # check fit
         self._check_fit()
-        
+
         # settings
         method, X_reduction, Y_transform, xsea, permute_what = self._get_last(
-            method=method, 
-            X_reduction=X_reduction, 
-            Y_transform=Y_transform, 
+            method=method,
+            X_reduction=X_reduction,
+            Y_transform=Y_transform,
             xsea=xsea,
             perm=permute_what
         )
-        
+
         # check if minimum input provided
         if colocalizations_dict is None and method is None:
             lgr.critical_raise("Provide either a method name or a colocalization result!",
                                ValueError)
-        
+
+        # sort_colocs deprecation
+        if sort_colocs:
+            lgr.warning("'sort_colocs' is deprecated and will be removed in a future release. "
+                        "Use sort_by='coloc' instead.")
+            if sort_by is None:
+                sort_by = "coloc"
+            sort_colocs = False
+
+        # values mode: z and p never show null distributions
+        if values in ("z", "p"):
+            plot_nulls = False
+
         # check nulls/p plot
-        if (plot_nulls or plot_p) and not permute_what:
-            lgr.warning("if 'plot_nulls' or 'plot_p', provide 'permute_what' ({'groups', "
-                        "'{x|y|xy}maps', 'sets'}). Setting 'plot_nulls' and 'plot_p' to False!")
-            plot_nulls, plot_p = False, False
-        
+        if (plot_nulls or annot_p) and not permute_what:
+            lgr.warning("if 'plot_nulls' or 'annot_p', provide 'permute_what' ({'groups', "
+                        "'{x|y|xy}maps', 'sets'}). Setting 'plot_nulls' and 'annot_p' to False!")
+            plot_nulls = False
+            annot_p = False
+
+        # resolve mc_method for p mode
+        if values == "p":
+            if isinstance(mc_method, str) and mc_method.lower() in ("uncorrected", "none", "false"):
+                mc_method = None
+            elif mc_method is None:
+                mc_method = self._last_settings.get("mc_method")
+            if mc_method is not None:
+                mc_method = _get_correct_mc_method(mc_method)
+            if mc_method:
+                lgr.info(f"Plotting −log₁₀(p), corrected: {mc_method}.")
+            else:
+                lgr.info("Plotting −log₁₀(p), uncorrected.")
+        elif values == "z":
+            lgr.info("Plotting null-normalised z-scores.")
+
         # get arguments
-        check_kwargs = dict(method=method, stats=stats, xdimred=X_reduction, 
+        check_kwargs = dict(method=method, stats=stats, xdimred=X_reduction,
                             ytrans=Y_transform, xsea=xsea)
-        get_kwargs = dict(method=method, stats=stats, X_reduction=X_reduction, 
+        get_kwargs = dict(method=method, stats=stats, X_reduction=X_reduction,
                           Y_transform=Y_transform, xsea=xsea)
-        
+
         # get colocalization results
         if colocalizations_dict is None:
             self._check_colocalize(**check_kwargs)
-            coloc_dicts = self.get_colocalizations(
-                **get_kwargs, 
-                force_dict=True,
-                get_nulls=plot_nulls, 
-                nulls_permute_what=permute_what,
-                verbose=False
-            )
-            if isinstance(coloc_dicts, tuple):
-                colocalizations_dict, nulls_dict = coloc_dicts
-            else:
-                colocalizations_dict, nulls_dict = coloc_dicts, None
-            if plot_nulls and nulls_dict is None:
-                lgr.warning("No nulls found. Not plotting null distributions.")
-                plot_nulls = False
+
+            if values == "z":
+                colocalizations_dict = self.get_normalized_colocalizations(
+                    **get_kwargs, force_dict=True, verbose=False
+                )
+                nulls_dict = None
+
+            elif values == "p":
+                _mc = mc_method.replace("_", "").replace("-", "") if mc_method else None
+                _p_raw = self.get_p_values(
+                    **get_kwargs, permute_what=permute_what, mc_method=_mc,
+                    force_dict=True, verbose=False
+                )
+                colocalizations_dict = {
+                    stat: df.apply(lambda col: -np.log10(col))
+                    for stat, df in _p_raw.items()
+                }
+                nulls_dict = None
+
+            else:  # values == "coloc"
+                coloc_dicts = self.get_colocalizations(
+                    **get_kwargs,
+                    force_dict=True,
+                    get_nulls=plot_nulls,
+                    nulls_permute_what=permute_what,
+                    verbose=False
+                )
+                if isinstance(coloc_dicts, tuple):
+                    colocalizations_dict, nulls_dict = coloc_dicts
+                else:
+                    colocalizations_dict, nulls_dict = coloc_dicts, None
+                if plot_nulls and nulls_dict is None:
+                    lgr.warning("No nulls found. Not plotting null distributions.")
+                    plot_nulls = False
 
         else:
             if not isinstance(colocalizations_dict, dict):
@@ -1890,20 +2004,32 @@ class NiSpace:
                     nulls_dict[stat] = {null_str: nulls_dict[stat][null_str]
                                         for null_str in nulls_dict[stat]}
         
-        # # get p values
-        # if plot_p and p_dict is None:
-        #     if self._check_permute(**check_kwargs, permuted=permute_what, raise_error=False):
-        #         p_dict = self.get_p_values(**get_kwargs, permuted=permute_what, force_dict=True)
-        #     else:
-        #         lgr.error("No p values found. Provide via 'p_dict' or run NiSpace.permute()!")
-                
-        # # get corrected p values
-        # if plot_p and pc_dict is None:
-        #     if self._check_permute(**check_kwargs, permuted=permute_what, mc_method=mc_method, raise_error=False):
-        #         pc_dict = self.get_p_values(**get_kwargs, permuted=permute_what, mc_method=mc_method, force_dict=True)
-        #     else:
-        #         lgr.error(f"No corrected p values for mc_method '{mc_method}' found. Provide via "
-        #                   "'pc_dict' or run NiSpace.permute() & NiSpace.correct_p()!")
+        # auto-fetch p-values for annotation (and sort_by="p")
+        # resolve effective mc_method: explicit arg > last stored setting
+        _annot_mc = mc_method or self._last_settings.get("mc_method")
+        if _annot_mc:
+            _annot_mc = _get_correct_mc_method(_annot_mc).replace("_", "").replace("-", "")
+        if annot_p is not False and values not in ("p",):
+            if p_dict is None:
+                try:
+                    _fetched = self.get_p_values(
+                        **get_kwargs, permute_what=permute_what,
+                        mc_method=None, force_dict=True, verbose=False
+                    )
+                    if _fetched:
+                        p_dict = _fetched
+                except Exception:
+                    pass
+            if pc_dict is None and _annot_mc is not None:
+                try:
+                    _fetched = self.get_p_values(
+                        **get_kwargs, permute_what=permute_what,
+                        mc_method=_annot_mc, force_dict=True, verbose=False
+                    )
+                    if _fetched:
+                        pc_dict = _fetched
+                except Exception:
+                    pass
         
         # loop over stats
         stats = [s for s in colocalizations_dict if s not in ["intercept"]]
@@ -1915,8 +2041,68 @@ class NiSpace:
                 title = f"{nice_stats_labels(method)} colocalization"
                 if Y_transform:
                     title += f" after {nice_stats_labels(Y_transform.replace('(a,b)', ''))} transform"
-                if nulls_dict:
-                    title += f"\n(permutation of {nice_stats_labels(permute_what)})"
+                if permute_what:
+                    _perm_str = nice_stats_labels(permute_what)
+                    if values == "z":
+                        title += f"\n(permutation of {_perm_str} | normalized)"
+                    elif values == "p":
+                        if mc_method:
+                            _mc_sub = mc_method.replace("_", "-")
+                            _p_suffix = rf"$p_{{\mathrm{{{_mc_sub}}}}}$"
+                        else:
+                            _p_suffix = r"$p_{\mathrm{uncorrected}}$"
+                        title += f"\n(permutation of {_perm_str} | {_p_suffix})"
+                    else:
+                        title += f"\n(permutation of {_perm_str})"
+
+            # compute column sort order (positional indices) for sort_by
+            _valid_sort_by = {"coloc", "z", "p", "abs_coloc", "abs_z"}
+            _sort_order = None
+            if sort_by is not None and sort_by not in _valid_sort_by:
+                lgr.warning(f"sort_by='{sort_by}' is not a valid option "
+                            f"({', '.join(sorted(_valid_sort_by))}). Ignoring.")
+                sort_by = None
+            if sort_by is not None and colocalizations_dict[stat].shape[1] > 1:
+                try:
+                    if sort_by in ("coloc", "abs_coloc"):
+                        _src = colocalizations_dict[stat]
+                        sv = _src.mean(axis=0).abs() if sort_by == "abs_coloc" else _src.mean(axis=0)
+                        _ascending = False
+                    elif sort_by in ("z", "abs_z"):
+                        if values == "z":
+                            _src = colocalizations_dict[stat]
+                        else:
+                            _z = self.get_normalized_colocalizations(
+                                **get_kwargs, force_dict=True, verbose=False)
+                            _src = _z.get(stat, colocalizations_dict[stat])
+                        sv = _src.mean(axis=0).abs() if sort_by == "abs_z" else _src.mean(axis=0)
+                        _ascending = False
+                    elif sort_by == "p":
+                        if values == "p":
+                            sv = colocalizations_dict[stat].mean(axis=0)
+                            _ascending = False
+                        else:
+                            _pd = ((pc_dict or {}).get(stat) or (p_dict or {}).get(stat))
+                            if _pd is None:
+                                # auto-fetch using same logic as values="p"
+                                _mc = mc_method.replace("_", "").replace("-", "") if mc_method else None
+                                _p_fetched = self.get_p_values(
+                                    **get_kwargs, permute_what=permute_what,
+                                    mc_method=_mc, force_dict=True, verbose=False
+                                )
+                                _pd = _p_fetched.get(stat)
+                            if _pd is None:
+                                raise ValueError("No p-values available for sort_by='p'.")
+                            sv = _pd.mean(axis=0)
+                            _ascending = True  # lower p = more significant
+                    else:
+                        sv = None
+                    if sv is not None:
+                        sorted_labels = sv.sort_values(ascending=_ascending).index.tolist()
+                        orig_labels = list(colocalizations_dict[stat].columns)
+                        _sort_order = [orig_labels.index(l) for l in sorted_labels]
+                except Exception as e:
+                    lgr.warning(f"Could not compute sort order for sort_by='{sort_by}': {e}")
 
             if kind == "categorical":
                 fig_ax = _plot_categorical(
@@ -1925,11 +2111,15 @@ class NiSpace:
                     nulls_dict=nulls_dict,
                     p_df=p_dict[stat] if p_dict is not None else None,
                     pc_df=pc_dict[stat] if pc_dict is not None else None,
+                    values=values,
+                    mc_method=mc_method or _annot_mc,
                     sort=sort_colocs,
+                    sort_order=_sort_order,
+                    annot_p=annot_p,
                     fig=fig,
                     ax=ax,
                     title=title,
-                    figsize=figsize, 
+                    figsize=figsize,
                     kwargs=plot_kwargs,
                     null_kwargs=nullplot_kwargs
                 )
@@ -2013,36 +2203,66 @@ class NiSpace:
     
     # ----------------------------------------------------------------------------------------------
    
-    def get_colocalizations(self, method=None, stats=None, 
+    def get_colocalizations(self, method=None, stats=None,
                             X_reduction=None, Y_transform=None, xsea=None,
+                            normalized=False, perm=None,
                             get_nulls=False, nulls_permute_what=None, force_dict=False,
-                            verbose=None): 
+                            verbose=None):
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
-        
+
         method, X_reduction, Y_transform, xsea = self._get_last(
-            method=method, 
-            X_reduction=X_reduction, 
-            Y_transform=Y_transform, 
-            xsea=xsea
+            method=method,
+            X_reduction=X_reduction,
+            Y_transform=Y_transform,
+            xsea=xsea,
         )
-        
+
+        if normalized:
+            perm = self._get_last(perm=perm)
+            if stats is None:
+                stats = _get_coloc_stats(method, permuted_only=True)
+            elif isinstance(stats, str):
+                stats = [stats]
+            else:
+                stats = list(stats).copy()
+            out = dict()
+            for stat in stats:
+                z_str = _get_df_string(
+                    "z",
+                    xdimred=X_reduction, ytrans=Y_transform,
+                    method=method, stat=stat,
+                    xsea=xsea, perm=perm
+                )
+                if z_str not in self._z_colocs:
+                    lgr.critical_raise(
+                        f"Normalized colocalizations for '{z_str}' not found. "
+                        "Run normalize_colocalizations() first.",
+                        KeyError
+                    )
+                out[stat] = self._z_colocs[z_str].copy()
+            if not force_dict and len(out) == 1:
+                out = out[stats[0]]
+            lgr.info(f"Returning z-scored colocalizations.")
+            lgr.setLevel(loglevel)
+            return out
+
         if stats is None:
             stats = _get_coloc_stats(method)
         elif isinstance(stats, str):
-            stats = [stats]  
+            stats = [stats]
         else:
-            stats = list(stats).copy()      
-            
-        coloc_keys = list(self._colocs.keys())  
-        
+            stats = list(stats).copy()
+
+        coloc_keys = list(self._colocs.keys())
+
         out = dict()
         for stat in stats:
             coloc_str = _get_df_string(
-                "coloc", 
+                "coloc",
                 xdimred=X_reduction,
                 ytrans=Y_transform,
-                method=method, 
+                method=method,
                 stat=stat,
                 xsea=xsea
             )
@@ -2192,6 +2412,10 @@ class NiSpace:
         mc_method = _get_correct_mc_method(mc_method)
         return self.get_p_values(mc_method=mc_method, **kwargs)
 
+    # ----------------------------------------------------------------------------------------------
+
+    def get_normalized_colocalizations(self, **kwargs):
+        return self.get_colocalizations(normalized=True, **kwargs)
 
     # SAVE, LOAD, COPY =============================================================================
 
@@ -2206,8 +2430,8 @@ class NiSpace:
         save_nulls : bool, optional
             Whether to save the null distributions. Defaults to True. If False, null
             colocalizations are dropped, which substantially reduces file size but prevents
-            running correct_p('maxT') or correct_p('step_maxT') after reloading. Call those
-            corrections before saving if you intend to drop nulls.
+            running correct_p('maxT'), correct_p('step_maxT'), or normalize_colocalizations()
+            after reloading. Call those methods before saving if you intend to drop nulls.
         verbose : bool, optional
         """
         loglevel = lgr.getEffectiveLevel()
