@@ -243,6 +243,7 @@ class NiSpace:
             "zy_matched": False,
             "regress_z": None,
             "mc_method": None,
+            "z_method": "robust",
         }
         
         # deprecation adjustment
@@ -700,7 +701,7 @@ class NiSpace:
         apply_transform, paired = _get_transform_fun(transform, return_df=True, return_paired=True,
                                                      dtype=self._dtype, ignore_nan_warnings=True)
         # small-sample warnings for reference-group-normed transforms
-        if any(t in transform for t in ("rzscore", "robustzscore", "centile")):
+        if any(t in transform for t in ("rzscore", "rzscores", "centile", "centiles")):
             if groups_nonan_dummy is not None:
                 n_ref = (groups_nonan_dummy == 1).sum()
             else:
@@ -1834,6 +1835,7 @@ class NiSpace:
             )
 
         score_fn = rzscore_nan if z_method == "robust" else zscore_nan
+        self._set_last(z_method=z_method)
 
         null_keys = list(self._nulls["_colocs"].keys())
         if coloc_method is not None:
@@ -1926,8 +1928,8 @@ class NiSpace:
                 sort_by = "coloc"
             sort_colocs = False
 
-        # values mode: z and p never show null distributions
-        if values in ("z", "p"):
+        # p mode never shows null distributions; z mode supports them
+        if values == "p":
             plot_nulls = False
 
         # check nulls/p plot
@@ -1959,14 +1961,28 @@ class NiSpace:
                           Y_transform=Y_transform, xsea=xsea)
 
         # get colocalization results
+        _z_method = self._last_settings.get("z_method", "robust")
         if colocalizations_dict is None:
             self._check_colocalize(**check_kwargs)
 
             if values == "z":
+                _z_method = self._last_settings.get("z_method", "robust")
+                lgr.info(f"Z-score normalisation method: "
+                         f"{'robust (median/MAD)' if _z_method == 'robust' else 'standard (mean/SD)'}.")
                 colocalizations_dict = self.get_normalized_colocalizations(
                     **get_kwargs, force_dict=True, verbose=False
                 )
-                nulls_dict = None
+                if plot_nulls:
+                    _raw = self.get_colocalizations(
+                        **get_kwargs, force_dict=True,
+                        get_nulls=True, nulls_permute_what=permute_what, verbose=False
+                    )
+                    _, nulls_dict = _raw if isinstance(_raw, tuple) else (_raw, None)
+                    if nulls_dict is None:
+                        lgr.warning("No nulls found. Not plotting null distributions in z mode.")
+                        plot_nulls = False
+                else:
+                    nulls_dict = None
 
             elif values == "p":
                 _mc = mc_method.replace("_", "").replace("-", "") if mc_method else None
@@ -2140,6 +2156,7 @@ class NiSpace:
                     sort=sort_colocs,
                     sort_order=_sort_order,
                     annot_p=annot_p,
+                    z_method=_z_method,
                     fig=fig,
                     ax=ax,
                     title=title,

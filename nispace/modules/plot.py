@@ -9,7 +9,7 @@ from ..plotting import catplot, nullplot, nice_stats_labels, print_significance
 def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
                       values="coloc", mc_method=None,
                       sort=False, sort_order=None,
-                      annot_p=True,
+                      annot_p=True, z_method="robust",
                       title=None, fig=None, ax=None, figsize=None,
                       kwargs=None, null_kwargs=None, clean_labels=True):
 
@@ -109,12 +109,18 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
     if nulls_dict:
         tmp = []
         for c_nulls, c_colocs in zip(nulls_dict[stat].keys(), colocs_df.columns):
-            tmp.append(
-                pd.DataFrame({
-                    "X": c_colocs,
-                    stat: (nulls_dict[stat][c_nulls] if colocs_df.shape[1] > 1 else nulls_dict[stat]).mean(axis=0)
-                })
-            )     
+            null_vals = (
+                nulls_dict[stat][c_nulls] if colocs_df.shape[1] > 1 else nulls_dict[stat]
+            ).mean(axis=0)  # → 1D array of null permutation values
+            if values == "z":
+                # transform to z-space using the same method as the observed z-scores
+                med = np.nanmedian(null_vals)
+                if z_method == "robust":
+                    scale = 1.4826 * np.nanmedian(np.abs(null_vals - med))
+                else:
+                    scale = np.nanstd(null_vals, ddof=1)
+                null_vals = (null_vals - med) / scale if scale > 0 else (null_vals - med)
+            tmp.append(pd.DataFrame({"X": c_colocs, stat: null_vals}))
         nulls_df_melt = pd.concat(tmp)
     
     # default args
@@ -196,18 +202,10 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
     plot_h0line = values == "coloc" and stat in ["beta", "rho"] and cont_on_y
     plot_v0line = values == "coloc" and stat in ["beta", "rho"] and not cont_on_y
 
-    # collect threshold specs for z/p modes — drawn after render with limit check
-    # sym=True:   draw both +pos and -pos, one legend entry per threshold
+    # collect threshold specs for p mode — drawn after render with limit check
     # force=True: always draw; extend axis if the position is outside seaborn's range
     _grey = "dimgrey"
-    if values == "z":
-        _ref_specs = [
-            {"pos": 0,    "ls": "-",  "lw": 1.2, "label": "null mean",        "sym": False, "force": True},
-            {"pos": 1.96, "ls": ":",  "lw": 0.8, "label": "$Z = 1.96$",  "sym": True,  "force": True},
-            {"pos": 2.58, "ls": "--", "lw": 0.8, "label": "$Z = 2.58$",  "sym": True,  "force": False},
-            {"pos": 3.29, "ls": "-.", "lw": 0.8, "label": "$Z = 3.29$", "sym": True,  "force": False},
-        ]
-    elif values == "p":
+    if values == "p":
         _ref_specs = [
             {"pos": -np.log10(0.05),  "ls": ":",  "lw": 0.8, "label": "$p = .05$",  "sym": False, "force": True},
             {"pos": -np.log10(0.01),  "ls": "--", "lw": 0.8, "label": "$p = .01$",  "sym": False, "force": False},
