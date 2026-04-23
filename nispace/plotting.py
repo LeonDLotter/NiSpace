@@ -192,24 +192,41 @@ def print_significance(ax, p_values, q_values=None, coloc_values=None,
     get_lim = ax.get_xlim if cont_on_x else ax.get_ylim
     set_lim = ax.set_xlim if cont_on_x else ax.set_ylim
 
-    # per-element anchor = mean coloc value (determines side)
-    col_means = np.array(coloc_values).flatten()
+    # coloc_values: 1D (means) for bar mode, 2D (n_Y × n_X) for scatter/point mode
+    _cv = np.atleast_2d(np.array(coloc_values, dtype=float))  # always (n_Y, n_X)
+    col_means = np.nanmean(_cv, axis=0)
+
+    # For multi-Y: position annotations at the 95% CI edge rather than the mean
+    # so markers don't overlap with errorbars.  Single-Y: CI == mean, so this is a no-op.
+    if _cv.shape[0] > 1:
+        from scipy import stats as _stats
+        n_valid = np.sum(~np.isnan(_cv), axis=0).astype(float)
+        se = np.nanstd(_cv, ddof=1, axis=0) / np.sqrt(np.maximum(n_valid, 1))
+        t_crit = _stats.t.ppf(0.975, df=np.maximum(n_valid - 1, 1))
+        ci_margin = t_crit * se
+        col_ci_upper = col_means + ci_margin
+        col_ci_lower = col_means - ci_margin
+    else:
+        col_ci_upper = col_means
+        col_ci_lower = col_means
+
     span = get_lim()[1] - get_lim()[0]
     pad = pad_frac * span
 
     # tick label objects — one per X element (categorical axis)
     labs = ax.get_yticklabels() if categorical_axis == "y" else ax.get_xticklabels()
 
-    # build annotation list aligned to tick order
-    # seaborn may reverse or reorder categories; match by label text
-    col_means_map = {}  # label text → mean coloc
+    # build lookup maps aligned to tick order
+    col_means_map    = {}
+    col_ci_upper_map = {}
+    col_ci_lower_map = {}
     p_map = {}
     q_map = {}
-    # coloc_values is assumed aligned to p_values order (colocs_df column order)
-    # but labs order may differ — we zip labs with the arrays assuming same order
     for i, lab in enumerate(labs):
         if i < len(col_means):
-            col_means_map[lab.get_text()] = col_means[i]
+            col_means_map[lab.get_text()]    = col_means[i]
+            col_ci_upper_map[lab.get_text()] = col_ci_upper[i]
+            col_ci_lower_map[lab.get_text()] = col_ci_lower[i]
             p_map[lab.get_text()] = p_values[i]
             q_map[lab.get_text()] = q_values[i]
 
@@ -240,7 +257,9 @@ def print_significance(ax, p_values, q_values=None, coloc_values=None,
 
         p = p_map[txt]
         q = q_map[txt]
-        mean = col_means_map[txt]
+        mean     = col_means_map[txt]
+        ci_upper = col_ci_upper_map[txt]
+        ci_lower = col_ci_lower_map[txt]
 
         # bold tick label — only for MC-corrected significance
         if bold_labels:
@@ -265,7 +284,9 @@ def print_significance(ax, p_values, q_values=None, coloc_values=None,
         if not ann_parts:
             continue
 
-        pos = mean + pad if mean >= 0 else mean - pad
+        # anchor at CI edge (for multi-Y) or mean (for single-Y / bar mode)
+        anchor = ci_upper if mean >= 0 else ci_lower
+        pos = anchor + pad if mean >= 0 else anchor - pad
         ha = "left" if mean >= 0 else "right"
         l_pos = lab.get_position()
         cat_coord = l_pos[0] if categorical_axis == "x" else l_pos[1]

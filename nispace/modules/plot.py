@@ -297,18 +297,17 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
         else:
             _p_row = p_df.iloc[0]
             _q_row = pc_df.iloc[0] if pc_df is not None else None
-            _col_means = colocs_df.mean(axis=0)
 
             # align all series to current colocs_df column order (after label cleaning)
-            _p_vals  = _p_row.reindex(colocs_df.columns).values
-            _q_vals  = _q_row.reindex(colocs_df.columns).values if _q_row is not None else None
-            _means   = _col_means.values
+            _p_vals     = _p_row.reindex(colocs_df.columns).values
+            _q_vals     = _q_row.reindex(colocs_df.columns).values if _q_row is not None else None
+            _coloc_data = colocs_df.reindex(columns=colocs_df.columns).values  # (n_Y, n_X)
 
             _sig_handles, _sig_labels = print_significance(
                 ax,
                 p_values=_p_vals,
                 q_values=_q_vals,
-                coloc_values=_means,
+                coloc_values=_coloc_data,
                 mode=annot_p,
                 mc_method=mc_method,
                 categorical_axis=catplot_kwargs["categorical_axis"],
