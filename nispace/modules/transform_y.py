@@ -5,7 +5,7 @@ import pandas as pd
 
 from ..stats.effectsize import (cohen_nan_fast, cohen_paired_nan_fast, hedges_nan_fast,
                                 zscore_nan_fast, rzscore_nan_fast,
-                                prc_fast, logfc_fast)
+                                prc_fast, logfc_fast, centile_fast)
 
 
 def _dummy_code_groups(groups):
@@ -134,7 +134,9 @@ def _get_transform_fun(formula, return_df=True, return_paired=False,
         "rzscore(*)": rzscore_nan_fast,
         "rzscore(*,*)": rzscore_nan_fast,
         "prc(*,*)": prc_fast,
-        "logfc(*,*)": logfc_fast
+        "logfc(*,*)": logfc_fast,
+        "centile(*)": centile_fast,
+        "centile(*,*)": centile_fast
     }
     
     # validate the formula

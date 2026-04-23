@@ -699,6 +699,28 @@ class NiSpace:
         # get formula interpreter to evaluate string formulas and output dataframes
         apply_transform, paired = _get_transform_fun(transform, return_df=True, return_paired=True,
                                                      dtype=self._dtype, ignore_nan_warnings=True)
+        # small-sample warnings for reference-group-normed transforms
+        if any(t in transform for t in ("rzscore", "robustzscore", "centile")):
+            if groups_nonan_dummy is not None:
+                n_ref = (groups_nonan_dummy == 1).sum()
+            else:
+                n_ref = len(_Y_nonan)
+            if "centile" in transform:
+                if n_ref < 20:
+                    lgr.warning(f"centile: reference group has only n={n_ref} subjects. "
+                                f"Percentile ranks are coarse at small n — consider "
+                                f"'zscore(a,b)' or, for a single summary map, 'hedges(a,b)'.")
+                elif n_ref < 30:
+                    lgr.info(f"centile: reference group has n={n_ref} subjects. "
+                             f"Percentile ranks may be coarse at this sample size.")
+            else:
+                if n_ref < 20:
+                    lgr.warning(f"rzscore: reference group has only n={n_ref} subjects. "
+                                f"MAD-based normalization is unreliable at small n — consider "
+                                f"'zscore(a,b)' or, for a single summary map, 'hedges(a,b)'.")
+                elif n_ref < 30:
+                    lgr.info(f"rzscore: reference group has n={n_ref} subjects. "
+                             f"MAD estimates can be variable at this sample size.")
         # paired comparison but no subjects vector
         if paired and subjects is None:
             lgr.warning("The transform performs a paired comparison but argument 'subjects' was not "

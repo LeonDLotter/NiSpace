@@ -342,6 +342,25 @@ def prc_fast(a, b):
 #   swap(a,b) -> log((b+c)/(a+c)) = -logfc(a,b)  ✓
 # -> null distribution is always exactly 0-centered.
 # ---------------------------------------------------
+def centile_fast(a, b=None):
+    """Percentile rank of each row of a within columns of b (or a if b is None). Output in [0, 100]."""
+    a = np.array(a, dtype=float)
+    ref = a if b is None else np.array(b, dtype=float)
+    n_cols = ref.shape[1]
+    result = np.empty_like(a, dtype=float)
+    for j in range(n_cols):
+        col_ref = ref[:, j]
+        col_ref_valid = np.sort(col_ref[~np.isnan(col_ref)])
+        n_valid = len(col_ref_valid)
+        for i in range(a.shape[0]):
+            v = a[i, j]
+            if np.isnan(v) or n_valid == 0:
+                result[i, j] = np.nan
+            else:
+                result[i, j] = np.searchsorted(col_ref_valid, v, side="right") / n_valid * 100
+    return result
+
+
 def logfc_nan(a, b):
     a = np.array(a, dtype=float)
     b = np.array(b, dtype=float)
