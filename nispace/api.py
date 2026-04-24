@@ -276,7 +276,7 @@ class NiSpace:
         ## handle parcellation
         
         # integrated parcellation
-        if isinstance(self._parc["parc"], str):
+        if isinstance(self._parc, dict) and isinstance(self._parc["parc"], str):
             # check if parcellation is an integrated parcellation
             parc_integrated = _check_parcellation(self._parc["parc"], force_str=True, raise_not_found=False)
             if parc_integrated is not None:
