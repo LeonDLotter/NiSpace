@@ -112,7 +112,7 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
         tmp = []
         for c_nulls, c_colocs in zip(nulls_dict[stat].keys(), colocs_df.columns):
             null_vals = (
-                nulls_dict[stat][c_nulls] if colocs_df.shape[1] > 1 else nulls_dict[stat]
+                nulls_dict[stat][c_nulls] if isinstance(nulls_dict[stat], dict) else nulls_dict[stat]
             ).mean(axis=0)  # → 1D array of null permutation values
             if values == "z":
                 # transform to z-space using the same method as the observed z-scores

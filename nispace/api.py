@@ -33,6 +33,36 @@ from .utils.utils import (set_log, fill_nan, _get_df_string, _lower_strip_ws, me
                           _parse_df_string, _parse_bool)
 
 
+def _match_maps(index, queries):
+    """Return sorted unique integer positions in *index* matching any of *queries*.
+
+    Matching priority:
+    1. Exact equality with the index value
+    2. For tuple index values: exact element match or partial string match on any element
+    3. For scalar index values: exact or partial string match
+    """
+    if isinstance(queries, (str, int)):
+        queries = [queries]
+    keep = []
+    for i, val in enumerate(index):
+        for q in queries:
+            q_str = str(q)
+            if q == val:
+                keep.append(i)
+                break
+            if isinstance(val, tuple):
+                parts = [str(v) for v in val]
+                if q in val or any(q_str == p or q_str in p for p in parts):
+                    keep.append(i)
+                    break
+            else:
+                s = str(val)
+                if q_str == s or q_str in s:
+                    keep.append(i)
+                    break
+    return sorted(set(keep))
+
+
 # ==================================================================================================
 # DEFINE CLASS
 # ==================================================================================================
@@ -1916,6 +1946,7 @@ class NiSpace:
              X_reduction=None, Y_transform=None,
              xsea=None,
              Y_labels=None, X_labels=None,
+             Y_maps=None, X_maps=None,
              values="coloc", mc_method=None,
              plot_nulls=True, annot_p=True, permute_what=None,
              title="auto", sort_by=None, sort_colocs=False, n_categories=50,
@@ -2050,27 +2081,56 @@ class NiSpace:
                               "get_colocalizations(force_dict=True, get_nulls=True)!")
                     nulls_dict = None
         
-        # restrict to given y labels
-        if Y_labels is not None:
-            if isinstance(Y_labels, str):
-                Y_labels = [Y_labels]
+        # Y_labels / X_labels are legacy aliases for Y_maps / X_maps
+        if Y_labels is not None and Y_maps is None:
+            Y_maps = Y_labels
+        if X_labels is not None and X_maps is None:
+            X_maps = X_labels
+
+        # restrict to given y maps
+        keep_y = keep_x = None
+        if Y_maps is not None:
+            _ref_df = next(iter(colocalizations_dict.values()))
+            keep_y = _match_maps(_ref_df.index, Y_maps)
+            if not keep_y:
+                lgr.critical_raise(f"No Y maps matching {Y_maps!r} found.", ValueError)
             for stat in colocalizations_dict:
-                indexer = colocalizations_dict[stat].index.isin(Y_labels)
-                colocalizations_dict[stat] = colocalizations_dict[stat].loc[indexer]
+                colocalizations_dict[stat] = colocalizations_dict[stat].iloc[keep_y]
                 if nulls_dict is not None:
-                    for null_str in nulls_dict[stat]:
-                        nulls_dict[stat][null_str] = nulls_dict[stat][null_str].loc[indexer]
-                        
-        # restrict to given x labels
-        if X_labels is not None:
-            if isinstance(X_labels, str):
-                X_labels = [X_labels]
+                    if isinstance(nulls_dict[stat], dict):
+                        for null_str in nulls_dict[stat]:
+                            nulls_dict[stat][null_str] = nulls_dict[stat][null_str].iloc[keep_y]
+                    else:
+                        nulls_dict[stat] = nulls_dict[stat].iloc[keep_y]
+
+        # restrict to given x maps
+        if X_maps is not None:
+            _ref_df = next(iter(colocalizations_dict.values()))
+            keep_x = _match_maps(_ref_df.columns, X_maps)
+            if not keep_x:
+                lgr.critical_raise(f"No X maps matching {X_maps!r} found.", ValueError)
             for stat in colocalizations_dict:
-                colocalizations_dict[stat] = colocalizations_dict[stat].loc[:, X_labels]
+                colocalizations_dict[stat] = colocalizations_dict[stat].iloc[:, keep_x]
                 if nulls_dict is not None:
-                    nulls_dict[stat] = {null_str: nulls_dict[stat][null_str]
-                                        for null_str in nulls_dict[stat]}
-        
+                    if isinstance(nulls_dict[stat], dict):
+                        nulls_dict[stat] = {
+                            k: v for k, v in nulls_dict[stat].items()
+                            if k in colocalizations_dict[stat].columns
+                        }
+
+        def _filter_dict(d):
+            if d is None:
+                return None
+            out = {}
+            for stat, df in d.items():
+                if keep_y is not None:
+                    df = df.iloc[keep_y]
+                if keep_x is not None:
+                    df = df.iloc[:, keep_x]
+                out[stat] = df
+            return out
+        # p_dict / pc_dict are always {stat: DataFrame} — plain iloc is fine
+
         # auto-fetch p-values for annotation (and sort_by="p")
         # resolve effective mc_method: explicit arg > last stored setting
         _annot_mc = mc_method or self._last_settings.get("mc_method")
@@ -2097,7 +2157,9 @@ class NiSpace:
                         pc_dict = _fetched
                 except Exception:
                     pass
-        
+        p_dict  = _filter_dict(p_dict)
+        pc_dict = _filter_dict(pc_dict)
+
         # loop over stats
         stats = [s for s in colocalizations_dict if s not in ["intercept"]]
         out = {}
@@ -2231,10 +2293,10 @@ class NiSpace:
                    space=None,
                    surf_mesh="inflated",
                    views=None,
-                   cmap="RdBu_r",
+                   cmap=None,
                    vmin=None, vmax=None,
                    shared_colorscale=False,
-                   symmetric_cmap=True,
+                   symmetric_cmap="auto",
                    colorbar=True,
                    colorbar_label="",
                    ncols=1,
@@ -2328,33 +2390,12 @@ class NiSpace:
 
         # -- map selection --
         if maps is not None:
-            if isinstance(maps, str):
-                maps = [maps]
-            maps = list(maps)
-            keep = []
-            for i, idx_val in enumerate(data_df.index):
-                for m in maps:
-                    m_str = str(m)
-                    if m == idx_val:                          # exact match
-                        keep.append(i)
-                        break
-                    if isinstance(idx_val, tuple):
-                        parts = [str(v) for v in idx_val]
-                        if (m in idx_val                      # element exact
-                                or any(m_str == p for p in parts)   # str exact
-                                or any(m_str in p for p in parts)):  # partial
-                            keep.append(i)
-                            break
-                    else:
-                        idx_str = str(idx_val)
-                        if m_str == idx_str or m_str in idx_str:     # exact or partial
-                            keep.append(i)
-                            break
+            keep = _match_maps(data_df.index, maps)
             if not keep:
                 lgr.critical_raise(
                     f"No maps matching {maps!r} found in the index.", ValueError
                 )
-            data_df = data_df.iloc[sorted(set(keep))]
+            data_df = data_df.iloc[keep]
 
         # -- safeguard against too many subplots --
         if len(data_df) > n_max:
@@ -2392,10 +2433,10 @@ class NiSpace:
 
     # GET ==========================================================================================
     
-    def get_x(self, X_reduction=None, verbose=None, copy=True):
+    def get_x(self, X_reduction=None, maps=None, squeeze=False, verbose=None, copy=True):
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
-        
+
         X_reduction = self._get_last(X_reduction=X_reduction)
         if X_reduction is False:
             out = self._X
@@ -2407,17 +2448,26 @@ class NiSpace:
                 lgr.critical_raise(f"No X dataframe for dimensionality reduction '{X_reduction}' "
                                    f"found! Available: {available}",
                                    KeyError)
-                
+
+        if maps is not None:
+            keep = _match_maps(out.index, maps)
+            if not keep:
+                lgr.critical_raise(f"No maps matching {maps!r} found in X index.", ValueError)
+            out = out.iloc[keep]
+
+        if squeeze and len(out) == 1:
+            out = out.squeeze()
+
         lgr.info(f"Returning X dataframe: \n{print_arg_pairs(X_reduction=X_reduction)}")
         lgr.setLevel(loglevel)
-        return out.copy() if copy else out      
+        return out.copy() if copy else out
     
     # ----------------------------------------------------------------------------------------------
     
-    def get_y(self, Y_transform=None, verbose=None, copy=True):
+    def get_y(self, Y_transform=None, maps=None, squeeze=False, verbose=None, copy=True):
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
-        
+
         Y_transform = self._get_last(Y_transform=Y_transform)
         if Y_transform is False:
             out = self._Y
@@ -2429,10 +2479,19 @@ class NiSpace:
                 lgr.critical_raise(f"No Y dataframe for transform '{Y_transform}' found! "
                                    f"Available: {available}",
                                    KeyError)
-                
+
+        if maps is not None:
+            keep = _match_maps(out.index, maps)
+            if not keep:
+                lgr.critical_raise(f"No maps matching {maps!r} found in Y index.", ValueError)
+            out = out.iloc[keep]
+
+        if squeeze and len(out) == 1:
+            out = out.squeeze()
+
         lgr.info(f"Returning Y dataframe: \n{print_arg_pairs(Y_transform=Y_transform)}")
         lgr.setLevel(loglevel)
-        return out.copy() if copy else out      
+        return out.copy() if copy else out
     
     # ----------------------------------------------------------------------------------------------
          

@@ -1290,11 +1290,11 @@ def brainplot(
     cut_coords=None,
     bg_img=None,
     draw_cross=False,
-    cmap="RdBu_r",
+    cmap=None,
     vmin=None,
     vmax=None,
     shared_colorscale=False,
-    symmetric_cmap=True,
+    symmetric_cmap="auto",
     colorbar=True,
     colorbar_label="",
     colorbar_inset=None,
@@ -1359,15 +1359,18 @@ def brainplot(
         templates when None.
     draw_cross : bool
         Draw crosshair lines at slice positions.
-    cmap : str
-        Colormap name.
+    cmap : str, optional
+        Colormap name. Defaults to "RdBu_r" when the colorscale is symmetric
+        and "viridis" otherwise (see symmetric_cmap).
     vmin, vmax : float, optional
         Color scale limits. None = auto-computed per map.
     shared_colorscale : bool
         Compute vmin/vmax across all maps (one shared colorbar). Always
         True for combined parcellations.
-    symmetric_cmap : bool
-        Center color limits at 0 (vmax = max(|vmin|, |vmax|)).
+    symmetric_cmap : bool or "auto"
+        Center color limits at 0. True → RdBu_r, False → viridis (unless
+        cmap is set explicitly). "auto" (default) detects from the data:
+        symmetric if values span both sides of zero, sequential otherwise.
     colorbar : bool
         Show colorbar. When shared, one horizontal bar is placed at the
         bottom center of the figure.
@@ -1727,6 +1730,14 @@ def brainplot(
     _flat_vals = (
         _img_all_vals if _img_mode is not None else data.values.flatten()
     )
+
+    # -- resolve symmetric_cmap and cmap --
+    if symmetric_cmap == "auto":
+        _clean = _flat_vals[np.isfinite(_flat_vals)]
+        symmetric_cmap = bool(np.any(_clean < 0) and np.any(_clean > 0))
+    if cmap is None:
+        cmap = "RdBu_r" if symmetric_cmap else "viridis"
+
     if use_shared:
         _global_vmin, _global_vmax = _auto_vmin_vmax(
             _flat_vals, symmetric_cmap, vmin, vmax
@@ -1773,7 +1784,7 @@ def brainplot(
             try:
                 target = p[0].split("-")[1]
                 n      = p[2].split("-")[1]
-                pub    = p[4].split("-")[1]
+                pub    = p[4].split("-")[1].capitalize()
                 return f"{target} ({pub}, n = {n})"
             except (IndexError, ValueError):
                 pass
@@ -1801,13 +1812,18 @@ def brainplot(
     else:
         _titles = [str(title)] * n_maps
     _has_title = _titles is not None
+    _multirow = n_rows_grid > 1
     if hspace is None:
-        if _has_title:
-            hspace = 0.2 if kind == "surface" else 0.3
+        if _has_title and _multirow:
+            hspace = 0.05 if kind == "surface" else 0.35
         else:
             hspace = -0.1 if kind == "surface" else 0.05
 
-    _title_h = 0.35 if _has_title else 0.0   # extra inches per row for title text
+    # Surface titles sit inside the axes; only add extra row height for multi-row.
+    if _has_title and _multirow:
+        _title_h = 0.3
+    else:
+        _title_h = 0.0
     if figsize is None:
         _panel_w = 1.8 if kind == "glass" else (1.4 if kind == "slice" else 2.0)
         _w = n_cols_grid * _n_panels * _panel_w
@@ -1884,8 +1900,9 @@ def brainplot(
             colorbar_inset = [1.04, 0.25, 0.02, 0.5]
 
     axes_out = []
-    # Colorbars are added after all brains so they render on top in multi-col layouts.
-    _pending_cbars = []  # [(ax, v_min, v_max)]
+    # Colorbars and titles are added after all brains so they render on top.
+    _pending_cbars  = []  # [(ax, v_min, v_max)]
+    _pending_titles = []  # [(ax, title_str)]
 
     for i in range(n_maps):
         ri    = i // n_cols_grid
@@ -1909,10 +1926,9 @@ def brainplot(
             ax_main.set_axis_off()
             axes_out.append(ax_main)
 
-        # ---- title ----
+        # ---- title (deferred) ----
         if _has_title:
-            _ax_title = ax_s if is_combined else ax_main
-            _ax_title.set_title(_titles[i], pad=6, fontsize="large", fontweight="bold")
+            _pending_titles.append((ax_s if is_combined else ax_main, _titles[i]))
 
         # ---- GIfTI passthrough: surface ----
         if _img_mode == "gifti":
@@ -2029,6 +2045,28 @@ def brainplot(
         fig.colorbar(_sm, cax=_cax)
         if colorbar_label:
             _cax.set_title(colorbar_label, fontsize="medium")
+
+    # Add titles last so they render on top of all brain axes.
+    # Surface plots: y slightly inside the axes top (brain sits in the lower
+    # portion of ax_main leaving empty space above it).
+    # Other kinds: y just above the axes top edge.
+    _title_y_surf  = 1.02   # inside ax_main, above the nilearn content
+    _title_y_other = 1.02   # just outside the top edge
+    _title_va_surf  = "top"
+    _title_va_other = "bottom"
+    for (_tax, _tstr) in _pending_titles:
+        _pos = _tax.get_position()
+        if kind == "surface":
+            _ty = _pos.y0 + _title_y_surf  * _pos.height
+            _va = _title_va_surf
+        else:
+            _ty = _pos.y0 + _title_y_other * _pos.height
+            _va = _title_va_other
+        fig.text(
+            _pos.x0 + _pos.width / 2, _ty, _tstr,
+            ha="center", va=_va,
+            fontsize="large", fontweight="bold",
+        )
 
     # -- hide unused subplot cells --
     if not is_combined and _own_fig:
