@@ -2,7 +2,7 @@
 ``NiSpace``: NeuroImaging Spatial Colocalization Environment
 ================================================================================
 
-.. image:: https://img.shields.io/badge/DOI-10.5281/zenodo.12514622-#1082C3
+.. image:: https://img.shields.io/badge/DOI-10.5281/zenodo.12514622-1082C3
   :target: https://zenodo.org/doi/10.5281/zenodo.12514622
   :alt: DOI: 10.5281/zenodo.12514622
 .. image:: https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey

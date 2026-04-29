@@ -345,7 +345,7 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
             ex_title = leg.get_title().get_text()
             leg_kwargs = {
                 "title": ex_title, "loc": leg._loc,
-                "handler_map": {tuple: HandlerTuple(ndivide=False, pad=0)}
+                "handler_map": {tuple: HandlerTuple(ndivide=1, pad=0)}
             }
             if leg._bbox_to_anchor is not None:
                 try:
@@ -358,7 +358,7 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
             new_leg.get_children()[0].get_children().extend(old_boxes)
         else:
             ax.legend(handles=[(_dot_proxy, _eb_proxy)], labels=["Observed mean\n(95% CI)"],
-                      handler_map={tuple: HandlerTuple(ndivide=None, pad=0)})
+                      handler_map={tuple: HandlerTuple(ndivide=1, pad=0)})
 
     return fig, ax, plot
 
