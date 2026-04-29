@@ -305,12 +305,19 @@ def simple_colocalization(y,
 
     ## VIZ
     if plot:
-        for method in colocalization_method:
-            plot_kwargs_curr = dict(
-                method=method,
-                permute_what=permuted,
-            ) | plot_kwargs
-            nsp.plot(**plot_kwargs_curr)
+        _n_x = nsp._X.shape[0]
+        if _n_x > 50:
+            lgr.warning(
+                f"Skipping plot: {_n_x} X maps exceed the default limit of 50. "
+                f"Call nsp.plot(n_categories={_n_x}, sort_by='abs_z') to plot manually."
+            )
+        else:
+            for method in colocalization_method:
+                plot_kwargs_curr = dict(
+                    method=method,
+                    permute_what=permuted,
+                ) | plot_kwargs
+                nsp.plot(**plot_kwargs_curr)
 
     ## RETURN
     colocs = {method: nsp.get_colocalizations(method)
@@ -532,14 +539,21 @@ def group_comparison(y, design,
 
     ## VIZ
     if plot:
-        for method in colocalization_method:
-            plot_kwargs_curr = dict(
-                method=method,
-                permute_what=permute_what,
-                Y_transform=comparison_method,
-                verbose=verbose,
-            ) | plot_kwargs
-            nsp.plot(**plot_kwargs_curr)
+        _n_x = nsp._X.shape[0]
+        if _n_x > 50:
+            lgr.warning(
+                f"Skipping plot: {_n_x} X maps exceed the default limit of 50. "
+                f"Call nsp.plot(n_categories={_n_x}, sort_by='abs_z') to plot manually."
+            )
+        else:
+            for method in colocalization_method:
+                plot_kwargs_curr = dict(
+                    method=method,
+                    permute_what=permute_what,
+                    Y_transform=comparison_method,
+                    verbose=verbose,
+                ) | plot_kwargs
+                nsp.plot(**plot_kwargs_curr)
 
     ## RETURN
     colocs = {method: nsp.get_colocalizations(method, Y_transform=comparison_method)

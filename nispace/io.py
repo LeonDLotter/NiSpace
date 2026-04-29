@@ -89,7 +89,9 @@ def parcellate_data(data,
         parc_labels = parc_labels if parc_labels is not None else parcellation._labels
         parc_hemi   = parc_hemi   if parc_hemi   is not None else parcellation._hemi
         parc_space  = parc_space  if parc_space  is not None else parcellation._space
-        parcellation = parcellation._image_obj
+        # _image_obj requires an active space; if none is set (pre-parcellated data path),
+        # set to None — list inputs will raise their own error, DataFrame inputs don't need it
+        parcellation = parcellation._image_obj if parcellation._space is not None else None
 
     ## put data into list
     if isinstance(data, Path):

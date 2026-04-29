@@ -20,7 +20,7 @@ from .modules.permute import (_get_null_maps, _get_exact_p_values, _get_correct_
 from .modules.plot import _plot_categorical
 from .modules.constants import _PARCS_DEFAULT, _COLOC_METHODS
 from .datasets import fetch_parcellation, fetch_template, _check_parcellation
-from .nulls import get_distance_matrix
+from .nulls import get_distance_matrix, _SPIN_METHODS
 from .stats.coloc import *
 from .stats.misc import (mc_correction, residuals_nan, zscore_df, permute_groups,
                           compute_meff, meff_sidak_correction,
@@ -177,7 +177,10 @@ class NiSpace:
             parcellation = kwargs.pop("parc")
         # custom image/path parcellations are built immediately; integrated strings
         # and already-constructed Parcellation objects are handled in fit()
-        if parcellation is not None and not isinstance(parcellation, (str, Parcellation)):
+        if parcellation is None:
+            self._parc = None
+        elif not isinstance(parcellation, (str, Parcellation)):
+            # image or path → build Parcellation immediately
             self._parc = Parcellation.from_path(
                 source=parcellation,
                 space=parcellation_space,
@@ -189,6 +192,7 @@ class NiSpace:
                 hemi=parcellation_hemi,
             )
         else:
+            # string name or existing Parcellation object → resolved in fit()
             self._parc = {
                 "parc": parcellation,
                 "labels": parcellation_labels,
@@ -274,41 +278,48 @@ class NiSpace:
                         "by default. Set NiSpace(return_self=True) to disable this warning.")
     
         ## handle parcellation
-        
-        # integrated parcellation
-        if isinstance(self._parc, dict) and isinstance(self._parc["parc"], str):
-            # check if parcellation is an integrated parcellation
-            parc_integrated = _check_parcellation(self._parc["parc"], force_str=True, raise_not_found=False)
-            if parc_integrated is not None:
-                # fetch full multi-space Parcellation (space=None → Parcellation object)
-                parc_obj = fetch_parcellation(
-                    parcellation=parc_integrated,
-                    return_dist_mat=self._load_dist_mat,
-                    return_spin_mat=self._load_spin_mat,
+        if self._parc is not None:
+            # integrated parcellation
+            if isinstance(self._parc, dict) and isinstance(self._parc["parc"], str):
+                # check if parcellation is an integrated parcellation
+                parc_integrated = _check_parcellation(self._parc["parc"], force_str=True, raise_not_found=False)
+                if parc_integrated is not None:
+                    # fetch full multi-space Parcellation (space=None → Parcellation object)
+                    parc_obj = fetch_parcellation(
+                        parcellation=parc_integrated,
+                        return_dist_mat=self._load_dist_mat,
+                        return_spin_mat=self._load_spin_mat,
+                    )
+                    # activate space only when raw image data needs parcellating;
+                    # DataFrames/Series/ndarrays are already parcellated — everything
+                    # else (lists, paths, image objects, "gm" string, …) is raw
+                    needs_parcellating = any(
+                        not isinstance(d, (pd.DataFrame, pd.Series, np.ndarray))
+                        for d in [self._x, self._y, self._z] if d is not None
+                    )
+                    if needs_parcellating:
+                        active_space = parc_obj.get_image_for_dataspace(self._parc["space"])
+                        parc_obj.set_active_space(active_space)
+                    self._parc = parc_obj
+                    # populate dist_mat dict from Parcellation for backward compat
+                    dm = parc_obj.get_dist_mat(compute_if_missing=False)
+                    self._parc_dist_mat["null_maps"] = dm
+                    if not isinstance(dm, tuple):
+                        self._parc_dist_mat["cv"] = dm
+                    if self._parc_spin_mat is None:
+                        self._parc_spin_mat = parc_obj.get_spin_mat()
+
+            # custom parcellation (string file path not matched as integrated)
+            if not isinstance(self._parc, Parcellation):
+                self._parc = Parcellation.from_path(
+                    source=self._parc["parc"],
+                    space=self._parc["space"],
+                    labels=self._parc["labels"],
+                    dist_mat=self._parc_dist_mat["null_maps"],
+                    symmetric=self._parc["symmetric"],
+                    l2rmap=self._parc["l2rmap"],
+                    hemi=self._parc["hemi"],
                 )
-                # activate space that matches the requested data space
-                active_space = parc_obj.get_image_for_dataspace(self._parc["space"])
-                parc_obj.set_active_space(active_space)
-                self._parc = parc_obj
-                # populate dist_mat dict from Parcellation for backward compat
-                dm = parc_obj.get_dist_mat(compute_if_missing=False)
-                self._parc_dist_mat["null_maps"] = dm
-                if not isinstance(dm, tuple):
-                    self._parc_dist_mat["cv"] = dm
-                if self._parc_spin_mat is None:
-                    self._parc_spin_mat = parc_obj.get_spin_mat()
-                
-        # custom parcellation (string file path not matched as integrated)
-        if self._parc is not None and not isinstance(self._parc, Parcellation):
-            self._parc = Parcellation.from_path(
-                source=self._parc["parc"],
-                space=self._parc["space"],
-                labels=self._parc["labels"],
-                dist_mat=self._parc_dist_mat["null_maps"],
-                symmetric=self._parc["symmetric"],
-                l2rmap=self._parc["l2rmap"],
-                hemi=self._parc["hemi"],
-            )
 
         ## extract input data
         _input_kwargs = dict(
@@ -1086,6 +1097,14 @@ class NiSpace:
 
         ## check if fit was run
         self._check_fit()
+
+        ## map permutation requires a parcellation
+        if "maps" in ([what] if isinstance(what, str) else what) and self._parc is None:
+            lgr.critical_raise(
+                "Map permutation requires a parcellation. "
+                "Provide one via NiSpace(parcellation=...).",
+                ValueError,
+            )
         
         ## check for allowed permutation combinations
         # check what variable
@@ -1188,6 +1207,12 @@ class NiSpace:
                      f"(parcellation null space: '{null_space}').")
         else:
             null_space, _ = self._parc.get_null_space()
+        # ensure null_space is loaded and fitted so backward-compat properties work in _get_null_maps
+        self._parc._ensure_image_loaded(null_space)
+        if null_space not in self._parc._hemi_dict:
+            self._parc._fit_space(null_space)
+        if self._parc._space is None:
+            self._parc._space = null_space
         # pass precomputed spin matrix for the resolved null space
         if maps_kwargs["null_method"] in {"alexander_bloch", "spin"}:
             maps_kwargs["spin_mat"] = (
@@ -1293,7 +1318,9 @@ class NiSpace:
                 lgr.info(f"Generating permuted {XY} maps.")
                 
                 # if no null maps & also no distance matrix given, generate distance matrix
-                if maps_nulls is None and dist_mat is None:
+                # (spin methods don't use a dist_mat — skip generation)
+                if maps_nulls is None and dist_mat is None \
+                        and maps_kwargs["null_method"] not in _SPIN_METHODS:
                     dist_mat = self._get_dist_mat(**dist_mat_kwargs)
                 
                 # get null maps, will not generate new maps if already existing and use of 
@@ -1891,7 +1918,7 @@ class NiSpace:
              Y_labels=None, X_labels=None,
              values="coloc", mc_method=None,
              plot_nulls=True, annot_p=True, permute_what=None,
-             title="auto", sort_by=None, sort_colocs=False,
+             title="auto", sort_by=None, sort_colocs=False, n_categories=50,
              colocalizations_dict=None, nulls_dict=None, p_dict=None, pc_dict=None,
              fig=None, ax=None, figsize=None, show=True,
              plot_kwargs=None, nullplot_kwargs=None,
@@ -2143,6 +2170,16 @@ class NiSpace:
                         _sort_order = [orig_labels.index(l) for l in sorted_labels]
                 except Exception as e:
                     lgr.warning(f"Could not compute sort order for sort_by='{sort_by}': {e}")
+
+            # guard: skip if too many X categories
+            _n_x = colocalizations_dict[stat].shape[1]
+            if n_categories is not None and _n_x > n_categories:
+                lgr.warning(
+                    f"Skipping plot for stat '{stat}': {_n_x} X categories exceed "
+                    f"n_categories={n_categories}. To plot, pass n_categories={_n_x} "
+                    f"(recommended with sort_by='abs_z')."
+                )
+                continue
 
             if kind == "categorical":
                 fig_ax = _plot_categorical(
@@ -2637,11 +2674,18 @@ class NiSpace:
         
     # ----------------------------------------------------------------------------------------------
         
-    def _get_dist_mat(self, dist_mat_type, centroids=False, parc_resample=2, 
+    def _get_dist_mat(self, dist_mat_type, centroids=False, parc_resample=2,
                       n_proc=None, store=True, verbose=None, force_generate=False):
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
-        
+
+        if self._parc is None:
+            lgr.critical_raise(
+                "Distance matrix computation requires a parcellation. "
+                "Provide one via NiSpace(parcellation=...).",
+                ValueError,
+            )
+
         if dist_mat_type not in ["cv", "null_maps"]:
             lgr.critical_raise(f"dist_mat_type = '{dist_mat_type}' not defined",
                                ValueError)
@@ -2655,6 +2699,10 @@ class NiSpace:
             
         if generate_dist_mat:
             null_space, _ = self._parc.get_null_space()
+            # ensure the null space is loaded and its derived attrs (hemi, idc, …) are computed
+            self._parc._ensure_image_loaded(null_space)
+            if null_space not in self._parc._hemi_dict:
+                self._parc._fit_space(null_space)
             dist_mat = get_distance_matrix(
                 parc=self._parc.get_image(null_space),
                 parc_space=null_space,
