@@ -27,7 +27,7 @@ from .stats.misc import (mc_correction, residuals_nan, zscore_df, permute_groups
                           maxT_correction, step_maxT_correction, _null_stats_to_array)
 from .stats.effectsize import rzscore_nan, zscore_nan
 from .cv import _get_dist_dep_splits, _get_rand_splits
-from .plotting import nice_stats_labels
+from .plotting import nice_stats_labels, brainplot
 from .utils.utils import (set_log, fill_nan, _get_df_string, _lower_strip_ws, mean_by_set_df,
                           get_column_names, lower, print_arg_pairs,
                           _parse_df_string, _parse_bool)
@@ -2218,8 +2218,178 @@ class NiSpace:
         if len(out) ==1:
             out = out[stat]        
         return out
-        
-        
+
+
+    # PLOT BRAIN ===================================================================================
+
+    def plot_brain(self,
+                   data="Y",
+                   maps=None,
+                   Y_transform=None,
+                   X_reduction=None,
+                   kind=None,
+                   space=None,
+                   surf_mesh="inflated",
+                   views=None,
+                   cmap="RdBu_r",
+                   vmin=None, vmax=None,
+                   shared_colorscale=False,
+                   symmetric_cmap=True,
+                   colorbar=True,
+                   colorbar_label="",
+                   ncols=1,
+                   title="auto",
+                   n_max=5,
+                   figsize=None,
+                   show=True,
+                   verbose=None,
+                   **kwargs):
+        """Plot brain maps directly onto surfaces or anatomical volumes.
+
+        Parameters
+        ----------
+        data : {"Y", "X"} or pd.DataFrame
+            Which data to plot. "Y" (default) uses the fitted Y maps, "X" the
+            reference maps. A DataFrame can be passed directly.
+        maps : str or list, optional
+            Subset of maps to plot. Matches against the DataFrame index
+            (including MultiIndex levels and tuple entries).
+        Y_transform : str, optional
+            Y transform to apply when data="Y". Defaults to the last used transform.
+        X_reduction : str, optional
+            X reduction to apply when data="X". Defaults to the last used reduction.
+        kind : str, optional
+            Rendering mode: "glass", "slice", or "surface". Defaults to "glass".
+        space : str, optional
+            Parcellation space.
+        surf_mesh : str
+            Surface mesh ("inflated", "pial", etc.).
+        views : list, optional
+            Surface views to render.
+        cmap : str
+            Colormap.
+        vmin, vmax : float, optional
+            Colorscale limits.
+        shared_colorscale : bool
+            Share colorscale across all maps.
+        symmetric_cmap : bool
+            Force symmetric colorscale around zero.
+        colorbar : bool
+            Show colorbar.
+        colorbar_label : str
+            Label for the colorbar title.
+        ncols : int
+            Number of columns in the subplot grid.
+        n_max : int
+            Maximum number of maps to plot. Raises an error if exceeded.
+        figsize : tuple, optional
+            Figure size in inches.
+        show : bool
+            Call plt.show() after plotting.
+        verbose : bool, optional
+            Verbose logging. Defaults to the instance setting.
+        **kwargs
+            Additional keyword arguments forwarded to brainplot() and from
+            there to the underlying nilearn plotting functions.
+
+        Returns
+        -------
+        fig : matplotlib.Figure
+        axes : list of matplotlib.Axes
+        """
+        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
+        lgr.info("*** NiSpace.plot_brain() ***")
+        self._check_fit()
+
+        Y_transform, X_reduction = self._get_last(
+            Y_transform=Y_transform, X_reduction=X_reduction
+        )
+
+        # -- resolve data --
+        if isinstance(data, str):
+            if data.upper() == "Y":
+                lgr.info(f"Plotting Y data (Y_transform='{Y_transform}').")
+                data_df = self.get_y(Y_transform=Y_transform, verbose=False)
+            elif data.upper() == "X":
+                lgr.info(f"Plotting X data (X_reduction='{X_reduction}').")
+                data_df = self.get_x(X_reduction=X_reduction, verbose=False)
+            else:
+                lgr.critical_raise(
+                    f"data='{data}' not recognised. Use 'Y', 'X', or a DataFrame.",
+                    ValueError,
+                )
+        elif isinstance(data, pd.DataFrame):
+            lgr.info("Plotting custom DataFrame.")
+            data_df = data
+        else:
+            lgr.critical_raise(
+                "data must be 'Y', 'X', or a pandas DataFrame.", ValueError
+            )
+
+        # -- map selection --
+        if maps is not None:
+            if isinstance(maps, str):
+                maps = [maps]
+            maps = list(maps)
+            keep = []
+            for i, idx_val in enumerate(data_df.index):
+                for m in maps:
+                    m_str = str(m)
+                    if m == idx_val:                          # exact match
+                        keep.append(i)
+                        break
+                    if isinstance(idx_val, tuple):
+                        parts = [str(v) for v in idx_val]
+                        if (m in idx_val                      # element exact
+                                or any(m_str == p for p in parts)   # str exact
+                                or any(m_str in p for p in parts)):  # partial
+                            keep.append(i)
+                            break
+                    else:
+                        idx_str = str(idx_val)
+                        if m_str == idx_str or m_str in idx_str:     # exact or partial
+                            keep.append(i)
+                            break
+            if not keep:
+                lgr.critical_raise(
+                    f"No maps matching {maps!r} found in the index.", ValueError
+                )
+            data_df = data_df.iloc[sorted(set(keep))]
+
+        # -- safeguard against too many subplots --
+        if len(data_df) > n_max:
+            lgr.critical_raise(
+                f"plot_brain: {len(data_df)} maps selected but n_max={n_max}. "
+                "Subset with the maps= argument or increase n_max.",
+                ValueError,
+            )
+
+        # -- call brainplot --
+        fig, axes = brainplot(
+            data=data_df,
+            parcellation=self._parc,
+            kind=kind,
+            space=space,
+            surf_mesh=surf_mesh,
+            views=views,
+            cmap=cmap,
+            vmin=vmin, vmax=vmax,
+            shared_colorscale=shared_colorscale,
+            symmetric_cmap=symmetric_cmap,
+            colorbar=colorbar,
+            colorbar_label=colorbar_label,
+            ncols=ncols,
+            title=title,
+            figsize=figsize,
+            verbose=verbose,
+            **kwargs,
+        )
+
+        if show:
+            plt.show()
+        return fig, axes
+
+
     # GET ==========================================================================================
     
     def get_x(self, X_reduction=None, verbose=None, copy=True):

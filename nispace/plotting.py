@@ -9,10 +9,12 @@ import seaborn as sns
 import seaborn.objects as sno
 from sklearn.preprocessing import minmax_scale
 from nilearn.plotting import view_surf as view_surf_nilearn
+from nilearn.plotting import plot_surf_stat_map, plot_surf_contours, plot_glass_brain, plot_stat_map
+from nilearn.image import new_img_like
 from neuromaps import images
 
 from . import lgr
-from .utils.utils import vect_to_vol_arr
+from .utils.utils import vect_to_vol_arr, set_log
 from .datasets import fetch_parcellation, fetch_template, parcellation_lib, template_lib
 
 
@@ -1028,7 +1030,7 @@ def heatmap(ax,
 def view_surf(data=None, parcellation=None, hemi="L", template="fsaverage", replace_nan=0,
               template_kwargs=None, parcellation_kwargs=None,
               verbose=False, **kwargs):
-    lgr.setLevel(verbose)
+    set_log(lgr, verbose)
     
     # kwargs 
     template_kwargs = {} if template_kwargs is None else template_kwargs
@@ -1084,3 +1086,953 @@ def view_surf(data=None, parcellation=None, hemi="L", template="fsaverage", repl
     
     # plot
     return view_surf_nilearn(surf_map=data_arr, surf_mesh=template_arr, **{"cmap": "RdBu_r"} | kwargs)
+
+
+# ==============================================================================================
+# BRAIN PLOT
+# ==============================================================================================
+
+def _auto_vmin_vmax(data_flat, symmetric, vmin=None, vmax=None):
+    """Compute display range from a flat data array, optionally centering at 0."""
+    data_flat = data_flat[np.isfinite(data_flat)]
+    v_min = float(vmin) if vmin is not None else float(np.nanmin(data_flat))
+    v_max = float(vmax) if vmax is not None else float(np.nanmax(data_flat))
+    if symmetric:
+        lim = max(abs(v_min), abs(v_max))
+        return -lim, lim
+    return v_min, v_max
+
+
+def _load_fslr_assets(surf_mesh="inflated"):
+    """Load fslr32k surface geometry, sulcal background, and medial wall mask via neuromaps.
+
+    Returns
+    -------
+    surf_geom : (lh_GiftiImage, rh_GiftiImage)
+    bg_data   : (sulc_lh_array, sulc_rh_array)
+    medial    : (medial_lh_array, medial_rh_array)
+    """
+    from neuromaps.datasets import fetch_fslr
+    fslr = fetch_fslr(density="32k")
+    valid = [k for k in ("pial", "inflated", "midthickness", "veryinflated") if k in fslr]
+    if surf_mesh not in fslr:
+        raise ValueError(
+            f"surf_mesh='{surf_mesh}' not available for fslr32k. Choose from: {valid}"
+        )
+    surf_lh = images.load_gifti(str(fslr[surf_mesh].L))
+    surf_rh = images.load_gifti(str(fslr[surf_mesh].R))
+    sulc_lh = images.load_gifti(str(fslr["sulc"].L)).agg_data()
+    sulc_rh = images.load_gifti(str(fslr["sulc"].R)).agg_data()
+    medial_lh = images.load_gifti(str(fslr["medial"].L)).agg_data()
+    medial_rh = images.load_gifti(str(fslr["medial"].R)).agg_data()
+    return (surf_lh, surf_rh), (sulc_lh, sulc_rh), (medial_lh, medial_rh)
+
+
+def _data_to_surf_verts(data_lh, data_rh, parc_arr_lh, parc_arr_rh, medial=None):
+    """Map per-parcel 1-D data to per-vertex arrays for both hemispheres.
+
+    Medial wall vertices are set to NaN when a medial wall mask is provided
+    (fslr32k: medial[h]==0 marks the medial wall).
+    """
+    idc_lh = np.trim_zeros(np.unique(parc_arr_lh)).astype(np.float64)
+    idc_rh = np.trim_zeros(np.unique(parc_arr_rh)).astype(np.float64)
+    vert_lh = vect_to_vol_arr(
+        data_lh.astype(np.float64), parc_arr_lh.astype(np.float64), idc_lh
+    )
+    vert_rh = vect_to_vol_arr(
+        data_rh.astype(np.float64), parc_arr_rh.astype(np.float64), idc_rh
+    )
+    if medial is not None:
+        vert_lh = np.where(medial[0] == 0, np.nan, vert_lh)
+        vert_rh = np.where(medial[1] == 0, np.nan, vert_rh)
+    return vert_lh, vert_rh
+
+
+def _render_surf_row(ax, fig, vert_lh, vert_rh, parc_arr_lh, parc_arr_rh,
+                     surf_geom, bg_data, views, cmap, vmin, vmax,
+                     symmetric_cmap, bg_on_data, darkness, threshold, alpha,
+                     plot_contours, zoom, **kwargs):
+    """Render one brain map onto surfaces inside *ax* via n inset 3-D subaxes."""
+    surf_lh, surf_rh = surf_geom
+    n_views = len(views)
+    for i, view_str in enumerate(views):
+        hemi_str, view_name = view_str.split("_", 1)
+        is_left = hemi_str == "left"
+        surf      = surf_lh      if is_left else surf_rh
+        bg        = bg_data[0]   if (bg_data is not None and is_left) else (
+                    bg_data[1]   if bg_data is not None else None)
+        vert      = vert_lh      if is_left else vert_rh
+        parc_arr  = parc_arr_lh  if is_left else parc_arr_rh
+
+        ax_3d = ax.inset_axes([i / n_views, 0, 1 / n_views, 1], projection="3d")
+        plot_surf_stat_map(
+            surf_mesh=surf.agg_data(),
+            stat_map=vert,
+            bg_map=bg,
+            hemi=hemi_str,
+            view=view_name,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            symmetric_cbar=symmetric_cmap,
+            bg_on_data=bg_on_data,
+            darkness=darkness,
+            threshold=threshold,
+            alpha=alpha,
+            colorbar=False,
+            axes=ax_3d,
+            figure=fig,
+            **kwargs,
+        )
+        if plot_contours:
+            # levels/labels/colors must all have the same length; computing
+            # levels explicitly avoids nilearn's default [1:]-skip which
+            # drops label 1 when the gifti has no background (label 0).
+            _levels = list(np.trim_zeros(np.unique(parc_arr)).astype(int))
+            plot_surf_contours(
+                surf_mesh=surf.agg_data(),
+                roi_map=parc_arr,
+                hemi=hemi_str,
+                view=view_name,
+                levels=_levels,
+                labels=[None] * len(_levels),
+                colors=["k"] * len(_levels),
+                axes=ax_3d,
+                figure=fig,
+            )
+        ax_3d.set_box_aspect(ax_3d.get_box_aspect(), zoom=zoom)
+
+
+def _data_to_volume(data, ref_nii, labels_in_img, bg_value=np.nan):
+    """Project per-parcel *data* onto a NIfTI volume using *labels_in_img* as the mapping.
+
+    Voxels outside all parcels and NaN data entries are filled with *bg_value*
+    (default NaN → nilearn converts these to 0 via nan_to_num).
+    """
+    parc_arr = ref_nii.get_fdata()
+    stat_arr = np.full(parc_arr.shape, bg_value, dtype=np.float32)
+    for i, label in enumerate(labels_in_img):
+        if i < len(data):
+            val = float(data[i])
+            stat_arr[parc_arr == label] = bg_value if not np.isfinite(val) else val
+    return new_img_like(ref_nii, stat_arr, copy_header=True)
+
+
+def _render_vol_row(ax, fig, stat_nii, bg_img, kind, display_mode, cut_coords,
+                    cmap, vmin, vmax, symmetric_cmap, threshold, alpha,
+                    draw_cross, colorbar, colorbar_label="", colorbar_inset=None,
+                    **kwargs):
+    """Render one brain map as a glass brain or anatomical slices into *ax*."""
+    if kind == "glass":
+        plot_glass_brain(
+            stat_nii,
+            figure=fig, axes=ax,
+            display_mode=display_mode,
+            alpha=alpha if alpha is not None else 0.7,
+            plot_abs=False,
+            cmap=cmap, vmin=vmin, vmax=vmax,
+            symmetric_cbar=symmetric_cmap,
+            threshold=threshold,
+            colorbar=False,
+            annotate=False,
+            **kwargs,
+        )
+        if colorbar:
+            _norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+            _sm = plt.cm.ScalarMappable(cmap=cmap, norm=_norm)
+            _sm.set_array([])
+            _inset = colorbar_inset if colorbar_inset is not None else [1.02, 0.15, 0.02, 0.7]
+            _cax = ax.inset_axes(_inset)
+            fig.colorbar(_sm, cax=_cax)
+            if colorbar_label:
+                _cax.set_title(colorbar_label, fontsize="medium")
+    else:  # slice
+        plot_stat_map(
+            stat_nii,
+            bg_img=bg_img,
+            cut_coords=cut_coords,
+            draw_cross=draw_cross,
+            figure=fig, axes=ax,
+            cmap=cmap, vmin=vmin, vmax=vmax,
+            symmetric_cbar=symmetric_cmap,
+            colorbar=False,
+            threshold=threshold,
+            display_mode=display_mode,
+            black_bg=False,
+            annotate=False,
+            **kwargs,
+        )
+        if colorbar:
+            _norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+            _sm = plt.cm.ScalarMappable(cmap=cmap, norm=_norm)
+            _sm.set_array([])
+            _inset = colorbar_inset if colorbar_inset is not None else [1.04, 0.25, 0.02, 0.5]
+            _cax = ax.inset_axes(_inset)
+            fig.colorbar(_sm, cax=_cax)
+            if colorbar_label:
+                _cax.set_title(colorbar_label, fontsize="medium")
+
+
+def brainplot(
+    data,
+    parcellation=None,
+    kind=None,
+    space=None,
+    surf_mesh="inflated",
+    views=None,
+    plot_contours=True,
+    zoom=1.5,
+    bg_on_data=True,
+    darkness=0.7,
+    threshold="auto",
+    alpha=0.8,
+    display_mode=None,
+    cut_coords=None,
+    bg_img=None,
+    draw_cross=False,
+    cmap="RdBu_r",
+    vmin=None,
+    vmax=None,
+    shared_colorscale=False,
+    symmetric_cmap=True,
+    colorbar=True,
+    colorbar_label="",
+    colorbar_inset=None,
+    ncols=1,
+    title="auto",
+    hspace=None,
+    wspace=None,
+    figsize=None,
+    fig=None,
+    axes=None,
+    verbose=False,
+    **kwargs,
+):
+    """Plot brain maps onto surfaces or anatomical volumes.
+
+    Parameters
+    ----------
+    data : pd.DataFrame, pd.Series, array-like, NIfTI image, or GIfTI pair
+        Tabular input: shape (n_maps, n_parcels) — requires *parcellation*.
+        NIfTI image (``nib.Nifti1Image`` or path): 3D volume for glass/slice
+        plots — *parcellation* must be ``None``.
+        GIfTI pair: ``(lh, rh)`` tuple or list of such tuples for surface
+        plots, where each element is a ``nib.GiftiImage``, a path, or a
+        vertex-data array — *parcellation* must be ``None``.
+    parcellation : Parcellation or None
+        Fitted NiSpace Parcellation object. Required for tabular input;
+        must be ``None`` when passing a NIfTI or GIfTI image.
+    kind : {"surface", "glass", "slice", "combined"}, optional
+        Rendering mode. Defaults to "combined" for combined (cx+sc) parcellations
+        and "surface" otherwise. Use "combined" for surface+glass brain side-by-side,
+        "glass" or "slice" to render a combined parcellation as a plain MNI volume.
+    space : str, optional
+        Parcellation space to use for rendering. Defaults to fslr32k for
+        surface plots and MNI152NLin2009cAsym for volume plots.
+    surf_mesh : {"inflated", "pial", "midthickness", "veryinflated"}
+        Surface geometry for fslr32k. Ignored for non-surface plots.
+    views : list of str, optional
+        Surface views as "<hemi>_<perspective>" strings.
+        Default: ["left_lateral", "left_medial", "right_medial", "right_lateral"].
+    plot_contours : bool
+        Draw black parcel borders on surface plots.
+    zoom : float
+        3-D axis zoom factor.
+    bg_on_data : bool
+        Overlay sulcal shading on top of the statistical map.
+    darkness : float
+        Darkness of sulcal background shading (0 = bright, 1 = dark).
+    threshold : float, "auto", or None
+        Values with absolute value below threshold are not displayed.
+        Default ``"auto"`` sets threshold to ``min(|data|) / 2``, masking
+        background zeros while keeping all parcel values visible. Pass
+        ``None`` to disable thresholding entirely.
+    alpha : float, optional
+        Transparency of the statistical map (surface only).
+    display_mode : str, optional
+        Nilearn display mode for glass/slice. Defaults to "lyrz" for glass
+        (left, posterior, right, top) and "ortho" for slice.
+    cut_coords : int or list, optional
+        Number of auto-cuts or explicit coordinates for slice plots.
+    bg_img : NIfTI image or path, optional
+        Background anatomical for slice plots. Auto-fetched from NiSpace
+        templates when None.
+    draw_cross : bool
+        Draw crosshair lines at slice positions.
+    cmap : str
+        Colormap name.
+    vmin, vmax : float, optional
+        Color scale limits. None = auto-computed per map.
+    shared_colorscale : bool
+        Compute vmin/vmax across all maps (one shared colorbar). Always
+        True for combined parcellations.
+    symmetric_cmap : bool
+        Center color limits at 0 (vmax = max(|vmin|, |vmax|)).
+    colorbar : bool
+        Show colorbar. When shared, one horizontal bar is placed at the
+        bottom center of the figure.
+    colorbar_label : str
+        Title string displayed above the colorbar. Empty string (default)
+        means no title.
+    colorbar_inset : list of float, optional
+        Position of the colorbar axes as ``[x0, y0, width, height]`` in
+        parent-axes coordinates. Defaults to ``[1.02, 0.15, 0.02, 0.7]``
+        for glass brain and ``[1.04, 0.25, 0.02, 0.5]`` for surface/slice.
+    ncols : int
+        Number of map columns in the subplot grid.
+    title : str or bool, optional
+        Map title above each brain. "auto" (default) uses the map's index label;
+        False/None disables titles.
+    hspace : float
+        Vertical spacing between map rows (passed to GridSpec/subplots).
+    wspace : float, optional
+        Horizontal spacing between map columns (fraction of axes width). Defaults
+        to 0.1 for glass/slice and 0.02 for surface; auto-increased for multi-column
+        layouts to leave room for per-column colorbars.
+    figsize : tuple, optional
+        Figure size in inches. Auto-computed if None.
+    fig : matplotlib.Figure, optional
+        Existing figure to draw into.
+    axes : list of matplotlib.Axes, optional
+        Axes to draw into (must match layout when fig is provided).
+    verbose : bool
+        Enable verbose logging.
+    **kwargs
+        Extra keyword arguments forwarded to the underlying nilearn function
+        (``plot_surf_stat_map``, ``plot_glass_brain``, or ``plot_stat_map``
+        depending on *kind*).
+
+    Returns
+    -------
+    fig : matplotlib.Figure
+    axes_list : list of matplotlib.Axes
+    """
+    from matplotlib.gridspec import GridSpec
+    set_log(lgr, verbose)
+    lgr.warning("Brain plotting in NiSpace is experimental. "
+                "If things look off, feel free to raise a GitHub issue!")
+
+    if views is None:
+        views = ["left_lateral", "left_medial", "right_medial", "right_lateral"]
+
+    # -- detect input mode and normalise --
+    import nibabel as _nib
+    import pathlib as _pl
+
+    def _load_gifti_arr(x):
+        if isinstance(x, np.ndarray):
+            return x.astype(np.float32)
+        img = _nib.load(str(x)) if not isinstance(x, _nib.GiftiImage) else x
+        return img.darrays[0].data.astype(np.float32)
+
+    _is_nifti_like = isinstance(data, _nib.Nifti1Image) or (
+        isinstance(data, (str, _pl.Path)) and str(data).endswith((".nii", ".nii.gz"))
+    )
+    _is_gifti_pair = isinstance(data, tuple) and len(data) == 2
+    _is_gifti_list = (
+        isinstance(data, list) and len(data) > 0
+        and isinstance(data[0], tuple) and len(data[0]) == 2
+    )
+
+    if _is_nifti_like:
+        _img_mode = "nifti"
+    elif _is_gifti_pair or _is_gifti_list:
+        _img_mode = "gifti"
+    else:
+        _img_mode = None  # tabular
+
+    # -- validate parcellation / image combination --
+    if _img_mode is None and parcellation is None:
+        raise ValueError(
+            "'parcellation' is required when 'data' is a tabular array. "
+            "Pass a Parcellation object or a parcellation name/path."
+        )
+    if _img_mode is not None and parcellation is not None:
+        raise ValueError(
+            "Set parcellation=None when passing a NIfTI or GIfTI image directly. "
+            "'parcellation' is only used for tabular (parcellated) input."
+        )
+
+    # tabular normalisation
+    if _img_mode is None:
+        if isinstance(data, pd.Series):
+            data = pd.DataFrame([data.values], index=[data.name or "map"])
+        elif isinstance(data, np.ndarray):
+            data = pd.DataFrame(np.atleast_2d(data))
+        elif not isinstance(data, pd.DataFrame):
+            data = pd.DataFrame(np.atleast_2d(np.asarray(data)))
+
+    # -- validate / load parcellation (tabular path only) --
+    if _img_mode is None:
+        from .modules.parcellation import Parcellation as _Parc
+        if not isinstance(parcellation, _Parc):
+            if isinstance(parcellation, str):
+                from .datasets import _check_parcellation, fetch_parcellation as _fp
+                try:
+                    _name = _check_parcellation(parcellation, force_str=True, raise_not_found=True)
+                    parcellation = _fp(parcellation=_name)
+                except (ValueError, AssertionError):
+                    try:
+                        parcellation = _Parc.from_path(source=parcellation)
+                        parcellation.fit()
+                    except Exception as _e:
+                        raise ValueError(
+                            f"'{parcellation}' is neither a NiSpace library parcellation "
+                            "nor a valid file path. Available library parcellations: "
+                            f"{', '.join(k for k in parcellation_lib if 'alias' not in parcellation_lib[k])}"
+                        ) from _e
+            elif isinstance(parcellation, (_pl.Path, _nib.Nifti1Image, _nib.GiftiImage, tuple)):
+                try:
+                    parcellation = _Parc.from_path(source=parcellation)
+                    parcellation.fit()
+                except Exception as _e:
+                    raise ValueError(
+                        f"Could not load parcellation from path/image: {_e}"
+                    ) from _e
+            else:
+                raise TypeError(
+                    "'parcellation' must be a Parcellation instance or a parcellation "
+                    f"name/path, not {type(parcellation).__name__}."
+                )
+
+        if data.empty:
+            raise ValueError("'data' is empty.")
+        if not np.issubdtype(data.values.dtype, np.number):
+            raise ValueError(
+                f"'data' must contain numeric values, got dtype '{data.values.dtype}'."
+            )
+        _n_parc = len(parcellation._labels) if parcellation._labels is not None else None
+        if _n_parc is not None and data.shape[1] != _n_parc:
+            raise ValueError(
+                f"'data' has {data.shape[1]} columns but parcellation "
+                f"'{parcellation._name}' has {_n_parc} parcels."
+            )
+        _all_nan = data.isnull().all(axis=1)
+        if _all_nan.any():
+            _bad = list(data.index[_all_nan])
+            lgr.warning(f"brainplot: {len(_bad)} map(s) are all-NaN and will appear blank: {_bad}")
+
+        n_maps           = len(data)
+        _parc_is_combined = parcellation._is_combined
+    else:
+        n_maps            = 0  # set below after image preprocessing
+        _parc_is_combined = False
+
+    # -- validate kind and auto-detect for image input --
+    if kind is None:
+        kind = "glass"
+    if kind not in ("surface", "glass", "slice", "combined"):
+        raise ValueError(f"kind='{kind}' must be 'surface', 'glass', 'slice', or 'combined'.")
+    if _img_mode == "nifti" and kind in ("surface", "combined"):
+        kind = "glass"
+        lgr.info("brainplot: NIfTI input → kind auto-set to 'glass'")
+    elif _img_mode == "gifti" and kind != "surface":
+        kind = "surface"
+        lgr.info("brainplot: GIfTI input → kind auto-set to 'surface'")
+    if _parc_is_combined and kind == "surface":
+        raise ValueError(
+            "kind='surface' is not supported for combined (cx+sc) parcellations. "
+            "Use kind='glass' or kind='slice' to render the full MNI volume."
+        )
+    if kind == "combined" and not _parc_is_combined:
+        raise ValueError(
+            "kind='combined' requires a combined (cx+sc) parcellation."
+        )
+    if kind == "combined":
+        raise NotImplementedError(
+            "kind='combined' is not yet implemented. Combined plots will integrate "
+            "cortical surface rendering with subcortical volumetric rendering, but "
+            "this feature is still in development. Use kind='glass' or kind='slice' "
+            "to render the full MNI volume instead."
+        )
+
+    # is_combined rendering path only active when explicitly requested
+    is_combined = _parc_is_combined and kind == "combined"
+    # default display_mode and cut_coords per kind
+    if display_mode is None:
+        if kind == "glass":
+            display_mode = "lyrz"
+        elif kind in ("slice", "combined"):
+            display_mode = "z"
+        else:
+            display_mode = "z"  # surface: unused
+    if cut_coords is None and kind == "slice":
+        cut_coords = 5
+
+    # -- preprocess image inputs / resolve threshold --
+    _vol_bg       = 0.0   # background fill for _data_to_volume (tabular path)
+    _stat_niis    = None  # list of pre-built NIfTI images  (nifti path)
+    _gifti_pairs  = None  # list of (lh_arr, rh_arr) tuples (gifti path)
+    _img_all_vals = None  # flat finite array for vmin/vmax  (image paths)
+
+    if _img_mode == "nifti":
+        _nii_in = _nib.load(str(data)) if not isinstance(data, _nib.Nifti1Image) else data
+        _arr    = _nii_in.get_fdata()
+        if _arr.ndim == 4:
+            raise ValueError("4D NIfTI is not supported; pass a single 3D volume.")
+        _finite_nz  = _arr[np.isfinite(_arr) & (_arr != 0)]
+        _min_abs    = float(np.min(np.abs(_finite_nz))) if len(_finite_nz) else 0.0
+        if threshold == "auto":
+            threshold = float(np.float32(_min_abs / 2)) if _min_abs > 0 else None
+            lgr.info(f"brainplot: threshold='auto' → {threshold}")
+        _stat_niis    = [new_img_like(_nii_in, np.nan_to_num(_arr, nan=0.0), copy_header=True)]
+        _img_all_vals = _arr[np.isfinite(_arr)].flatten()
+        n_maps        = 1
+
+    elif _img_mode == "gifti":
+        _pairs_raw = [data] if _is_gifti_pair else data
+        _gifti_pairs = [(_load_gifti_arr(p[0]), _load_gifti_arr(p[1])) for p in _pairs_raw]
+        _img_all_vals = np.concatenate([np.concatenate(p) for p in _gifti_pairs])
+        _finite_nz  = _img_all_vals[np.isfinite(_img_all_vals) & (_img_all_vals != 0)]
+        _min_abs    = float(np.min(np.abs(_finite_nz))) if len(_finite_nz) else 0.0
+        if threshold == "auto":
+            threshold = float(np.float32(_min_abs / 2)) if _min_abs > 0 else None
+            lgr.info(f"brainplot: threshold='auto' → {threshold}")
+        n_maps = len(_gifti_pairs)
+        plot_contours = False  # no parcellation array available for contours
+
+    else:  # tabular
+        if threshold == "auto":
+            _min_abs = float(np.nanmin(np.abs(data.values)))
+            threshold = float(np.float32(_min_abs / 2)) if _min_abs > 0 else None
+            lgr.info(f"brainplot: threshold='auto' → {threshold}")
+
+    # -- resolve spaces --
+    def _is_surf(s):  return any(k in s.lower() for k in ("fslr", "fsaverage", "fsa"))
+    def _is_mni(s):   return "mni" in s.lower()
+
+    surf_space = mni_space = None
+
+    if _img_mode is None:  # tabular: resolve spaces from parcellation
+        if is_combined:
+            cx_surf_spaces = list(parcellation._cx_surface.keys())
+            if not cx_surf_spaces:
+                raise ValueError(
+                    f"Combined parcellation '{parcellation._name}' has no cx surface data. "
+                    "kind='surface' requires surface data for cortex."
+                )
+            _cx_pref = space if (space and not _is_mni(space)) else None
+            surf_space = (_cx_pref if _cx_pref in cx_surf_spaces
+                          else next((s for s in cx_surf_spaces if "fslr" in s.lower()),
+                                    cx_surf_spaces[0]))
+            _mni_spaces = [s for s in parcellation.spaces if _is_mni(s)]
+            if not _mni_spaces:
+                raise ValueError(
+                    f"Combined parcellation '{parcellation._name}' has no MNI space "
+                    "for subcortex projection."
+                )
+            mni_space = next((s for s in _mni_spaces if "2009" in s), _mni_spaces[0])
+
+        elif kind == "surface":
+            _surf_spaces = [s for s in parcellation.spaces if _is_surf(s)]
+            if not _surf_spaces:
+                raise ValueError(
+                    f"Parcellation '{parcellation._name}' has no surface space. "
+                    f"Available: {parcellation.spaces}"
+                )
+            surf_space = (space if space in _surf_spaces
+                          else next((s for s in _surf_spaces if "fslr" in s.lower()),
+                                    _surf_spaces[0]))
+
+        else:  # glass / slice
+            _mni_spaces = [s for s in parcellation.spaces if _is_mni(s)]
+            if not _mni_spaces:
+                raise ValueError(
+                    f"Parcellation '{parcellation._name}' has no MNI space. "
+                    f"Available: {parcellation.spaces}"
+                )
+            mni_space = (space if space in _mni_spaces
+                         else next((s for s in _mni_spaces if "2009" in s), _mni_spaces[0]))
+
+        _primary = mni_space if mni_space is not None else surf_space
+        if (_primary is not None
+                and _primary in parcellation.spaces
+                and parcellation._idc_byhemi_dict.get(_primary) is None):
+            parcellation.set_active_space(_primary)
+
+    lgr.info(
+        f"brainplot: kind='{kind}', img_mode='{_img_mode}', "
+        f"surf_space='{surf_space}', mni_space='{mni_space}'"
+    )
+
+    # -- load surface assets --
+    surf_geom = bg_data = medial_data = None
+    parc_arr_lh = parc_arr_rh = None
+
+    if kind == "surface" or is_combined:
+        if _img_mode == "gifti":
+            # GIfTI passthrough: load geometry from templates (assume fslr32k)
+            _use_fslr = space is None or "fslr" in (space or "").lower()
+            if _use_fslr:
+                surf_geom, bg_data, medial_data = _load_fslr_assets(surf_mesh)
+            else:
+                tpl = fetch_template("fsaverage", hemi=["L", "R"], desc="pial", verbose=False)
+                surf_geom = (images.load_gifti(str(tpl[0])), images.load_gifti(str(tpl[1])))
+        else:
+            if surf_space and "fslr" in surf_space.lower():
+                surf_geom, bg_data, medial_data = _load_fslr_assets(surf_mesh)
+            else:
+                if surf_mesh != "pial":
+                    lgr.warning(
+                        f"surf_mesh='{surf_mesh}' is only available for fslr32k spaces. "
+                        "Falling back to 'pial' for fsaverage."
+                    )
+                tpl = fetch_template("fsaverage", hemi=["L", "R"], desc="pial", verbose=False)
+                surf_geom = (images.load_gifti(str(tpl[0])), images.load_gifti(str(tpl[1])))
+
+            if is_combined:
+                cx_entry = parcellation._cx_surface.get(surf_space)
+                if cx_entry is None:
+                    raise ValueError(
+                        f"No cx surface data for space '{surf_space}'. "
+                        f"Available: {list(parcellation._cx_surface.keys())}"
+                    )
+                if cx_entry.get("image") is None:
+                    from .io import load_img as _load_img
+                    cx_entry["image"] = _load_img(cx_entry["img_paths"])
+                    parcellation._cx_surface[surf_space] = cx_entry
+                parc_arr_lh = cx_entry["image"][0].agg_data()
+                parc_arr_rh = cx_entry["image"][1].agg_data()
+            else:
+                parc_img = parcellation.get_image(surf_space)
+                parc_arr_lh = parc_img[0].agg_data()
+                parc_arr_rh = parc_img[1].agg_data()
+
+    # -- load volume assets --
+    mni_nii = bg_img_nii = None
+
+    if _img_mode is None and (kind in ("glass", "slice") or is_combined):
+        mni_nii = parcellation.get_image(mni_space)
+        if kind == "slice":
+            if bg_img is not None:
+                bg_img_nii = bg_img
+            else:
+                for _desc in ("brain", "T1w"):
+                    try:
+                        bg_img_nii = fetch_template(mni_space, desc=_desc, verbose=False)
+                        break
+                    except Exception:
+                        continue
+                if bg_img_nii is None:
+                    lgr.warning(
+                        "Could not auto-fetch MNI background image; "
+                        "slice plots will use nilearn's default."
+                    )
+
+    # -- vmin / vmax --
+    force_shared = is_combined
+    use_shared   = shared_colorscale or force_shared
+    _global_vmin = _global_vmax = None
+
+    _flat_vals = (
+        _img_all_vals if _img_mode is not None else data.values.flatten()
+    )
+    if use_shared:
+        _global_vmin, _global_vmax = _auto_vmin_vmax(
+            _flat_vals, symmetric_cmap, vmin, vmax
+        )
+
+    # Pre-resolve integer cut_coords to explicit positions so all maps use
+    # identical slice locations (nilearn would pick different cuts per image).
+    if kind == "slice" and isinstance(cut_coords, int):
+        from nilearn.plotting import find_cut_slices as _find_cuts
+        _ref_img = (_stat_niis[0] if _img_mode == "nifti"
+                    else mni_nii if mni_nii is not None else None)
+        if _ref_img is not None:
+            cut_coords = list(_find_cuts(_ref_img, direction=display_mode,
+                                         n_cuts=cut_coords))
+            lgr.info(f"brainplot: cut_coords resolved to {cut_coords}")
+
+    def _vminmax(row_vals):
+        if use_shared:
+            return _global_vmin, _global_vmax
+        return _auto_vmin_vmax(row_vals, symmetric_cmap, vmin, vmax)
+
+    # -- figure layout --
+    n_rows_grid  = int(np.ceil(n_maps / ncols))
+    n_cols_grid  = min(n_maps, ncols)
+    n_views      = len(views)
+    if kind == "slice":
+        _n_panels = len(cut_coords) if hasattr(cut_coords, "__len__") else int(cut_coords)
+    elif kind == "glass":
+        _n_panels = len(display_mode)
+    else:  # surface / combined
+        _n_panels = n_views
+    _has_shared_cbar = False   # colorbars always shown per-row on the right
+    _cbar_h      = 0.0
+    if wspace is None:
+        _base_wspace = 0.1 if kind in ("glass", "slice") else 0.02
+        _wspace = _base_wspace if n_cols_grid == 1 else max(_base_wspace, 0.15)
+    else:
+        _wspace = wspace
+    def _fmt_label(lbl):
+        """Format a single label string; prettify PET-style keys."""
+        s = str(lbl)
+        if all(k in s for k in ("target-", "tracer-", "pub-")):
+            p = s.split("_")
+            try:
+                target = p[0].split("-")[1]
+                n      = p[2].split("-")[1]
+                pub    = p[4].split("-")[1]
+                return f"{target} ({pub}, n = {n})"
+            except (IndexError, ValueError):
+                pass
+        return s
+
+    # Normalise title to a per-map list (or None to disable).
+    if title in (False, None, ""):
+        _titles = None
+    elif title == "auto":
+        if _img_mode is None:
+            _titles = [
+                _fmt_label(
+                    " | ".join(str(v) for v in idx) if isinstance(idx, tuple) else idx
+                )
+                for idx in data.index
+            ]
+        else:
+            _titles = [str(i) for i in range(n_maps)]
+    elif isinstance(title, (list, tuple)):
+        if len(title) != n_maps:
+            raise ValueError(
+                f"title has {len(title)} entries but {n_maps} maps are being plotted."
+            )
+        _titles = [_fmt_label(t) for t in title]
+    else:
+        _titles = [str(title)] * n_maps
+    _has_title = _titles is not None
+    if hspace is None:
+        if _has_title:
+            hspace = 0.2 if kind == "surface" else 0.3
+        else:
+            hspace = -0.1 if kind == "surface" else 0.05
+
+    _title_h = 0.35 if _has_title else 0.0   # extra inches per row for title text
+    if figsize is None:
+        _panel_w = 1.8 if kind == "glass" else (1.4 if kind == "slice" else 2.0)
+        _w = n_cols_grid * _n_panels * _panel_w
+        if kind in ("surface", "combined") or is_combined:
+            _surf_row_h = 2.2 if n_rows_grid == 1 else 1.8
+            _h = n_rows_grid * (_surf_row_h + _title_h)
+            if is_combined:
+                _h += n_rows_grid * 0.8
+        else:
+            _h = n_rows_grid * (1.8 + _title_h)
+        figsize = (_w, _h + _cbar_h)
+
+    if fig is not None and axes is not None:
+        # caller provides their own layout — normalise to flat list
+        _axes_flat = np.asarray(axes).flatten().tolist()
+        _n_expected = n_rows_grid * n_cols_grid
+        if len(_axes_flat) != _n_expected:
+            raise ValueError(
+                f"'axes' has {len(_axes_flat)} elements but the grid requires "
+                f"{_n_expected} ({n_rows_grid} rows × {n_cols_grid} cols)."
+            )
+        if not all(isinstance(a, mpl.axes.Axes) for a in _axes_flat):
+            raise TypeError("All elements of 'axes' must be matplotlib Axes instances.")
+        _axes_arr = np.array(_axes_flat).reshape(n_rows_grid, n_cols_grid)
+        _own_fig  = False
+    elif fig is not None and axes is None:
+        # caller provided fig only — create axes inside it
+        _own_fig = True
+        if is_combined:
+            _hr = []
+            for _ in range(n_rows_grid):
+                _hr += [2.2, 1.0]
+            _gs = GridSpec(
+                n_rows_grid * 2, n_cols_grid,
+                figure=fig,
+                height_ratios=_hr,
+                hspace=hspace, wspace=_wspace,
+            )
+            _axes_arr = None
+        else:
+            _axes_arr = np.array(
+                fig.subplots(n_rows_grid, n_cols_grid,
+                             gridspec_kw={"hspace": hspace, "wspace": _wspace})
+            ).reshape(n_rows_grid, n_cols_grid)
+    else:
+        # create everything from scratch
+        _own_fig = True
+        if is_combined:
+            fig = plt.figure(figsize=figsize)
+            _hr = []
+            for _ in range(n_rows_grid):
+                _hr += [2.2, 1.0]
+            _gs = GridSpec(
+                n_rows_grid * 2, n_cols_grid,
+                figure=fig,
+                height_ratios=_hr,
+                hspace=hspace, wspace=_wspace,
+            )
+            _axes_arr = None  # combined axes created per-map below
+        else:
+            fig, _axes_arr = plt.subplots(
+                n_rows_grid, n_cols_grid,
+                figsize=figsize, squeeze=False,
+                gridspec_kw={"hspace": hspace, "wspace": _wspace},
+            )
+
+    # Resolve default colorbar inset coords per kind
+    if colorbar_inset is None:
+        if kind == "glass":
+            colorbar_inset = [1.02, 0.15, 0.02, 0.7]
+        elif is_combined:  # kind == "combined"
+            colorbar_inset = [1.04, 0.25, 0.03, 0.5]
+        else:  # surface / slice
+            colorbar_inset = [1.04, 0.25, 0.02, 0.5]
+
+    axes_out = []
+    # Colorbars are added after all brains so they render on top in multi-col layouts.
+    _pending_cbars = []  # [(ax, v_min, v_max)]
+
+    for i in range(n_maps):
+        ri    = i // n_cols_grid
+        ci    = i % n_cols_grid
+
+        if _img_mode is None:
+            row_vals = data.iloc[i].values.astype(np.float64)
+            v_min, v_max = _vminmax(row_vals)
+        else:
+            row_vals = None
+            v_min, v_max = _vminmax(_img_all_vals)
+
+        if is_combined:
+            ax_s = fig.add_subplot(_gs[ri * 2,     ci])
+            ax_v = fig.add_subplot(_gs[ri * 2 + 1, ci])
+            ax_s.set_axis_off()
+            ax_v.set_axis_off()
+            axes_out += [ax_s, ax_v]
+        else:
+            ax_main = _axes_arr[ri, ci]
+            ax_main.set_axis_off()
+            axes_out.append(ax_main)
+
+        # ---- title ----
+        if _has_title:
+            _ax_title = ax_s if is_combined else ax_main
+            _ax_title.set_title(_titles[i], pad=6, fontsize="large", fontweight="bold")
+
+        # ---- GIfTI passthrough: surface ----
+        if _img_mode == "gifti":
+            vert_lh, vert_rh = _gifti_pairs[i]
+            _render_surf_row(
+                ax_main, fig, vert_lh, vert_rh,
+                parc_arr_lh, parc_arr_rh,
+                surf_geom, bg_data, views,
+                cmap, v_min, v_max,
+                symmetric_cmap, bg_on_data, darkness, threshold, alpha,
+                plot_contours, zoom,
+                **kwargs,
+            )
+            if colorbar:
+                _pending_cbars.append((ax_main, v_min, v_max))
+
+        # ---- NIfTI passthrough: glass / slice ----
+        elif _img_mode == "nifti":
+            _render_vol_row(
+                ax_main, fig, _stat_niis[i], bg_img,
+                kind, display_mode, cut_coords,
+                cmap, v_min, v_max,
+                symmetric_cmap, threshold, alpha, draw_cross,
+                colorbar=False,
+                **kwargs,
+            )
+            if colorbar:
+                _pending_cbars.append((ax_main, v_min, v_max))
+
+        # ---- tabular: surface (non-combined) ----
+        elif kind == "surface" and not is_combined:
+            idc = parcellation.get_idc_byhemi(surf_space)
+            vert_lh, vert_rh = _data_to_surf_verts(
+                row_vals[idc["L"]], row_vals[idc["R"]],
+                parc_arr_lh, parc_arr_rh, medial_data,
+            )
+            _render_surf_row(
+                ax_main, fig, vert_lh, vert_rh,
+                parc_arr_lh, parc_arr_rh,
+                surf_geom, bg_data, views,
+                cmap, v_min, v_max,
+                symmetric_cmap, bg_on_data, darkness, threshold, alpha,
+                plot_contours, zoom,
+                **kwargs,
+            )
+            if colorbar:
+                _pending_cbars.append((ax_main, v_min, v_max))
+
+        # ---- tabular: combined cx surface + sc slices ----
+        elif is_combined:
+            n_cx = len(parcellation._labels) - parcellation._get_sc_n_parcels()
+            # Surface labels are identical to cx portion labels in the combined volume
+            # (1-based), so label - 1 is the 0-based position in row_vals.
+            _idc_lh_surf = np.trim_zeros(np.unique(parc_arr_lh)).astype(int)
+            _idc_rh_surf = np.trim_zeros(np.unique(parc_arr_rh)).astype(int)
+            vert_lh, vert_rh = _data_to_surf_verts(
+                row_vals[_idc_lh_surf - 1],
+                row_vals[_idc_rh_surf - 1],
+                parc_arr_lh, parc_arr_rh, medial_data,
+            )
+            _render_surf_row(
+                ax_s, fig, vert_lh, vert_rh,
+                parc_arr_lh, parc_arr_rh,
+                surf_geom, bg_data, views,
+                cmap, v_min, v_max,
+                symmetric_cmap, bg_on_data, darkness, threshold, alpha,
+                plot_contours, zoom,
+                **kwargs,
+            )
+            _mni_arr     = mni_nii.get_fdata()
+            _all_labels  = np.trim_zeros(np.unique(_mni_arr))
+            _sc_labels   = _all_labels[n_cx:]
+            _sc_stat     = _data_to_volume(row_vals[n_cx:], mni_nii, _sc_labels, _vol_bg)
+            _render_vol_row(
+                ax_v, fig, _sc_stat, None,
+                "glass", "lyrz", None,
+                cmap, v_min, v_max,
+                symmetric_cmap, threshold, alpha, draw_cross,
+                colorbar=False,
+                **kwargs,
+            )
+            if colorbar:
+                _pending_cbars.append((ax_s, v_min, v_max))
+
+        # ---- tabular: glass / slice (non-combined) ----
+        else:
+            _mni_arr    = mni_nii.get_fdata()
+            _all_labels = np.trim_zeros(np.unique(_mni_arr))
+            _stat_nii   = _data_to_volume(row_vals, mni_nii, _all_labels, _vol_bg)
+            _render_vol_row(
+                ax_main, fig, _stat_nii, bg_img_nii,
+                kind, display_mode, cut_coords,
+                cmap, v_min, v_max,
+                symmetric_cmap, threshold, alpha, draw_cross,
+                colorbar=False,
+                **kwargs,
+            )
+            if colorbar:
+                _pending_cbars.append((ax_main, v_min, v_max))
+
+    # Add colorbars last so they render on top of all brain axes (important for
+    # multi-column layouts where adjacent brains would otherwise cover them).
+    for (_cax_ax, _vmin, _vmax) in _pending_cbars:
+        _norm = mpl.colors.Normalize(vmin=_vmin, vmax=_vmax)
+        _sm   = plt.cm.ScalarMappable(cmap=cmap, norm=_norm)
+        _sm.set_array([])
+        _pos  = _cax_ax.get_position()
+        _cax  = fig.add_axes([
+            _pos.x1 + (colorbar_inset[0] - 1.0) * _pos.width,
+            _pos.y0 + colorbar_inset[1] * _pos.height,
+            colorbar_inset[2] * _pos.width,
+            colorbar_inset[3] * _pos.height,
+        ])
+        fig.colorbar(_sm, cax=_cax)
+        if colorbar_label:
+            _cax.set_title(colorbar_label, fontsize="medium")
+
+    # -- hide unused subplot cells --
+    if not is_combined and _own_fig:
+        for j in range(n_maps, n_rows_grid * n_cols_grid):
+            _axes_arr[j // n_cols_grid, j % n_cols_grid].set_visible(False)
+
+    return fig, axes_out

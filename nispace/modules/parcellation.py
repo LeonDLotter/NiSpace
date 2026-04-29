@@ -332,7 +332,6 @@ class Parcellation:
             # ---- store image path (lazy load) ----
             p.add_space(space, image=img_path, dist_mat=dm, spin_mat=sm)
 
-        lgr.info(f"Parcellation '{name}' available in spaces: {list(lib_entry.keys())}.")
         p.validate(pre_activation=True)
         return p
 

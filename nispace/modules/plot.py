@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib.legend_handler import HandlerTuple
 
 from .. import lgr
 from ..plotting import catplot, nullplot, nice_stats_labels, print_significance
@@ -147,7 +149,7 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
         "legend": {"kwargs": {"title": legend_title}},
         "color_which": "Greys",
         "bands": {"alpha": 0.15, "edgealpha": 0.5, "label_prefix": f"Null perc. "},
-        "median_line": {"label": "Null Median"}
+        "median_line": {"label": "Null median"}
     }
 
     # one X:
@@ -173,8 +175,10 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
         catplot_kwargs["legend"] |= {"plot": True}
         catplot_kwargs["dots"] = {"plot": False}
         
-    # multiple Y:
-    # anything?
+    # multiple Y: suppress individual dot/errorbar labels — combined entry added at the end
+    else:
+        catplot_kwargs["dots"] = {"label": False}
+        catplot_kwargs["errorbars"] = {"label": False}
 
     # combine with custom input 
     for k, v in kwargs.items():
@@ -328,6 +332,33 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
                     new_leg.get_children()[0].get_children()[:0] = old_boxes
                 else:
                     ax.legend(handles=_sig_handles, labels=_sig_labels)
+
+    # combined dot + CI legend entry for multi-Y mode (HandlerTuple overlays both icons)
+    if colocs_df.shape[0] > 1:
+        _dot_proxy = mpl.lines.Line2D(
+            [], [], marker="o", linestyle="none", color="k",
+            markerfacecolor=(1, 1, 1, 0.8), markeredgewidth=1, markersize=5)
+        _eb_proxy = mpl.lines.Line2D([], [], color="k", linewidth=1)
+        leg = ax.get_legend()
+        if leg is not None:
+            old_boxes = leg.get_children()[0].get_children()[:]
+            ex_title = leg.get_title().get_text()
+            leg_kwargs = {
+                "title": ex_title, "loc": leg._loc,
+                "handler_map": {tuple: HandlerTuple(ndivide=False, pad=0)}
+            }
+            if leg._bbox_to_anchor is not None:
+                try:
+                    pts = leg._bbox_to_anchor._bbox.get_points()
+                    norms = np.max(np.abs(pts), axis=1)
+                    leg_kwargs["bbox_to_anchor"] = tuple(pts[norms.argmax()])
+                except Exception:
+                    leg_kwargs["bbox_to_anchor"] = (1.0, 0.5)
+            new_leg = ax.legend([(_dot_proxy, _eb_proxy)], ["Observed mean\n(95% CI)"], **leg_kwargs)
+            new_leg.get_children()[0].get_children().extend(old_boxes)
+        else:
+            ax.legend(handles=[(_dot_proxy, _eb_proxy)], labels=["Observed mean\n(95% CI)"],
+                      handler_map={tuple: HandlerTuple(ndivide=None, pad=0)})
 
     return fig, ax, plot
 
