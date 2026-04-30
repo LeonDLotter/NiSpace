@@ -16,6 +16,8 @@ from neuromaps import images
 from . import lgr
 from .utils.utils import vect_to_vol_arr, set_log
 from .datasets import fetch_parcellation, fetch_template, parcellation_lib, template_lib
+from ._patches import apply_surface_plot_patches
+apply_surface_plot_patches()
 
 
 def nice_stats_labels(string, add_dollars=True):
@@ -1184,6 +1186,24 @@ def _render_surf_row(ax, fig, vert_lh, vert_rh, parc_arr_lh, parc_arr_rh,
     """Render one brain map onto surfaces inside *ax* via n inset 3-D subaxes."""
     surf_lh, surf_rh = surf_geom
     n_views = len(views)
+
+    # Bake alpha into the colormap once before the per-view loop.
+    # With bg_on_data=False the colormap alpha is preserved; mix_colormaps
+    # then produces: stat_color*alpha + bg_color*(1-alpha) — the correct blend.
+    # When alpha==1 we fall through to the normal bg_on_data behaviour.
+    import matplotlib.colors as _mcolors
+    _plot_cmap = cmap
+    _plot_bg_on_data = bg_on_data
+    if alpha is not None and float(alpha) != 1.0:
+        _a = float(alpha)
+        _cmap_obj = (mpl.colormaps[cmap] if isinstance(cmap, str)
+                     else cmap if isinstance(cmap, _mcolors.Colormap)
+                     else _mcolors.LinearSegmentedColormap.from_list("_c", cmap))
+        _rgba = _cmap_obj(np.linspace(0, 1, 256))
+        _rgba[:, 3] = _a
+        _plot_cmap = _mcolors.ListedColormap(_rgba)
+        _plot_bg_on_data = False  # let colormap alpha drive the blend
+
     for i, view_str in enumerate(views):
         hemi_str, view_name = view_str.split("_", 1)
         is_left = hemi_str == "left"
@@ -1194,23 +1214,6 @@ def _render_surf_row(ax, fig, vert_lh, vert_rh, parc_arr_lh, parc_arr_rh,
         parc_arr  = parc_arr_lh  if is_left else parc_arr_rh
 
         ax_3d = ax.inset_axes([i / n_views, 0, 1 / n_views, 1], projection="3d")
-
-        # Bake alpha into the colormap so nilearn's mix_colormaps uses it.
-        # With bg_on_data=False the colormap alpha is preserved; mix_colormaps
-        # then produces: stat_color*alpha + bg_color*(1-alpha) — the correct blend.
-        # When alpha==1 we fall through to the normal bg_on_data behaviour.
-        _plot_cmap = cmap
-        _plot_bg_on_data = bg_on_data
-        if alpha is not None and float(alpha) != 1.0:
-            import matplotlib.colors as _mcolors
-            _a = float(alpha)
-            _cmap_obj = (mpl.colormaps[cmap] if isinstance(cmap, str)
-                         else cmap if isinstance(cmap, _mcolors.Colormap)
-                         else _mcolors.LinearSegmentedColormap.from_list("_c", cmap))
-            _rgba = _cmap_obj(np.linspace(0, 1, 256))
-            _rgba[:, 3] = _a
-            _plot_cmap = _mcolors.ListedColormap(_rgba)
-            _plot_bg_on_data = False  # let colormap alpha drive the blend
 
         plot_surf_stat_map(
             surf_mesh=surf.agg_data(),
@@ -1266,7 +1269,7 @@ def _data_to_volume(data, ref_nii, labels_in_img, bg_value=np.nan):
 
 def _render_vol_row(ax, fig, stat_nii, bg_img, kind, display_mode, cut_coords,
                     cmap, vmin, vmax, symmetric_cmap, threshold, alpha,
-                    draw_cross, colorbar, colorbar_label="", colorbar_inset=None,
+                    draw_cross, colorbar, dim="auto", colorbar_label="", colorbar_inset=None,
                     **kwargs):
     """Render one brain map as a glass brain or anatomical slices into *ax*."""
     if kind == "glass":
@@ -1274,7 +1277,7 @@ def _render_vol_row(ax, fig, stat_nii, bg_img, kind, display_mode, cut_coords,
             stat_nii,
             figure=fig, axes=ax,
             display_mode=display_mode,
-            alpha=alpha if alpha is not None else 0.7,
+            transparency=alpha,  # controls stat map overlay opacity
             plot_abs=False,
             cmap=cmap, vmin=vmin, vmax=vmax,
             symmetric_cbar=symmetric_cmap,
@@ -1306,6 +1309,8 @@ def _render_vol_row(ax, fig, stat_nii, bg_img, kind, display_mode, cut_coords,
             display_mode=display_mode,
             black_bg=False,
             annotate=False,
+            transparency=alpha,
+            dim=dim,
             **kwargs,
         )
         if colorbar:
@@ -1330,8 +1335,9 @@ def brainplot(
     zoom=1.5,
     bg_on_data=True,
     darkness=0.7,
+    dim=0,
     threshold="auto",
-    alpha=0.7,
+    alpha=0.8,
     display_mode=None,
     cut_coords=None,
     bg_img=None,
@@ -1365,9 +1371,18 @@ def brainplot(
         GIfTI pair: ``(lh, rh)`` tuple or list of such tuples for surface
         plots, where each element is a ``nib.GiftiImage``, a path, or a
         vertex-data array — *parcellation* must be ``None``.
-    parcellation : Parcellation or None
-        Fitted NiSpace Parcellation object. Required for tabular input;
-        must be ``None`` when passing a NIfTI or GIfTI image.
+    parcellation : Parcellation, str, Path, NIfTI image, GIfTI image, tuple, or None
+        Parcellation to use for mapping tabular data onto the brain.
+        Required when *data* is tabular; must be ``None`` for NIfTI/GIfTI image input.
+        Accepted forms:
+
+        * ``Parcellation`` — a fitted NiSpace Parcellation object.
+        * ``str`` — NiSpace library name (e.g. ``"Schaefer400"``) **or** a
+          file-system path to a NIfTI/GIfTI parcellation image.
+        * ``pathlib.Path`` — path to a NIfTI or GIfTI parcellation image.
+        * ``nib.Nifti1Image`` — volumetric parcellation image.
+        * ``nib.GiftiImage`` or ``tuple`` — surface parcellation; pass a
+          ``(lh, rh)`` tuple where each element is a ``GiftiImage`` or path.
     kind : {"surface", "glass", "slice", "combined"}, optional
         Rendering mode. Defaults to "combined" for combined (cx+sc) parcellations
         and "surface" otherwise. Use "combined" for surface+glass brain side-by-side,
@@ -1388,13 +1403,16 @@ def brainplot(
         Overlay sulcal shading on top of the statistical map.
     darkness : float
         Darkness of sulcal background shading (0 = bright, 1 = dark).
+    dim : float or "auto"
+        Dimming factor for the anatomical background in slice plots.
+        Roughly −2 (more contrast) to +2 (dimmer). Default ``"auto"``.
     threshold : float, "auto", or None
         Values with absolute value below threshold are not displayed.
         Default ``"auto"`` sets threshold to ``min(|data|) / 2``, masking
         background zeros while keeping all parcel values visible. Pass
         ``None`` to disable thresholding entirely.
     alpha : float, optional
-        Transparency of the statistical map (surface only).
+        Transparency of the statistical map. Default 0.8 for all kinds.
     display_mode : str, optional
         Nilearn display mode for glass/slice. Defaults to "lyrz" for glass
         (left, posterior, right, top) and "ortho" for slice.
@@ -1429,9 +1447,11 @@ def brainplot(
         for glass brain and ``[1.04, 0.25, 0.02, 0.5]`` for surface/slice.
     ncols : int
         Number of map columns in the subplot grid.
-    title : str or bool, optional
-        Map title above each brain. "auto" (default) uses the map's index label;
-        False/None disables titles.
+    title : str, list, or bool, optional
+        Map title above each brain. ``"auto"`` (default) uses the map's index
+        label for tabular input and shows no title for NIfTI/GIfTI image input
+        (where no meaningful label is available). Pass a string, a list of
+        strings (one per map), or ``False``/``None`` to disable.
     hspace : float
         Vertical spacing between map rows (passed to GridSpec/subplots).
     wspace : float, optional
@@ -1523,7 +1543,6 @@ def brainplot(
                 except (ValueError, AssertionError):
                     try:
                         parcellation = _Parc.from_path(source=parcellation)
-                        parcellation.fit()
                     except Exception as _e:
                         raise ValueError(
                             f"'{parcellation}' is neither a NiSpace library parcellation "
@@ -1533,7 +1552,6 @@ def brainplot(
             elif isinstance(parcellation, (_pl.Path, _nib.Nifti1Image, _nib.GiftiImage, tuple)):
                 try:
                     parcellation = _Parc.from_path(source=parcellation)
-                    parcellation.fit()
                 except Exception as _e:
                     raise ValueError(
                         f"Could not load parcellation from path/image: {_e}"
@@ -1841,7 +1859,8 @@ def brainplot(
                 for idx in data.index
             ]
         else:
-            _titles = [str(i) for i in range(n_maps)]
+            # volume / gifti input — no meaningful label available
+            _titles = None
     elif isinstance(title, (list, tuple)):
         if len(title) != n_maps:
             raise ValueError(
@@ -1935,7 +1954,9 @@ def brainplot(
             colorbar_inset = [1.02, 0.15, 0.02, 0.7]
         elif is_combined:  # kind == "combined"
             colorbar_inset = [1.04, 0.25, 0.03, 0.5]
-        else:  # surface / slice
+        elif kind == "slice":
+            colorbar_inset = [1.04, 0.2, 0.02, 0.6]
+        else:  # surface
             colorbar_inset = [1.04, 0.25, 0.02, 0.5]
 
     axes_out = []
@@ -1991,7 +2012,7 @@ def brainplot(
                 kind, display_mode, cut_coords,
                 cmap, v_min, v_max,
                 symmetric_cmap, threshold, alpha, draw_cross,
-                colorbar=False,
+                colorbar=False, dim=dim,
                 **kwargs,
             )
             if colorbar:
@@ -2046,7 +2067,7 @@ def brainplot(
                 "glass", "lyrz", None,
                 cmap, v_min, v_max,
                 symmetric_cmap, threshold, alpha, draw_cross,
-                colorbar=False,
+                colorbar=False, dim=dim,
                 **kwargs,
             )
             if colorbar:
@@ -2062,7 +2083,7 @@ def brainplot(
                 kind, display_mode, cut_coords,
                 cmap, v_min, v_max,
                 symmetric_cmap, threshold, alpha, draw_cross,
-                colorbar=False,
+                colorbar=False, dim=dim,
                 **kwargs,
             )
             if colorbar:
@@ -2070,11 +2091,10 @@ def brainplot(
 
     # Add colorbars last so they render on top of all brain axes (important for
     # multi-column layouts where adjacent brains would otherwise cover them).
-    # For surface plots the colormap has alpha baked in; mirror that in the colorbar.
+    # Bake alpha into the colorbar colormap so it matches the rendered data.
+    import matplotlib.colors as _mcolors
     _cbar_cmap = cmap
-    _is_surface_plot = (kind == "surface") or is_combined or (_img_mode == "gifti")
-    if _is_surface_plot and alpha is not None and float(alpha) != 1.0:
-        import matplotlib.colors as _mcolors
+    if alpha is not None and float(alpha) != 1.0:
         _a = float(alpha)
         _cmap_obj = (mpl.colormaps[cmap] if isinstance(cmap, str)
                      else cmap if isinstance(cmap, _mcolors.Colormap)
@@ -2099,24 +2119,24 @@ def brainplot(
             _cax.set_title(colorbar_label, fontsize="medium")
 
     # Add titles last so they render on top of all brain axes.
-    # Surface plots: y slightly inside the axes top (brain sits in the lower
-    # portion of ax_main leaving empty space above it).
-    # Other kinds: y just above the axes top edge.
-    _title_y_surf  = 1.02   # inside ax_main, above the nilearn content
-    _title_y_other = 1.02   # just outside the top edge
-    _title_va_surf  = "top"
-    _title_va_other = "bottom"
+    # y is expressed as a fraction of the axes height added to the axes top.
+    # Surface/glass: 1.02 in single-row; surface bumps to 1.05 in multi-row.
+    # Slice: 1.06 (single and multi) — more white space above slice panels.
+    if kind == "surface":
+        _title_y = 1.05 if _multirow else 1.02
+        _title_va = "top"
+    elif kind == "slice":
+        _title_y = 1.06
+        _title_va = "bottom"
+    else:  # glass
+        _title_y = 1.02
+        _title_va = "bottom"
     for (_tax, _tstr) in _pending_titles:
         _pos = _tax.get_position()
-        if kind == "surface":
-            _ty = _pos.y0 + _title_y_surf  * _pos.height
-            _va = _title_va_surf
-        else:
-            _ty = _pos.y0 + _title_y_other * _pos.height
-            _va = _title_va_other
+        _ty = _pos.y0 + _title_y * _pos.height
         fig.text(
             _pos.x0 + _pos.width / 2, _ty, _tstr,
-            ha="center", va=_va,
+            ha="center", va=_title_va,
             fontsize="large", fontweight="bold",
         )
 
