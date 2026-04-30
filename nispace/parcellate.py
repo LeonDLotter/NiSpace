@@ -210,7 +210,8 @@ class Parcellater():
                 
             # parcellate
             darr = data.get_fdata()
-            parcellated = vol_to_vect_arr(darr, self._parc_arr, self._parc_idc, background_value)
+            _bg = background_value if background_value is not None else np.nan
+            parcellated = vol_to_vect_arr(darr, self._parc_arr, self._parc_idc, _bg)
             # masker = NiftiLabelsMasker(
             #     parc, mask_img=mask_img, resampling_target=None
             # )
@@ -252,7 +253,8 @@ class Parcellater():
                 background_value = np.median(darr[nomedialwall == 0])
             #parcellated = vertices_to_parcels(darr, parc, background=background_value)
             parc_arr = _gifti_to_array(parc)
-            parcellated = vol_to_vect_arr(darr, parc_arr, self._parc_idc, background_value)
+            _bg = background_value if background_value is not None else np.nan
+            parcellated = vol_to_vect_arr(darr, parc_arr, self._parc_idc, _bg)
             
         # fill parcels with background intensity with nan, works only if background_value exists
         if background_parcels_to_nan and background_value is not None:
