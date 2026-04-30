@@ -12,6 +12,7 @@ from ..nulls import (
     find_parcel_hemispheres, get_distance_matrix,
 )
 from ..io import load_distmat, load_spinmat, load_img, load_labels, load_l2rmap
+from ..utils.utils import set_log
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +146,7 @@ class Parcellation:
         source : str, Path, nib.Nifti1Image, nib.GiftiImage, or tuple thereof
         space  : str, optional – inferred from image type if not given
         """
+        set_log(lgr, verbose)
         lgr.info(f"Building Parcellation from path / image{f' ({name})' if name else ''}.")
         p = cls(name=name, level=level, symmetric=symmetric,
                 left2right_mapping=l2rmap, lrcorr=lrcorr)
@@ -196,6 +198,7 @@ class Parcellation:
         lib_entry_or_list : dict or [cx_lib_entry, sc_lib_entry]
         data_dir          : str or Path  – root NiSpace data directory
         """
+        set_log(lgr, verbose)
         from ..utils.utils_datasets import get_file
         from ..utils.utils import merge_parcellations
 
@@ -341,6 +344,7 @@ class Parcellation:
         lrcorr_threshold, gf_kw, verbose,
     ):
         """Build a combined (cx+sc) multi-space Parcellation from the library."""
+        set_log(lgr, verbose)
         from ..utils.utils_datasets import get_file
         from ..utils.utils import merge_parcellations
 

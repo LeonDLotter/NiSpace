@@ -319,6 +319,7 @@ class NiSpace:
                         parcellation=parc_integrated,
                         return_dist_mat=self._load_dist_mat,
                         return_spin_mat=self._load_spin_mat,
+                        verbose=verbose,
                     )
                     # activate space only when raw image data needs parcellating;
                     # DataFrames/Series/ndarrays are already parcellated — everything
