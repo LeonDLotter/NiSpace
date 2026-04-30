@@ -1112,12 +1112,13 @@ def _load_fslr_assets(surf_mesh="inflated"):
     bg_data   : (sulc_lh_array, sulc_rh_array)
     medial    : (medial_lh_array, medial_rh_array)
     """
+    # TODO: ADJUST THIS TO ONLY LOAD VIA NISPACE FETCHERS
     from neuromaps.datasets import fetch_fslr
     fslr = fetch_fslr(density="32k")
     valid = [k for k in ("pial", "inflated", "midthickness", "veryinflated") if k in fslr]
     if surf_mesh not in fslr:
         raise ValueError(
-            f"surf_mesh='{surf_mesh}' not available for fslr32k. Choose from: {valid}"
+            f"surf_mesh='{surf_mesh}' not available for fsLR. Choose from: {valid}"
         )
     surf_lh = images.load_gifti(str(fslr[surf_mesh].L))
     surf_rh = images.load_gifti(str(fslr[surf_mesh].R))
@@ -1125,6 +1126,34 @@ def _load_fslr_assets(surf_mesh="inflated"):
     sulc_rh = images.load_gifti(str(fslr["sulc"].R)).agg_data()
     medial_lh = images.load_gifti(str(fslr["medial"].L)).agg_data()
     medial_rh = images.load_gifti(str(fslr["medial"].R)).agg_data()
+    return (surf_lh, surf_rh), (sulc_lh, sulc_rh), (medial_lh, medial_rh)
+
+
+def _load_fsaverage_assets(surf_mesh="pial"):
+    """Load fsaverage surface geometry, sulcal background, and medial wall mask via neuromaps.
+
+    Returns
+    -------
+    surf_geom : (lh_GiftiImage, rh_GiftiImage)
+    bg_data   : (sulc_lh_array, sulc_rh_array)
+    medial    : (medial_lh_array, medial_rh_array)
+    """
+    # TODO: ADJUST THIS TO ONLY LOAD VIA NISPACE FETCHERS
+    from neuromaps.datasets import fetch_fsaverage
+    fsavg = fetch_fsaverage(density="41k")
+    valid = [k for k in ("pial", "inflated", "white") if k in fsavg]
+    if surf_mesh not in fsavg:
+        lgr.warning(
+            f"surf_mesh='{surf_mesh}' not available for fsaverage. "
+            f"Choose from: {valid}. Falling back to 'pial'."
+        )
+        surf_mesh = "pial"
+    surf_lh = images.load_gifti(str(fsavg[surf_mesh].L))
+    surf_rh = images.load_gifti(str(fsavg[surf_mesh].R))
+    sulc_lh = images.load_gifti(str(fsavg["sulc"].L)).agg_data()
+    sulc_rh = images.load_gifti(str(fsavg["sulc"].R)).agg_data()
+    medial_lh = images.load_gifti(str(fsavg["medial"].L)).agg_data()
+    medial_rh = images.load_gifti(str(fsavg["medial"].R)).agg_data()
     return (surf_lh, surf_rh), (sulc_lh, sulc_rh), (medial_lh, medial_rh)
 
 
@@ -1165,20 +1194,37 @@ def _render_surf_row(ax, fig, vert_lh, vert_rh, parc_arr_lh, parc_arr_rh,
         parc_arr  = parc_arr_lh  if is_left else parc_arr_rh
 
         ax_3d = ax.inset_axes([i / n_views, 0, 1 / n_views, 1], projection="3d")
+
+        # Bake alpha into the colormap so nilearn's mix_colormaps uses it.
+        # With bg_on_data=False the colormap alpha is preserved; mix_colormaps
+        # then produces: stat_color*alpha + bg_color*(1-alpha) — the correct blend.
+        # When alpha==1 we fall through to the normal bg_on_data behaviour.
+        _plot_cmap = cmap
+        _plot_bg_on_data = bg_on_data
+        if alpha is not None and float(alpha) != 1.0:
+            import matplotlib.colors as _mcolors
+            _a = float(alpha)
+            _cmap_obj = (mpl.colormaps[cmap] if isinstance(cmap, str)
+                         else cmap if isinstance(cmap, _mcolors.Colormap)
+                         else _mcolors.LinearSegmentedColormap.from_list("_c", cmap))
+            _rgba = _cmap_obj(np.linspace(0, 1, 256))
+            _rgba[:, 3] = _a
+            _plot_cmap = _mcolors.ListedColormap(_rgba)
+            _plot_bg_on_data = False  # let colormap alpha drive the blend
+
         plot_surf_stat_map(
             surf_mesh=surf.agg_data(),
             stat_map=vert,
             bg_map=bg,
             hemi=hemi_str,
             view=view_name,
-            cmap=cmap,
+            cmap=_plot_cmap,
             vmin=vmin,
             vmax=vmax,
             symmetric_cbar=symmetric_cmap,
-            bg_on_data=bg_on_data,
+            bg_on_data=_plot_bg_on_data,
             darkness=darkness,
             threshold=threshold,
-            alpha=alpha,
             colorbar=False,
             axes=ax_3d,
             figure=fig,
@@ -1280,12 +1326,12 @@ def brainplot(
     space=None,
     surf_mesh="inflated",
     views=None,
-    plot_contours=True,
+    plot_contours=False,
     zoom=1.5,
     bg_on_data=True,
     darkness=0.7,
     threshold="auto",
-    alpha=0.8,
+    alpha=0.7,
     display_mode=None,
     cut_coords=None,
     bg_img=None,
@@ -1655,7 +1701,7 @@ def brainplot(
 
     lgr.info(
         f"brainplot: kind='{kind}', img_mode='{_img_mode}', "
-        f"surf_space='{surf_space}', mni_space='{mni_space}'"
+        f"surf_space='{surf_space}', mni_space='{mni_space}', surf_mesh='{surf_mesh}'"
     )
 
     # -- load surface assets --
@@ -1669,19 +1715,12 @@ def brainplot(
             if _use_fslr:
                 surf_geom, bg_data, medial_data = _load_fslr_assets(surf_mesh)
             else:
-                tpl = fetch_template("fsaverage", hemi=["L", "R"], desc="pial", verbose=False)
-                surf_geom = (images.load_gifti(str(tpl[0])), images.load_gifti(str(tpl[1])))
+                surf_geom, bg_data, medial_data = _load_fsaverage_assets(surf_mesh)
         else:
             if surf_space and "fslr" in surf_space.lower():
                 surf_geom, bg_data, medial_data = _load_fslr_assets(surf_mesh)
             else:
-                if surf_mesh != "pial":
-                    lgr.warning(
-                        f"surf_mesh='{surf_mesh}' is only available for fslr32k spaces. "
-                        "Falling back to 'pial' for fsaverage."
-                    )
-                tpl = fetch_template("fsaverage", hemi=["L", "R"], desc="pial", verbose=False)
-                surf_geom = (images.load_gifti(str(tpl[0])), images.load_gifti(str(tpl[1])))
+                surf_geom, bg_data, medial_data = _load_fsaverage_assets(surf_mesh)
 
             if is_combined:
                 cx_entry = parcellation._cx_surface.get(surf_space)
@@ -2031,9 +2070,22 @@ def brainplot(
 
     # Add colorbars last so they render on top of all brain axes (important for
     # multi-column layouts where adjacent brains would otherwise cover them).
+    # For surface plots the colormap has alpha baked in; mirror that in the colorbar.
+    _cbar_cmap = cmap
+    _is_surface_plot = (kind == "surface") or is_combined or (_img_mode == "gifti")
+    if _is_surface_plot and alpha is not None and float(alpha) != 1.0:
+        import matplotlib.colors as _mcolors
+        _a = float(alpha)
+        _cmap_obj = (mpl.colormaps[cmap] if isinstance(cmap, str)
+                     else cmap if isinstance(cmap, _mcolors.Colormap)
+                     else _mcolors.LinearSegmentedColormap.from_list("_c", cmap))
+        _rgba = _cmap_obj(np.linspace(0, 1, 256))
+        _rgba[:, 3] = _a
+        _cbar_cmap = _mcolors.ListedColormap(_rgba)
+
     for (_cax_ax, _vmin, _vmax) in _pending_cbars:
         _norm = mpl.colors.Normalize(vmin=_vmin, vmax=_vmax)
-        _sm   = plt.cm.ScalarMappable(cmap=cmap, norm=_norm)
+        _sm   = plt.cm.ScalarMappable(cmap=_cbar_cmap, norm=_norm)
         _sm.set_array([])
         _pos  = _cax_ax.get_position()
         _cax  = fig.add_axes([
