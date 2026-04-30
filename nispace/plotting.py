@@ -1335,7 +1335,7 @@ def brainplot(
     zoom=1.5,
     bg_on_data=True,
     darkness=0.7,
-    dim=0,
+    dim="auto",
     threshold="auto",
     alpha=0.8,
     display_mode=None,
@@ -1697,6 +1697,11 @@ def brainplot(
                     f"Parcellation '{parcellation._name}' has no surface space. "
                     f"Available: {parcellation.spaces}"
                 )
+            if space is not None and space not in _surf_spaces:
+                raise ValueError(
+                    f"space='{space}' not available for parcellation '{parcellation._name}'. "
+                    f"Available surface spaces: {_surf_spaces}"
+                )
             surf_space = (space if space in _surf_spaces
                           else next((s for s in _surf_spaces if "fslr" in s.lower()),
                                     _surf_spaces[0]))
@@ -1707,6 +1712,11 @@ def brainplot(
                 raise ValueError(
                     f"Parcellation '{parcellation._name}' has no MNI space. "
                     f"Available: {parcellation.spaces}"
+                )
+            if space is not None and space not in _mni_spaces:
+                raise ValueError(
+                    f"space='{space}' not available for parcellation '{parcellation._name}'. "
+                    f"Available MNI spaces: {_mni_spaces}"
                 )
             mni_space = (space if space in _mni_spaces
                          else next((s for s in _mni_spaces if "2009" in s), _mni_spaces[0]))
