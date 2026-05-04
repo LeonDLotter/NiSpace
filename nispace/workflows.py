@@ -21,6 +21,7 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
                    nispace_object, 
                    fetch_x_kwargs,
                    init_kwargs,
+                   fit_kwargs,
                    ):
     """Base workflow for colocalization, group comparison, and GSEA.
     Will load X data, initialize NiSpace object """
@@ -111,7 +112,7 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
     
     ## FIT
     if not status["fit"]:
-        nsp.fit()
+        nsp.fit(**fit_kwargs)
         status["fit"] = True
         
     ## RETURN status, NiSpace object, pre-loaded nulls
@@ -143,6 +144,7 @@ def simple_colocalization(y,
                           nispace_object=None,
                           fetch_x_kwargs=None,
                           init_kwargs=None,
+                          fit_kwargs=None,
                           clean_y_kwargs=None,
                           colocalize_kwargs=None,
                           permute_kwargs=None,
@@ -218,6 +220,7 @@ def simple_colocalization(y,
     # kwarg dicts
     fetch_x_kwargs = {} if fetch_x_kwargs is None else fetch_x_kwargs
     init_kwargs = {} if init_kwargs is None else init_kwargs
+    fit_kwargs = {} if fit_kwargs is None else fit_kwargs
     clean_y_kwargs = {} if clean_y_kwargs is None else clean_y_kwargs
     colocalize_kwargs = {} if colocalize_kwargs is None else colocalize_kwargs
     permute_kwargs = {} if permute_kwargs is None else permute_kwargs
@@ -242,7 +245,8 @@ def simple_colocalization(y,
         verbose=verbose,
         nispace_object=nispace_object, 
         fetch_x_kwargs=fetch_x_kwargs,
-        init_kwargs=init_kwargs
+        init_kwargs=init_kwargs,
+        fit_kwargs=fit_kwargs
     )
     status = status | {fun: False for fun in ["clean_y", "colocalize", "permute", "correct_p"]}   
     
@@ -364,6 +368,7 @@ def group_comparison(y, design,
                      nispace_object=None,
                      fetch_x_kwargs=None,
                      init_kwargs=None,
+                     fit_kwargs=None,
                      clean_y_kwargs=None,
                      transform_y_kwargs=None,
                      colocalize_kwargs=None,
@@ -374,6 +379,7 @@ def group_comparison(y, design,
     # kwarg dicts
     fetch_x_kwargs = {} if fetch_x_kwargs is None else fetch_x_kwargs
     init_kwargs = {} if init_kwargs is None else init_kwargs
+    fit_kwargs = {} if fit_kwargs is None else fit_kwargs
     clean_y_kwargs = {} if clean_y_kwargs is None else clean_y_kwargs
     transform_y_kwargs = {} if clean_y_kwargs is None else clean_y_kwargs
     colocalize_kwargs = {} if colocalize_kwargs is None else colocalize_kwargs
@@ -399,7 +405,8 @@ def group_comparison(y, design,
         verbose=verbose,
         nispace_object=nispace_object, 
         fetch_x_kwargs=fetch_x_kwargs,
-        init_kwargs=init_kwargs
+        init_kwargs=init_kwargs,
+        fit_kwargs=fit_kwargs
     )
     status = status | {fun: False for fun in ["clean_y", "transform_y", "colocalize", "permute", "correct_p"]}   
       
@@ -603,6 +610,7 @@ def simple_xsea(y,
                 nispace_object=None,
                 fetch_x_kwargs=None,
                 init_kwargs=None,
+                fit_kwargs=None,
                 clean_y_kwargs=None,
                 colocalize_kwargs=None,
                 permute_kwargs=None,
@@ -612,6 +620,7 @@ def simple_xsea(y,
     # kwarg dicts
     fetch_x_kwargs = {} if fetch_x_kwargs is None else fetch_x_kwargs
     init_kwargs = {} if init_kwargs is None else init_kwargs
+    fit_kwargs = {} if fit_kwargs is None else fit_kwargs
     clean_y_kwargs = {} if clean_y_kwargs is None else clean_y_kwargs
     colocalize_kwargs = {} if colocalize_kwargs is None else colocalize_kwargs
     permute_kwargs = {} if permute_kwargs is None else permute_kwargs
@@ -652,6 +661,7 @@ def simple_xsea(y,
         nispace_object=nispace_object,
         fetch_x_kwargs=fetch_x_kwargs,
         init_kwargs=init_kwargs,
+        fit_kwargs=fit_kwargs,
         clean_y_kwargs=clean_y_kwargs,
         colocalize_kwargs={
             "xsea_aggregation_method": xsea_aggregation_method,
