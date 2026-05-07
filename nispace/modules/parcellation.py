@@ -1308,3 +1308,49 @@ class Parcellation:
         if ok:
             lgr.info(f"{prefix}: validation passed.")
         return ok
+
+    # ------------------------------------------------------------------
+    # Visualization
+    # ------------------------------------------------------------------
+
+    def plot(self, space=None, cmap="gist_rainbow", colorbar=False, **kwargs):
+        """Visualize the parcellation with each parcel in a distinct color.
+
+        Wraps :func:`nispace.plotting.brainplot` with ROI-style defaults
+        (analogous to ``nilearn.plotting.plot_roi``).  The parcellation image
+        for the active space is passed directly — no tabular data conversion.
+        Parameter kind can be "slice", "surface", or "glass" and determines
+        the type of plot produced.
+
+        Parameters
+        ----------
+        space : str, optional
+            Parcellation space to render.  Defaults to the active space.
+        cmap : str
+            Colormap for distinct parcel colors.
+            Default ``"gist_rainbow"`` matches ``nilearn.plotting.plot_roi``.
+        colorbar : bool
+            Show colorbar.  Default ``False`` — parcel indices carry no
+            meaningful scale.
+        **kwargs
+            Forwarded to :func:`nispace.plotting.brainplot`.
+
+        Returns
+        -------
+        fig : matplotlib.Figure
+        axes_out : list of matplotlib.Axes
+        """
+        from ..plotting import brainplot
+
+        space = space or self._space
+        if space is None:
+            raise ValueError(
+                "No active space set. Call set_active_space() first or pass space=."
+            )
+        self._ensure_image_loaded(space)
+        img = self._images[space]
+
+        kwargs.setdefault("symmetric_cmap", False)
+        kwargs.setdefault("title", self._name or False)
+
+        return brainplot(img, space=space, cmap=cmap, colorbar=colorbar, **kwargs)

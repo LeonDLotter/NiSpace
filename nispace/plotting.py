@@ -1777,9 +1777,10 @@ def brainplot(
             if bg_img is not None:
                 bg_img_nii = bg_img
             else:
+                _bg_space = mni_space
                 for _desc in ("brain", "T1w"):
                     try:
-                        bg_img_nii = fetch_template(mni_space, desc=_desc, verbose=False)
+                        bg_img_nii = fetch_template(_bg_space, desc=_desc, verbose=False)
                         break
                     except Exception:
                         continue
@@ -1788,6 +1789,20 @@ def brainplot(
                         "Could not auto-fetch MNI background image; "
                         "slice plots will use nilearn's default."
                     )
+
+    elif _img_mode == "nifti" and kind == "slice" and bg_img is None:
+        _bg_space = space if space is not None else "MNI152NLin2009cAsym"
+        for _desc in ("brain", "T1w"):
+            try:
+                bg_img_nii = fetch_template(_bg_space, desc=_desc, verbose=False)
+                break
+            except Exception:
+                continue
+        if bg_img_nii is None:
+            lgr.warning(
+                "Could not auto-fetch MNI background image; "
+                "slice plots will use nilearn's default."
+            )
 
     # -- vmin / vmax --
     force_shared = is_combined
@@ -2018,7 +2033,7 @@ def brainplot(
         # ---- NIfTI passthrough: glass / slice ----
         elif _img_mode == "nifti":
             _render_vol_row(
-                ax_main, fig, _stat_niis[i], bg_img,
+                ax_main, fig, _stat_niis[i], bg_img_nii or bg_img,
                 kind, display_mode, cut_coords,
                 cmap, v_min, v_max,
                 symmetric_cmap, threshold, alpha, draw_cross,
