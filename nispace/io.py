@@ -87,6 +87,14 @@ def parcellate_data(data,
     # unpack Parcellation object into flat args (lazy import avoids circular dependency)
     from .modules.parcellation import Parcellation
     if isinstance(parcellation, Parcellation):
+        # bilateral surface parcellating is not yet supported
+        if getattr(parcellation, "_bilateral", False) and parcellation._space is not None:
+            active_space = parcellation._space or ""
+            if "mni" not in active_space.lower():
+                raise NotImplementedError(
+                    "Surface parcellating with a bilateral Parcellation is not yet supported. "
+                    "Use an MNI space or fetch pre-parcellated data via fetch_reference(). # TODO"
+                )
         parc_labels = parc_labels if parc_labels is not None else parcellation._labels
         parc_hemi   = parc_hemi   if parc_hemi   is not None else parcellation._hemi
         parc_space  = parc_space  if parc_space  is not None else parcellation._space

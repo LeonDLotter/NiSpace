@@ -1,6 +1,5 @@
 {
     "Schaefer100": {
-
         "MNI152NLin2009cAsym": {
             "level": "cortex",
             "map": {
@@ -22,9 +21,9 @@
             "lrcorr": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer100/MNI152NLin2009cAsym/parc-Schaefer100_space-MNI152NLin2009cAsym.lrcorr.csv.gz"
-            }
+            },
+            "symmetric": false
         },
-
         "MNI152NLin6Asym": {
             "level": "cortex",
             "map": {
@@ -46,9 +45,9 @@
             "lrcorr": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer100/MNI152NLin6Asym/parc-Schaefer100_space-MNI152NLin6Asym.lrcorr.csv.gz"
-            }
+            },
+            "symmetric": false
         },
-
         "fsaverage": {
             "level": "cortex",
             "map": {
@@ -98,9 +97,9 @@
             "lrcorr": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer100/fsaverage/parc-Schaefer100_space-fsaverage.lrcorr.csv.gz"
-            }
+            },
+            "symmetric": false
         },
-
         "fsLR": {
             "level": "cortex",
             "map": {
@@ -150,13 +149,11 @@
             "lrcorr": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer100/fsLR/parc-Schaefer100_space-fsLR.lrcorr.csv.gz"
-            }
+            },
+            "symmetric": false
         }
-
     },
-
     "Schaefer200": {
-
         "MNI152NLin2009cAsym": {
             "level": "cortex",
             "map": {
@@ -178,9 +175,9 @@
             "lrcorr": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer200/MNI152NLin2009cAsym/parc-Schaefer200_space-MNI152NLin2009cAsym.lrcorr.csv.gz"
-            }
+            },
+            "symmetric": false
         },
-
         "MNI152NLin6Asym": {
             "level": "cortex",
             "map": {
@@ -202,9 +199,9 @@
             "lrcorr": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer200/MNI152NLin6Asym/parc-Schaefer200_space-MNI152NLin6Asym.lrcorr.csv.gz"
-            }
+            },
+            "symmetric": false
         },
-
         "fsaverage": {
             "level": "cortex",
             "map": {
@@ -254,9 +251,9 @@
             "lrcorr": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer200/fsaverage/parc-Schaefer200_space-fsaverage.lrcorr.csv.gz"
-            }
+            },
+            "symmetric": false
         },
-
         "fsLR": {
             "level": "cortex",
             "map": {
@@ -306,13 +303,11 @@
             "lrcorr": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer200/fsLR/parc-Schaefer200_space-fsLR.lrcorr.csv.gz"
-            }
+            },
+            "symmetric": false
         }
-
     },
-
     "Schaefer400": {
-        
         "MNI152NLin2009cAsym": {
             "level": "cortex",
             "map": {
@@ -334,9 +329,9 @@
             "lrcorr": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer400/MNI152NLin2009cAsym/parc-Schaefer400_space-MNI152NLin2009cAsym.lrcorr.csv.gz"
-            }
+            },
+            "symmetric": false
         },
-
         "MNI152NLin6Asym": {
             "level": "cortex",
             "map": {
@@ -358,9 +353,9 @@
             "lrcorr": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer400/MNI152NLin6Asym/parc-Schaefer400_space-MNI152NLin6Asym.lrcorr.csv.gz"
-            }
+            },
+            "symmetric": false
         },
-
         "fsaverage": {
             "level": "cortex",
             "map": {
@@ -410,9 +405,9 @@
             "lrcorr": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer400/fsaverage/parc-Schaefer400_space-fsaverage.lrcorr.csv.gz"
-            }
+            },
+            "symmetric": false
         },
-
         "fsLR": {
             "level": "cortex",
             "map": {
@@ -462,13 +457,11 @@
             "lrcorr": {
                 "host": "github-nispace",
                 "remote": "parcellation/Schaefer400/fsLR/parc-Schaefer400_space-fsLR.lrcorr.csv.gz"
-            }
+            },
+            "symmetric": false
         }
-
     },
-
     "TianS1": {
-        
         "MNI152NLin2009cAsym": {
             "level": "subcortex",
             "map": {
@@ -482,9 +475,9 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/TianS1/MNI152NLin2009cAsym/parc-TianS1_space-MNI152NLin2009cAsym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         },
-
         "MNI152NLin6Asym": {
             "level": "subcortex",
             "map": {
@@ -498,16 +491,14 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/TianS1/MNI152NLin6Asym/parc-TianS1_space-MNI152NLin6Asym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         }
-
     },
     "MelbourneS1": {
         "alias": "TianS1"
     },
-
     "TianS2": {
-        
         "MNI152NLin2009cAsym": {
             "level": "subcortex",
             "map": {
@@ -521,9 +512,9 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/TianS2/MNI152NLin2009cAsym/parc-TianS2_space-MNI152NLin2009cAsym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         },
-
         "MNI152NLin6Asym": {
             "level": "subcortex",
             "map": {
@@ -537,16 +528,14 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/TianS2/MNI152NLin6Asym/parc-TianS2_space-MNI152NLin6Asym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         }
-
     },
     "MelbourneS2": {
         "alias": "TianS2"
     },
-
     "TianS3": {
-        
         "MNI152NLin2009cAsym": {
             "level": "subcortex",
             "map": {
@@ -560,9 +549,9 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/TianS3/MNI152NLin2009cAsym/parc-TianS3_space-MNI152NLin2009cAsym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         },
-
         "MNI152NLin6Asym": {
             "level": "subcortex",
             "map": {
@@ -576,16 +565,14 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/TianS3/MNI152NLin6Asym/parc-TianS3_space-MNI152NLin6Asym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         }
-
     },
     "MelbourneS3": {
         "alias": "TianS3"
     },
-
     "Glasser": {
-
         "fsaverage": {
             "level": "cortex",
             "map": {
@@ -627,9 +614,9 @@
                     "host": "github-nispace",
                     "remote": "parcellation/Glasser/fsaverage/parc-Glasser_space-fsaverage_hemi-R.spin.npy"
                 }
-            }
+            },
+            "symmetric": true
         },
-
         "fsLR": {
             "level": "cortex",
             "map": {
@@ -671,7 +658,8 @@
                     "host": "github-nispace",
                     "remote": "parcellation/Glasser/fsLR/parc-Glasser_space-fsLR_hemi-R.spin.npy"
                 }
-            }
+            },
+            "symmetric": true
         }
     },
     "HCP": {
@@ -680,9 +668,7 @@
     "MMP": {
         "alias": "Glasser"
     },
-
     "DesikanKilliany": {
-
         "MNI152NLin2009cAsym": {
             "level": "cortex",
             "map": {
@@ -696,9 +682,9 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/DesikanKilliany/MNI152NLin2009cAsym/parc-DesikanKilliany_space-MNI152NLin2009cAsym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         },
-
         "MNI152NLin6Asym": {
             "level": "cortex",
             "map": {
@@ -712,9 +698,9 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/DesikanKilliany/MNI152NLin6Asym/parc-DesikanKilliany_space-MNI152NLin6Asym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         },
-
         "fsaverage": {
             "level": "cortex",
             "map": {
@@ -756,9 +742,9 @@
                     "host": "github-nispace",
                     "remote": "parcellation/DesikanKilliany/fsaverage/parc-DesikanKilliany_space-fsaverage_hemi-R.spin.npy"
                 }
-            }
+            },
+            "symmetric": true
         },
-
         "fsLR": {
             "level": "cortex",
             "map": {
@@ -800,15 +786,14 @@
                     "host": "github-nispace",
                     "remote": "parcellation/DesikanKilliany/fsLR/parc-DesikanKilliany_space-fsLR_hemi-R.spin.npy"
                 }
-            }
+            },
+            "symmetric": true
         }
     },
     "Desikan": {
         "alias": "DesikanKilliany"
     },
-
     "DesikanKillianyTourville": {
-
         "MNI152NLin2009cAsym": {
             "level": "cortex",
             "map": {
@@ -822,9 +807,9 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/DesikanKillianyTourville/MNI152NLin2009cAsym/parc-DesikanKillianyTourville_space-MNI152NLin2009cAsym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         },
-
         "MNI152NLin6Asym": {
             "level": "cortex",
             "map": {
@@ -838,16 +823,14 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/DesikanKillianyTourville/MNI152NLin6Asym/parc-DesikanKillianyTourville_space-MNI152NLin6Asym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         }
-       
     },
     "DKT": {
         "alias": "DesikanKillianyTourville"
     },
-
     "Destrieux": {
-
         "MNI152NLin2009cAsym": {
             "level": "cortex",
             "map": {
@@ -861,9 +844,9 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/Destrieux/MNI152NLin2009cAsym/parc-Destrieux_space-MNI152NLin2009cAsym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         },
-
         "MNI152NLin6Asym": {
             "level": "cortex",
             "map": {
@@ -877,9 +860,9 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/Destrieux/MNI152NLin6Asym/parc-Destrieux_space-MNI152NLin6Asym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         },
-
         "fsaverage": {
             "level": "cortex",
             "map": {
@@ -921,9 +904,9 @@
                     "host": "github-nispace",
                     "remote": "parcellation/Destrieux/fsaverage/parc-Destrieux_space-fsaverage_hemi-R.spin.npy"
                 }
-            }
+            },
+            "symmetric": true
         },
-
         "fsLR": {
             "level": "cortex",
             "map": {
@@ -965,12 +948,11 @@
                     "host": "github-nispace",
                     "remote": "parcellation/Destrieux/fsLR/parc-Destrieux_space-fsLR_hemi-R.spin.npy"
                 }
-            }
+            },
+            "symmetric": true
         }
     },
-
     "Aseg": {
-
         "MNI152NLin2009cAsym": {
             "level": "subcortex",
             "map": {
@@ -984,9 +966,9 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/Aseg/MNI152NLin2009cAsym/parc-Aseg_space-MNI152NLin2009cAsym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         },
-
         "MNI152NLin6Asym": {
             "level": "subcortex",
             "map": {
@@ -1000,13 +982,11 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/Aseg/MNI152NLin6Asym/parc-Aseg_space-MNI152NLin6Asym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         }
-    
     },
-
     "HarvardOxfordCortical": {
-
         "MNI152NLin2009cAsym": {
             "level": "cortex",
             "map": {
@@ -1020,9 +1000,9 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/HarvardOxfordCortical/MNI152NLin2009cAsym/parc-HarvardOxfordCortical_space-MNI152NLin2009cAsym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         },
-
         "MNI152NLin6Asym": {
             "level": "cortex",
             "map": {
@@ -1036,9 +1016,9 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/HarvardOxfordCortical/MNI152NLin6Asym/parc-HarvardOxfordCortical_space-MNI152NLin6Asym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         },
-
         "fsaverage": {
             "level": "cortex",
             "map": {
@@ -1080,9 +1060,9 @@
                     "host": "github-nispace",
                     "remote": "parcellation/HarvardOxfordCortical/fsaverage/parc-HarvardOxfordCortical_space-fsaverage_hemi-R.spin.npy"
                 }
-            }
+            },
+            "symmetric": true
         },
-
         "fsLR": {
             "level": "cortex",
             "map": {
@@ -1124,15 +1104,14 @@
                     "host": "github-nispace",
                     "remote": "parcellation/HarvardOxfordCortical/fsLR/parc-HarvardOxfordCortical_space-fsLR_hemi-R.spin.npy"
                 }
-            }
+            },
+            "symmetric": true
         }
     },
     "HOC": {
         "alias": "HarvardOxfordCortical"
     },
-
     "HarvardOxfordSubcortical": {
-
         "MNI152NLin2009cAsym": {
             "level": "subcortex",
             "map": {
@@ -1146,9 +1125,9 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/HarvardOxfordSubcortical/MNI152NLin2009cAsym/parc-HarvardOxfordSubcortical_space-MNI152NLin2009cAsym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         },
-
         "MNI152NLin6Asym": {
             "level": "subcortex",
             "map": {
@@ -1162,11 +1141,11 @@
             "distmat": {
                 "host": "github-nispace",
                 "remote": "parcellation/HarvardOxfordSubcortical/MNI152NLin6Asym/parc-HarvardOxfordSubcortical_space-MNI152NLin6Asym.dist.csv.gz"
-            }
+            },
+            "symmetric": true
         }
     },
     "HOS": {
         "alias": "HarvardOxfordSubcortical"
     }
-
 }

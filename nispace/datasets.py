@@ -250,6 +250,7 @@ def _check_parcellation(parcellation: str, force_list: bool = False, force_str: 
 def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                        space: str = None,
                        hemi: Union[List[str], str] = ["L", "R"],
+                       bilateral: bool = False,
                        return_labels: bool = True,
                        return_space: bool = False,
                        return_resolution: bool = False,
@@ -449,7 +450,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
     if space is None:
         from .modules.parcellation import Parcellation
         if isinstance(parc, list):
-            return Parcellation.from_nispace_library(
+            parc_obj = Parcellation.from_nispace_library(
                 parc,
                 [parcellation_lib[parc[0]], parcellation_lib[parc[1]]],
                 nispace_data_dir,
@@ -461,7 +462,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                 verbose=verbose,
             )
         else:
-            return Parcellation.from_nispace_library(
+            parc_obj = Parcellation.from_nispace_library(
                 parc,
                 parcellation_lib[parc],
                 nispace_data_dir,
@@ -472,6 +473,9 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                 check_file_hash=check_file_hash,
                 verbose=verbose,
             )
+        if bilateral:
+            parc_obj.make_bilateral()
+        return parc_obj
 
     # ---- LEGACY PATH: space explicitly given → return tuple of values ----
     # run load_parc for a single parcellation
@@ -1023,6 +1027,7 @@ def fetch_reference(dataset: str,
                     weight_quantile: Union[None, float] = None,
                     set_specificity: Union[None, float] = None,
                     parcellation: str = None,
+                    bilateral: bool = False,
                     standardize_parcellated: bool = False,
                     return_metadata: bool = False,
                     print_references: bool = True,
@@ -1033,6 +1038,16 @@ def fetch_reference(dataset: str,
                     check_file_hash: bool = True,
                     verbose: bool = True):
     verbose = set_log(lgr, verbose)
+
+    # --- handle Parcellation object passed as parcellation= ---
+    from .modules.parcellation import Parcellation as _Parcellation
+    if isinstance(parcellation, _Parcellation):
+        if parcellation._is_combined:
+            parcellation = (parcellation._cx_name or "") + (parcellation._sc_name or "")
+        else:
+            parcellation = parcellation._name
+    elif bilateral and parcellation is None:
+        lgr.warning("bilateral=True has no effect without a parcellation.")
 
     # Check dataset availability
     if isinstance(dataset, str):
@@ -1047,7 +1062,7 @@ def fetch_reference(dataset: str,
         lgr.critical_raise(f"Invalid dataset type; expecting string or pandas DataFrame/Series, got {type(dataset)}",
                            TypeError)
     lgr.info(f"Loading {dataset} maps.")
-    
+
     # data directory
     # warn if the parameter is used
     if nispace_data_dir is not None:
@@ -1064,7 +1079,27 @@ def fetch_reference(dataset: str,
     if parcellation is not None:
         # check parcellation and return correct name or list of two names
         parc = _check_parcellation(parcellation)
-        
+
+        # bilateral symmetry guard: only valid for symmetric library parcellations
+        if bilateral:
+            names_to_check = parc if isinstance(parc, list) else [parc]
+            for _pname in names_to_check:
+                if not isinstance(_pname, str) or _pname not in parcellation_lib:
+                    continue
+                is_sym = all(
+                    space_data.get(
+                        "symmetric",
+                        "l2rmap" not in space_data and "lrcorr" not in space_data,
+                    )
+                    for space_data in parcellation_lib[_pname].values()
+                    if isinstance(space_data, dict)
+                )
+                if not is_sym:
+                    raise ValueError(
+                        f"bilateral=True requires a symmetric parcellation. "
+                        f"'{_pname}' is not symmetric."
+                    )
+
         # load maps from collection "All", which should be available for all datasets
         maps_avail = _load_collection(get_file(
             base_dir / f"collection-All.collect", **reference_lib[dataset]["collection"]["All"],
@@ -1168,6 +1203,28 @@ def fetch_reference(dataset: str,
             check_file_hash=check_file_hash,
             verbose=verbose,
         )
+        # bilateral: average matched LH/RH columns by label prefix
+        if bilateral:
+            from .modules.parcellation import _bilateral_labels_match
+            ok, lh_idc, rh_idc, bilateral_cols, unmatched = _bilateral_labels_match(
+                data.columns.tolist()
+            )
+            if not ok:
+                lgr.warning(
+                    f"Bilateral averaging: label matching failed "
+                    f"({len(unmatched)} unmatched label(s): {unmatched[:5]}). "
+                    "Returning non-bilateral data."
+                )
+            else:
+                N_before = data.shape[1]
+                lh_vals = data.iloc[:, lh_idc].values
+                rh_vals = data.iloc[:, rh_idc].values
+                data = pd.DataFrame(
+                    (lh_vals + rh_vals) / 2,
+                    index=data.index,
+                    columns=bilateral_cols,
+                )
+                lgr.info(f"Bilateral averaging applied: {N_before} → {len(bilateral_cols)} parcels.")
         
     # Fetch paths to maps if no 'parcellation' is specified
     else:

@@ -12,7 +12,7 @@ from ..nulls import (
     find_parcel_hemispheres, get_distance_matrix,
 )
 from ..io import load_distmat, load_spinmat, load_img, load_labels, load_l2rmap
-from ..utils.utils import set_log
+from ..utils.utils import set_log, relabel_nifti_parc, relabel_gifti_parc
 
 
 # ---------------------------------------------------------------------------
@@ -47,6 +47,65 @@ def _spaces_match(query, candidate):
 
 
 # ---------------------------------------------------------------------------
+# Bilateral label symmetry helper
+# ---------------------------------------------------------------------------
+
+def _bilateral_labels_match(labels, lh_prefix="hemi-L_", rh_prefix="hemi-R_"):
+    """Match LH and RH labels by stripping hemisphere prefixes.
+
+    Finds labels that start with *lh_prefix* or *rh_prefix*, strips those
+    prefixes, and pairs them by name.  Does not assume any particular ordering
+    or that the count of LH and RH labels is equal a priori.
+
+    Parameters
+    ----------
+    labels : sequence of str
+    lh_prefix : str
+        Prefix that identifies left-hemisphere labels.
+    rh_prefix : str
+        Prefix that identifies right-hemisphere labels.
+
+    Returns
+    -------
+    ok : bool
+        True when every LH label has exactly one matching RH label and
+        vice versa (and at least one pair was found).
+    lh_idc : np.ndarray
+        0-based indices into *labels* for the matched LH parcels (in LH order).
+    rh_idc : np.ndarray
+        0-based indices into *labels* for the matched RH parcels,
+        in the same order as *lh_idc* (i.e. ``lh_idc[i]`` ↔ ``rh_idc[i]``).
+    bilateral_labels : list[str]
+        Stripped label names in matched order.
+    unmatched : list[str]
+        Stripped names that could not be paired.
+    """
+    labels = [str(l) for l in labels]
+
+    lh_pairs = [(i, l[len(lh_prefix):]) for i, l in enumerate(labels) if l.startswith(lh_prefix)]
+    rh_pairs = [(i, l[len(rh_prefix):]) for i, l in enumerate(labels) if l.startswith(rh_prefix)]
+
+    rh_lookup = {name: idx for idx, name in rh_pairs}
+    lh_names  = {name for _, name in lh_pairs}
+
+    lh_idc, rh_idc, bilateral_labels, unmatched = [], [], [], []
+    for lh_idx, lh_name in lh_pairs:
+        if lh_name in rh_lookup:
+            lh_idc.append(lh_idx)
+            rh_idc.append(rh_lookup[lh_name])
+            bilateral_labels.append(lh_name)
+        else:
+            unmatched.append(lh_name)
+
+    for _, rh_name in rh_pairs:
+        if rh_name not in lh_names:
+            unmatched.append(rh_name)
+
+    ok = len(lh_pairs) > 0 and len(unmatched) == 0 and len(lh_idc) == len(rh_idc) == len(lh_pairs) == len(rh_pairs)
+    return ok, np.array(lh_idc), np.array(rh_idc), bilateral_labels, unmatched
+
+
+# ---------------------------------------------------------------------------
 # Parcellation class
 # ---------------------------------------------------------------------------
 
@@ -78,6 +137,8 @@ class Parcellation:
         idc_lh=None, idc_rh=None, dist_mat=None, spin_mat=None, name=None,
         # multi-space / combined
         level=None, is_combined=False, cx_name=None, sc_name=None,
+        # hemisphere prefix strings used by make_bilateral / _bilateral_labels_match
+        lh_prefix="hemi-L_", rh_prefix="hemi-R_",
     ):
         # --- shared (space-independent) ---
         self._name = name
@@ -107,10 +168,17 @@ class Parcellation:
         self._is_surface_dict        = {}  # {space: bool}
 
         # --- combined-specific ---
-        self._cx_idc_lh = None  # cx-LH parcel indices within the combined data vector
-        self._cx_idc_rh = None  # cx-RH parcel indices within the combined data vector
+        self._cx_idc_lh   = None    # cx-LH parcel indices within the combined data vector
+        self._cx_idc_rh   = None    # cx-RH parcel indices within the combined data vector
+        self._cx_symmetric = None   # symmetry of the cx component (combined only)
+        self._sc_symmetric = None   # symmetry of the sc component (combined only)
         # {space: {"img_paths": ..., "image": None|loaded, "spin_mat": ...}}
         self._cx_surface = {}
+
+        # --- bilateral ---
+        self._bilateral  = False    # True after make_bilateral()
+        self._lh_prefix  = lh_prefix
+        self._rh_prefix  = rh_prefix
 
         # --- active context (set by NiSpace.fit via set_active_space) ---
         self._space = space  # may be None until activated
@@ -272,7 +340,10 @@ class Parcellation:
                         )
                         p._labels = np.array(load_labels(label_paths))
 
-                sym = "l2rmap" not in space_lib and "lrcorr" not in space_lib
+                sym = space_lib.get(
+                    "symmetric",
+                    "l2rmap" not in space_lib and "lrcorr" not in space_lib,
+                )
                 p._symmetric = sym
 
                 if not sym and "l2rmap" in space_lib:
@@ -294,29 +365,37 @@ class Parcellation:
 
             # ---- distance matrix ----
             dm = None
-            if load_dist_mat and "distmat" in space_lib:
+            if "distmat" in space_lib:
                 if is_vol:
-                    dm_path = get_file(
-                        base / f"parc-{name}_space-{space}.dist.csv.gz",
-                        **space_lib["distmat"], **gf_kw,
-                    )
-                    dm = load_distmat(dm_path)
+                    dm_path_template = base / f"parc-{name}_space-{space}.dist.csv.gz"
+                    if load_dist_mat:
+                        dm_local = get_file(dm_path_template, **space_lib["distmat"], **gf_kw)
+                        dm = load_distmat(dm_local)
+                    else:
+                        dm = {"path_template": dm_path_template,
+                              "spec": space_lib["distmat"], "gf_kw": gf_kw}
                 else:
-                    dm_paths = []
+                    dm_specs = []
                     has_all = True
                     for h in ["L", "R"]:
                         if space_lib["distmat"].get(h) is not None:
-                            dm_paths.append(
-                                get_file(
-                                    base / f"parc-{name}_space-{space}_hemi-{h}.dist.csv.gz",
-                                    **space_lib["distmat"][h], **gf_kw,
-                                )
-                            )
+                            dm_specs.append({
+                                "path_template": base / f"parc-{name}_space-{space}_hemi-{h}.dist.csv.gz",
+                                "spec": space_lib["distmat"][h], "gf_kw": gf_kw,
+                            })
                         else:
                             lgr.info(f"  Distance matrix for '{name}' hemi-{h} in '{space}' not available.")
                             has_all = False
-                            dm_paths.append(None)
-                    dm = load_distmat(tuple(dm_paths)) if has_all else None
+                            dm_specs.append(None)
+                    if has_all:
+                        if load_dist_mat:
+                            dm_paths = tuple(
+                                get_file(s["path_template"], **s["spec"], **s["gf_kw"])
+                                for s in dm_specs
+                            )
+                            dm = load_distmat(dm_paths)
+                        else:
+                            dm = tuple(dm_specs)
 
             # ---- spin matrix (surface only) ----
             sm = None
@@ -405,9 +484,18 @@ class Parcellation:
                 sc_labels = load_labels(sc_label_path)
                 p._labels = np.array(cx_labels + sc_labels)
 
-                # symmetry / l2rmap / lrcorr from cx (sc is always symmetric)
-                cx_sym = "l2rmap" not in cx_lib[mni_space] and "lrcorr" not in cx_lib[mni_space]
-                p._symmetric = cx_sym  # combined is asymmetric if cx is
+                # symmetry: read from JSON if present, fall back to l2rmap/lrcorr check
+                cx_sym = cx_lib[mni_space].get(
+                    "symmetric",
+                    "l2rmap" not in cx_lib[mni_space] and "lrcorr" not in cx_lib[mni_space],
+                )
+                sc_sym = sc_lib[mni_space].get(
+                    "symmetric",
+                    "l2rmap" not in sc_lib[mni_space] and "lrcorr" not in sc_lib[mni_space],
+                )
+                p._cx_symmetric = cx_sym
+                p._sc_symmetric = sc_sym
+                p._symmetric = cx_sym and sc_sym
 
                 if not cx_sym and "l2rmap" in cx_lib[mni_space]:
                     l2r_path = get_file(
@@ -540,6 +628,34 @@ class Parcellation:
             lgr.info(f"Lazy-loading parcellation image for space '{space}'.")
             self._images[space] = load_img(img)
 
+    def _ensure_dist_mat_loaded(self, space):
+        """Load dist mat for *space* from stored path/spec if not yet loaded."""
+        dm = self._dist_mats.get(space)
+        if dm is None:
+            return
+        if isinstance(dm, (np.ndarray, tuple)) and not (
+            isinstance(dm, tuple) and dm and isinstance(dm[0], (str, pathlib.Path, dict))
+        ):
+            return  # already loaded
+        # lazy-load: dm is a path, tuple of paths, or a lazy-spec dict / tuple of dicts
+        lgr.info(f"Lazy-loading dist mat for '{self._name}' in space '{space}'.")
+        if isinstance(dm, dict):
+            from ..utils.utils_datasets import get_file
+            local_path = get_file(dm["path_template"], **dm["spec"], **dm["gf_kw"])
+            self._dist_mats[space] = load_distmat(local_path)
+        elif isinstance(dm, tuple) and dm and isinstance(dm[0], dict):
+            from ..utils.utils_datasets import get_file
+            paths = tuple(
+                get_file(d["path_template"], **d["spec"], **d["gf_kw"])
+                if d is not None else None
+                for d in dm
+            )
+            self._dist_mats[space] = load_distmat(paths)
+        elif isinstance(dm, (str, pathlib.Path)):
+            self._dist_mats[space] = load_distmat(dm)
+        elif isinstance(dm, tuple) and dm and isinstance(dm[0], (str, pathlib.Path)):
+            self._dist_mats[space] = load_distmat(dm)
+
     def _fit_space(self, space):
         """Compute per-space derived attributes (idc_byhemi, labels_img, etc.)."""
         if space in self._idc_byhemi_dict:
@@ -581,6 +697,12 @@ class Parcellation:
         # use pre-populated values from legacy init if available, else compute
         if space in self._idc_byhemi_dict and self._idc_byhemi_dict[space]["L"] is not None:
             pass  # already set by add_space from legacy path
+        elif self._bilateral and not is_uni:
+            # bilateral: both hemispheres share the same parcel indices 0..N_lh-1
+            idc_both = np.arange(len(self._labels))
+            self._idc_byhemi_dict[space]        = {"L": idc_both, "R": idc_both}
+            self._labels_img_byhemi_dict[space] = {"L": labels_img, "R": labels_img}
+            self._labels_byhemi_dict[space]     = {"L": self._labels, "R": self._labels}
         elif not is_uni:
             (idc_lh, idc_rh), (li_lh, li_rh) = find_parcel_hemispheres(img)
             self._idc_byhemi_dict[space]        = {"L": idc_lh,  "R": idc_rh}
@@ -663,6 +785,130 @@ class Parcellation:
             return 0
 
     # ------------------------------------------------------------------
+    # Bilateral transformation
+    # ------------------------------------------------------------------
+
+    def make_bilateral(self):
+        """Relabel parcels so both hemispheres share indices 1…N_bil.
+
+        After calling:
+        - ``_labels`` contains N_bil hemisphere-prefix-stripped labels.
+        - All images are relabeled (RH values → matching LH values).
+        - Distance matrices are averaged across hemispheres.
+        - Spin matrices are cleared (null maps fall back to 'moran').
+        - ``_bilateral`` is True.
+
+        Requires a symmetric parcellation (``_symmetric=True``).
+        Label matching is done by stripping ``_lh_prefix`` / ``_rh_prefix``.
+        """
+        if self._bilateral:
+            return self
+        if not self._symmetric:
+            raise ValueError(
+                "make_bilateral() requires a symmetric parcellation (_symmetric=True)."
+            )
+        if self._labels is None or len(self._labels) == 0:
+            raise ValueError("make_bilateral() requires non-empty labels.")
+
+        ok, lh_idc, rh_idc, bilateral_labels, unmatched = _bilateral_labels_match(
+            self._labels, self._lh_prefix, self._rh_prefix
+        )
+        if not ok:
+            raise ValueError(
+                f"make_bilateral() '{self._name}': label matching failed — "
+                f"{len(unmatched)} unmatched label(s): {unmatched[:5]}. "
+                f"Check that all labels carry '{self._lh_prefix}' / '{self._rh_prefix}' prefixes "
+                f"and that every LH label has a matching RH label."
+            )
+
+        N_bil     = len(lh_idc)
+        new_vals  = np.arange(N_bil, dtype=np.int32) + 1  # 1-based bilateral parcel values
+        # old 1-based parcel values (lh_idc/rh_idc are 0-based into _labels)
+        old_lh_vals = (lh_idc + 1).astype(np.int32)
+        old_rh_vals = (rh_idc + 1).astype(np.int32)
+
+        self._labels = np.array(bilateral_labels)
+
+        # clear l2rmap / lrcorr (irrelevant after bilateral)
+        self._l2rmap = None
+        self._lrcorr = None
+
+        # --- relabel images ---
+        for space in list(self._images.keys()):
+            is_path = isinstance(self._images[space], (str, pathlib.Path)) or (
+                isinstance(self._images[space], tuple)
+                and self._images[space]
+                and isinstance(self._images[space][0], (str, pathlib.Path))
+            )
+            if is_path:
+                self._ensure_image_loaded(space)
+            img = self._images[space]
+
+            if isinstance(img, nib.Nifti1Image):
+                # map all old parcel values → bilateral values
+                all_old = np.concatenate([old_lh_vals, old_rh_vals])
+                all_new = np.concatenate([new_vals,    new_vals])
+                self._images[space] = relabel_nifti_parc(img, new_order=all_old, new_labels=all_new)
+
+            elif isinstance(img, tuple) and len(img) == 2:
+                lh_img, rh_img = img
+                # LH GIFTI: sorted(old_lh_vals) → new_vals reordered by argsort
+                lh_sort = np.argsort(old_lh_vals)
+                lh_img_new = relabel_gifti_parc(lh_img, new_labels=new_vals[lh_sort])
+                # RH GIFTI: sorted(old_rh_vals) → new_vals reordered by argsort
+                rh_sort = np.argsort(old_rh_vals)
+                rh_img_new = relabel_gifti_parc(rh_img, new_labels=new_vals[rh_sort])
+                self._images[space] = (lh_img_new, rh_img_new)
+            # unilateral GiftiImage: skip
+
+        # --- average dist_mats ---
+        for space in list(self._dist_mats.keys()):
+            self._ensure_dist_mat_loaded(space)
+            dm = self._dist_mats[space]
+            if dm is None:
+                continue
+            if isinstance(dm, tuple) and len(dm) == 2:
+                dm_l, dm_r = dm
+                if dm_l is not None and dm_r is not None:
+                    self._dist_mats[space] = (dm_l.astype(float) + dm_r.astype(float)) / 2
+                else:
+                    self._dist_mats[space] = dm_l if dm_l is not None else dm_r
+            elif isinstance(dm, np.ndarray) and dm.ndim == 2:
+                # volumetric N×N matrix: extract matched LH/RH blocks by index
+                dm_l_block = dm[np.ix_(lh_idc, lh_idc)].astype(float)
+                dm_r_block = dm[np.ix_(rh_idc, rh_idc)].astype(float)
+                self._dist_mats[space] = (dm_l_block + dm_r_block) / 2
+
+        # --- nullify spin_mats ---
+        if any(v is not None for v in self._spin_mats.values()):
+            lgr.warning(
+                "make_bilateral(): spin matrices are incompatible with bilateral relabeling "
+                "and have been cleared. Null maps will fall back to 'moran'."
+            )
+        for space in self._spin_mats:
+            self._spin_mats[space] = None
+
+        # --- reset combined-specific cx indices (recomputed by set_active_space) ---
+        self._cx_idc_lh = None
+        self._cx_idc_rh = None
+
+        # --- clear per-space derived caches (recomputed on next access) ---
+        self._idc_byhemi_dict.clear()
+        self._labels_byhemi_dict.clear()
+        self._labels_img_dict.clear()
+        self._labels_img_byhemi_dict.clear()
+        self._hemi_dict.clear()
+        self._resolution_dict.clear()
+        self._is_surface_dict.clear()
+
+        self._bilateral = True
+        lgr.info(
+            f"make_bilateral() '{self._name}': {len(lh_idc) * 2} → {N_bil} parcels."
+        )
+        self.validate(pre_activation=True)
+        return self
+
+    # ------------------------------------------------------------------
     # Space query helpers
     # ------------------------------------------------------------------
 
@@ -690,6 +936,7 @@ class Parcellation:
         fly and caches the result.
         """
         space = space or self._space
+        self._ensure_dist_mat_loaded(space)
         dm = self._dist_mats.get(space)
         if dm is not None:
             return dm
@@ -814,6 +1061,7 @@ class Parcellation:
 
     @property
     def _dist_mat(self):
+        self._ensure_dist_mat_loaded(self._space)
         return self._dist_mats.get(self._space)
 
     @_dist_mat.setter
@@ -896,7 +1144,7 @@ class Parcellation:
         def _is_surf(s):
             return any(k in s.lower() for k in ("fsa", "fsaverage", "fslr", "fs_lr"))
 
-        if not self._is_combined:
+        if not self._is_combined and not self._bilateral:
             for preferred in ["fsLR", "fsaverage"]:
                 if preferred in self.spaces:
                     return preferred, "alexander_bloch"
@@ -974,14 +1222,15 @@ class Parcellation:
             idc_r = idc.get("R")
             if idc_l is None or idc_r is None:
                 continue
-            # no overlap
-            overlap = np.intersect1d(idc_l, idc_r)
-            if len(overlap) > 0:
-                lgr.error(
-                    f"{prefix} space '{space}': LH and RH indices overlap "
-                    f"({len(overlap)} shared parcels)."
-                )
-                ok = False
+            # no overlap (bilateral: shared indices are expected)
+            if not self._bilateral:
+                overlap = np.intersect1d(idc_l, idc_r)
+                if len(overlap) > 0:
+                    lgr.error(
+                        f"{prefix} space '{space}': LH and RH indices overlap "
+                        f"({len(overlap)} shared parcels)."
+                    )
+                    ok = False
             # coverage
             n_parcels = len(self._labels_img_dict.get(space, []))
             if n_parcels:
@@ -1001,13 +1250,15 @@ class Parcellation:
                         )
                         ok = False
 
-        # 4. dist_mat shape
+        # 4. dist_mat shape (skip lazy-spec entries — not yet loaded)
         for space, dm in self._dist_mats.items():
-            if dm is None:
+            if dm is None or isinstance(dm, dict):
                 continue
             mats = dm if isinstance(dm, tuple) else (dm,)
             for m in mats:
-                if m is not None and m.ndim == 2 and m.shape[0] != m.shape[1]:
+                if m is None or isinstance(m, dict):
+                    continue
+                if hasattr(m, "ndim") and m.ndim == 2 and m.shape[0] != m.shape[1]:
                     lgr.error(f"{prefix} space '{space}': distance matrix is not square.")
                     ok = False
 
