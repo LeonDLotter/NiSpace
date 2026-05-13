@@ -1,4 +1,5 @@
 import sys
+import threading
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -46,7 +47,12 @@ def _init_lgr(lgr_name="nispace", datefmt="%d/%m/%y %H:%M:%S"):
     return logger
 
 
+_quiet_ctx = threading.local()
+
+
 def set_log(lgr, verbose=True):
+    if getattr(_quiet_ctx, 'active', False):
+        return False
     root = logging.getLogger("nispace")
     if verbose == True:
         root.setLevel(logging.INFO)
@@ -61,14 +67,16 @@ def set_log(lgr, verbose=True):
 
 @contextmanager
 def _quiet():
-    """Temporarily silence the nispace logger for internal calls."""
+    """Temporarily silence the nispace logger; set_log calls inside are no-ops."""
     root = logging.getLogger("nispace")
     old = root.level
     root.setLevel(60)
+    _quiet_ctx.active = True
     try:
         yield
     finally:
         root.setLevel(old)
+        _quiet_ctx.active = False
     
 
 def _rm_ext(path, ext=[".txt", ".csv", ".nii", ".gii", ".gz"]):

@@ -22,7 +22,7 @@ from ._core.plot import _plot_categorical
 from ._core.constants import _PARCS_DEFAULT, _COLOC_METHODS
 from .datasets import fetch_parcellation, fetch_template, _check_parcellation
 from .nulls import get_distance_matrix, _SPIN_METHODS
-from .stats.coloc import *
+from .stats.coloc import beta, elasticnet, lasso, mlr, partialpearson, pearson, ridge
 from .stats.misc import (mc_correction, residuals_nan, zscore_df, permute_groups,
                           compute_meff, meff_sidak_correction,
                           maxT_correction, step_maxT_correction, _null_stats_to_array)
