@@ -6,7 +6,8 @@ import pandas as pd
 
 from neuromaps.images import load_data
 
-from .. import lgr
+import logging
+lgr = logging.getLogger(__name__)
 from ..nulls import (
     _img_space_for_neuromaps, _img_density_for_neuromaps,
     find_parcel_hemispheres, get_distance_matrix,

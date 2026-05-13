@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
 
-from .. import lgr
+import logging
+lgr = logging.getLogger(__name__)
 from ..nulls import generate_null_maps
 from ..stats.misc import null_to_p, zscore_df
 from ..utils.utils import set_log

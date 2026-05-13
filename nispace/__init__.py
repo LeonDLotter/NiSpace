@@ -1,7 +1,7 @@
 
-# initialize logger to make it available for all modules
+# initialize the root nispace logger (colored StreamHandler, propagate=False)
 from .utils.utils import _init_lgr
-lgr = _init_lgr(__name__)
+_init_lgr("nispace")
 
 # get version
 from . import _version

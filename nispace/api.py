@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 from joblib import Parallel, delayed
 from tqdm import tqdm
 
-from . import lgr
+import logging
+lgr = logging.getLogger(__name__)
 from .io import parcellate_data, to_pickle, from_pickle
 from .modules.parcellation import Parcellation
 from .modules.reduce_x import _reduce_dimensions
@@ -28,7 +29,7 @@ from .stats.misc import (mc_correction, residuals_nan, zscore_df, permute_groups
 from .stats.effectsize import rzscore_nan, zscore_nan
 from .cv import _get_dist_dep_splits, _get_rand_splits
 from .plotting import nice_stats_labels, brainplot
-from .utils.utils import (set_log, fill_nan, _get_df_string, _lower_strip_ws, mean_by_set_df,
+from .utils.utils import (set_log, _quiet, fill_nan, _get_df_string, _lower_strip_ws, mean_by_set_df,
                           get_column_names, lower, print_arg_pairs,
                           _parse_df_string, _parse_bool)
 
@@ -887,7 +888,8 @@ class NiSpace:
             if not X_reduction:
                 X = self._X
             else:
-                X = self.get_x(X_reduction=X_reduction, verbose=False)
+                with _quiet():
+                    X = self.get_x(X_reduction=X_reduction)
         X_arr = np.array(X, dtype=dtype)
         X_weights = None
         if xsea:
@@ -934,7 +936,8 @@ class NiSpace:
                     lgr.warning(f"Y transform '{Y_transform}' was not run before. Running now.")
                     self.transform_y(Y_transform, groups, subjects)
                 else:
-                    Y = self.get_y(Y_transform=Y_transform, verbose=False)        
+                    with _quiet():
+                        Y = self.get_y(Y_transform=Y_transform)
         Y_arr = np.array(Y, dtype=dtype)
         
         # Z
@@ -1281,7 +1284,8 @@ class NiSpace:
             _X_obs = self._X
         else:
             lgr.info(f"Loading dimensionality-reduced X data, reduction method = '{X_reduction}'.")
-            _X_obs = self.get_x(X_reduction=X_reduction, verbose=False)
+            with _quiet():
+                _X_obs = self.get_x(X_reduction=X_reduction)
         _X_obs_arr = np.array(_X_obs, dtype=dtype)
         if xsea:
             if self._xsea:
@@ -1297,7 +1301,8 @@ class NiSpace:
         _Y_obs_arr = np.array(_Y_obs, dtype=dtype)
         if Y_transform:
             lgr.info(f"Loading transformed Y data, transform = '{Y_transform}'.")
-            _Y_trans_obs = self.get_y(Y_transform=Y_transform, verbose=False)
+            with _quiet():
+                _Y_trans_obs = self.get_y(Y_transform=Y_transform)
             _Y_trans_obs_arr = np.array(_Y_trans_obs, dtype=dtype)
         # Z
         _Z_obs = self._Z
@@ -1321,14 +1326,14 @@ class NiSpace:
                     
         ## get observed colocalizations as numpy arrays
         lgr.info(f"Loading observed colocalizations (method = '{method}').")
-        _colocs_obs = self.get_colocalizations(
-            method, 
-            X_reduction=X_reduction, 
-            Y_transform=Y_transform, 
-            xsea=xsea,
-            force_dict=True,
-            verbose=False
-        )
+        with _quiet():
+            _colocs_obs = self.get_colocalizations(
+                method,
+                X_reduction=X_reduction,
+                Y_transform=Y_transform,
+                xsea=xsea,
+                force_dict=True,
+            )
         _colocs_obs = {stat: np.array(df, dtype=dtype) for stat, df in _colocs_obs.items()}
                     
         # get average prediction values of all y if requested
@@ -1769,7 +1774,8 @@ class NiSpace:
                         lgr.warning("mc_dimension='x'/'c' is not meaningful for 'meff' "
                                     "(Meff is defined over X maps). Ignoring.")
                     meff_variant = "galwey" if mc_method == "meff_galwey" else "li_ji"
-                    X_data = np.array(self.get_x(X_reduction=xdimred, verbose=False))
+                    with _quiet():
+                        X_data = np.array(self.get_x(X_reduction=xdimred))
                     # for XSEA: use per-set mean map so Meff reflects set-level independence
                     if xsea and hasattr(self._X.index, "get_level_values"):
                         set_labels = self._X.index.get_level_values("set")
@@ -1784,7 +1790,8 @@ class NiSpace:
                     n_y_rows = p_values.shape[0]
                     if how == "a" and n_y_rows > 1:
                         # joint correction across X and Y: meff_total = meff_X * meff_Y
-                        Y_data = np.array(self.get_y(Y_transform=ytrans, verbose=False))
+                        with _quiet():
+                            Y_data = np.array(self.get_y(Y_transform=ytrans))
                         meff_y = compute_meff(Y_data, method=meff_variant)
                         meff = meff_x * meff_y
                         lgr.info(f"Meff_Y ({meff_variant}) = {meff_y:.2f} "
@@ -1839,11 +1846,12 @@ class NiSpace:
                         )
                     null_colocs = self._nulls["_colocs"][null_str]
                     # get observed statistics (not p-values)
-                    obs_stats = self.get_colocalizations(
-                        method=coloc, stats=[stat],
-                        X_reduction=xdimred, Y_transform=ytrans,
-                        xsea=xsea, force_dict=True, verbose=False
-                    )[stat]
+                    with _quiet():
+                        obs_stats = self.get_colocalizations(
+                            method=coloc, stats=[stat],
+                            X_reduction=xdimred, Y_transform=ytrans,
+                            xsea=xsea, force_dict=True,
+                        )[stat]
                     # get tail (use stored resolved p_tails if available, else default)
                     p_tails_stored = self._nulls.get(f"p_tails_{null_str}", {})
                     tail = p_tails_stored.get(stat, "two")
@@ -1911,11 +1919,12 @@ class NiSpace:
             stats = _get_coloc_stats(coloc, permuted_only=True)
 
             for stat in stats:
-                obs_dict = self.get_colocalizations(
-                    method=coloc, stats=[stat],
-                    X_reduction=xdimred, Y_transform=ytrans,
-                    xsea=xsea, force_dict=True, verbose=False
-                )
+                with _quiet():
+                    obs_dict = self.get_colocalizations(
+                        method=coloc, stats=[stat],
+                        X_reduction=xdimred, Y_transform=ytrans,
+                        xsea=xsea, force_dict=True,
+                    )
                 if stat not in obs_dict:
                     continue
                 obs_df = obs_dict[stat]
@@ -2028,14 +2037,16 @@ class NiSpace:
                 _z_method = self._last_settings.get("z_method", "robust")
                 lgr.info(f"Z-score normalisation method: "
                          f"{'robust (median/MAD)' if _z_method == 'robust' else 'standard (mean/SD)'}.")
-                colocalizations_dict = self.get_normalized_colocalizations(
-                    **get_kwargs, force_dict=True, verbose=False
-                )
-                if plot_nulls:
-                    _raw = self.get_colocalizations(
+                with _quiet():
+                    colocalizations_dict = self.get_normalized_colocalizations(
                         **get_kwargs, force_dict=True,
-                        get_nulls=True, nulls_permute_what=permute_what, verbose=False
                     )
+                if plot_nulls:
+                    with _quiet():
+                        _raw = self.get_colocalizations(
+                            **get_kwargs, force_dict=True,
+                            get_nulls=True, nulls_permute_what=permute_what,
+                        )
                     _, nulls_dict = _raw if isinstance(_raw, tuple) else (_raw, None)
                     if nulls_dict is None:
                         lgr.warning("No nulls found. Not plotting null distributions in z mode.")
@@ -2045,10 +2056,11 @@ class NiSpace:
 
             elif values == "p":
                 _mc = mc_method.replace("_", "").replace("-", "") if mc_method else None
-                _p_raw = self.get_p_values(
-                    **get_kwargs, permute_what=permute_what, mc_method=_mc,
-                    force_dict=True, verbose=False
-                )
+                with _quiet():
+                    _p_raw = self.get_p_values(
+                        **get_kwargs, permute_what=permute_what, mc_method=_mc,
+                        force_dict=True,
+                    )
                 colocalizations_dict = {
                     stat: df.apply(lambda col: -np.log10(col))
                     for stat, df in _p_raw.items()
@@ -2056,13 +2068,13 @@ class NiSpace:
                 nulls_dict = None
 
             else:  # values == "coloc"
-                coloc_dicts = self.get_colocalizations(
-                    **get_kwargs,
-                    force_dict=True,
-                    get_nulls=plot_nulls,
-                    nulls_permute_what=permute_what,
-                    verbose=False
-                )
+                with _quiet():
+                    coloc_dicts = self.get_colocalizations(
+                        **get_kwargs,
+                        force_dict=True,
+                        get_nulls=plot_nulls,
+                        nulls_permute_what=permute_what,
+                    )
                 if isinstance(coloc_dicts, tuple):
                     colocalizations_dict, nulls_dict = coloc_dicts
                 else:
@@ -2140,20 +2152,22 @@ class NiSpace:
         if annot_p is not False and values not in ("p",):
             if p_dict is None:
                 try:
-                    _fetched = self.get_p_values(
-                        **get_kwargs, permute_what=permute_what,
-                        mc_method=None, force_dict=True, verbose=False
-                    )
+                    with _quiet():
+                        _fetched = self.get_p_values(
+                            **get_kwargs, permute_what=permute_what,
+                            mc_method=None, force_dict=True,
+                        )
                     if _fetched:
                         p_dict = _fetched
                 except Exception:
                     pass
             if pc_dict is None and _annot_mc is not None:
                 try:
-                    _fetched = self.get_p_values(
-                        **get_kwargs, permute_what=permute_what,
-                        mc_method=_annot_mc, force_dict=True, verbose=False
-                    )
+                    with _quiet():
+                        _fetched = self.get_p_values(
+                            **get_kwargs, permute_what=permute_what,
+                            mc_method=_annot_mc, force_dict=True,
+                        )
                     if _fetched:
                         pc_dict = _fetched
                 except Exception:
@@ -2202,8 +2216,9 @@ class NiSpace:
                         if values == "z":
                             _src = colocalizations_dict[stat]
                         else:
-                            _z = self.get_normalized_colocalizations(
-                                **get_kwargs, force_dict=True, verbose=False)
+                            with _quiet():
+                                _z = self.get_normalized_colocalizations(
+                                    **get_kwargs, force_dict=True,)
                             _src = _z.get(stat, colocalizations_dict[stat])
                         sv = _src.mean(axis=0).abs() if sort_by == "abs_z" else _src.mean(axis=0)
                         _ascending = False
@@ -2216,10 +2231,11 @@ class NiSpace:
                             if _pd is None:
                                 # auto-fetch using same logic as values="p"
                                 _mc = mc_method.replace("_", "").replace("-", "") if mc_method else None
-                                _p_fetched = self.get_p_values(
-                                    **get_kwargs, permute_what=permute_what,
-                                    mc_method=_mc, force_dict=True, verbose=False
-                                )
+                                with _quiet():
+                                    _p_fetched = self.get_p_values(
+                                        **get_kwargs, permute_what=permute_what,
+                                        mc_method=_mc, force_dict=True,
+                                    )
                                 _pd = _p_fetched.get(stat)
                             if _pd is None:
                                 raise ValueError("No p-values available for sort_by='p'.")
@@ -2372,10 +2388,12 @@ class NiSpace:
         if isinstance(data, str):
             if data.upper() == "Y":
                 lgr.info(f"Plotting Y data (Y_transform='{Y_transform}').")
-                data_df = self.get_y(Y_transform=Y_transform, verbose=False)
+                with _quiet():
+                    data_df = self.get_y(Y_transform=Y_transform)
             elif data.upper() == "X":
                 lgr.info(f"Plotting X data (X_reduction='{X_reduction}').")
-                data_df = self.get_x(X_reduction=X_reduction, verbose=False)
+                with _quiet():
+                    data_df = self.get_x(X_reduction=X_reduction)
             else:
                 lgr.critical_raise(
                     f"data='{data}' not recognised. Use 'Y', 'X', or a DataFrame.",
@@ -2614,11 +2632,11 @@ class NiSpace:
                 
                 out_null = dict()
                 n_nulls = len(nulls)
-                idx = self.get_p_values(method, nulls_permute_what, _COLOC_METHODS[method][0],
-                                        xsea,
-                                        X_reduction=X_reduction,
-                                        Y_transform=Y_transform,
-                                        verbose=False).index
+                with _quiet():
+                    idx = self.get_p_values(method, nulls_permute_what, _COLOC_METHODS[method][0],
+                                            xsea,
+                                            X_reduction=X_reduction,
+                                            Y_transform=Y_transform).index
                 for stat in stats:
                    
                     if out[stat].shape[1] == 1:

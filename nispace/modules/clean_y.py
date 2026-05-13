@@ -5,7 +5,8 @@ from joblib import Parallel, delayed
 from nilearn.plotting import plot_design_matrix
 from tqdm.auto import tqdm
 
-from .. import lgr
+import logging
+lgr = logging.getLogger(__name__)
 from ..stats.misc import residuals_nan, partial_residuals_nan, zscore_df
 from ..utils.utils import set_log
 

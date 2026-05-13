@@ -5,6 +5,7 @@ import pandas as pd
 import re
 import copy
 import logging
+from contextlib import contextmanager
 from colorlog import ColoredFormatter
 from numba import njit
 
@@ -27,34 +28,47 @@ class CriticalRaiseLogger(logging.Logger):
         raise error(message)
     
     
-def _init_lgr(lgr_name="", datefmt="%d/%m/%y %H:%M:%S"):
-    logging.setLoggerClass(CriticalRaiseLogger) 
+def _init_lgr(lgr_name="nispace", datefmt="%d/%m/%y %H:%M:%S"):
+    logging.setLoggerClass(CriticalRaiseLogger)
     logger = logging.getLogger(lgr_name)
     logger.setLevel(logging.INFO)
-    
+
     if not logger.hasHandlers():
         fmt = f"%(log_color)s%(levelname)s | {'%(asctime)s | ' if datefmt != '' else ''}%(name)s: %(message)s"
         formatter = ColoredFormatter(fmt, datefmt=datefmt)
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(formatter)
         logger.addHandler(handler)
+        # Don't propagate to root — prevents double output when the calling
+        # application has its own root handler configured.
+        logger.propagate = False
 
     return logger
-    
+
 
 def set_log(lgr, verbose=True):
-    # standard level: INFO
+    root = logging.getLogger("nispace")
     if verbose == True:
-        lgr.setLevel(logging.INFO)
+        root.setLevel(logging.INFO)
         return True
-    # quiet level: 60 (> CRITICAL)
     elif verbose in [False, None, 0]:
-        lgr.setLevel(60)
+        root.setLevel(60)
         return False
-    # custom level
     else:
-        lgr.setLevel(verbose)
+        root.setLevel(verbose)
         return True
+
+
+@contextmanager
+def _quiet():
+    """Temporarily silence the nispace logger for internal calls."""
+    root = logging.getLogger("nispace")
+    old = root.level
+    root.setLevel(60)
+    try:
+        yield
+    finally:
+        root.setLevel(old)
     
 
 def _rm_ext(path, ext=[".txt", ".csv", ".nii", ".gii", ".gz"]):

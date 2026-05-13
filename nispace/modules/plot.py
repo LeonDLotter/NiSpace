@@ -4,7 +4,8 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.legend_handler import HandlerTuple
 
-from .. import lgr
+import logging
+lgr = logging.getLogger(__name__)
 from ..plotting import catplot, nullplot, nice_stats_labels, print_significance
 
 

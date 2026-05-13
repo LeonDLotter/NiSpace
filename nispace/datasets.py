@@ -6,7 +6,9 @@ import os
 
 from requests import Session
 
-from . import lgr, __commit__
+import logging
+lgr = logging.getLogger(__name__)
+from . import __commit__
 from .modules.constants import _PARC_DEFAULT, _SPACE_DEFAULT
 from .stats.misc import zscore_df
 from .utils.utils import _rm_ext, set_log, merge_parcellations

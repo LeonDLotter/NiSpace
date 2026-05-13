@@ -11,7 +11,8 @@ import pandas as pd
 import nibabel as nib
 from neuromaps import images 
 
-from . import lgr
+import logging
+lgr = logging.getLogger(__name__)
 from .utils.utils import set_log
 from .parcellate import Parcellater
 

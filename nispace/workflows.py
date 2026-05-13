@@ -3,7 +3,9 @@ import pandas as pd
 from nilearn.plotting import plot_design_matrix
 import matplotlib.pyplot as plt
 
-from . import lgr, NiSpace
+import logging
+lgr = logging.getLogger(__name__)
+from . import NiSpace
 from .utils.utils import set_log
 from .modules.constants import (_PARC_DEFAULT, 
                                 _COLLECT_DEFAULT,

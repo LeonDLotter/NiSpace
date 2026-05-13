@@ -25,7 +25,8 @@ try:
 except ImportError:
     _BRAINSMASH_AVAILABLE = False
 
-from . import lgr
+import logging
+lgr = logging.getLogger(__name__)
 from .stats.coloc import corr
 from .utils.utils import set_log
 

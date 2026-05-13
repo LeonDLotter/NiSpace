@@ -13,7 +13,8 @@ from nilearn.plotting import plot_surf_stat_map, plot_surf_contours, plot_glass_
 from nilearn.image import new_img_like
 from neuromaps import images
 
-from . import lgr
+import logging
+lgr = logging.getLogger(__name__)
 from .utils.utils import vect_to_vol_arr, set_log
 from .datasets import fetch_parcellation, fetch_template, parcellation_lib, template_lib
 from ._patches import apply_surface_plot_patches

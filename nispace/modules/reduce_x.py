@@ -6,7 +6,8 @@ try:
 except ImportError:
     _FACTOR_ANALYZER_AVAILABLE = False
 
-from .. import lgr
+import logging
+lgr = logging.getLogger(__name__)
 from ..stats.coloc import corr
 
 

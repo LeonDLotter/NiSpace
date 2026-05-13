@@ -7,7 +7,8 @@ from sklearn.decomposition import PCA
 from sklearn.feature_selection import mutual_info_regression
 from tqdm.auto import tqdm
 
-from .. import lgr
+import logging
+lgr = logging.getLogger(__name__)
 from ..utils.utils import _del_from_tuple
 
 # for backwards compatibility
