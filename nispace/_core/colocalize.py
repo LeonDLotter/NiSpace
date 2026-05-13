@@ -8,7 +8,7 @@ lgr = logging.getLogger(__name__)
 from ..utils.utils import nan_detector
 from ..stats.coloc import (pearson, mutualinfo, r2, mlr, dominance, fast_pls1, pcr, lasso, ridge, elasticnet, rank2d)
 from ..stats.misc import rho_to_z, residuals_nan
-from ..modules.constants import _COLOC_METHODS, _COLOC_METHODS_DROPOPT, _COLOC_METHODS_PERM
+from .constants import _COLOC_METHODS, _COLOC_METHODS_DROPOPT, _COLOC_METHODS_PERM
 
 
 def _rank_regress(arr, rank, regress, z=None, zy_matched=False, n_proc=1, verbose=True):

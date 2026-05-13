@@ -7,7 +7,7 @@ import logging
 lgr = logging.getLogger(__name__)
 from . import NiSpace
 from .utils.utils import set_log
-from .modules.constants import (_PARC_DEFAULT, 
+from ._core.constants import (_PARC_DEFAULT, 
                                 _COLLECT_DEFAULT,
                                 _COLOC_METHODS)
 from .datasets import fetch_reference, reference_lib, _check_parcellation

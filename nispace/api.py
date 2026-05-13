@@ -12,14 +12,14 @@ from tqdm import tqdm
 import logging
 lgr = logging.getLogger(__name__)
 from .io import parcellate_data, to_pickle, from_pickle
-from .modules.parcellation import Parcellation
-from .modules.reduce_x import _reduce_dimensions
-from .modules.transform_y import _dummy_code_groups, _num_code_subjects, _get_transform_fun
-from .modules.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats, _rank_regress
-from .modules.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_method,
+from ._core.parcellation import Parcellation
+from ._core.reduce_x import _reduce_dimensions
+from ._core.transform_y import _dummy_code_groups, _num_code_subjects, _get_transform_fun
+from ._core.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats, _rank_regress
+from ._core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_method,
                                _EMPIRICAL_MC_METHODS)
-from .modules.plot import _plot_categorical
-from .modules.constants import _PARCS_DEFAULT, _COLOC_METHODS
+from ._core.plot import _plot_categorical
+from ._core.constants import _PARCS_DEFAULT, _COLOC_METHODS
 from .datasets import fetch_parcellation, fetch_template, _check_parcellation
 from .nulls import get_distance_matrix, _SPIN_METHODS
 from .stats.coloc import *
@@ -604,7 +604,7 @@ class NiSpace:
                 combat_train=None, combat_model=None, combat_kwargs=None,
                 plot_design_between=False,
                 n_proc=None, replace=True, verbose=None):
-        from .modules.clean_y import _clean_y_within, _clean_y_between
+        from ._core.clean_y import _clean_y_within, _clean_y_between
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.clean_y() - Y covariate regression. ***")
         self._check_fit()

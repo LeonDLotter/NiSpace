@@ -16,7 +16,7 @@ from tqdm.auto import tqdm
 # import MoranRandomization function, copied from brainspace, as our default null model
 # brainspace was removed as an dependency because it installs vtk, which is a large 3d rendering
 # library that NiSpace does not use. 
-from .modules.brainspace_moran import MoranRandomization
+from ._brainspace_moran import MoranRandomization
     
 # brainsmash is optional dependency. Moran
 try:

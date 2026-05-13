@@ -1534,7 +1534,7 @@ def brainplot(
 
     # -- validate / load parcellation (tabular path only) --
     if _img_mode is None:
-        from .modules.parcellation import Parcellation as _Parc
+        from ._core.parcellation import Parcellation as _Parc
         if not isinstance(parcellation, _Parc):
             if isinstance(parcellation, str):
                 from .datasets import _check_parcellation, fetch_parcellation as _fp

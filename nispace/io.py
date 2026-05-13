@@ -86,7 +86,7 @@ def parcellate_data(data,
     verbose = set_log(lgr, verbose)
 
     # unpack Parcellation object into flat args (lazy import avoids circular dependency)
-    from .modules.parcellation import Parcellation
+    from ._core.parcellation import Parcellation
     if isinstance(parcellation, Parcellation):
         # bilateral surface parcellating is not yet supported
         if getattr(parcellation, "_bilateral", False) and parcellation._space is not None:
