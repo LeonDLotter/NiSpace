@@ -12,14 +12,14 @@ from tqdm import tqdm
 import logging
 lgr = logging.getLogger(__name__)
 from .io import parcellate_data, to_pickle, from_pickle
-from ._core.parcellation import Parcellation
-from ._core.reduce_x import _reduce_dimensions
-from ._core.transform_y import _dummy_code_groups, _num_code_subjects, _get_transform_fun
-from ._core.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats, _rank_regress
-from ._core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_method,
+from .core.parcellation import Parcellation
+from .core.reduce_x import _reduce_dimensions
+from .core.transform_y import _dummy_code_groups, _num_code_subjects, _get_transform_fun
+from .core.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats, _rank_regress
+from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_method,
                                _EMPIRICAL_MC_METHODS)
-from ._core.plot import _plot_categorical
-from ._core.constants import _PARCS_DEFAULT, _COLOC_METHODS
+from .core.plot import _plot_categorical
+from .core.constants import _PARCS_DEFAULT, _COLOC_METHODS
 from .datasets import fetch_parcellation, fetch_template, _check_parcellation
 from .nulls import get_distance_matrix, _SPIN_METHODS
 from .stats.coloc import beta, elasticnet, lasso, mlr, partialpearson, pearson, ridge

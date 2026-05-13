@@ -9,7 +9,7 @@ from requests import Session
 import logging
 lgr = logging.getLogger(__name__)
 from . import __commit__
-from ._core.constants import _PARC_DEFAULT, _SPACE_DEFAULT
+from .core.constants import _PARC_DEFAULT, _SPACE_DEFAULT
 from .stats.misc import zscore_df
 from .utils.utils import _rm_ext, set_log, merge_parcellations
 from .utils.utils_datasets import get_file
@@ -450,7 +450,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
     
     # ---- NEW PATH: space=None → return multi-space Parcellation object ----
     if space is None:
-        from ._core.parcellation import Parcellation
+        from .core.parcellation import Parcellation
         if isinstance(parc, list):
             parc_obj = Parcellation.from_nispace_library(
                 parc,
@@ -1042,7 +1042,7 @@ def fetch_reference(dataset: str,
     verbose = set_log(lgr, verbose)
 
     # --- handle Parcellation object passed as parcellation= ---
-    from ._core.parcellation import Parcellation as _Parcellation
+    from .core.parcellation import Parcellation as _Parcellation
     if isinstance(parcellation, _Parcellation):
         if parcellation._is_combined:
             parcellation = (parcellation._cx_name or "") + (parcellation._sc_name or "")
@@ -1207,7 +1207,7 @@ def fetch_reference(dataset: str,
         )
         # bilateral: average matched LH/RH columns by label prefix
         if bilateral:
-            from ._core.parcellation import _bilateral_labels_match
+            from .core.parcellation import _bilateral_labels_match
             ok, lh_idc, rh_idc, bilateral_cols, unmatched = _bilateral_labels_match(
                 data.columns.tolist()
             )
