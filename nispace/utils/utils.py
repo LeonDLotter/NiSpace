@@ -351,20 +351,47 @@ def vect_to_vol_arr(vect, parc_arr, parc_idc, bg_value=0):
         vect_arr_1d[parc_arr_1d==idx] = vect[i]
     return vect_arr_1d.reshape(parc_arr.shape)
 
+def _resolve_bg_array(bg_spec, auto_value=np.nan):
+    """Resolve a background_value spec to a sorted float64 array for vol_to_vect_arr.
+
+    Parameters
+    ----------
+    bg_spec : list
+        Already-normalised list (str 'auto', None, or float entries).
+    auto_value : float
+        Pre-computed auto-detected background value; used wherever 'auto'/None
+        appear in bg_spec. Ignored (not inserted) when NaN.
+    """
+    values = set()
+    for item in bg_spec:
+        if item in (None, "auto"):
+            if not np.isnan(auto_value):
+                values.add(float(auto_value))
+        else:
+            values.add(float(item))
+    return np.array(sorted(values), dtype=np.float64)
+
+
 @njit
-def vol_to_vect_arr(vol_arr, parc_arr, parc_idc, bg_value=np.nan):
+def vol_to_vect_arr(vol_arr, parc_arr, parc_idc, bg_values):
+    """Aggregate vol_arr into parcel means, excluding NaN and any values in bg_values.
+
+    Parameters
+    ----------
+    bg_values : np.ndarray of float64
+        Values to exclude in addition to NaN. Pass an empty array for NaN-only
+        exclusion (equivalent to nanmean).
+    """
     vol_arr2d = vol_arr.flatten()
     parc_arr2d = parc_arr.flatten().astype(vol_arr.dtype)
     parc_idc = parc_idc.astype(vol_arr.dtype)
     vect = np.zeros(len(parc_idc), dtype=vol_arr.dtype)
-    filter_bg = not np.isnan(bg_value)
     for i, idx in enumerate(parc_idc):
         in_parcel = parc_arr2d == idx
         not_nan = ~np.isnan(vol_arr2d)
-        if filter_bg:
-            idc = in_parcel & not_nan & (vol_arr2d != bg_value)
-        else:
-            idc = in_parcel & not_nan
+        idc = in_parcel & not_nan
+        for bg in bg_values:
+            idc = idc & (vol_arr2d != bg)
         vals = vol_arr2d[idc]
         vect[i] = vals.mean() if len(vals) > 0 else np.nan
     return vect

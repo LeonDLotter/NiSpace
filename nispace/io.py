@@ -25,8 +25,9 @@ def parcellate_data(data,
                     parc_space=None,
                     parc_hemi=None,
                     resampling_target="data",
-                    ignore_background_data=False,
-                    drop_background_parcels=True,
+                    ignore_background_data=True,
+                    background_value=["auto", 0.0],
+                    drop_background_parcels=False,
                     min_num_valid_datapoints=None, 
                     min_fraction_valid_datapoints=None,
                     return_parc=False,
@@ -55,8 +56,25 @@ def parcellate_data(data,
         Labels for the input data.
     data_space : str
         The space in which the input data is defined.
+    ignore_background_data : bool
+        Whether to exclude background voxels from parcel-mean computation.
+        When True, values specified by `background_value` are masked before
+        averaging, so they do not dilute parcel means. Default: True
+    background_value : float, list, set, array, or 'auto'
+        Value(s) to treat as background when `ignore_background_data=True`.
+        Accepts a scalar, or any collection of scalars and/or the sentinel
+        string ``'auto'``/``None``:
+        - float (e.g. ``0.0``): exclude that specific value
+        - ``'auto'`` or ``None``: auto-detect from border voxels (volumetric)
+          or medial wall median (surface)
+        - list/set/array: any combination of the above
+        Default: ``['auto', 0.0]`` (excludes detected background and zeros)
     drop_background_parcels : bool
-        Whether to drop parcels that contain only background intensity.
+        Whether to set parcels whose mean equals `background_value` to NaN
+        after aggregation. Only meaningful when `ignore_background_data` is
+        False: if `ignore_background_data=True`, all-background parcels
+        already return NaN from aggregation (no valid values → empty mean),
+        making this flag redundant. Default: False
     min_num_valid_datapoints : int, optional
         Minimum number of valid datapoints required per parcel.
     min_fraction_valid_datapoints : float, optional
@@ -86,7 +104,7 @@ def parcellate_data(data,
     verbose = set_log(lgr, verbose)
 
     # unpack Parcellation object into flat args (lazy import avoids circular dependency)
-    from ._core.parcellation import Parcellation
+    from .core.parcellation import Parcellation
     if isinstance(parcellation, Parcellation):
         # bilateral surface parcellating is not yet supported
         if getattr(parcellation, "_bilateral", False) and parcellation._space is not None:
@@ -182,7 +200,7 @@ def parcellate_data(data,
                 space="mni152" if "mni" in data_space.lower() else data_space,
                 hemi=parc_hemi,
                 ignore_background_data=ignore_background_data,
-                background_value=None,
+                background_value=background_value,
                 fill_dropped=True,
                 background_parcels_to_nan=drop_background_parcels,
                 min_num_valid_datapoints=min_num_valid_datapoints,
@@ -201,6 +219,11 @@ def parcellate_data(data,
                     parcellater._parc_idc_excl)
         
         # extract data (in parallel)
+        lgr.info(
+            f"Background (bg) handling: ignoring bg: {ignore_background_data}"
+            + (f" (bg value: {background_value})" if ignore_background_data else "")
+            + f"; dropping bg parcels: {drop_background_parcels}"
+        )
         lgr.info(f"Parcellating imaging data.")
     
         # run  

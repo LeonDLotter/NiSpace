@@ -25,7 +25,7 @@ ALIAS = dict(
     FSLR='fsLR', CIVET='civet'
 )
 
-from nispace.utils.utils import get_background_value, vol_to_vect_arr
+from nispace.utils.utils import get_background_value, vol_to_vect_arr, _resolve_bg_array
 
 def _gifti_to_array(gifti):
     """ Converts tuple of `gifti` to numpy array
@@ -110,8 +110,8 @@ class Parcellater():
         return self
 
     def transform(self, data, space, ignore_background_data=True,
-                  background_value=None, hemi=None, 
-                  fill_dropped=True, background_parcels_to_nan=True,
+                  background_value=["auto", 0.0], hemi=None,
+                  fill_dropped=True, background_parcels_to_nan=False,
                   min_num_valid_datapoints=None, min_fraction_valid_datapoints=None):
         """
         Applies parcellation to `data` in `space`
@@ -127,20 +127,25 @@ class Parcellater():
             dataset then this specifies which hemisphere. If not specified it
             is assumed that `data` is (L, R) hemisphere. Ignored if `space` is
             'MNI152'. Default: None
-        ignore_background_data: bool
-            Specifies whether the background data values should be ignored
-            when computing the average `data` within each parcel. If set to
-            True and `background_value` is set to None, the background_value is
-            estimated from the data: if there are NaNs in the data, the
-            background value is set to NaN. Otherwise, it is estimated as
-            the median of the values on the border of the images for
-            volumetric images or as the median of the values within the medial
-            wall for surface images. The background value can also be set
-            manually using the `background_value` parameter. Default: False
-        background_value: float
-            Specifies the background value to ignore when computing the
-            averages and when `ignore_background_data` is True.
-            Default: None
+        ignore_background_data : bool
+            Whether to exclude background voxels/vertices from parcel-mean
+            computation. When True, values specified by `background_value` are
+            masked before averaging. Default: True
+        background_value : float, list, set, array, or 'auto'
+            Value(s) to treat as background when `ignore_background_data=True`.
+            Accepts a scalar, or any collection of scalars and/or the sentinel
+            string ``'auto'``/``None``:
+            - float (e.g. ``0.0``): exclude that specific value
+            - ``'auto'`` or ``None``: auto-detect from border voxels (volumetric)
+              or medial wall median (surface)
+            - list/set/array: any combination of the above
+            Default: ``['auto', 0.0]`` (excludes detected background and zeros)
+        background_parcels_to_nan : bool
+            Whether to set parcels whose mean equals the single resolved
+            background value to NaN after aggregation. Only meaningful when
+            `ignore_background_data=False` and `background_value` resolves to
+            exactly one scalar; otherwise redundant (all-background parcels
+            already return NaN from empty-mean aggregation). Default: False
 
         Returns
         -------
@@ -187,78 +192,46 @@ class Parcellater():
         self._parc_idc_bg = []
         self._parc_idc_excl = []
         
+        # normalise background_value spec to a plain list once, used by both branches
+        bg_spec = list(background_value) if isinstance(background_value, (list, tuple, np.ndarray, set)) \
+                  else [background_value]
+        needs_auto = ignore_background_data and any(v in (None, "auto") for v in bg_spec)
+
         if ((self.resampling_target == 'data'
              and space.lower() == 'mni152')
                 or (self.resampling_target == 'parcellation'
                     and self._volumetric)):
             data = nib.concat_images([nib.squeeze_image(data)])
-            # if ignore_background_data:
-            #     if background_value is None:
-            #         background_value = get_background_value(data)
-            #     if background_value in [np.nan, "nan"]:
-            #         mask_img = math_img("~np.isnan(data)", data=data)
-            #     else:
-            #         mask_img = math_img(f"data != {background_value}", data=data)
-            #     #     background_value = "np.nan" if np.isnan(background_value) else background_value
-            #     #     mask_img = math_img(f"data != {background_value}", data=data)
-            #     # else:
-            #     #     mask_img = new_img_like(data, data.get_fdata() != background_value)
-            # else:
-            #     mask_img = None
-            if ignore_background_data and background_value is None:
-                background_value = get_background_value(data)
-                
-            # parcellate
             darr = data.get_fdata()
-            _bg = background_value if background_value is not None else np.nan
-            parcellated = vol_to_vect_arr(darr, self._parc_arr, self._parc_idc, _bg)
-            # masker = NiftiLabelsMasker(
-            #     parc, mask_img=mask_img, resampling_target=None
-            # )
-            # parcellated = masker.fit_transform(data).squeeze()
-            
-            # take care of parcels dropped by nilearn
-            # we use an intermediate pandas array because indexing is simple here
-            # if fill_dropped:
-            #     # indices 
-            #     idc_orig = np.asarray(self.parcellation_idc).astype(np.int32)      
-            #     idc_resampled = np.asarray(masker.labels_).astype(np.int32)
-            #     idc_resampled = idc_resampled[idc_resampled != 0] # indices in masker include bg 0
-            #     # new array with original indices
-            #     parcellated_series = pd.Series(index=idc_orig)
-            #     # write data into original positions, leaving dropped parcels with nan
-            #     parcellated_series.loc[idc_resampled] = parcellated
-            #     # replace np array
-            #     parcellated = np.array(parcellated_series)
-            #     # save stuff
-            #     self._parc_idc = idc_resampled
-            #     self._parc_idc_dropped = list( set(idc_orig) ^ set(idc_resampled) )  
-            
+            auto_value = get_background_value(data) if needs_auto else np.nan
+            bg_arr = _resolve_bg_array(bg_spec, auto_value) if ignore_background_data \
+                     else np.array([], dtype=np.float64)
+            parcellated = vol_to_vect_arr(darr, self._parc_arr, self._parc_idc, bg_arr)
+
         else:
             if not self._volumetric:
                 for n, _ in enumerate(parc):
                     parc[n].labeltable.labels = \
                         self.parcellation[n].labeltable.labels
             darr = _gifti_to_array(data)
-            if ignore_background_data and background_value is None:
+            if needs_auto:
                 density, = _estimate_density((data,), hemi=hemi)
-                if self.resampling_target in ('data', None):
-                    mask_space = space
-                elif self.resampling_target == 'parcellation':
-                    mask_space = self.space
+                mask_space = space if self.resampling_target in ('data', None) else self.space
                 atlas_medialwall = fetch_atlas(mask_space, density)['medial']
                 atlas_medialwall = atlas_medialwall[0] if hemi == 'L' \
                     else atlas_medialwall[1] if hemi == 'R' else atlas_medialwall
                 nomedialwall = load_data(atlas_medialwall)
-                background_value = np.median(darr[nomedialwall == 0])
-            #parcellated = vertices_to_parcels(darr, parc, background=background_value)
+                auto_value = np.median(darr[nomedialwall == 0])
+            else:
+                auto_value = np.nan
             parc_arr = _gifti_to_array(parc)
-            _bg = background_value if background_value is not None else np.nan
-            parcellated = vol_to_vect_arr(darr, parc_arr, self._parc_idc, _bg)
-            
-        # fill parcels with background intensity with nan, works only if background_value exists
-        if background_parcels_to_nan and background_value is not None:
-            bg_idc = parcellated == background_value
+            bg_arr = _resolve_bg_array(bg_spec, auto_value) if ignore_background_data \
+                     else np.array([], dtype=np.float64)
+            parcellated = vol_to_vect_arr(darr, parc_arr, self._parc_idc, bg_arr)
+
+        # drop parcels whose mean equals the background value — only for the scalar case
+        if background_parcels_to_nan and len(bg_arr) == 1:
+            bg_idc = parcellated == bg_arr[0]
             parcellated[bg_idc] = np.nan
             self._parc_idc_bg = list(self.parcellation_idc[bg_idc])
             
@@ -326,8 +299,8 @@ class Parcellater():
         return img
 
     def fit_transform(self, data, space, ignore_background_data=True,
-                      background_value=None, hemi=None, 
-                      fill_dropped=True, background_parcels_to_nan=True,
+                      background_value=["auto", 0.0], hemi=None,
+                      fill_dropped=True, background_parcels_to_nan=False,
                       min_num_valid_datapoints=None, min_fraction_valid_datapoints=None):
                       
         """ Prepare and perform parcellation of `data`

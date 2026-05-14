@@ -1,8 +1,10 @@
 ## REPO FOLDERS/FILES ################################
 
 # private folders /files
-_*/
+/_*/
+.claude/
 */_archive/
+*/*/_archive/
 datasets/nispace-*
 .osfcli*
 osf*

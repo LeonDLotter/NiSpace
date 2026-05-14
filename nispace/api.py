@@ -288,13 +288,30 @@ class NiSpace:
     
     def fit(self, **kwargs):
         """
-        "Fit" the NiSpace class instance, i.e., check input and apply parcellation if necessary. 
+        "Fit" the NiSpace class instance, i.e., check input and apply parcellation if necessary.
         Input and parameters are set on initialization.
-        
+
         Parameters
         ----------
-        None
-        
+        **kwargs
+            Any keyword argument accepted by :func:`parcellate_data` can be
+            passed here and will override that function's defaults. The three
+            most commonly needed ones are:
+
+            ignore_background_data : bool
+                Whether to exclude background voxels from parcel-mean
+                computation. Default: True
+            background_value : float, list, set, array, or 'auto'
+                Value(s) treated as background. Scalar, ``'auto'`` (border-voxel
+                auto-detection), ``None`` (same as ``'auto'``), or any
+                collection of the above. Default: ``['auto', 0.0]``
+            drop_background_parcels : bool
+                Whether to set all-background parcels to NaN after
+                aggregation. Redundant when ``ignore_background_data=True``
+                because those parcels already return NaN from empty-mean
+                aggregation; only useful with ``ignore_background_data=False``.
+                Default: False
+
         Returns
         -------
         self : object
@@ -604,7 +621,7 @@ class NiSpace:
                 combat_train=None, combat_model=None, combat_kwargs=None,
                 plot_design_between=False,
                 n_proc=None, replace=True, verbose=None):
-        from ._core.clean_y import _clean_y_within, _clean_y_between
+        from .core.clean_y import _clean_y_within, _clean_y_between
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.clean_y() - Y covariate regression. ***")
         self._check_fit()
