@@ -742,7 +742,12 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
         if spin_mat is not None and spin_method == "original":
             if isinstance(spin_mat, tuple) and len(spin_mat) == 2:
                 spins_lh, spins_rh = spin_mat
-                lgr.info("Using provided precomputed spin matrix.")
+                if spins_lh.shape[1] < n_nulls:
+                    lgr.warning(f"Precomputed spin matrix has {spins_lh.shape[1]} spins but "
+                                f"n_perm={n_nulls} requested. Regenerating.")
+                    spin_mat = None
+                else:
+                    lgr.info("Using provided precomputed spin matrix.")
             else:
                 lgr.warning("Provided 'spin_mat' must be a tuple (spins_lh, spins_rh). Regenerating.")
                 spin_mat = None
