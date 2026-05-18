@@ -20,15 +20,18 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
                    seed=None, n_proc=-1, dtype=np.float32, verbose=True):
 
     # case null maps given
+    _custom = False
     if null_maps is not None:
         if not isinstance(null_maps, dict):
             lgr.warning("Provided null maps are not a dictionary. Will re-generate.")
             null_maps = None
         else:
             lgr.info(f"Using provided null maps.")
+            _custom = True
 
     # case null maps not given but existing
     elif (null_maps is None) & (use_existing_maps==True):
+        null_method_stored = None
         try:
             permute, null_method_stored, null_maps = \
                 [nispace_nulls[k] for k in ["maps_null_which", "maps_null_method", "maps_null"]]
@@ -45,7 +48,7 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
             if any(np.array([null_maps[x].shape[0] for x in data_obs.index]) < n_perm):
                 lgr.warning(f"Number of null maps < n_perm ({n_perm}). Will re-generate.")
                 null_maps = None
-        if null_method_stored != null_method:
+        if not _custom and null_method_stored != null_method:
             lgr.warning("Null method changed. Will re-generate.")
             null_maps = None
 
