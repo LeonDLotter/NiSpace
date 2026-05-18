@@ -1150,13 +1150,19 @@ class NiSpace:
         ## check if fit was run
         self._check_fit()
 
-        ## map permutation requires a parcellation
+        ## map permutation: raise early only when parc is genuinely needed
         if "maps" in ([what] if isinstance(what, str) else what) and self._parc is None:
-            lgr.critical_raise(
-                "Map permutation requires a parcellation. "
-                "Provide one via NiSpace(parcellation=...).",
-                ValueError,
-            )
+            from .nulls import _SPIN_METHODS as _sm
+            _has_nulls = maps_nulls is not None or (self._nulls.get("maps_null") is not None)
+            _has_dist  = dist_mat is not None
+            _is_spin   = maps_method in _sm if maps_method else False
+            if not (_has_nulls or (_has_dist and not _is_spin)):
+                lgr.critical_raise(
+                    "Map null map generation requires a parcellation. Provide one via "
+                    "NiSpace(parcellation=...), or supply pre-computed null maps (maps_nulls=) "
+                    "or a distance matrix (dist_mat=) with a non-spin null method.",
+                    ValueError,
+                )
         
         ## check for allowed permutation combinations
         # check what variable
@@ -1244,7 +1250,7 @@ class NiSpace:
             "lr_mirror_dist_mat": False,
             "cx_sc_minmax_scale": False,
             "parc_resample": 2,
-            "parc_name": self._parc._name,
+            "parc_name": self._parc._name if self._parc else None,
         }
         for k in [k for k in kwargs.keys() if k.startswith("maps_")]:
             maps_kwargs[k.removeprefix("maps_")] = kwargs.pop(k)
@@ -1252,25 +1258,30 @@ class NiSpace:
         # TODO: combined spin+moran: get_null_space() currently returns a single (space, method).
         # For combined parcellations it should return a split strategy and permute() should
         # pass a sc-only dist_mat to _get_null_maps alongside the cx spin path.
-        if maps_kwargs["null_method"] is None:
-            null_space, null_method = self._parc.get_null_space()
-            maps_kwargs["null_method"] = null_method
-            lgr.info(f"Using default null method '{null_method}' "
-                     f"(parcellation null space: '{null_space}').")
+        if self._parc is not None:
+            if maps_kwargs["null_method"] is None:
+                null_space, null_method = self._parc.get_null_space()
+                maps_kwargs["null_method"] = null_method
+                lgr.info(f"Using default null method '{null_method}' "
+                         f"(parcellation null space: '{null_space}').")
+            else:
+                null_space, _ = self._parc.get_null_space()
+            # ensure null_space is loaded and fitted so backward-compat properties work in _get_null_maps
+            self._parc._ensure_image_loaded(null_space)
+            if null_space not in self._parc._hemi_dict:
+                self._parc._fit_space(null_space)
+            if self._parc._space is None:
+                self._parc._space = null_space
+            # pass precomputed spin matrix for the resolved null space
+            if maps_kwargs["null_method"] in {"alexander_bloch", "spin"}:
+                maps_kwargs["spin_mat"] = (
+                    self._parc_spin_mat
+                    or self._parc.get_spin_mat(null_space)
+                )
         else:
-            null_space, _ = self._parc.get_null_space()
-        # ensure null_space is loaded and fitted so backward-compat properties work in _get_null_maps
-        self._parc._ensure_image_loaded(null_space)
-        if null_space not in self._parc._hemi_dict:
-            self._parc._fit_space(null_space)
-        if self._parc._space is None:
-            self._parc._space = null_space
-        # pass precomputed spin matrix for the resolved null space
-        if maps_kwargs["null_method"] in {"alexander_bloch", "spin"}:
-            maps_kwargs["spin_mat"] = (
-                self._parc_spin_mat
-                or self._parc.get_spin_mat(null_space)
-            )
+            if maps_kwargs["null_method"] is None:
+                maps_kwargs["null_method"] = "moran"
+                lgr.info("No parcellation set; defaulting null method to 'moran'.")
         # groups permutation
         groups_kwargs = {
             "paired": "auto",
