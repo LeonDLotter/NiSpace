@@ -1345,16 +1345,21 @@ class NiSpace:
         lgr.info(f"Permutation of: {perm_info}.")
             
         ## settings
+        _rank_kwarg = kwargs.pop("rank", None)
         method, X_reduction, Y_transform, xsea, rank, zy_matched, regress_z = self._get_last(
-            method=method, 
-            X_reduction=X_reduction, 
-            Y_transform=Y_transform, 
+            method=method,
+            X_reduction=X_reduction,
+            Y_transform=Y_transform,
             xsea=xsea,
             rank=None,
             zy_matched=None,
             regress_z=None,
         )
-        
+        if _rank_kwarg is not None:
+            rank = _rank_kwarg
+        if "spearman" in method:
+            rank = True
+
         # specific settings via kwargs
         # distance matrix generation 
         dist_mat_kwargs = {
@@ -1427,11 +1432,20 @@ class NiSpace:
         
         ## check if colocalize was run
         xsea = True if ("sets" in what) or (xsea == True) else False
-        if not self._check_colocalize(method, None, X_reduction, Y_transform, xsea, 
+        if not self._check_colocalize(method, None, X_reduction, Y_transform, xsea,
                                       raise_error=False):
             lgr.warning(f"'{method}' colocalization was not run before. Running now.")
             self.colocalize(method, X_reduction, Y_transform, **coloc_kwargs)
-        
+            # colocalize() resolves rank/regress_z/zy_matched through its own conditional
+            # logic (partial methods, zy_matched, clean_y interactions, etc.).  Refresh
+            # local variables so the null-map pre-ranking/regression block below uses
+            # exactly the same settings as the observed colocalization just computed.
+            rank       = self._last_settings["rank"]
+            regress_z  = self._last_settings["regress_z"] or ""
+            zy_matched = self._last_settings["zy_matched"]
+            if "spearman" in method:
+                rank = True
+
         ## get observed data
         # X
         if not X_reduction:
