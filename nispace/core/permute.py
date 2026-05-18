@@ -17,7 +17,7 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
                    lr_mirror_dist_mat=False, split_hemi=None, split_cxsc=False,
                    cx_sc_minmax_scale=False,
                    parc_name=None,
-                   seed=None, n_proc=-1, dtype=np.float32, verbose=True):
+                   seed=None, n_proc=-1, dtype=np.float32, verbose=True, **kwargs):
 
     # case null maps given
     _custom = False
@@ -125,9 +125,11 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
             split_cxsc=split_cxsc,
             cx_sc_minmax_scale=cx_sc_minmax_scale,
             parc_name=parc_name,
+            dtype=dtype,
             n_proc=n_proc,
             seed=seed,
-            verbose=verbose
+            verbose=verbose,
+            **kwargs
         )
 
         # cache spin or dist mat

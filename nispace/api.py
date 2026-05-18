@@ -1144,6 +1144,131 @@ class NiSpace:
                 p_tails=None, p_from_average_y_coloc="auto",
                 n_proc=None, seed=None, store=True, verbose=None, force_dict=False,
                 **kwargs):
+        """
+        Estimate exact non-parametric p-values via permutation testing.
+
+        Parameters
+        ----------
+        what : str or list of str
+            What to permute. One or more of:
+            ``"maps"`` — spatially constrained null maps for X and/or Y brain maps;
+            ``"groups"`` — Y group labels (requires ``Y_transform``);
+            ``"sets"`` — X set membership labels (requires XSEA).
+            Allowed combinations: ``["maps", "groups"]``, ``["maps", "sets"]``,
+            ``["groups", "sets"]``. Three-way simultaneous permutation is not
+            supported and falls back to ``["groups", "sets"]``.
+        method : str, optional
+            Colocalization method. Defaults to the method used in the last
+            :meth:`colocalize` call.
+        X_reduction : str, optional
+            X dimensionality-reduction label. Defaults to last used.
+        Y_transform : str, optional
+            Y transformation label. Defaults to last used.
+        xsea : bool, optional
+            Whether to run in XSEA mode. Defaults to last used.
+        n_perm : int, optional
+            Number of permutations. Default is 10000.
+        maps_which : str or list of str, optional
+            Which data to generate null maps for: ``"X"``, ``"Y"``, or
+            ``["X", "Y"]``. Default is ``"X"``.
+        maps_nulls : dict, optional
+            Pre-computed null maps as ``{map_name: array(n_perm, n_parcels)}``.
+            Bypasses null map generation entirely when provided and valid.
+        maps_method : str, optional
+            Null map generation method. Auto-selected from the parcellation when
+            not set. Options: ``"moran"`` (default for volumetric),
+            ``"alexander_bloch"`` / ``"spin"`` (surface), ``"burt2018"``,
+            ``"burt2020"``, ``"random"``.
+        dist_mat : array-like of shape (n_parcels, n_parcels), optional
+            Pre-computed geodesic distance matrix. Generated from the
+            parcellation if not provided (and required by the null method).
+        sets_X_background : array-like of shape (n_maps, n_parcels), optional
+            Background X map pool for set permutation. If not provided, the
+            unique observed X maps are used as the background.
+        p_tails : str or dict, optional
+            P-value tail(s). ``"two"``, ``"upper"``, or ``"lower"``. Can be a
+            dict keyed by statistic name (e.g. ``{"rho": "two"}``). Defaults to
+            method-appropriate tails.
+        p_from_average_y_coloc : str or bool, optional
+            How to aggregate across Y maps before computing p-values:
+            ``"mean"`` or ``"median"`` (average first, one p-value per X map),
+            ``False`` (one p-value per Y×X pair),
+            ``"auto"`` (default) — ``False`` for single-Y, ``"mean"`` otherwise.
+        n_proc : int, optional
+            Number of parallel processes. Defaults to the value set at init.
+        seed : int, optional
+            Random seed for reproducibility.
+        store : bool, optional
+            Store p-values and z-scores in the object. Default is True.
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+        force_dict : bool, optional
+            Always return a dict even when the result has a single statistic.
+
+        Other Parameters
+        ----------------
+        Keyword arguments are routed by prefix to the appropriate subsystem:
+
+        **maps_\\*** → null map generation (:func:`_get_null_maps` /
+        :func:`generate_null_maps`). The ``maps_`` prefix is stripped before
+        forwarding. Named parameters of ``_get_null_maps`` are matched first;
+        any remainder is forwarded through to the individual null method
+        function.
+
+            maps_centroids : bool
+                Use parcel centroids instead of full parcel surfaces when
+                building the geodesic distance matrix. Default False.
+            maps_parc_resample : int
+                Voxel size (mm) to which the parcellation is resampled before
+                distance-matrix computation. Default 2.
+            maps_lr_mirror_dist_mat : bool
+                Mirror the left-hemisphere distance matrix to the right
+                hemisphere. Default False.
+            maps_split_hemi : bool or None
+                Generate null maps separately per hemisphere. Default None.
+            maps_split_cxsc : bool
+                Generate null maps separately for cortex and subcortex.
+                Default False.
+            maps_cx_sc_minmax_scale : bool
+                Min–max scale cortex and subcortex null maps to the same range
+                before merging. Default False.
+            maps_procedure : str
+                Moran randomisation procedure: ``"singleton"`` (default) or
+                ``"all"``.
+            maps_joint : bool
+                Moran joint randomisation. Default True.
+
+        **distmat_\\*** → distance-matrix generation (``_get_dist_mat``). The
+        ``distmat_`` prefix is stripped before forwarding.
+
+            distmat_centroids : bool
+                Same meaning as ``maps_centroids`` but for the CV distance
+                matrix.
+            distmat_parc_resample : int
+                Resampling voxel size for CV distance matrix. Default 2.
+
+        **groups_\\*** → group-label permutation (:func:`permute_groups`). The
+        ``groups_`` prefix is stripped before forwarding.
+
+            groups_paired : bool or "auto"
+                Whether to perform paired permutation (requires a subjects
+                vector). ``"auto"`` (default) infers pairing from the Y
+                transform.
+            groups_strategy : str
+                Permutation strategy: ``"proportional"`` (default) or
+                ``"random"``.
+
+        Remaining kwargs (no recognised prefix) are collected into the
+        colocalization kwargs and forwarded to :meth:`colocalize` if it has
+        not been called yet.
+
+        Returns
+        -------
+        p_values : DataFrame or dict of DataFrames
+            P-values indexed by Y labels × X labels.  A dict is returned when
+            the colocalization method produces multiple statistics or when
+            ``force_dict=True``.
+        """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.permute() - Estimate exact non-parametric p values. ***")
 
