@@ -477,6 +477,12 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
             )
         if bilateral:
             parc_obj.make_bilateral()
+        # hemisphere selection: normalise hemi arg and call select_hemi if single hemi
+        _hemi_set = set([hemi] if isinstance(hemi, str) else list(hemi))
+        if not _hemi_set >= {"L", "R"}:
+            h = next(iter(_hemi_set), None)
+            if h in ("L", "R"):
+                parc_obj.select_hemi(h, verbose=verbose)
         return parc_obj
 
     # ---- LEGACY PATH: space explicitly given → return tuple of values ----
@@ -1030,6 +1036,7 @@ def fetch_reference(dataset: str,
                     set_specificity: Union[None, float] = None,
                     parcellation: str = None,
                     bilateral: bool = False,
+                    hemi: Union[str, List[str]] = None,
                     standardize_parcellated: bool = False,
                     return_metadata: bool = False,
                     print_references: bool = True,
@@ -1250,12 +1257,35 @@ def fetch_reference(dataset: str,
             for m in maps_avail:
                 data.append(tuple([
                     get_file(
-                        map_dir / m / f"{m}_space-{space}_hemi-{hemi}.%s", **reference_lib[dataset]["map"][m][space][hemi], 
+                        map_dir / m / f"{m}_space-{space}_hemi-{_h}.%s", **reference_lib[dataset]["map"][m][space][_h],
                         **get_file_kwargs,
                     )
-                    for hemi in reference_lib[dataset]["map"][m][space].keys()
+                    for _h in reference_lib[dataset]["map"][m][space].keys()
                 ]))
         
+    # Hemisphere filter
+    if hemi is not None:
+        _hemi_set = set([hemi] if isinstance(hemi, str) else list(hemi))
+        if not _hemi_set >= {"L", "R"}:
+            _h_keep = next(iter(_hemi_set), None)
+            if _h_keep in ("L", "R"):
+                if isinstance(data, pd.DataFrame):
+                    _prefix = "hemi-L_" if _h_keep == "L" else "hemi-R_"
+                    _keep_cols = [c for c in data.columns if str(c).startswith(_prefix)]
+                    if _keep_cols:
+                        data = data[_keep_cols]
+                        lgr.info(f"hemi='{_h_keep}': kept {len(_keep_cols)} parcels.")
+                    else:
+                        lgr.warning(
+                            f"hemi='{_h_keep}': no columns with prefix '{_prefix}' found. "
+                            "Returning all columns."
+                        )
+                else:
+                    lgr.warning(
+                        f"hemi='{_h_keep}' filtering is only supported for parcellated data "
+                        "(parcellation= must be set). Full images returned."
+                    )
+
     # Print references
     # for maps if "pet", or for sets if "mrna"
     if return_metadata or print_references:

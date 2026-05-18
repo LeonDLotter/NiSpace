@@ -379,27 +379,54 @@ def _get_surface_atlas(parc_space, density):
         )
 
 
-def generate_spins(parc, parc_space, n_perm=1000, method="original", seed=None):
-    """Generate spin resampling indices for a bilateral surface parcellation.
+def generate_spins(parc, parc_space, n_perm=1000, method="original", seed=None,
+                   parc_hemi=None):
+    """Generate spin resampling indices for a surface parcellation.
 
-    Returns a tuple (spins_lh, spins_rh) of int32 arrays with shape (n_parcels_hemi, n_perm),
-    where RH indices are local to [0, n_rh).
+    Supports bilateral (tuple of two GiftiImages) and single-hemisphere
+    (single GiftiImage) parcellations.
+
+    Returns a tuple (spins_lh, spins_rh) of int32 arrays.  For bilateral
+    parcellations both have shape (n_parcels_hemi, n_perm).  For a
+    single-hemisphere parcellation the unused hemisphere gets shape (0, n_perm).
+    RH indices are local to [0, n_rh).
     """
-    if not isinstance(parc, tuple):
+    is_bilateral = isinstance(parc, tuple)
+    is_unilateral = isinstance(parc, nib.GiftiImage)
+
+    if not (is_bilateral or is_unilateral):
         lgr.critical_raise(
-            "Spin tests require a bilateral surface parcellation (tuple of two GiftiImages).",
-            ValueError
+            "Spin tests require a surface parcellation: either a bilateral "
+            "(lh_img, rh_img) tuple or a single GiftiImage.",
+            ValueError,
         )
 
     density = _img_density_for_neuromaps(parc)
     atlas, _ = _get_surface_atlas(parc_space, density)
     spheres = atlas["sphere"]
 
-    centroids, hemiid = get_parcel_centroids(
-        surfaces=(spheres[0], spheres[1]),
-        parcellation=(parc[0], parc[1]),
-        method="surface",
-    )
+    if is_bilateral:
+        centroids, hemiid = get_parcel_centroids(
+            surfaces=(spheres[0], spheres[1]),
+            parcellation=(parc[0], parc[1]),
+            method="surface",
+        )
+    else:
+        # single hemisphere — determine which side
+        keep_hemi = None
+        if parc_hemi is not None:
+            h = parc_hemi[0] if isinstance(parc_hemi, (list, tuple)) else parc_hemi
+            keep_hemi = h if h in ("L", "R") else None
+        if keep_hemi is None:
+            keep_hemi = "L"
+            lgr.warning("generate_spins: parc_hemi not specified for unilateral image; assuming 'L'.")
+
+        centroids = find_surf_parc_centroids(
+            parc, parc_space=parc_space, parc_hemi=[keep_hemi], parc_density=density,
+        )
+        # hemiid: 0 = LH, 1 = RH — tells gen_spinsamples the geometry of the rotation
+        hemiid = np.zeros(len(centroids), dtype=int) if keep_hemi == "L" \
+            else np.ones(len(centroids), dtype=int)
 
     spins = gen_spinsamples(
         coords=centroids,
@@ -425,6 +452,8 @@ def apply_spins(data_1d, spins_lh, spins_rh, idc_lh, idc_rh, n_perm=None):
         n_perm = spins_lh.shape[1]
     n_parcels = len(data_1d)
     null_data = np.full((n_perm, n_parcels), np.nan, dtype=data_1d.dtype)
+    idc_lh = np.asarray(idc_lh, dtype=int)
+    idc_rh = np.asarray(idc_rh, dtype=int)
     data_lh = data_1d[idc_lh]
     data_rh = data_1d[idc_rh]
     for k in range(n_perm):
@@ -692,12 +721,12 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
     if method in _SPIN_METHODS:
         spin_method = _SPIN_METHOD_MAP[method]
 
-        # validate: bilateral surface parcellation required
-        if not isinstance(parcellation, tuple):
+        # validate: surface parcellation required (bilateral tuple or unilateral GiftiImage)
+        if not isinstance(parcellation, (tuple, nib.GiftiImage)):
             lgr.critical_raise(
-                f"Null method '{method}' requires a bilateral surface parcellation. "
-                f"Volumetric and single-hemisphere parcellations are not supported.",
-                ValueError
+                f"Null method '{method}' requires a surface parcellation. "
+                f"Volumetric parcellations are not supported (use a distance-based null instead).",
+                ValueError,
             )
 
         # validate: hemisphere indices required
@@ -725,6 +754,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
                 n_perm=n_nulls,
                 method=spin_method,
                 seed=seed,
+                parc_hemi=parc_hemi,
             )
             spin_mat = (spins_lh, spins_rh)
 

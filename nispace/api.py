@@ -172,7 +172,7 @@ class NiSpace:
             If "parcellation", the data is resampled to the parcellation space (linear). 
             Resampling only works in MNI -> MNI and MNI -> mni/fsaverage/fslr direction; if, e.g., 
             input data is in MNI space and parcellation is in fsaverage, resampling_target will be
-            forced to "parcellation", as MNI -> fsaverage transformation is not supported.
+            forced to "parcellation", as MNI -> fsaverage/fslr transformation is not supported.
         n_proc : int, optional
             The number of processes to use in joblib parallelization. Default is 1. -1 will use as 
             many processes as cores are detected.
@@ -335,6 +335,7 @@ class NiSpace:
                     # fetch full multi-space Parcellation (space=None → Parcellation object)
                     parc_obj = fetch_parcellation(
                         parcellation=parc_integrated,
+                        hemi=self._parc["hemi"],
                         return_dist_mat=self._load_dist_mat,
                         return_spin_mat=self._load_spin_mat,
                         verbose=verbose,

@@ -181,6 +181,9 @@ class Parcellation:
         self._lh_prefix  = lh_prefix
         self._rh_prefix  = rh_prefix
 
+        # --- hemisphere selection (set by select_hemi) ---
+        self._selected_hemi = None   # "L" or "R" after select_hemi()
+
         # --- active context (set by NiSpace.fit via set_active_space) ---
         self._space = space  # may be None until activated
 
@@ -642,8 +645,12 @@ class Parcellation:
         lgr.info(f"Lazy-loading dist mat for '{self._name}' in space '{space}'.")
         if isinstance(dm, dict):
             from ..utils.utils_datasets import get_file
+            keep_idc = dm.get("keep_idc")
             local_path = get_file(dm["path_template"], **dm["spec"], **dm["gf_kw"])
-            self._dist_mats[space] = load_distmat(local_path)
+            loaded = load_distmat(local_path)
+            if keep_idc is not None and isinstance(loaded, np.ndarray):
+                loaded = loaded[np.ix_(keep_idc, keep_idc)]
+            self._dist_mats[space] = loaded
         elif isinstance(dm, tuple) and dm and isinstance(dm[0], dict):
             from ..utils.utils_datasets import get_file
             paths = tuple(
@@ -684,7 +691,7 @@ class Parcellation:
         if is_surf and not is_uni:
             hemi = ("L", "R")
         elif is_uni:
-            h = self._legacy_hemi if self._legacy_hemi is not None else "L"
+            h = self._selected_hemi or self._legacy_hemi or "L"
             hemi = (h,) if isinstance(h, str) else tuple(h)
         else:
             hemi = None
@@ -719,8 +726,8 @@ class Parcellation:
             idc_all = np.arange(len(labels_img))
             h_key = hemi[0] if hemi else "L"
             other  = "R" if h_key == "L" else "L"
-            self._idc_byhemi_dict[space]        = {h_key: idc_all,   other: np.array([])}
-            self._labels_img_byhemi_dict[space] = {h_key: labels_img, other: np.array([])}
+            self._idc_byhemi_dict[space]        = {h_key: idc_all,            other: np.array([], dtype=int)}
+            self._labels_img_byhemi_dict[space] = {h_key: labels_img, other: np.array([], dtype=int)}
             self._labels_byhemi_dict[space] = {
                 h_key: self._labels[idc_all],
                 other: np.array([]),
@@ -907,6 +914,169 @@ class Parcellation:
             f"make_bilateral() '{self._name}': {len(lh_idc) * 2} → {N_bil} parcels."
         )
         self.validate(pre_activation=True)
+        return self
+
+    # ------------------------------------------------------------------
+    # Hemisphere selection
+    # ------------------------------------------------------------------
+
+    def select_hemi(self, hemi, verbose=True):
+        """Keep only parcels from one hemisphere.
+
+        Filters ``_labels``, parcellation images, distance matrices, and
+        clears spin matrices.  Safe to call on a pre-activation Parcellation
+        (images may still be lazy paths).
+
+        Parameters
+        ----------
+        hemi : str or list/tuple of str
+            ``"L"``, ``"R"``, ``["L"]``, ``["R"]`` — or ``["L", "R"]`` / ``None``
+            (no-op, returns self unchanged).
+
+        Returns
+        -------
+        self
+        """
+        # --- normalise hemi arg ---
+        set_log(lgr, verbose)
+        if hemi is None:
+            return self
+        if isinstance(hemi, (list, tuple)):
+            hemi_list = [h for h in hemi if h in ("L", "R")]
+        else:
+            hemi_list = [hemi] if hemi in ("L", "R") else []
+
+        if len(hemi_list) == 0:
+            lgr.warning(f"select_hemi: unrecognised hemi value {hemi!r}. Skipping.")
+            return self
+        if {"L", "R"}.issubset(set(hemi_list)):
+            return self  # both hemispheres requested — no-op
+
+        keep_hemi = hemi_list[0]
+
+        # --- determine keep_idc (0-based indices into current _labels) ---
+        keep_idc = None
+
+        # prefer already-computed idc_byhemi from any fitted space
+        for idc_dict in self._idc_byhemi_dict.values():
+            idc_h = idc_dict.get(keep_hemi)
+            if idc_h is not None and len(idc_h) > 0:
+                keep_idc = np.sort(idc_h).astype(int)
+                break
+
+        # fallback: label-prefix matching
+        if keep_idc is None and self._labels is not None:
+            prefix = self._lh_prefix if keep_hemi == "L" else self._rh_prefix
+            keep_idc = np.array(
+                [i for i, lbl in enumerate(self._labels) if str(lbl).startswith(prefix)],
+                dtype=int,
+            )
+
+        if keep_idc is None or len(keep_idc) == 0:
+            lgr.warning(
+                f"select_hemi('{keep_hemi}'): no parcels found for that hemisphere. Skipping."
+            )
+            return self
+
+        # 1-based parcel values that correspond to keep_idc in NIfTI images
+        keep_vals_1based = (keep_idc + 1).astype(np.int32)
+
+        # --- filter labels ---
+        if self._labels is not None:
+            self._labels = self._labels[keep_idc]
+
+        # --- filter images ---
+        for space in list(self._images.keys()):
+            img = self._images[space]
+
+            is_surf_path = (
+                isinstance(img, tuple) and img
+                and isinstance(img[0], (str, pathlib.Path))
+            )
+            is_surf_loaded = (
+                isinstance(img, tuple) and img
+                and isinstance(img[0], nib.GiftiImage)
+            )
+
+            if is_surf_path or is_surf_loaded:
+                # (lh, rh) tuple — keep the requested hemisphere
+                idx = 0 if keep_hemi == "L" else 1
+                self._images[space] = img[idx] if len(img) > idx else img[0]
+
+            elif isinstance(img, nib.Nifti1Image):
+                # loaded volume — zero out unwanted parcel voxels
+                data = img.get_fdata(dtype=np.float32).copy()
+                mask = np.isin(data, keep_vals_1based)
+                data[~mask] = 0
+                self._images[space] = nib.Nifti1Image(data, img.affine, img.header)
+
+            elif isinstance(img, (str, pathlib.Path)):
+                # lazy volume path — load now and mask immediately
+                loaded = load_img(img)
+                if isinstance(loaded, nib.Nifti1Image):
+                    data = loaded.get_fdata(dtype=np.float32).copy()
+                    mask = np.isin(data, keep_vals_1based)
+                    data[~mask] = 0
+                    self._images[space] = nib.Nifti1Image(data, loaded.affine, loaded.header)
+                else:
+                    self._images[space] = loaded  # shouldn't happen for vol path
+
+        # --- filter dist_mats ---
+        for space in list(self._dist_mats.keys()):
+            dm = self._dist_mats[space]
+            if dm is None:
+                continue
+
+            is_surf_dm = isinstance(dm, tuple)
+            is_vol_loaded = isinstance(dm, np.ndarray) and dm.ndim == 2
+            is_vol_lazy = isinstance(dm, dict)
+
+            if is_surf_dm:
+                # (dm_l, dm_r) or (spec_l, spec_r) — keep one
+                idx = 0 if keep_hemi == "L" else 1
+                self._dist_mats[space] = dm[idx] if len(dm) > idx else None
+
+            elif is_vol_loaded:
+                # sub-block for selected hemisphere
+                self._dist_mats[space] = dm[np.ix_(keep_idc, keep_idc)]
+
+            elif is_vol_lazy:
+                # attach keep_idc so _ensure_dist_mat_loaded can apply the mask
+                self._dist_mats[space] = dict(dm, keep_idc=keep_idc)
+
+        # --- trim spin_mats: keep the relevant half, zero-out the other ---
+        for space, sm in self._spin_mats.items():
+            if sm is None or not (isinstance(sm, tuple) and len(sm) == 2):
+                continue
+            spins_lh, spins_rh = sm
+            if keep_hemi == "L":
+                n_perm = spins_lh.shape[1] if spins_lh is not None and spins_lh.ndim == 2 else 0
+                self._spin_mats[space] = (
+                    spins_lh,
+                    np.zeros((0, n_perm), dtype=spins_rh.dtype if spins_rh is not None else np.int32),
+                )
+            else:
+                n_perm = spins_rh.shape[1] if spins_rh is not None and spins_rh.ndim == 2 else 0
+                self._spin_mats[space] = (
+                    np.zeros((0, n_perm), dtype=spins_lh.dtype if spins_lh is not None else np.int32),
+                    spins_rh,
+                )
+
+        # --- l2rmap / lrcorr are irrelevant for a single hemisphere ---
+        self._l2rmap = None
+        self._lrcorr = None
+
+        # --- clear per-space derived caches (recomputed on next set_active_space) ---
+        self._idc_byhemi_dict.clear()
+        self._labels_byhemi_dict.clear()
+        self._labels_img_dict.clear()
+        self._labels_img_byhemi_dict.clear()
+        self._hemi_dict.clear()
+        self._resolution_dict.clear()
+        self._is_surface_dict.clear()
+
+        self._selected_hemi = keep_hemi
+        lgr.info(f"select_hemi('{keep_hemi}'): {len(keep_idc)} parcels selected.")
         return self
 
     # ------------------------------------------------------------------
