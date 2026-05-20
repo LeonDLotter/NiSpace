@@ -9,7 +9,7 @@ import sys
 # -- Project information -----------------------------------------------------
 
 project = 'NiSpace'
-copyright = '2025, Leon D. Lotter'
+copyright = '2026, Leon D. Lotter'
 author = 'Leon D. Lotter'
 
 # Version

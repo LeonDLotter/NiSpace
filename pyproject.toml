@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools", "versioneer[toml]"]
+requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "nispace"
-version = "0.0.1"  # This will be overridden by versioneer
+dynamic = ["version"]
 authors = [
     {name = "Leon D. Lotter", email = "leondlotter@gmail.com"},
 ]
@@ -12,7 +12,7 @@ maintainers = [
     {name = "Leon D. Lotter", email = "leondlotter@gmail.com"},
 ]
 description = "Neuroimaging Spatial Colocalization Environment"
-readme = "README.md"
+readme = "README.rst"
 requires-python = ">=3.9"
 license = {file = "LICENSE"}
 classifiers = [
@@ -21,6 +21,8 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 
 dependencies = [
@@ -57,10 +59,9 @@ Repository = "https://github.com/LeonDLotter/NiSpace"
 [tool.setuptools.packages]
 find = {}
 
-[tool.versioneer]
-VCS = "git"
-style = "pep440"
-versionfile_source = "nispace/_version.py"
-versionfile_build = "nispace/_version.py"
-tag_prefix = "v"
-parentdir_prefix = ""
+[tool.setuptools.package-data]
+nispace = ["datalib/*", "datalib/**/*"]
+
+[tool.setuptools_scm]
+version_file = "nispace/_version.py"
+fallback_version = "0.0.0+unknown"

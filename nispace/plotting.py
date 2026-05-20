@@ -64,7 +64,7 @@ def nice_stats_labels(string, add_dollars=True):
     }
     for k in replace_dict:
         if add_dollars:
-            k_replace = "$" + replace_dict[k].replace(' ', '\ ') + "$"
+            k_replace = "$" + replace_dict[k].replace(' ', r'\ ') + "$"
         else:
             k_replace = replace_dict[k]
         string = string.replace(k, k_replace)

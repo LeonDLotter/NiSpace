@@ -333,7 +333,7 @@ def calculate_sha256_hash(file_path):
 
 
 def sync_osf(local_path, osf_id, username=None, password=None, token=None,
-             dry_run=False, exclude=["^\."], config_file=None, 
+             dry_run=False, exclude=[r"^\."], config_file=None,
              skip_new_file_url_error=False, skip_file_exists_error=False,
              use_R=False):
     
