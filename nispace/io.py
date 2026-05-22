@@ -64,10 +64,12 @@ def parcellate_data(data,
         Value(s) to treat as background when `ignore_background_data=True`.
         Accepts a scalar, or any collection of scalars and/or the sentinel
         string ``'auto'``/``None``:
+
         - float (e.g. ``0.0``): exclude that specific value
         - ``'auto'`` or ``None``: auto-detect from border voxels (volumetric)
           or medial wall median (surface)
         - list/set/array: any combination of the above
+
         Default: ``['auto', 0.0]`` (excludes detected background and zeros)
     drop_background_parcels : bool
         Whether to set parcels whose mean equals `background_value` to NaN

@@ -1,75 +1,57 @@
 {
-    "abide": {
-        "tab": {
-            "Schaefer200": {
-                "host": "github-nispace",
-                "remote": "example/example-abide_parc-Schaefer200.csv.gz"
-            },
-            "TianS1": {
-                "host": "github-nispace",
-                "remote": "example/example-abide_parc-TianS1.csv.gz"
-            }
-        },
-        "info": {
-            "host": "github-nispace",
-            "remote": "example/example-abide_info.csv"
-        }
-    },
-
-    "enigma": {
-        "tab": {
-            "DesikanKilliany": {
-                "host": "github-nispace",
-                "remote": "example/example-enigma_parc-DesikanKilliany.csv.gz"
-            }
-        }
-    },
-
-    "happy": {
+    "anorexianervosa": {
         "tab": {
             "Schaefer100": {
                 "host": "github-nispace",
-                "remote": "example/example-happy_parc-Schaefer200.csv.gz"
+                "remote": "example/example-anorexianervosa_parc-Schaefer100.csv.gz"
             },
             "Schaefer200": {
                 "host": "github-nispace",
-                "remote": "example/example-happy_parc-Schaefer200.csv.gz"
+                "remote": "example/example-anorexianervosa_parc-Schaefer200.csv.gz"
             },
             "Schaefer400": {
                 "host": "github-nispace",
-                "remote": "example/example-happy_parc-Schaefer400.csv.gz"
+                "remote": "example/example-anorexianervosa_parc-Schaefer400.csv.gz"
             },
             "Glasser": {
                 "host": "github-nispace",
-                "remote": "example/example-happy_parc-Glasser.csv.gz"
+                "remote": "example/example-anorexianervosa_parc-Glasser.csv.gz"
             },
             "DesikanKilliany": {
                 "host": "github-nispace",
-                "remote": "example/example-happy_parc-DesikanKilliany.csv.gz"
+                "remote": "example/example-anorexianervosa_parc-DesikanKilliany.csv.gz"
             },
             "DesikanKillianyTourville": {
                 "host": "github-nispace",
-                "remote": "example/example-happy_parc-DesikanKillianyTourville.csv.gz"
+                "remote": "example/example-anorexianervosa_parc-DesikanKillianyTourville.csv.gz"
             },
             "Destrieux": {
                 "host": "github-nispace",
-                "remote": "example/example-happy_parc-Destrieux.csv.gz"
+                "remote": "example/example-anorexianervosa_parc-Destrieux.csv.gz"
             },
             "TianS1": {
                 "host": "github-nispace",
-                "remote": "example/example-happy_parc-TianS1.csv.gz"
+                "remote": "example/example-anorexianervosa_parc-TianS1.csv.gz"
             },
             "TianS2": {
                 "host": "github-nispace",
-                "remote": "example/example-happy_parc-TianS2.csv.gz"
+                "remote": "example/example-anorexianervosa_parc-TianS2.csv.gz"
             },
             "TianS3": {
                 "host": "github-nispace",
-                "remote": "example/example-happy_parc-TianS3.csv.gz"
+                "remote": "example/example-anorexianervosa_parc-TianS3.csv.gz"
             },
             "Aseg": {
                 "host": "github-nispace",
-                "remote": "example/example-happy_parc-Aseg.csv.gz"
+                "remote": "example/example-anorexianervosa_parc-Aseg.csv.gz"
+            },
+            "HarvardOxfordCortical": {
+                "host": "github-nispace",
+                "remote": "example/example-anorexianervosa_parc-HarvardOxfordCortical.csv.gz"
+            },
+            "HarvardOxfordSubcortical": {
+                "host": "github-nispace",
+                "remote": "example/example-anorexianervosa_parc-HarvardOxfordSubcortical.csv.gz"
             }
         }
     }

@@ -18,6 +18,8 @@ _COLLECT_DEFAULT = {
     "magicc": "CellTypesSilettiSuperclusters",
     "grf": "ByAlpha",
     "neurosynth": "CognitiveFunctions",
+    "enigmathick": "Adult",
+    "enigmaarea": "Adult",
 }
 # TODO: move this to the datalib files
 

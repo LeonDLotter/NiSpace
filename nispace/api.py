@@ -1207,60 +1207,37 @@ class NiSpace:
 
         Other Parameters
         ----------------
-        Keyword arguments are routed by prefix to the appropriate subsystem:
-
-        **maps_\\*** → null map generation (:func:`_get_null_maps` /
-        :func:`generate_null_maps`). The ``maps_`` prefix is stripped before
-        forwarding. Named parameters of ``_get_null_maps`` are matched first;
-        any remainder is forwarded through to the individual null method
-        function.
-
-            maps_centroids : bool
-                Use parcel centroids instead of full parcel surfaces when
-                building the geodesic distance matrix. Default False.
-            maps_parc_resample : int
-                Voxel size (mm) to which the parcellation is resampled before
-                distance-matrix computation. Default 2.
-            maps_lr_mirror_dist_mat : bool
-                Mirror the left-hemisphere distance matrix to the right
-                hemisphere. Default False.
-            maps_split_hemi : bool or None
-                Generate null maps separately per hemisphere. Default None.
-            maps_split_cxsc : bool
-                Generate null maps separately for cortex and subcortex.
-                Default False.
-            maps_cx_sc_minmax_scale : bool
-                Min–max scale cortex and subcortex null maps to the same range
-                before merging. Default False.
-            maps_procedure : str
-                Moran randomisation procedure: ``"singleton"`` (default) or
-                ``"all"``.
-            maps_joint : bool
-                Moran joint randomisation. Default True.
-
-        **distmat_\\*** → distance-matrix generation (``_get_dist_mat``). The
-        ``distmat_`` prefix is stripped before forwarding.
-
-            distmat_centroids : bool
-                Same meaning as ``maps_centroids`` but for the CV distance
-                matrix.
-            distmat_parc_resample : int
-                Resampling voxel size for CV distance matrix. Default 2.
-
-        **groups_\\*** → group-label permutation (:func:`permute_groups`). The
-        ``groups_`` prefix is stripped before forwarding.
-
-            groups_paired : bool or "auto"
-                Whether to perform paired permutation (requires a subjects
-                vector). ``"auto"`` (default) infers pairing from the Y
-                transform.
-            groups_strategy : str
-                Permutation strategy: ``"proportional"`` (default) or
-                ``"random"``.
-
-        Remaining kwargs (no recognised prefix) are collected into the
-        colocalization kwargs and forwarded to :meth:`colocalize` if it has
-        not been called yet.
+        maps_centroids : bool
+            ``maps_*`` kwargs → null map generation (:func:`generate_null_maps`).
+            Use parcel centroids for geodesic distance matrix. Default False.
+        maps_parc_resample : int
+            Voxel size (mm) to resample parcellation before distance-matrix
+            computation. Default 2.
+        maps_lr_mirror_dist_mat : bool
+            Mirror left-hemisphere distance matrix to the right. Default False.
+        maps_split_hemi : bool or None
+            Generate null maps separately per hemisphere. Default None.
+        maps_split_cxsc : bool
+            Generate null maps separately for cortex and subcortex. Default False.
+        maps_cx_sc_minmax_scale : bool
+            Min–max scale cortex and subcortex null maps before merging.
+            Default False.
+        maps_procedure : str
+            Moran randomisation procedure: ``"singleton"`` (default) or ``"all"``.
+        maps_joint : bool
+            Moran joint randomisation. Default True.
+        distmat_centroids : bool
+            ``distmat_*`` kwargs → distance-matrix generation (``_get_dist_mat``).
+            Use centroids for CV distance matrix. Default False.
+        distmat_parc_resample : int
+            Resampling voxel size for CV distance matrix. Default 2.
+        groups_paired : bool or "auto"
+            ``groups_*`` kwargs → group-label permutation (:func:`permute_groups`).
+            Paired permutation (requires subjects vector). ``"auto"`` infers
+            pairing from the Y transform. Default ``"auto"``.
+        groups_strategy : str
+            Permutation strategy: ``"proportional"`` (default) or ``"random"``.
+            Remaining kwargs (no prefix) are forwarded to :meth:`colocalize`.
 
         Returns
         -------

@@ -4394,7 +4394,69 @@
                 "remote": "reference/tpm/collection-All.collect"
             }
         }
-        
+
+    },
+
+    "enigmathick": {
+
+        "metadata": {
+            "host": "github-nispace",
+            "remote": "reference/enigmathick/metadata.csv"
+        },
+
+        "tab": {
+            "DesikanKilliany": {
+                "host": "github-nispace",
+                "remote": "reference/enigmathick/tab/dset-enigmathick_parc-DesikanKilliany.csv.gz"
+            },
+            "Aseg": {
+                "host": "github-nispace",
+                "remote": "reference/enigmathick/tab/dset-enigmathick_parc-Aseg.csv.gz"
+            }
+        },
+
+        "collection": {
+            "All": {
+                "host": "github-nispace",
+                "remote": "reference/enigmathick/collection-All.collect"
+            },
+            "Adult": {
+                "host": "github-nispace",
+                "remote": "reference/enigmathick/collection-Adult.collect"
+            }
+        }
+
+    },
+
+    "enigmaarea": {
+
+        "metadata": {
+            "host": "github-nispace",
+            "remote": "reference/enigmaarea/metadata.csv"
+        },
+
+        "tab": {
+            "DesikanKilliany": {
+                "host": "github-nispace",
+                "remote": "reference/enigmaarea/tab/dset-enigmaarea_parc-DesikanKilliany.csv.gz"
+            },
+            "Aseg": {
+                "host": "github-nispace",
+                "remote": "reference/enigmaarea/tab/dset-enigmaarea_parc-Aseg.csv.gz"
+            }
+        },
+
+        "collection": {
+            "All": {
+                "host": "github-nispace",
+                "remote": "reference/enigmaarea/collection-All.collect"
+            },
+            "Adult": {
+                "host": "github-nispace",
+                "remote": "reference/enigmaarea/collection-Adult.collect"
+            }
+        }
+
     }
 
 }

@@ -99,3 +99,29 @@ Please cite the original publication when using these maps:
 - GM/WM/CSF: Lorio et al., 2016 (https://doi.org/10.1016/j.neuroimage.2016.01.062), license: CC BY-NC-SA 4.0
 - Arteries: Mouches et al., 2019 (https://doi.org/10.1038/s41597-019-0034-5), license: CC0 1.0
 - Veins: Huck et al., 2019 (https://doi.org/10.1007/s00429-019-01919-4), license: CC BY 4.0
+
+
+# enigmathick
+The NiSpace "enigmathick" dataset is based on ENIGMA (Enhancing NeuroImaging Genetics through
+Meta-Analysis) working group summary statistics as provided via the ENIGMA Toolbox v2.0.3
+(https://github.com/MICA-MNI/ENIGMA). It contains Cohen's d effect sizes (d_icv, largely ICV-corrected) for
+case-vs-control differences in cortical thickness and subcortical volume across several neurological and psychiatric disorders.
+Cortical values are provided in the Desikan parcellation, subcortical values in the Aseg parcellation.
+Inclusion of the subcortical values enable combined cortical+subcortical access via parcellation="DesikanKillianyAseg". 
+For some disorders, effect size maps are split by subtype and/or age group. Use collection "Adult" for a reduced collection
+of only adult data as often used in related publications.
+For each disorder, please cite the appropriate ENIGMA working group publication (see metadata.csv). 
+We additionally ask to cite the ENIGMA Toolbox; Larivière et al., 2021 (https://doi.org/10.1038/s41596-021-00579-z).
+
+
+# enigmaarea
+The NiSpace "enigmaarea" dataset is based on ENIGMA (Enhancing NeuroImaging Genetics through
+Meta-Analysis) working group summary statistics as provided via the ENIGMA Toolbox v2.0.3
+(https://github.com/MICA-MNI/ENIGMA). It contains Cohen's d effect sizes (d_icv, largely ICV-corrected) for
+case-vs-control differences in cortical surface area and subcortical volume across several neurological and psychiatric disorders.
+Cortical values are provided in the Desikan parcellation, subcortical values in the Aseg parcellation.
+Inclusion of the subcortical values enable combined cortical+subcortical access via parcellation="DesikanKillianyAseg". 
+For some disorders, effect size maps are split by subtype and/or age group. Use collection "Adult" for a reduced collection
+of only adult data as often used in related publications.
+For each disorder, please cite the appropriate ENIGMA working group publication (see metadata.csv). 
+We additionally ask to cite the ENIGMA Toolbox; Larivière et al., 2021 (https://doi.org/10.1038/s41596-021-00579-z).

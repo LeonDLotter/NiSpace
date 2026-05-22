@@ -122,6 +122,7 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+docs/_auto/
 
 # PyBuilder
 .pybuilder/
