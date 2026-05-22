@@ -62,13 +62,10 @@ def nice_stats_labels(string, add_dollars=True):
         "ymaps": "X maps",
         "xymaps": "X and Y maps"
     }
-    for k in replace_dict:
-        if add_dollars:
-            k_replace = "$" + replace_dict[k].replace(' ', r'\ ') + "$"
-        else:
-            k_replace = replace_dict[k]
-        string = string.replace(k, k_replace)
-    return string
+    result = replace_dict.get(string, string)
+    if add_dollars:
+        return "$" + result.replace(' ', r'\ ') + "$"
+    return result
 
 
 def hide_empty_axes(axes):
@@ -500,7 +497,7 @@ def catplot(fig, ax, data_long, categorical_var="variable", continuous_var="valu
         if scatters["size"] == "auto":
             n_max = data_long.groupby(categorical_var, observed=False).count().max().values[0]
             n_cat = len(data_long[categorical_var].unique())
-            scatters["size"] = 5 / (0.1 * n_max**0.5) / ((0.3 * n_cat**0.5) if n_cat > 1 else 1)
+            scatters["size"] = max(1.5, min(5, 5 / (0.1 * n_max**0.5) / ((0.3 * n_cat**0.5) if n_cat > 1 else 1)))
         plot = plot.add(
             sno.Dots(pointsize=scatters["size"], artist_kws=scatters["kwargs"]), 
             sno.Jitter(x=scatters["jitter_width"] if categorical_axis == "x" else None,

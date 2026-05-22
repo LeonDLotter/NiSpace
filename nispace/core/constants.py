@@ -14,8 +14,8 @@ _DSETS_SC_ONLY = []
 
 _COLLECT_DEFAULT = {
     "pet": "UniqueTracers",
-    "mrna": "CellTypesSilettiSuperclusters",
-    "magicc": "CellTypesSilettiSuperclusters",
+    "mrna": "CellTypesPsychEncodeTPM",
+    "magicc": "CellTypesPsychEncodeTPM",
     "grf": "ByAlpha",
     "neurosynth": "CognitiveFunctions",
     "enigmathick": "Adult",

@@ -2106,7 +2106,11 @@ class NiSpace:
              Y_maps=None, X_maps=None,
              values="coloc", mc_method=None,
              plot_nulls=True, annot_p=True, permute_what=None,
-             title="auto", sort_by=None, sort_colocs=False, n_categories=50,
+             title="auto",
+             sort_by=None,        # None | 'coloc'|'abs_coloc'|'z'|'abs_z'|'p' — also enables truncation when n_categories is exceeded
+             sort_colocs=False,
+             n_categories=50,     # max categories shown; exceeded + sort_by set → truncate top N; exceeded + no sort_by → skip with warning; None = no limit
+
              colocalizations_dict=None, nulls_dict=None, p_dict=None, pc_dict=None,
              fig=None, ax=None, figsize=None, show=True,
              plot_kwargs=None, nullplot_kwargs=None,
@@ -2397,15 +2401,23 @@ class NiSpace:
                 except Exception as e:
                     lgr.warning(f"Could not compute sort order for sort_by='{sort_by}': {e}")
 
-            # guard: skip if too many X categories
             _n_x = colocalizations_dict[stat].shape[1]
             if n_categories is not None and _n_x > n_categories:
-                lgr.warning(
-                    f"Skipping plot for stat '{stat}': {_n_x} X categories exceed "
-                    f"n_categories={n_categories}. To plot, pass n_categories={_n_x} "
-                    f"(recommended with sort_by='abs_z')."
-                )
-                continue
+                if sort_by is not None and _sort_order is not None:
+                    # sort_by is set → truncation is meaningful, show top N
+                    _sort_order = _sort_order[:n_categories]
+                    lgr.info(
+                        f"Showing top {n_categories} of {_n_x} categories "
+                        f"(sorted by '{sort_by}')."
+                    )
+                else:
+                    # no sort_by → arbitrary truncation would be misleading, skip instead
+                    lgr.warning(
+                        f"Plot skipped: {_n_x} categories exceed n_categories={n_categories}. "
+                        f"To show the top {n_categories}, add sort_by='abs_z'. "
+                        f"To show all, pass n_categories=None."
+                    )
+                    continue
 
             if kind == "categorical":
                 fig_ax = _plot_categorical(

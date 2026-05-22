@@ -8,7 +8,7 @@ except ImportError:
 
 import logging
 lgr = logging.getLogger(__name__)
-from ..stats.coloc import corr
+from ..stats.coloc import pearson
 
 
 def _reduce_dimensions(data, method="pca", n_components=None, min_ev=None, 
@@ -86,9 +86,10 @@ def _reduce_dimensions(data, method="pca", n_components=None, min_ev=None,
     
     # get PCA and ICA "loadings"
     if method in ["pca", "ica"]:
+        components = components.astype(data.dtype)
         loadings = np.zeros((data.shape[1], n_components))
         for c in range(n_components):
             for r in range(data.shape[1]):
-                loadings[r, c] = corr(x=data[:, r], y=components[:, c], rank=False)
+                loadings[r, c] = pearson(x=data[:, r], y=components[:, c])
     ## return
     return components, ev, loadings
