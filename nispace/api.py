@@ -108,7 +108,7 @@ class NiSpace:
                  n_proc: int = 1, 
                  verbose: bool = True,
                  dtype: Union[type, str] = np.float32,
-                 return_self: bool = False,
+                 return_self: bool = True,
                  **kwargs):
         """
         Initialize the NiSpace object. 
