@@ -587,12 +587,12 @@ class NiSpace:
                         
         ## save and return     
         if store:
-            self._X_dimred[_get_df_string(kind="xdimred", xdimred=reduction)] = _X_reduced            
+            self._X_dimred[_get_df_string(kind="xdimred", xdimred=reduction)] = _X_reduced
             if reduction in ["pca", "ica", "fa"]:
                 self._dimred[reduction] = dict(
-                    method=reduction, 
-                    n_components=_X_reduced.shape[0], 
-                    min_ev=min_ev, 
+                    method=reduction,
+                    n_components=_X_reduced.shape[0],
+                    min_ev=min_ev,
                     loadings=loadings
                 )
                 if reduction in ["pca", "fa"]:
@@ -600,7 +600,8 @@ class NiSpace:
                 if reduction=="fa":
                     self._dimred[reduction]["fa_method"] = fa_method
                     self._dimred[reduction]["fa_rotation"] = fa_rotation
-            
+            self._set_last(X_reduction=reduction)
+
             ## return
             if self._return_self:
                 return self
@@ -813,7 +814,8 @@ class NiSpace:
             # save transformed y
             df_str = _get_df_string("ytrans", ytrans=transform)
             self._Y_trans[df_str] = _Y_trans
-        
+            self._set_last(Y_transform=transform)
+
             ## return
             if self._return_self:
                 return self

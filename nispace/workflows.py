@@ -389,7 +389,7 @@ def group_comparison(y, design,
     init_kwargs = {} if init_kwargs is None else init_kwargs
     fit_kwargs = {} if fit_kwargs is None else fit_kwargs
     clean_y_kwargs = {} if clean_y_kwargs is None else clean_y_kwargs
-    transform_y_kwargs = {} if clean_y_kwargs is None else clean_y_kwargs
+    transform_y_kwargs = {} if transform_y_kwargs is None else transform_y_kwargs
     colocalize_kwargs = {} if colocalize_kwargs is None else colocalize_kwargs
     permute_kwargs = {} if permute_kwargs is None else permute_kwargs
     correct_p_kwargs = {} if correct_p_kwargs is None else correct_p_kwargs
