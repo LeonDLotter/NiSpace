@@ -3,11 +3,9 @@
 Examples
 ========
 
-Some (largely) working examples rendered from Jupyter notebooks. 
-Example notebooks are under construction and will be adjusted and extended in the future.
+.. note::
 
-.. nbgallery::
-   :glob:
+   The example notebooks are currently undergoing extensive revision and are temporarily
+   unavailable. They will be re-added once updated. Check back soon.
 
-   nb_examples/*
 

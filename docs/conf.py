@@ -41,7 +41,7 @@ napoleon_numpy_docstring = True     # Turn on numpydoc strings
 napoleon_use_param = True
 napoleon_use_rtype = True
 templates_path = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'nb_examples/ds*', 'nb_examples/_archive']
+exclude_patterns = ['_build', '_auto', 'Thumbs.db', '.DS_Store', 'nb_examples/*']
 autodoc_default_options = {
     'members': True, 
     'inherited-members': True,
@@ -59,13 +59,18 @@ nbsphinx_codecell_lexer = 'ipython3'
 
 # -- Options for HTML output -------------------------------------------------
 
-html_theme = "sphinx_book_theme"
+html_theme = "sphinx_rtd_theme"
 html_title = project + ' - version ' + release
 html_static_path = ['_static']
-html_theme_options = {
-    "repository_url": "https://github.com/leondlotter/nispace",
-    "use_repository_button": True,
-}
+html_css_files = ['custom.css']
+html_theme_options = {}
 
 pygments_style = 'sphinx'
+
+
+def setup(app):
+    import sys as _sys
+    _sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+    import gen_dataset_pages
+    gen_dataset_pages.generate(app)
 

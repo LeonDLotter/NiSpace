@@ -11,12 +11,8 @@ Reference API
 
 .. _api_api:
 
-:mod:`nispace.api` - NiSpace main class
----------------------------------------
-.. autoclass:: nispace.api
-   :members:
-   :inherited-members:
-
+:mod:`nispace.api` – NiSpace main class
+----------------------------------------
 .. currentmodule:: nispace.api
 
 .. autosummary::
@@ -28,12 +24,8 @@ Reference API
 
 .. _api_datasets:
 
-:mod:`nispace.datasets` - Dataset fetchers
-------------------------------------------
-.. automodule:: nispace.datasets
-   :members:
-   :inherited-members:
-
+:mod:`nispace.datasets` – Dataset fetchers
+-------------------------------------------
 .. currentmodule:: nispace.datasets
 
 .. autosummary::
@@ -43,18 +35,16 @@ Reference API
    fetch_template
    fetch_parcellation
    fetch_reference
+   fetch_collection
+   apply_collection
    fetch_metadata
    fetch_example
-   
+
 
 .. _api_workflows:
 
-:mod:`nispace.workflows` - Workflows
-------------------------------------
-.. automodule:: nispace.workflows
-   :members:
-   :inherited-members:
-
+:mod:`nispace.workflows` – Workflows
+--------------------------------------
 .. currentmodule:: nispace.workflows
 
 .. autosummary::
@@ -68,12 +58,8 @@ Reference API
 
 .. _api_stats_coloc:
 
-:mod:`nispace.stats.coloc` - Colocalization statistics
-------------------------------------------------------
-.. automodule:: nispace.stats.coloc
-   :members:
-   :inherited-members:
-
+:mod:`nispace.stats.coloc` – Colocalization statistics
+--------------------------------------------------------
 .. currentmodule:: nispace.stats.coloc
 
 .. autosummary::
@@ -81,14 +67,20 @@ Reference API
    :toctree: generated/
 
    rank_array
+   rank1d
+   rank2d
    corr
+   pearson
    partialcorr
+   partialpearson
+   mutualinfo
    mlr
    r2
    beta
    dominance
    pls
    pcr
+   fast_pls1
    elasticnet
    lasso
    ridge
@@ -96,12 +88,8 @@ Reference API
 
 .. _api_stats_effectsize:
 
-:mod:`nispace.stats.effectsize` - Effect size calculation
----------------------------------------------------------
-.. automodule:: nispace.stats.effectsize
-   :members:
-   :inherited-members:
-
+:mod:`nispace.stats.effectsize` – Effect size calculation
+-----------------------------------------------------------
 .. currentmodule:: nispace.stats.effectsize
 
 .. autosummary::
@@ -114,20 +102,17 @@ Reference API
    cohen_paired_nan
    hedges
    hedges_nan
-   hedges_paired
    zscore
    zscore_nan
+   rzscore_nan
    prc
+   logfc_nan
 
 
 .. _api_stats_misc:
 
-:mod:`nispace.stats.misc` - Miscellaneous stats functions
----------------------------------------------------------
-.. automodule:: nispace.stats.misc
-   :members:
-   :inherited-members:
-
+:mod:`nispace.stats.misc` – Miscellaneous stats functions
+-----------------------------------------------------------
 .. currentmodule:: nispace.stats.misc
 
 .. autosummary::
@@ -137,21 +122,23 @@ Reference API
    np_any_axis1
    residuals
    residuals_nan
+   partial_residuals_nan
    rho_to_z
+   z_to_rho
    zscore_df
    permute_groups
    null_to_p
-   mc_correction 
+   mc_correction
+   compute_meff
+   meff_sidak_correction
+   maxT_correction
+   step_maxT_correction
 
 
 .. _api_io:
 
-:mod:`nispace.io` - Imaging data input
---------------------------------------
-.. automodule:: nispace.io
-   :members:
-   :inherited-members:
-
+:mod:`nispace.io` – Imaging data input
+----------------------------------------
 .. currentmodule:: nispace.io
 
 .. autosummary::
@@ -164,16 +151,16 @@ Reference API
    load_img
    load_labels
    load_distmat
+   load_spinmat
+   load_l2rmap
+   to_pickle
+   from_pickle
 
 
 .. _api_parcellate:
 
-:mod:`nispace.parcellate` - Parcellation class
-----------------------------------------------
-.. automodule:: nispace.parcellate
-   :members:
-   :inherited-members:
-
+:mod:`nispace.parcellate` – Parcellation class
+------------------------------------------------
 .. currentmodule:: nispace.parcellate
 
 .. autosummary::
@@ -185,12 +172,8 @@ Reference API
 
 .. _api_nulls:
 
-:mod:`nispace.nulls` - Null map generation
-------------------------------------------
-.. automodule:: nispace.nulls
-   :members:
-   :inherited-members:
-
+:mod:`nispace.nulls` – Null map generation
+--------------------------------------------
 .. currentmodule:: nispace.nulls
 
 .. autosummary::
@@ -201,27 +184,33 @@ Reference API
    nulls_moran
    nulls_burt2020
    nulls_burt2018
+   nulls_random
+   generate_spins
+   apply_spins
    get_distance_matrix
+   find_vol_parc_centroids
    find_surf_parc_centroids
+   correlate_hemis_parc
+   find_parcel_hemispheres
 
 
 .. _api_plotting:
 
-:mod:`nispace.plotting` - Plotting functions
---------------------------------------------
-.. automodule:: nispace.plotting
-   :members:
-   :inherited-members:
-
+:mod:`nispace.plotting` – Plotting functions
+----------------------------------------------
 .. currentmodule:: nispace.plotting
 
 .. autosummary::
    :template: function.rst
    :toctree: generated/
 
+   brainplot
+   view_surf
    catplot
    nullplot
    heatmap
+   nice_stats_labels
+   print_significance
    move_legend_fig_to_ax
    colors_from_values
    hide_empty_axes
@@ -230,12 +219,8 @@ Reference API
 
 .. _api_utils_utils:
 
-:mod:`nispace.utils` - Utility functions
-----------------------------------------
-.. automodule:: nispace.utils.utils
-   :members:
-   :inherited-members:
-
+:mod:`nispace.utils` – Utility functions
+------------------------------------------
 .. currentmodule:: nispace.utils.utils
 
 .. autosummary::
@@ -246,11 +231,16 @@ Reference API
    nan_detector
    remove_nan
    fill_nan
+   mean_by_set_df
    print_arg_pairs
    get_column_names
    lower
    get_background_value
+   vect_to_vol_arr
+   vol_to_vect_arr
    parc_vect_to_vol
    relabel_gifti_parc
-
-
+   relabel_nifti_parc
+   merge_parcellations
+   mirror_nifti
+   mirror_gifti

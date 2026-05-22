@@ -1,0 +1,41 @@
+/* Reduce heading sizes slightly */
+h1 { font-size: 2rem;   margin-top: 2rem; }
+h2 { font-size: 1.6rem; margin-top: 2rem; }
+h3 { font-size: 1.35rem; margin-top: 1.75rem; }
+h4 { font-size: 1.15rem; margin-top: 1.5rem; }
+
+/* Expandable details/summary — scoped to content only */
+details.nispace-details > summary {
+    list-style: none;
+    cursor: pointer;
+}
+details.nispace-details > summary::-webkit-details-marker {
+    display: none;
+}
+details.nispace-details > summary::before {
+    content: "▶ ";
+    display: inline-block;
+    transition: transform 0.2s ease;
+}
+details.nispace-details[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+/* NiSpace HTML tables in raw:: html blocks */
+table.nispace-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1em;
+}
+table.nispace-table th,
+table.nispace-table td {
+    text-align: left;
+    padding: 4px 8px;
+    vertical-align: top;
+}
+table.nispace-table thead tr {
+    border-bottom: 2px solid currentColor;
+}
+table.nispace-table tbody tr {
+    border-bottom: 1px solid rgba(128,128,128,0.3);
+}

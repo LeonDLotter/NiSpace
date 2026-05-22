@@ -19,7 +19,7 @@ If you use this functionality, make sure that you have Workbench installed (see 
 .. _installation_github:
 
 Installation via pip from GitHub
-------------------------
+--------------------------------
 
 The current development version is most conveniently installed from GitHub using pip:
 
@@ -41,7 +41,7 @@ However, to avoid this, you can install them directly with the other dependencie
    pip install "git+https://github.com/LeonDLotter/NiSpace.git@dev#egg=nispace[opt]"
 
 In the future, factor-analyzer will be removed as a dependency and all non-default null models will be kept as optional dependencies.
-The default null model, `moran` was copied from `BrainSpace <https://github.com/MICA-MNI/BrainSpace/blob/master/brainspace/null_models/moran.py>`_ and integrated into NiSpace to avoid BrainSpace and vtk as dependencies.
+The default null model, `moran`, was copied from `BrainSpace <https://github.com/MICA-MNI/BrainSpace/blob/master/brainspace/null_models/moran.py>`_ and integrated into NiSpace to avoid BrainSpace and vtk as dependencies.
 
 
 .. _installation_manual:
@@ -63,7 +63,7 @@ Alternatively, you can clone the repository and install ``NiSpace`` manually:
 Installation via pip from PyPI
 ------------------------------
 
-NiSpace is not yet available on PyPI.
+``NiSpace`` is not yet available on PyPI.
 
 
 .. _installation_datasets:
