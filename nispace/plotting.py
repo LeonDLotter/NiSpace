@@ -1268,9 +1268,11 @@ def _data_to_volume(data, ref_nii, labels_in_img, bg_value=np.nan):
 def _render_vol_row(ax, fig, stat_nii, bg_img, kind, display_mode, cut_coords,
                     cmap, vmin, vmax, symmetric_cmap, threshold, alpha,
                     draw_cross, colorbar, dim="auto", colorbar_label="", colorbar_inset=None,
+                    draw_brain=True, zoom=1.0,
                     **kwargs):
     """Render one brain map as a glass brain or anatomical slices into *ax*."""
     if kind == "glass":
+        _axes_before = set(id(a) for a in fig.axes)
         plot_glass_brain(
             stat_nii,
             figure=fig, axes=ax,
@@ -1284,6 +1286,21 @@ def _render_vol_row(ax, fig, stat_nii, bg_img, kind, display_mode, cut_coords,
             annotate=False,
             **kwargs,
         )
+        _new_axes = [a for a in fig.axes if id(a) not in _axes_before]
+        if not draw_brain:
+            for _sub_ax in _new_axes:
+                for _patch in _sub_ax.patches:
+                    _patch.set_visible(False)
+        if zoom != 1.0:
+            for _sub_ax in _new_axes:
+                for _getter, _setter in (
+                    (_sub_ax.get_xlim, _sub_ax.set_xlim),
+                    (_sub_ax.get_ylim, _sub_ax.set_ylim),
+                ):
+                    _lo, _hi = _getter()
+                    _center = (_lo + _hi) / 2
+                    _half = (_hi - _lo) / (2 * zoom)
+                    _setter(_center - _half, _center + _half)
         if colorbar:
             _norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
             _sm = plt.cm.ScalarMappable(cmap=cmap, norm=_norm)
@@ -1330,7 +1347,7 @@ def brainplot(
     surf_mesh="inflated",
     views=None,
     plot_contours=False,
-    zoom=1.5,
+    zoom=None,
     bg_on_data=True,
     darkness=0.7,
     dim="auto",
@@ -1340,6 +1357,7 @@ def brainplot(
     cut_coords=None,
     bg_img=None,
     draw_cross=False,
+    draw_brain=True,
     cmap=None,
     vmin=None,
     vmax=None,
@@ -1355,6 +1373,7 @@ def brainplot(
     figsize=None,
     fig=None,
     axes=None,
+    title_kwargs=None,
     verbose=False,
     **kwargs,
 ):
@@ -1382,9 +1401,11 @@ def brainplot(
         * ``nib.GiftiImage`` or ``tuple`` — surface parcellation; pass a
           ``(lh, rh)`` tuple where each element is a ``GiftiImage`` or path.
     kind : {"surface", "glass", "slice", "combined"}, optional
-        Rendering mode. Defaults to "combined" for combined (cx+sc) parcellations
-        and "surface" otherwise. Use "combined" for surface+glass brain side-by-side,
-        "glass" or "slice" to render a combined parcellation as a plain MNI volume.
+        Rendering mode. Defaults to ``"surface"`` when *parcellation* is a
+        GIfTI image/tuple, ``"surface"`` for surface-only Parcellation objects,
+        and ``"glass"`` otherwise. Use ``"combined"`` for surface+glass side-by-side
+        (not yet implemented); pass ``"glass"`` or ``"slice"`` to render any
+        parcellation as a plain MNI volume.
     space : str, optional
         Parcellation space to use for rendering. Defaults to fslr32k for
         surface plots and MNI152NLin2009cAsym for volume plots.
@@ -1395,8 +1416,9 @@ def brainplot(
         Default: ["left_lateral", "left_medial", "right_medial", "right_lateral"].
     plot_contours : bool
         Draw black parcel borders on surface plots.
-    zoom : float
-        3-D axis zoom factor.
+    zoom : float, optional
+        Zoom factor applied to each brain panel. Defaults to ``1.5`` for
+        surface plots and ``1.0`` for glass/slice (no zoom).
     bg_on_data : bool
         Overlay sulcal shading on top of the statistical map.
     darkness : float
@@ -1421,6 +1443,10 @@ def brainplot(
         templates when None.
     draw_cross : bool
         Draw crosshair lines at slice positions.
+    draw_brain : bool
+        Draw the glass brain outline (grey wireframe). Set to ``False`` to
+        show only the statistical overlay without the brain silhouette.
+        Only applies to ``kind="glass"``.
     cmap : str, optional
         Colormap name. Defaults to "RdBu_r" when the colorscale is symmetric
         and "viridis" otherwise (see symmetric_cmap).
@@ -1462,6 +1488,13 @@ def brainplot(
         Existing figure to draw into.
     axes : list of matplotlib.Axes, optional
         Axes to draw into (must match layout when fig is provided).
+    title_kwargs : dict, optional
+        Extra keyword arguments passed to ``fig.text()`` for the title.
+        Standard matplotlib text params (``fontsize``, ``color``, etc.) are
+        accepted; defaults are ``{"fontsize": "large", "fontweight": "bold"}``.
+        A special ``"y"`` key sets the title y-position as a fraction of the
+        axes height (default: ``0.92`` inside the axes for surface, ``1.02``
+        above for others).
     verbose : bool
         Enable verbose logging.
     **kwargs
@@ -1499,6 +1532,12 @@ def brainplot(
     _is_gifti_list = (
         isinstance(data, list) and len(data) > 0
         and isinstance(data[0], tuple) and len(data[0]) == 2
+    )
+
+    _parc_is_gifti_input = (
+        isinstance(parcellation, (_nib.GiftiImage, tuple))
+        or (isinstance(parcellation, (str, _pl.Path))
+            and str(parcellation).endswith((".gii", ".gii.gz")))
     )
 
     if _is_nifti_like:
@@ -1540,7 +1579,7 @@ def brainplot(
                     parcellation = _fp(parcellation=_name)
                 except (ValueError, AssertionError):
                     try:
-                        parcellation = _Parc.from_path(source=parcellation)
+                        parcellation = _Parc.from_path(source=parcellation, space=space)
                     except Exception as _e:
                         raise ValueError(
                             f"'{parcellation}' is neither a NiSpace library parcellation "
@@ -1549,7 +1588,7 @@ def brainplot(
                         ) from _e
             elif isinstance(parcellation, (_pl.Path, _nib.Nifti1Image, _nib.GiftiImage, tuple)):
                 try:
-                    parcellation = _Parc.from_path(source=parcellation)
+                    parcellation = _Parc.from_path(source=parcellation, space=space)
                 except Exception as _e:
                     raise ValueError(
                         f"Could not load parcellation from path/image: {_e}"
@@ -1584,8 +1623,14 @@ def brainplot(
         _parc_is_combined = False
 
     # -- validate kind and auto-detect for image input --
+    _kind_user_set = kind is not None
     if kind is None:
-        kind = "glass"
+        kind = "surface" if _parc_is_gifti_input else "glass"
+    # post-load: surface-only Parcellation object passed directly (no MNI space available)
+    if (_img_mode is None and not _kind_user_set and kind == "glass"
+            and not any("mni" in s.lower() for s in parcellation.spaces)):
+        kind = "surface"
+        lgr.info("brainplot: surface-only parcellation → kind auto-set to 'surface'")
     if kind not in ("surface", "glass", "slice", "combined"):
         raise ValueError(f"kind='{kind}' must be 'surface', 'glass', 'slice', or 'combined'.")
     if _img_mode == "nifti" and kind in ("surface", "combined"):
@@ -1613,6 +1658,9 @@ def brainplot(
 
     # is_combined rendering path only active when explicitly requested
     is_combined = _parc_is_combined and kind == "combined"
+    # default zoom per kind
+    if zoom is None:
+        zoom = 1.5 if kind == "surface" else 1.0
     # default display_mode and cut_coords per kind
     if display_mode is None:
         if kind == "glass":
@@ -1658,7 +1706,9 @@ def brainplot(
 
     else:  # tabular
         if threshold == "auto":
-            _min_abs = float(np.nanmin(np.abs(data.values)))
+            _vals = data.values.flatten()
+            _finite_nz = _vals[np.isfinite(_vals) & (_vals != 0)]
+            _min_abs = float(np.min(np.abs(_finite_nz))) if len(_finite_nz) else 0.0
             threshold = float(np.float32(_min_abs / 2)) if _min_abs > 0 else None
             lgr.info(f"brainplot: threshold='auto' → {threshold}")
 
@@ -2035,7 +2085,7 @@ def brainplot(
                 kind, display_mode, cut_coords,
                 cmap, v_min, v_max,
                 symmetric_cmap, threshold, alpha, draw_cross,
-                colorbar=False, dim=dim,
+                colorbar=False, dim=dim, draw_brain=draw_brain, zoom=zoom,
                 **kwargs,
             )
             if colorbar:
@@ -2090,7 +2140,7 @@ def brainplot(
                 "glass", "lyrz", None,
                 cmap, v_min, v_max,
                 symmetric_cmap, threshold, alpha, draw_cross,
-                colorbar=False, dim=dim,
+                colorbar=False, dim=dim, draw_brain=draw_brain, zoom=zoom,
                 **kwargs,
             )
             if colorbar:
@@ -2106,7 +2156,7 @@ def brainplot(
                 kind, display_mode, cut_coords,
                 cmap, v_min, v_max,
                 symmetric_cmap, threshold, alpha, draw_cross,
-                colorbar=False, dim=dim,
+                colorbar=False, dim=dim, draw_brain=draw_brain, zoom=zoom,
                 **kwargs,
             )
             if colorbar:
@@ -2154,13 +2204,17 @@ def brainplot(
     else:  # glass
         _title_y = 1.02
         _title_va = "bottom"
+    _title_kw = {"fontsize": "large", "fontweight": "bold"}
+    if title_kwargs:
+        _title_kw.update(title_kwargs)
+    _title_y_override = _title_kw.pop("y", None)
     for (_tax, _tstr) in _pending_titles:
         _pos = _tax.get_position()
-        _ty = _pos.y0 + _title_y * _pos.height
+        _ty = _pos.y0 + (_title_y_override if _title_y_override is not None else _title_y) * _pos.height
         fig.text(
             _pos.x0 + _pos.width / 2, _ty, _tstr,
             ha="center", va=_title_va,
-            fontsize="large", fontweight="bold",
+            **_title_kw,
         )
 
     # -- hide unused subplot cells --
