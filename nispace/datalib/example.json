@@ -1,18 +1,6 @@
 {
     "anorexianervosa": {
         "tab": {
-            "Schaefer100": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Schaefer100.csv.gz"
-            },
-            "Schaefer200": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Schaefer200.csv.gz"
-            },
-            "Schaefer400": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Schaefer400.csv.gz"
-            },
             "Glasser": {
                 "host": "github-nispace",
                 "remote": "example/example-anorexianervosa_parc-Glasser.csv.gz"
@@ -52,6 +40,18 @@
             "HarvardOxfordSubcortical": {
                 "host": "github-nispace",
                 "remote": "example/example-anorexianervosa_parc-HarvardOxfordSubcortical.csv.gz"
+            },
+            "Schaefer100Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "example/example-anorexianervosa_parc-Schaefer100Parcels7Networks.csv.gz"
+            },
+            "Schaefer200Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "example/example-anorexianervosa_parc-Schaefer200Parcels7Networks.csv.gz"
+            },
+            "Schaefer400Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "example/example-anorexianervosa_parc-Schaefer400Parcels7Networks.csv.gz"
             }
         }
     }
