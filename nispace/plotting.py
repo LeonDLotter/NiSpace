@@ -1180,7 +1180,7 @@ def _data_to_surf_verts(data_lh, data_rh, parc_arr_lh, parc_arr_rh, medial=None)
 def _render_surf_row(ax, fig, vert_lh, vert_rh, parc_arr_lh, parc_arr_rh,
                      surf_geom, bg_data, views, cmap, vmin, vmax,
                      symmetric_cmap, bg_on_data, darkness, threshold, alpha,
-                     plot_contours, zoom, **kwargs):
+                     plot_contours, zoom, black_bg=False, **kwargs):
     """Render one brain map onto surfaces inside *ax* via n inset 3-D subaxes."""
     surf_lh, surf_rh = surf_geom
     n_views = len(views)
@@ -1247,6 +1247,12 @@ def _render_surf_row(ax, fig, vert_lh, vert_rh, parc_arr_lh, parc_arr_rh,
                 axes=ax_3d,
                 figure=fig,
             )
+        if black_bg:
+            ax_3d.set_facecolor("black")
+            for _pane in (ax_3d.xaxis.pane, ax_3d.yaxis.pane, ax_3d.zaxis.pane):
+                _pane.fill = True
+                _pane.set_facecolor("black")
+                _pane.set_edgecolor("black")
         ax_3d.set_box_aspect(ax_3d.get_box_aspect(), zoom=zoom)
 
 
@@ -1268,7 +1274,7 @@ def _data_to_volume(data, ref_nii, labels_in_img, bg_value=np.nan):
 def _render_vol_row(ax, fig, stat_nii, bg_img, kind, display_mode, cut_coords,
                     cmap, vmin, vmax, symmetric_cmap, threshold, alpha,
                     draw_cross, colorbar, dim="auto", colorbar_label="", colorbar_inset=None,
-                    draw_brain=True, zoom=1.0,
+                    draw_brain=True, zoom=1.0, black_bg=False,
                     **kwargs):
     """Render one brain map as a glass brain or anatomical slices into *ax*."""
     if kind == "glass":
@@ -1284,6 +1290,7 @@ def _render_vol_row(ax, fig, stat_nii, bg_img, kind, display_mode, cut_coords,
             threshold=threshold,
             colorbar=False,
             annotate=False,
+            black_bg=black_bg,
             **kwargs,
         )
         _new_axes = [a for a in fig.axes if id(a) not in _axes_before]
@@ -1322,7 +1329,7 @@ def _render_vol_row(ax, fig, stat_nii, bg_img, kind, display_mode, cut_coords,
             colorbar=False,
             threshold=threshold,
             display_mode=display_mode,
-            black_bg=False,
+            black_bg=black_bg,
             annotate=False,
             transparency=alpha,
             dim=dim,
@@ -1358,6 +1365,7 @@ def brainplot(
     bg_img=None,
     draw_cross=False,
     draw_brain=True,
+    black_bg=False,
     cmap=None,
     vmin=None,
     vmax=None,
@@ -1447,6 +1455,10 @@ def brainplot(
         Draw the glass brain outline (grey wireframe). Set to ``False`` to
         show only the statistical overlay without the brain silhouette.
         Only applies to ``kind="glass"``.
+    black_bg : bool
+        Use a black figure and axes background. For glass/slice this is
+        forwarded to nilearn's ``black_bg`` parameter; for surface it sets
+        the figure patch and 3-D axes pane colors to black.
     cmap : str, optional
         Colormap name. Defaults to "RdBu_r" when the colorscale is symmetric
         and "viridis" otherwise (see symmetric_cmap).
@@ -2032,6 +2044,9 @@ def brainplot(
         else:  # surface
             colorbar_inset = [1.04, 0.25, 0.02, 0.5]
 
+    if black_bg:
+        fig.patch.set_facecolor("black")
+
     axes_out = []
     # Colorbars and titles are added after all brains so they render on top.
     _pending_cbars  = []  # [(ax, v_min, v_max)]
@@ -2053,10 +2068,15 @@ def brainplot(
             ax_v = fig.add_subplot(_gs[ri * 2 + 1, ci])
             ax_s.set_axis_off()
             ax_v.set_axis_off()
+            if black_bg:
+                ax_s.set_facecolor("black")
+                ax_v.set_facecolor("black")
             axes_out += [ax_s, ax_v]
         else:
             ax_main = _axes_arr[ri, ci]
             ax_main.set_axis_off()
+            if black_bg:
+                ax_main.set_facecolor("black")
             axes_out.append(ax_main)
 
         # ---- title (deferred) ----
@@ -2072,7 +2092,7 @@ def brainplot(
                 surf_geom, bg_data, views,
                 cmap, v_min, v_max,
                 symmetric_cmap, bg_on_data, darkness, threshold, alpha,
-                plot_contours, zoom,
+                plot_contours, zoom, black_bg=black_bg,
                 **kwargs,
             )
             if colorbar:
@@ -2086,6 +2106,7 @@ def brainplot(
                 cmap, v_min, v_max,
                 symmetric_cmap, threshold, alpha, draw_cross,
                 colorbar=False, dim=dim, draw_brain=draw_brain, zoom=zoom,
+                black_bg=black_bg,
                 **kwargs,
             )
             if colorbar:
@@ -2104,7 +2125,7 @@ def brainplot(
                 surf_geom, bg_data, views,
                 cmap, v_min, v_max,
                 symmetric_cmap, bg_on_data, darkness, threshold, alpha,
-                plot_contours, zoom,
+                plot_contours, zoom, black_bg=black_bg,
                 **kwargs,
             )
             if colorbar:
@@ -2128,7 +2149,7 @@ def brainplot(
                 surf_geom, bg_data, views,
                 cmap, v_min, v_max,
                 symmetric_cmap, bg_on_data, darkness, threshold, alpha,
-                plot_contours, zoom,
+                plot_contours, zoom, black_bg=black_bg,
                 **kwargs,
             )
             _mni_arr     = mni_nii.get_fdata()
@@ -2141,6 +2162,7 @@ def brainplot(
                 cmap, v_min, v_max,
                 symmetric_cmap, threshold, alpha, draw_cross,
                 colorbar=False, dim=dim, draw_brain=draw_brain, zoom=zoom,
+                black_bg=black_bg,
                 **kwargs,
             )
             if colorbar:
@@ -2157,6 +2179,7 @@ def brainplot(
                 cmap, v_min, v_max,
                 symmetric_cmap, threshold, alpha, draw_cross,
                 colorbar=False, dim=dim, draw_brain=draw_brain, zoom=zoom,
+                black_bg=black_bg,
                 **kwargs,
             )
             if colorbar:
@@ -2188,8 +2211,13 @@ def brainplot(
             colorbar_inset[3] * _pos.height,
         ])
         fig.colorbar(_sm, cax=_cax)
+        if black_bg:
+            _cax.yaxis.set_tick_params(color="white", labelcolor="white")
+            for _sp in _cax.spines.values():
+                _sp.set_edgecolor("white")
         if colorbar_label:
-            _cax.set_title(colorbar_label, fontsize="medium")
+            _cax.set_title(colorbar_label, fontsize="medium",
+                           color="white" if black_bg else "black")
 
     # Add titles last so they render on top of all brain axes.
     # y is expressed as a fraction of the axes height added to the axes top.
@@ -2205,6 +2233,8 @@ def brainplot(
         _title_y = 1.02
         _title_va = "bottom"
     _title_kw = {"fontsize": "large", "fontweight": "bold"}
+    if black_bg:
+        _title_kw["color"] = "white"
     if title_kwargs:
         _title_kw.update(title_kwargs)
     _title_y_override = _title_kw.pop("y", None)
