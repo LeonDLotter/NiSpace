@@ -660,15 +660,135 @@ def _corr_vector(data_1d, correlation=1, seed=None):
     
     return output
 
-def correlated_vector(data_1d, correlation=1, seed=None):    
+def correlated_vector(data_1d, correlation=1, seed=None):
     # if correlation is 1, return the original vector
     if correlation == 1:
         return data_1d.copy()
-    
+
     # to array
     data_1d = np.array(data_1d).squeeze()
 
     # get correlated vector
     output = _corr_vector(data_1d, correlation=correlation, seed=seed)
-    
+
     return output
+
+
+def apply_transform(img, mni_from=None, mni_to=None, transform=None, order=3, res=None):
+    """Apply an ANTs/ITK composite transform between MNI152 template spaces.
+
+    Two operation modes:
+
+    * **MNI mode**: pass ``mni_from`` and ``mni_to``. The required templateflow
+      ``.h5`` is fetched automatically. If both spaces are equal the input image
+      is returned unchanged.
+    * **Transform mode**: pass a path (str / Path) to an ANTs composite ``.h5``
+      file. ``mni_from`` / ``mni_to`` are ignored; the target grid is inferred
+      from the filename (templateflow ``tpl-`` convention) when possible, or
+      falls back to the embedded displacement-field grid.
+
+    The output voxel resolution is controlled by ``res``. When ``res=None``
+    the voxel size of the input image is used (rounded to 1, 2, or 3 mm).
+
+    Parameters
+    ----------
+    img : str, Path, or nibabel.SpatialImage
+        Input image to resample.
+    mni_from : str, optional
+        Source MNI space (e.g. ``'MNI152NLin6Asym'``, ``'MNI152NLin2009cAsym'``).
+    mni_to : str, optional
+        Target MNI space.
+    transform : str or Path, optional
+        Path to an ANTs/ITK composite ``.h5`` transform file.
+    order : int
+        Spline interpolation order passed to ``nitransforms.resampling.apply``
+        (0 = nearest neighbour, 1 = trilinear, 3 = cubic spline). Default 3.
+    res : int, str, or None
+        Output resolution in mm. Accepted forms: ``1``, ``2``, ``3`` or
+        ``"1mm"``, ``"2mm"``, ``"3mm"``. If None, inferred from the input
+        image's voxel size (rounded and clamped to 1–3 mm).
+
+    Returns
+    -------
+    nibabel.Nifti1Image
+        Resampled image in the target space.
+    """
+    try:
+        from nitransforms.io.itk import ITKCompositeH5
+        from nitransforms import TransformChain, linear, DenseFieldTransform
+        from nitransforms.resampling import apply as _nt_apply
+    except ImportError as exc:
+        raise ImportError(
+            "apply_transform requires 'nitransforms'. "
+            "Install with: pip install nitransforms"
+        ) from exc
+
+    import re
+    import warnings
+
+    # Load image if path given
+    if isinstance(img, (str, Path)):
+        img = nib.load(str(img))
+
+    if transform is not None:
+        # Transform mode: load h5 directly
+        h5_path = str(transform)
+        # Try to parse target space from templateflow filename (tpl-XXX_from-...)
+        target_space = None
+        m = re.match(r"tpl-([^_]+)_", Path(h5_path).name)
+        if m:
+            target_space = m.group(1)
+    else:
+        # MNI mode: validate and fetch transform from templateflow
+        if mni_from is None or mni_to is None:
+            raise ValueError("Provide either 'transform' or both 'mni_from' and 'mni_to'.")
+        if mni_from == mni_to:
+            return img
+        import templateflow.api as tflow
+        h5_path = tflow.get(**{"template": mni_to, "from": mni_from, "extension": "h5"})
+        if not h5_path:
+            raise ValueError(
+                f"No templateflow transform found from '{mni_from}' to '{mni_to}'."
+            )
+        h5_path = str(h5_path)
+        target_space = mni_to
+
+    # Determine output resolution
+    _available_res = [1, 2, 3]
+    if res is None:
+        vox_size = float(np.min(np.abs(img.header.get_zooms()[:3])))
+        res = min(_available_res, key=lambda r: abs(r - vox_size))
+    else:
+        if isinstance(res, str):
+            res = int(res.lower().replace("mm", ""))
+        if res not in _available_res:
+            raise ValueError(f"res={res} not supported. Choose from {_available_res}.")
+
+    # Build reference image from nispace template (defines output grid)
+    # Deferred import avoids circular dependency (datasets.py imports utils.py)
+    reference = None
+    if target_space is not None:
+        try:
+            from nispace.datasets import fetch_template
+            tpl_path = fetch_template(target_space, res=f"{res}mm", desc="mask", verbose=False)
+            reference = nib.load(str(tpl_path))
+        except Exception:
+            pass  # fall through to warp-grid fallback below
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning, module="nitransforms")
+
+        # Load composite h5: part 0 = affine, part 1 = displacement field
+        parts = ITKCompositeH5.from_filename(h5_path)
+        chain = TransformChain(
+            [linear.Affine(parts[0].to_ras()), DenseFieldTransform(parts[1], is_deltas=True)]
+        )
+
+        if reference is None:
+            # Fallback: use the displacement field's own spatial grid
+            warp_nii = parts[1]
+            reference = nib.Nifti1Image(
+                np.zeros(warp_nii.shape[:3], dtype=np.uint8), warp_nii.affine, warp_nii.header
+            )
+
+        return _nt_apply(chain, img, reference=reference, order=order)
