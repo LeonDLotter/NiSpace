@@ -6,12 +6,14 @@ from nilearn.image import resample_img, coord_transform
 from neuromaps.images import load_gifti, load_nifti, load_data, PARCIGNORE
 from neuromaps.nulls.nulls import batch_surrogates
 from neuromaps.nulls.spins import gen_spinsamples, get_parcel_centroids
-from neuromaps.datasets import fetch_atlas
+from collections import namedtuple
 from neuromaps.points import make_surf_graph
 from scipy.sparse.csgraph import dijkstra
 from scipy.spatial.distance import cdist
 from sklearn.preprocessing import minmax_scale
 from tqdm.auto import tqdm
+
+_SurfPair = namedtuple("_SurfPair", ["L", "R"])
 
 # import MoranRandomization function, copied from brainspace, as our default null model
 # brainspace was removed as an dependency because it installs vtk, which is a large 3d rendering
@@ -367,16 +369,22 @@ _NULL_METHODS = {
 
 
 def _get_surface_atlas(parc_space, density):
-    """Return (atlas_bundle, surf_key) for a supported surface space."""
+    """Return (atlas_dict, surf_key) for a supported surface space."""
+    from .datasets import fetch_template
     if "fsa" in parc_space.lower():
-        return fetch_atlas("fsaverage", density), "pial"
+        space, surf_key = "fsaverage", "pial"
     elif "fslr" in parc_space.lower():
-        return fetch_atlas("fsLR", density), "midthickness"
+        space, surf_key = "fsLR", "midthickness"
     else:
         lgr.critical_raise(
             f"Surface space '{parc_space}' not supported. Use 'fsaverage' or 'fsLR'.",
             ValueError,
         )
+    atlas = {}
+    for desc in [surf_key, "sphere", "medial"]:
+        L, R = fetch_template(space, desc=desc, res=density, check_file_hash=False, verbose=False)
+        atlas[desc] = _SurfPair(L, R)
+    return atlas, surf_key
 
 
 def generate_spins(parc, parc_space, n_perm=1000, method="original", seed=None,

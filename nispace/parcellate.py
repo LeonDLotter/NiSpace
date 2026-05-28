@@ -10,7 +10,7 @@ from nilearn.image import new_img_like, math_img
 import numpy as np
 import pandas as pd
 
-from neuromaps.datasets import DENSITIES, fetch_atlas
+from neuromaps.datasets import DENSITIES
 from neuromaps.images import construct_shape_gii, load_gifti, load_nifti, load_data
 from neuromaps.resampling import resample_images
 from neuromaps.transforms import _check_hemi, _estimate_density
@@ -219,9 +219,9 @@ class Parcellater():
             if needs_auto:
                 density, = _estimate_density((data,), hemi=hemi)
                 mask_space = space if self.resampling_target in ('data', None) else self.space
-                atlas_medialwall = fetch_atlas(mask_space, density)['medial']
-                atlas_medialwall = atlas_medialwall[0] if hemi == 'L' \
-                    else atlas_medialwall[1] if hemi == 'R' else atlas_medialwall
+                from .datasets import fetch_template
+                _mw_L, _mw_R = fetch_template(mask_space, desc="medial", res=density, check_file_hash=False, verbose=False)
+                atlas_medialwall = _mw_L if hemi == 'L' else _mw_R if hemi == 'R' else (_mw_L, _mw_R)
                 nomedialwall = load_data(atlas_medialwall)
                 auto_value = np.median(darr[nomedialwall == 0])
             else:

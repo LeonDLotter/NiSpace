@@ -2,38 +2,38 @@
     "MNI152NLin2009cAsym": {
         "1mm": {
             "T1w": {
-                "host": "url",
-                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_T1w.nii.gz"
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/T1w/tpl-MNI152NLin2009cAsym_desc-T1w_res-1mm.nii.gz"
             },
             "brain": {
-                "host": "url",
-                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_desc-brain_T1w.nii.gz"
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/brain/tpl-MNI152NLin2009cAsym_desc-brain_res-1mm.nii.gz"
             },
             "mask": {
-                "host": "url",
-                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_desc-brain_mask.nii.gz"
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/mask/tpl-MNI152NLin2009cAsym_desc-mask_res-1mm.nii.gz"
             },
             "gmprob": {
-                "host": "url",
-                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_label-GM_probseg.nii.gz"
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/gmprob/tpl-MNI152NLin2009cAsym_desc-gmprob_res-1mm.nii.gz"
             }
         },
         "2mm": {
             "T1w": {
-                "host": "url",
-                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_T1w.nii.gz"
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/T1w/tpl-MNI152NLin2009cAsym_desc-T1w_res-2mm.nii.gz"
             },
             "brain": {
-                "host": "url",
-                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_desc-brain_T1w.nii.gz"
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/brain/tpl-MNI152NLin2009cAsym_desc-brain_res-2mm.nii.gz"
             },
             "mask": {
-                "host": "url",
-                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_desc-brain_mask.nii.gz"
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/mask/tpl-MNI152NLin2009cAsym_desc-mask_res-2mm.nii.gz"
             },
             "gmprob": {
-                "host": "url",
-                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_label-GM_probseg.nii.gz"
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/gmprob/tpl-MNI152NLin2009cAsym_desc-gmprob_res-2mm.nii.gz"
             }
         },
         "3mm": {
@@ -55,34 +55,33 @@
             }
         }
     },
-
     "MNI152NLin6Asym": {
         "1mm": {
             "T1w": {
-                "host": "url",
-                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin6Asym/tpl-MNI152NLin6Asym_res-01_T1w.nii.gz"
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/T1w/tpl-MNI152NLin6Asym_desc-T1w_res-1mm.nii.gz"
             },
             "brain": {
-                "host": "url",
-                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin6Asym/tpl-MNI152NLin6Asym_res-01_desc-brain_T1w.nii.gz"
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/brain/tpl-MNI152NLin6Asym_desc-brain_res-1mm.nii.gz"
             },
             "mask": {
-                "host": "url",
-                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin6Asym/tpl-MNI152NLin6Asym_res-01_desc-brain_mask.nii.gz"
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/mask/tpl-MNI152NLin6Asym_desc-mask_res-1mm.nii.gz"
             }
         },
         "2mm": {
             "T1w": {
-                "host": "url",
-                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin6Asym/tpl-MNI152NLin6Asym_res-02_T1w.nii.gz"
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/T1w/tpl-MNI152NLin6Asym_desc-T1w_res-2mm.nii.gz"
             },
             "brain": {
-                "host": "url",
-                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin6Asym/tpl-MNI152NLin6Asym_res-02_desc-brain_T1w.nii.gz"
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/brain/tpl-MNI152NLin6Asym_desc-brain_res-2mm.nii.gz"
             },
             "mask": {
-                "host": "url",
-                "remote": "https://templateflow.s3.amazonaws.com/tpl-MNI152NLin6Asym/tpl-MNI152NLin6Asym_res-02_desc-brain_mask.nii.gz"
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/mask/tpl-MNI152NLin6Asym_desc-mask_res-2mm.nii.gz"
             }
         },
         "3mm": {
@@ -100,52 +99,564 @@
             }
         }
     },
-
-    "fsaverage": {
-        "10k": {
-            "pial": {
+    "fsLR": {
+        "4k": {
+            "midthickness": {
                 "L": {
-                    "host": "url",
-                    "remote": "https://templateflow.s3.amazonaws.com/tpl-fsaverage/tpl-fsaverage_hemi-L_den-10k_pial.surf.gii"
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/midthickness/tpl-fsLR_desc-midthickness_res-4k_hemi-L.surf.gii"
                 },
                 "R": {
-                    "host": "url",
-                    "remote": "https://templateflow.s3.amazonaws.com/tpl-fsaverage/tpl-fsaverage_hemi-R_den-10k_pial.surf.gii"
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/midthickness/tpl-fsLR_desc-midthickness_res-4k_hemi-R.surf.gii"
+                }
+            },
+            "inflated": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/inflated/tpl-fsLR_desc-inflated_res-4k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/inflated/tpl-fsLR_desc-inflated_res-4k_hemi-R.surf.gii"
                 }
             },
             "sphere": {
                 "L": {
-                    "host": "url",
-                    "remote": "https://templateflow.s3.amazonaws.com/tpl-fsaverage/tpl-fsaverage_hemi-L_den-10k_sphere.surf.gii"
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sphere/tpl-fsLR_desc-sphere_res-4k_hemi-L.surf.gii"
                 },
                 "R": {
-                    "host": "url",
-                    "remote": "https://templateflow.s3.amazonaws.com/tpl-fsaverage/tpl-fsaverage_hemi-R_den-10k_sphere.surf.gii"
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sphere/tpl-fsLR_desc-sphere_res-4k_hemi-R.surf.gii"
+                }
+            },
+            "medial": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/medial/tpl-fsLR_desc-medial_res-4k_hemi-L.label.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/medial/tpl-fsLR_desc-medial_res-4k_hemi-R.label.gii"
+                }
+            },
+            "sulc": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sulc/tpl-fsLR_desc-sulc_res-4k_hemi-L.shape.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sulc/tpl-fsLR_desc-sulc_res-4k_hemi-R.shape.gii"
+                }
+            },
+            "vaavg": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/vaavg/tpl-fsLR_desc-vaavg_res-4k_hemi-L.shape.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/vaavg/tpl-fsLR_desc-vaavg_res-4k_hemi-R.shape.gii"
+                }
+            }
+        },
+        "8k": {
+            "midthickness": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/midthickness/tpl-fsLR_desc-midthickness_res-8k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/midthickness/tpl-fsLR_desc-midthickness_res-8k_hemi-R.surf.gii"
+                }
+            },
+            "inflated": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/inflated/tpl-fsLR_desc-inflated_res-8k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/inflated/tpl-fsLR_desc-inflated_res-8k_hemi-R.surf.gii"
+                }
+            },
+            "sphere": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sphere/tpl-fsLR_desc-sphere_res-8k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sphere/tpl-fsLR_desc-sphere_res-8k_hemi-R.surf.gii"
+                }
+            },
+            "medial": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/medial/tpl-fsLR_desc-medial_res-8k_hemi-L.label.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/medial/tpl-fsLR_desc-medial_res-8k_hemi-R.label.gii"
+                }
+            },
+            "sulc": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sulc/tpl-fsLR_desc-sulc_res-8k_hemi-L.shape.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sulc/tpl-fsLR_desc-sulc_res-8k_hemi-R.shape.gii"
+                }
+            },
+            "vaavg": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/vaavg/tpl-fsLR_desc-vaavg_res-8k_hemi-L.shape.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/vaavg/tpl-fsLR_desc-vaavg_res-8k_hemi-R.shape.gii"
+                }
+            }
+        },
+        "32k": {
+            "midthickness": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/midthickness/tpl-fsLR_desc-midthickness_res-32k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/midthickness/tpl-fsLR_desc-midthickness_res-32k_hemi-R.surf.gii"
+                }
+            },
+            "inflated": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/inflated/tpl-fsLR_desc-inflated_res-32k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/inflated/tpl-fsLR_desc-inflated_res-32k_hemi-R.surf.gii"
+                }
+            },
+            "veryinflated": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/veryinflated/tpl-fsLR_desc-veryinflated_res-32k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/veryinflated/tpl-fsLR_desc-veryinflated_res-32k_hemi-R.surf.gii"
+                }
+            },
+            "sphere": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sphere/tpl-fsLR_desc-sphere_res-32k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sphere/tpl-fsLR_desc-sphere_res-32k_hemi-R.surf.gii"
+                }
+            },
+            "medial": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/medial/tpl-fsLR_desc-medial_res-32k_hemi-L.label.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/medial/tpl-fsLR_desc-medial_res-32k_hemi-R.label.gii"
+                }
+            },
+            "sulc": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sulc/tpl-fsLR_desc-sulc_res-32k_hemi-L.shape.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sulc/tpl-fsLR_desc-sulc_res-32k_hemi-R.shape.gii"
+                }
+            },
+            "vaavg": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/vaavg/tpl-fsLR_desc-vaavg_res-32k_hemi-L.shape.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/vaavg/tpl-fsLR_desc-vaavg_res-32k_hemi-R.shape.gii"
+                }
+            }
+        },
+        "164k": {
+            "midthickness": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/midthickness/tpl-fsLR_desc-midthickness_res-164k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/midthickness/tpl-fsLR_desc-midthickness_res-164k_hemi-R.surf.gii"
+                }
+            },
+            "inflated": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/inflated/tpl-fsLR_desc-inflated_res-164k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/inflated/tpl-fsLR_desc-inflated_res-164k_hemi-R.surf.gii"
+                }
+            },
+            "veryinflated": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/veryinflated/tpl-fsLR_desc-veryinflated_res-164k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/veryinflated/tpl-fsLR_desc-veryinflated_res-164k_hemi-R.surf.gii"
+                }
+            },
+            "sphere": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sphere/tpl-fsLR_desc-sphere_res-164k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sphere/tpl-fsLR_desc-sphere_res-164k_hemi-R.surf.gii"
+                }
+            },
+            "medial": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/medial/tpl-fsLR_desc-medial_res-164k_hemi-L.label.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/medial/tpl-fsLR_desc-medial_res-164k_hemi-R.label.gii"
+                }
+            },
+            "sulc": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sulc/tpl-fsLR_desc-sulc_res-164k_hemi-L.shape.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sulc/tpl-fsLR_desc-sulc_res-164k_hemi-R.shape.gii"
+                }
+            },
+            "vaavg": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/vaavg/tpl-fsLR_desc-vaavg_res-164k_hemi-L.shape.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/vaavg/tpl-fsLR_desc-vaavg_res-164k_hemi-R.shape.gii"
+                }
+            }
+        }
+    },
+    "fsaverage": {
+        "3k": {
+            "white": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/white/tpl-fsaverage_desc-white_res-3k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/white/tpl-fsaverage_desc-white_res-3k_hemi-R.surf.gii"
+                }
+            },
+            "pial": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/pial/tpl-fsaverage_desc-pial_res-3k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/pial/tpl-fsaverage_desc-pial_res-3k_hemi-R.surf.gii"
+                }
+            },
+            "inflated": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/inflated/tpl-fsaverage_desc-inflated_res-3k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/inflated/tpl-fsaverage_desc-inflated_res-3k_hemi-R.surf.gii"
+                }
+            },
+            "sphere": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/sphere/tpl-fsaverage_desc-sphere_res-3k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/sphere/tpl-fsaverage_desc-sphere_res-3k_hemi-R.surf.gii"
+                }
+            },
+            "medial": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/medial/tpl-fsaverage_desc-medial_res-3k_hemi-L.label.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/medial/tpl-fsaverage_desc-medial_res-3k_hemi-R.label.gii"
+                }
+            },
+            "sulc": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/sulc/tpl-fsaverage_desc-sulc_res-3k_hemi-L.shape.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/sulc/tpl-fsaverage_desc-sulc_res-3k_hemi-R.shape.gii"
+                }
+            },
+            "vaavg": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/vaavg/tpl-fsaverage_desc-vaavg_res-3k_hemi-L.shape.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/vaavg/tpl-fsaverage_desc-vaavg_res-3k_hemi-R.shape.gii"
+                }
+            }
+        },
+        "10k": {
+            "white": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/white/tpl-fsaverage_desc-white_res-10k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/white/tpl-fsaverage_desc-white_res-10k_hemi-R.surf.gii"
+                }
+            },
+            "pial": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/pial/tpl-fsaverage_desc-pial_res-10k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/pial/tpl-fsaverage_desc-pial_res-10k_hemi-R.surf.gii"
+                }
+            },
+            "inflated": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/inflated/tpl-fsaverage_desc-inflated_res-10k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/inflated/tpl-fsaverage_desc-inflated_res-10k_hemi-R.surf.gii"
+                }
+            },
+            "sphere": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/sphere/tpl-fsaverage_desc-sphere_res-10k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/sphere/tpl-fsaverage_desc-sphere_res-10k_hemi-R.surf.gii"
+                }
+            },
+            "medial": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/medial/tpl-fsaverage_desc-medial_res-10k_hemi-L.label.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/medial/tpl-fsaverage_desc-medial_res-10k_hemi-R.label.gii"
+                }
+            },
+            "sulc": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/sulc/tpl-fsaverage_desc-sulc_res-10k_hemi-L.shape.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/sulc/tpl-fsaverage_desc-sulc_res-10k_hemi-R.shape.gii"
+                }
+            },
+            "vaavg": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/vaavg/tpl-fsaverage_desc-vaavg_res-10k_hemi-L.shape.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/vaavg/tpl-fsaverage_desc-vaavg_res-10k_hemi-R.shape.gii"
                 }
             }
         },
         "41k": {
-            "pial": {
+            "white": {
                 "L": {
-                    "host": "url",
-                    "remote": "https://templateflow.s3.amazonaws.com/tpl-fsaverage/tpl-fsaverage_hemi-L_den-41k_pial.surf.gii"
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/white/tpl-fsaverage_desc-white_res-41k_hemi-L.surf.gii"
                 },
                 "R": {
-                    "host": "url",
-                    "remote": "https://templateflow.s3.amazonaws.com/tpl-fsaverage/tpl-fsaverage_hemi-R_den-41k_pial.surf.gii"
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/white/tpl-fsaverage_desc-white_res-41k_hemi-R.surf.gii"
+                }
+            },
+            "pial": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/pial/tpl-fsaverage_desc-pial_res-41k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/pial/tpl-fsaverage_desc-pial_res-41k_hemi-R.surf.gii"
+                }
+            },
+            "inflated": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/inflated/tpl-fsaverage_desc-inflated_res-41k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/inflated/tpl-fsaverage_desc-inflated_res-41k_hemi-R.surf.gii"
                 }
             },
             "sphere": {
                 "L": {
-                    "host": "url",
-                    "remote": "https://templateflow.s3.amazonaws.com/tpl-fsaverage/tpl-fsaverage_hemi-L_den-41k_sphere.surf.gii"
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/sphere/tpl-fsaverage_desc-sphere_res-41k_hemi-L.surf.gii"
                 },
                 "R": {
-                    "host": "url",
-                    "remote": "https://templateflow.s3.amazonaws.com/tpl-fsaverage/tpl-fsaverage_hemi-R_den-41k_sphere.surf.gii"
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/sphere/tpl-fsaverage_desc-sphere_res-41k_hemi-R.surf.gii"
+                }
+            },
+            "medial": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/medial/tpl-fsaverage_desc-medial_res-41k_hemi-L.label.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/medial/tpl-fsaverage_desc-medial_res-41k_hemi-R.label.gii"
+                }
+            },
+            "sulc": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/sulc/tpl-fsaverage_desc-sulc_res-41k_hemi-L.shape.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/sulc/tpl-fsaverage_desc-sulc_res-41k_hemi-R.shape.gii"
+                }
+            },
+            "vaavg": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/vaavg/tpl-fsaverage_desc-vaavg_res-41k_hemi-L.shape.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/vaavg/tpl-fsaverage_desc-vaavg_res-41k_hemi-R.shape.gii"
+                }
+            }
+        },
+        "164k": {
+            "white": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/white/tpl-fsaverage_desc-white_res-164k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/white/tpl-fsaverage_desc-white_res-164k_hemi-R.surf.gii"
+                }
+            },
+            "pial": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/pial/tpl-fsaverage_desc-pial_res-164k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/pial/tpl-fsaverage_desc-pial_res-164k_hemi-R.surf.gii"
+                }
+            },
+            "inflated": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/inflated/tpl-fsaverage_desc-inflated_res-164k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/inflated/tpl-fsaverage_desc-inflated_res-164k_hemi-R.surf.gii"
+                }
+            },
+            "sphere": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/sphere/tpl-fsaverage_desc-sphere_res-164k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/sphere/tpl-fsaverage_desc-sphere_res-164k_hemi-R.surf.gii"
+                }
+            },
+            "medial": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/medial/tpl-fsaverage_desc-medial_res-164k_hemi-L.label.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/medial/tpl-fsaverage_desc-medial_res-164k_hemi-R.label.gii"
+                }
+            },
+            "sulc": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/sulc/tpl-fsaverage_desc-sulc_res-164k_hemi-L.shape.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/sulc/tpl-fsaverage_desc-sulc_res-164k_hemi-R.shape.gii"
+                }
+            },
+            "vaavg": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/vaavg/tpl-fsaverage_desc-vaavg_res-164k_hemi-L.shape.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/vaavg/tpl-fsaverage_desc-vaavg_res-164k_hemi-R.shape.gii"
                 }
             }
         }
-
     }
 }

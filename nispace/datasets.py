@@ -80,12 +80,13 @@ def fetch_template(template: str = _SPACE_DEFAULT,
         The template to fetch. Default is "MNI152NLin2009cAsym".
         
     res : str, optional
-        The resolution of the template to fetch. If None, will default to "1mm" for MNI152 and 
-        "10k" for fsaverage.
-        
+        The resolution of the template to fetch. Defaults: "1mm" for MNI152, "41k" for
+        fsaverage (available: 3k/10k/41k/164k), "32k" for fsLR (available: 4k/8k/32k/164k).
+
     desc : str, optional
-        The description of the template to fetch. If None, will default to "T1w" for MNI152 and 
-        "pial" for fsaverage.
+        The image type. Defaults: "T1w" for MNI152 (also: brain/mask/gmprob); "pial" for
+        fsaverage (also: white/inflated/sphere/sulc/medial/vaavg); "midthickness" for fsLR
+        (also: inflated/veryinflated[32k+]/sphere/sulc/medial/vaavg).
         
     hemi : list of str, optional
         The hemispheres to fetch. Default is ["L", "R"].
@@ -122,6 +123,11 @@ def fetch_template(template: str = _SPACE_DEFAULT,
     elif "fsa" in template.lower():
         res = "41k" if res is None else res
         desc = "pial" if desc is None else desc
+        if hemi is None:
+            hemi = ["L", "R"]
+    elif "fslr" in template.lower():
+        res = "32k" if res is None else res
+        desc = "midthickness" if desc is None else desc
         if hemi is None:
             hemi = ["L", "R"]
     

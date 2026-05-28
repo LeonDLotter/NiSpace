@@ -1104,7 +1104,7 @@ def _auto_vmin_vmax(data_flat, symmetric, vmin=None, vmax=None):
 
 
 def _load_fslr_assets(surf_mesh="inflated"):
-    """Load fslr32k surface geometry, sulcal background, and medial wall mask via neuromaps.
+    """Load fsLR 32k surface geometry, sulcal background, and medial wall mask.
 
     Returns
     -------
@@ -1112,25 +1112,26 @@ def _load_fslr_assets(surf_mesh="inflated"):
     bg_data   : (sulc_lh_array, sulc_rh_array)
     medial    : (medial_lh_array, medial_rh_array)
     """
-    # TODO: ADJUST THIS TO ONLY LOAD VIA NISPACE FETCHERS
-    from neuromaps.datasets import fetch_fslr
-    fslr = fetch_fslr(density="32k")
-    valid = [k for k in ("pial", "inflated", "midthickness", "veryinflated") if k in fslr]
-    if surf_mesh not in fslr:
+    from .datasets import fetch_template
+    valid = ("midthickness", "inflated", "veryinflated", "sphere")
+    if surf_mesh not in valid:
         raise ValueError(
             f"surf_mesh='{surf_mesh}' not available for fsLR. Choose from: {valid}"
         )
-    surf_lh = images.load_gifti(str(fslr[surf_mesh].L))
-    surf_rh = images.load_gifti(str(fslr[surf_mesh].R))
-    sulc_lh = images.load_gifti(str(fslr["sulc"].L)).agg_data()
-    sulc_rh = images.load_gifti(str(fslr["sulc"].R)).agg_data()
-    medial_lh = images.load_gifti(str(fslr["medial"].L)).agg_data()
-    medial_rh = images.load_gifti(str(fslr["medial"].R)).agg_data()
+    surf_lh, surf_rh = fetch_template("fsLR", desc=surf_mesh, check_file_hash=False, verbose=False)
+    sulc_lh_path, sulc_rh_path = fetch_template("fsLR", desc="sulc", check_file_hash=False, verbose=False)
+    medial_lh_path, medial_rh_path = fetch_template("fsLR", desc="medial", check_file_hash=False, verbose=False)
+    surf_lh = images.load_gifti(str(surf_lh))
+    surf_rh = images.load_gifti(str(surf_rh))
+    sulc_lh = images.load_gifti(str(sulc_lh_path)).agg_data()
+    sulc_rh = images.load_gifti(str(sulc_rh_path)).agg_data()
+    medial_lh = images.load_gifti(str(medial_lh_path)).agg_data()
+    medial_rh = images.load_gifti(str(medial_rh_path)).agg_data()
     return (surf_lh, surf_rh), (sulc_lh, sulc_rh), (medial_lh, medial_rh)
 
 
 def _load_fsaverage_assets(surf_mesh="pial"):
-    """Load fsaverage surface geometry, sulcal background, and medial wall mask via neuromaps.
+    """Load fsaverage 41k surface geometry, sulcal background, and medial wall mask.
 
     Returns
     -------
@@ -1138,22 +1139,23 @@ def _load_fsaverage_assets(surf_mesh="pial"):
     bg_data   : (sulc_lh_array, sulc_rh_array)
     medial    : (medial_lh_array, medial_rh_array)
     """
-    # TODO: ADJUST THIS TO ONLY LOAD VIA NISPACE FETCHERS
-    from neuromaps.datasets import fetch_fsaverage
-    fsavg = fetch_fsaverage(density="41k")
-    valid = [k for k in ("pial", "inflated", "white") if k in fsavg]
-    if surf_mesh not in fsavg:
+    from .datasets import fetch_template
+    valid = ("pial", "white", "inflated", "sphere")
+    if surf_mesh not in valid:
         lgr.warning(
             f"surf_mesh='{surf_mesh}' not available for fsaverage. "
             f"Choose from: {valid}. Falling back to 'pial'."
         )
         surf_mesh = "pial"
-    surf_lh = images.load_gifti(str(fsavg[surf_mesh].L))
-    surf_rh = images.load_gifti(str(fsavg[surf_mesh].R))
-    sulc_lh = images.load_gifti(str(fsavg["sulc"].L)).agg_data()
-    sulc_rh = images.load_gifti(str(fsavg["sulc"].R)).agg_data()
-    medial_lh = images.load_gifti(str(fsavg["medial"].L)).agg_data()
-    medial_rh = images.load_gifti(str(fsavg["medial"].R)).agg_data()
+    surf_lh, surf_rh = fetch_template("fsaverage", desc=surf_mesh, check_file_hash=False, verbose=False)
+    sulc_lh_path, sulc_rh_path = fetch_template("fsaverage", desc="sulc", check_file_hash=False, verbose=False)
+    medial_lh_path, medial_rh_path = fetch_template("fsaverage", desc="medial", check_file_hash=False, verbose=False)
+    surf_lh = images.load_gifti(str(surf_lh))
+    surf_rh = images.load_gifti(str(surf_rh))
+    sulc_lh = images.load_gifti(str(sulc_lh_path)).agg_data()
+    sulc_rh = images.load_gifti(str(sulc_rh_path)).agg_data()
+    medial_lh = images.load_gifti(str(medial_lh_path)).agg_data()
+    medial_rh = images.load_gifti(str(medial_rh_path)).agg_data()
     return (surf_lh, surf_rh), (sulc_lh, sulc_rh), (medial_lh, medial_rh)
 
 
