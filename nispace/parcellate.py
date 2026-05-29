@@ -246,7 +246,11 @@ class Parcellater():
             
             # load data
             parc_array = load_data(parc)
-            parc_array_nogb = parc_array[load_data(data) != background_value]
+            data_arr = load_data(data)
+            not_bg = ~np.isnan(data_arr.astype(float))
+            for _v in bg_arr:
+                not_bg &= (data_arr != _v)
+            parc_array_nogb = parc_array[not_bg]
             
             parc_n_datapoints = np.zeros(len(self.parcellation_idc), dtype=int)
             data_n_nobg = parc_n_datapoints.copy()
