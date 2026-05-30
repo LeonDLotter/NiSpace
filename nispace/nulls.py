@@ -40,7 +40,7 @@ def _dist_mat_from_coords(coords, dtype=np.float32):
     return dist_mat
 
 
-def _surf_geodesic_row(i, parcel_verts, all_parcel_verts, graph, n_parcels, centroids, dtype):
+def _surf_geodesic_row(i, parcel_verts, graph, n_parcels, centroids, dtype):
     """Compute one row of the geodesic parcel-parcel distance matrix (upper triangle).
 
     Default (centroids=False): multi-source Dijkstra from all vertices of parcel i,
@@ -54,7 +54,7 @@ def _surf_geodesic_row(i, parcel_verts, all_parcel_verts, graph, n_parcels, cent
         dists = dists[np.newaxis, :]
     row = np.zeros(n_parcels, dtype=dtype)
     for j in range(i, n_parcels):
-        tgt = all_parcel_verts[j] if not centroids else all_parcel_verts[j][:1]
+        tgt = parcel_verts[j] if not centroids else parcel_verts[j][:1]
         row[j] = dists[:, tgt].mean()
     return row
 
@@ -114,7 +114,7 @@ def _surf_dist_hemi(gifti_surf, gifti_parc, medial_gifti, centroids, n_proc, dty
              f"{mode_tag} mode, {n_proc} proc.")
 
     dist_rows = Parallel(n_jobs=n_proc)(
-        delayed(_surf_geodesic_row)(i, parcel_verts, parcel_verts, graph, n_parcels, centroids, dtype)
+        delayed(_surf_geodesic_row)(i, parcel_verts, graph, n_parcels, centroids, dtype)
         for i in tqdm(range(n_parcels), desc=f"Distance matrix{hemi_tag} ({n_proc} proc)", disable=not verbose)
     )
 
@@ -483,14 +483,25 @@ def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"],
         if parc_resample and not isinstance(parc_resample, str):
             if parc_resample is True:
                 parc_resample = 3
-            lgr.info(f"Resampling volumetric parcellation to voxelsize of {parc_resample} "
+            current_voxsize = abs(round(parc.affine[0, 0]))
+            lgr.info(f"Resampling volumetric parcellation from {current_voxsize}mm to {parc_resample}mm "
                       "for distance matrix generation.")
-            parc = resample_img(
+            ids_before = set(np.trim_zeros(np.unique(parc.get_fdata())))
+            parc_resampled = resample_img(
                 parc,
                 target_affine=np.diag([parc_resample] * 3),
                 interpolation="nearest",
                 force_resample=True, copy_header=True
             )
+            lost = ids_before - set(np.trim_zeros(np.unique(parc_resampled.get_fdata())))
+            if lost:
+                lgr.warning(
+                    f"Resampling to {parc_resample}mm voxels would drop {len(lost)} parcel(s) "
+                    f"(IDs: {sorted(int(i) for i in lost)}). Skipping downsampling and using "
+                    f"original {current_voxsize}mm resolution."
+                )
+            else:
+                parc = parc_resampled
         parc_data = parc.get_fdata()
         parc_affine = parc.affine
         parcels = np.trim_zeros(np.unique(parc_data))
@@ -547,18 +558,36 @@ def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"],
                 lgr.info(f"Resampling surface parcellation from {current_density} to {parc_resample} density "
                          "for distance matrix generation.")
                 resample_fn = fsaverage_to_fsaverage if "fsa" in parc_space.lower() else fslr_to_fslr
-                parc = resample_fn(parc, parc_resample, method="nearest")
+
+                def _parc_ids(p):
+                    imgs = p if isinstance(p, tuple) else (p,)
+                    return set(np.trim_zeros(np.unique(
+                        np.concatenate([load_data(img).astype(int).ravel() for img in imgs])
+                    )))
+
+                ids_before = _parc_ids(parc)
+                parc_resampled = resample_fn(parc, parc_resample, method="nearest")
+                lost = ids_before - _parc_ids(parc_resampled)
+                if lost:
+                    lgr.warning(
+                        f"Resampling to {parc_resample} would drop {len(lost)} parcel(s) "
+                        f"(IDs: {sorted(lost)}). Skipping downsampling and using original "
+                        f"{current_density} density."
+                    )
+                else:
+                    parc = parc_resampled
                     
 
         if surf_euclidean:
+            density = _img_density_for_neuromaps(parc[0] if isinstance(parc, tuple) else parc)
+            lgr.info(f"Estimating euclidean distance matrix: {parc_space} {density} surface parcels, "
+                     f"centroid mode.")
             _parc_centroids = find_surf_parc_centroids(
                 parc=parc,
                 parc_space=parc_space,
                 parc_hemi=parc_hemi,
-                parc_density=_img_density_for_neuromaps(parc),
+                parc_density=density,
             )
-            n_parcels_surf = len(_parc_centroids)
-            lgr.info(f"Estimating euclidean distance matrix: {n_parcels_surf} surface parcels, centroid mode.")
             dist = _dist_mat_from_coords(_parc_centroids, dtype=dtype)
 
         else:
