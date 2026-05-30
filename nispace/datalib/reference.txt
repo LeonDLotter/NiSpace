@@ -48,6 +48,14 @@ and transformed to fsLR and fsaverage (obtain with: "MNI152NLin2009cAsym", "MNI1
 Please cite the original publication when using these maps.
 
 
+# rsn17
+The NiSpace "RSN17" dataset contains probabilistic resting-state network maps derived from individual-level cortical
+parcellations of 1029 HCP subjects into 17 functional networks, generated as described in Kong et al., 2021 
+(https://doi.org/10.1093/cercor/bhab101) and made available at https://github.com/ThomasYeoLab/Kong2022_ArealMSHBM. 
+The maps are only available in fsLR and fsaverage spaces. Note that the networks followe the Kong et al. naming convention,
+which differs from the 17 "Yeo networks". Please cite the original publication when using these maps.
+
+
 # grf
 The NiSpace "GRF" dataset consists of many thousands of "Gaussian Random Field Maps" (GRFs) generated with different levels
 of spatial smoothness. The parameter "alpha" controls the smoothness of the field and therefore the spatial autocorrelation

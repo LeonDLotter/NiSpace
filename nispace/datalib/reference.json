@@ -2995,22 +2995,6 @@
             }
         },
         "tab": {
-            "TianS1": {
-                "host": "github-nispace",
-                "remote": "reference/rsn/tab/dset-rsn_parc-TianS1.csv.gz"
-            },
-            "TianS2": {
-                "host": "github-nispace",
-                "remote": "reference/rsn/tab/dset-rsn_parc-TianS2.csv.gz"
-            },
-            "TianS3": {
-                "host": "github-nispace",
-                "remote": "reference/rsn/tab/dset-rsn_parc-TianS3.csv.gz"
-            },
-            "TianS4": {
-                "host": "github-nispace",
-                "remote": "reference/rsn/tab/dset-rsn_parc-TianS4.csv.gz"
-            },
             "Glasser": {
                 "host": "github-nispace",
                 "remote": "reference/rsn/tab/dset-rsn_parc-Glasser.csv.gz"
@@ -3019,17 +3003,9 @@
                 "host": "github-nispace",
                 "remote": "reference/rsn/tab/dset-rsn_parc-AALCortical.csv.gz"
             },
-            "AALSubcortical": {
-                "host": "github-nispace",
-                "remote": "reference/rsn/tab/dset-rsn_parc-AALSubcortical.csv.gz"
-            },
             "BrainnetomeCortical": {
                 "host": "github-nispace",
                 "remote": "reference/rsn/tab/dset-rsn_parc-BrainnetomeCortical.csv.gz"
-            },
-            "BrainnetomeSubcortical": {
-                "host": "github-nispace",
-                "remote": "reference/rsn/tab/dset-rsn_parc-BrainnetomeSubcortical.csv.gz"
             },
             "DesikanKilliany": {
                 "host": "github-nispace",
@@ -3043,17 +3019,9 @@
                 "host": "github-nispace",
                 "remote": "reference/rsn/tab/dset-rsn_parc-Destrieux.csv.gz"
             },
-            "Aseg": {
-                "host": "github-nispace",
-                "remote": "reference/rsn/tab/dset-rsn_parc-Aseg.csv.gz"
-            },
             "HarvardOxfordCortical": {
                 "host": "github-nispace",
                 "remote": "reference/rsn/tab/dset-rsn_parc-HarvardOxfordCortical.csv.gz"
-            },
-            "HarvardOxfordSubcortical": {
-                "host": "github-nispace",
-                "remote": "reference/rsn/tab/dset-rsn_parc-HarvardOxfordSubcortical.csv.gz"
             },
             "Schaefer100Parcels7Networks": {
                 "host": "github-nispace",
@@ -3108,6 +3076,468 @@
             "All": {
                 "host": "github-nispace",
                 "remote": "reference/rsn/collection-All.collect"
+            }
+        }
+    },
+    "rsn17": {
+        "map": {
+            "nw-Auditory_pub-kong2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-Auditory_pub-kong2022/nw-Auditory_pub-kong2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-Auditory_pub-kong2022/nw-Auditory_pub-kong2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-Auditory_pub-kong2022/nw-Auditory_pub-kong2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-Auditory_pub-kong2022/nw-Auditory_pub-kong2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "nw-ControlA_pub-kong2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-ControlA_pub-kong2022/nw-ControlA_pub-kong2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-ControlA_pub-kong2022/nw-ControlA_pub-kong2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-ControlA_pub-kong2022/nw-ControlA_pub-kong2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-ControlA_pub-kong2022/nw-ControlA_pub-kong2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "nw-ControlB_pub-kong2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-ControlB_pub-kong2022/nw-ControlB_pub-kong2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-ControlB_pub-kong2022/nw-ControlB_pub-kong2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-ControlB_pub-kong2022/nw-ControlB_pub-kong2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-ControlB_pub-kong2022/nw-ControlB_pub-kong2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "nw-ControlC_pub-kong2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-ControlC_pub-kong2022/nw-ControlC_pub-kong2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-ControlC_pub-kong2022/nw-ControlC_pub-kong2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-ControlC_pub-kong2022/nw-ControlC_pub-kong2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-ControlC_pub-kong2022/nw-ControlC_pub-kong2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "nw-DefaultA_pub-kong2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DefaultA_pub-kong2022/nw-DefaultA_pub-kong2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DefaultA_pub-kong2022/nw-DefaultA_pub-kong2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DefaultA_pub-kong2022/nw-DefaultA_pub-kong2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DefaultA_pub-kong2022/nw-DefaultA_pub-kong2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "nw-DefaultB_pub-kong2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DefaultB_pub-kong2022/nw-DefaultB_pub-kong2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DefaultB_pub-kong2022/nw-DefaultB_pub-kong2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DefaultB_pub-kong2022/nw-DefaultB_pub-kong2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DefaultB_pub-kong2022/nw-DefaultB_pub-kong2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "nw-DefaultC_pub-kong2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DefaultC_pub-kong2022/nw-DefaultC_pub-kong2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DefaultC_pub-kong2022/nw-DefaultC_pub-kong2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DefaultC_pub-kong2022/nw-DefaultC_pub-kong2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DefaultC_pub-kong2022/nw-DefaultC_pub-kong2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "nw-DorsAttnA_pub-kong2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DorsAttnA_pub-kong2022/nw-DorsAttnA_pub-kong2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DorsAttnA_pub-kong2022/nw-DorsAttnA_pub-kong2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DorsAttnA_pub-kong2022/nw-DorsAttnA_pub-kong2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DorsAttnA_pub-kong2022/nw-DorsAttnA_pub-kong2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "nw-DorsAttnB_pub-kong2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DorsAttnB_pub-kong2022/nw-DorsAttnB_pub-kong2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DorsAttnB_pub-kong2022/nw-DorsAttnB_pub-kong2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DorsAttnB_pub-kong2022/nw-DorsAttnB_pub-kong2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-DorsAttnB_pub-kong2022/nw-DorsAttnB_pub-kong2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "nw-Language_pub-kong2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-Language_pub-kong2022/nw-Language_pub-kong2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-Language_pub-kong2022/nw-Language_pub-kong2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-Language_pub-kong2022/nw-Language_pub-kong2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-Language_pub-kong2022/nw-Language_pub-kong2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "nw-SalVenAttnA_pub-kong2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-SalVenAttnA_pub-kong2022/nw-SalVenAttnA_pub-kong2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-SalVenAttnA_pub-kong2022/nw-SalVenAttnA_pub-kong2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-SalVenAttnA_pub-kong2022/nw-SalVenAttnA_pub-kong2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-SalVenAttnA_pub-kong2022/nw-SalVenAttnA_pub-kong2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "nw-SalVenAttnB_pub-kong2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-SalVenAttnB_pub-kong2022/nw-SalVenAttnB_pub-kong2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-SalVenAttnB_pub-kong2022/nw-SalVenAttnB_pub-kong2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-SalVenAttnB_pub-kong2022/nw-SalVenAttnB_pub-kong2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-SalVenAttnB_pub-kong2022/nw-SalVenAttnB_pub-kong2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "nw-SomatomotorA_pub-kong2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-SomatomotorA_pub-kong2022/nw-SomatomotorA_pub-kong2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-SomatomotorA_pub-kong2022/nw-SomatomotorA_pub-kong2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-SomatomotorA_pub-kong2022/nw-SomatomotorA_pub-kong2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-SomatomotorA_pub-kong2022/nw-SomatomotorA_pub-kong2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "nw-SomatomotorB_pub-kong2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-SomatomotorB_pub-kong2022/nw-SomatomotorB_pub-kong2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-SomatomotorB_pub-kong2022/nw-SomatomotorB_pub-kong2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-SomatomotorB_pub-kong2022/nw-SomatomotorB_pub-kong2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-SomatomotorB_pub-kong2022/nw-SomatomotorB_pub-kong2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "nw-VisualA_pub-kong2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-VisualA_pub-kong2022/nw-VisualA_pub-kong2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-VisualA_pub-kong2022/nw-VisualA_pub-kong2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-VisualA_pub-kong2022/nw-VisualA_pub-kong2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-VisualA_pub-kong2022/nw-VisualA_pub-kong2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "nw-VisualB_pub-kong2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-VisualB_pub-kong2022/nw-VisualB_pub-kong2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-VisualB_pub-kong2022/nw-VisualB_pub-kong2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-VisualB_pub-kong2022/nw-VisualB_pub-kong2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-VisualB_pub-kong2022/nw-VisualB_pub-kong2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "nw-VisualC_pub-kong2022": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-VisualC_pub-kong2022/nw-VisualC_pub-kong2022_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-VisualC_pub-kong2022/nw-VisualC_pub-kong2022_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-VisualC_pub-kong2022/nw-VisualC_pub-kong2022_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/rsn17/map/nw-VisualC_pub-kong2022/nw-VisualC_pub-kong2022_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            }
+        },
+        "collection": {
+            "All": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/collection-All.collect"
+            }
+        },
+        "tab": {
+            "Glasser": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-Glasser.csv.gz"
+            },
+            "AALCortical": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-AALCortical.csv.gz"
+            },
+            "BrainnetomeCortical": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-BrainnetomeCortical.csv.gz"
+            },
+            "DesikanKilliany": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-DesikanKilliany.csv.gz"
+            },
+            "DesikanKillianyTourville": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-DesikanKillianyTourville.csv.gz"
+            },
+            "Destrieux": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-Destrieux.csv.gz"
+            },
+            "HarvardOxfordCortical": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-HarvardOxfordCortical.csv.gz"
+            },
+            "Schaefer100Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-Schaefer100Parcels7Networks.csv.gz"
+            },
+            "Schaefer100Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-Schaefer100Parcels17Networks.csv.gz"
+            },
+            "Schaefer200Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-Schaefer200Parcels7Networks.csv.gz"
+            },
+            "Schaefer200Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-Schaefer200Parcels17Networks.csv.gz"
+            },
+            "Schaefer400Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-Schaefer400Parcels7Networks.csv.gz"
+            },
+            "Schaefer400Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-Schaefer400Parcels17Networks.csv.gz"
+            },
+            "Schaefer1000Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-Schaefer1000Parcels7Networks.csv.gz"
+            },
+            "Schaefer1000Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-Schaefer1000Parcels17Networks.csv.gz"
+            },
+            "Yan100": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-Yan100.csv.gz"
+            },
+            "Yan200": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-Yan200.csv.gz"
+            },
+            "Yan400": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-Yan400.csv.gz"
+            },
+            "Yan1000": {
+                "host": "github-nispace",
+                "remote": "reference/rsn17/tab/dset-rsn17_parc-Yan1000.csv.gz"
             }
         }
     },
@@ -4331,22 +4761,6 @@
             }
         },
         "tab": {
-            "TianS1": {
-                "host": "github-nispace",
-                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-TianS1.csv.gz"
-            },
-            "TianS2": {
-                "host": "github-nispace",
-                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-TianS2.csv.gz"
-            },
-            "TianS3": {
-                "host": "github-nispace",
-                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-TianS3.csv.gz"
-            },
-            "TianS4": {
-                "host": "github-nispace",
-                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-TianS4.csv.gz"
-            },
             "Glasser": {
                 "host": "github-nispace",
                 "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Glasser.csv.gz"
@@ -4355,17 +4769,9 @@
                 "host": "github-nispace",
                 "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-AALCortical.csv.gz"
             },
-            "AALSubcortical": {
-                "host": "github-nispace",
-                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-AALSubcortical.csv.gz"
-            },
             "BrainnetomeCortical": {
                 "host": "github-nispace",
                 "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-BrainnetomeCortical.csv.gz"
-            },
-            "BrainnetomeSubcortical": {
-                "host": "github-nispace",
-                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-BrainnetomeSubcortical.csv.gz"
             },
             "DesikanKilliany": {
                 "host": "github-nispace",
@@ -4379,17 +4785,9 @@
                 "host": "github-nispace",
                 "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Destrieux.csv.gz"
             },
-            "Aseg": {
-                "host": "github-nispace",
-                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Aseg.csv.gz"
-            },
             "HarvardOxfordCortical": {
                 "host": "github-nispace",
                 "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-HarvardOxfordCortical.csv.gz"
-            },
-            "HarvardOxfordSubcortical": {
-                "host": "github-nispace",
-                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-HarvardOxfordSubcortical.csv.gz"
             },
             "Schaefer100Parcels7Networks": {
                 "host": "github-nispace",
@@ -4879,22 +5277,6 @@
             }
         },
         "tab": {
-            "TianS1": {
-                "host": "github-nispace",
-                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-TianS1.csv.gz"
-            },
-            "TianS2": {
-                "host": "github-nispace",
-                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-TianS2.csv.gz"
-            },
-            "TianS3": {
-                "host": "github-nispace",
-                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-TianS3.csv.gz"
-            },
-            "TianS4": {
-                "host": "github-nispace",
-                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-TianS4.csv.gz"
-            },
             "Glasser": {
                 "host": "github-nispace",
                 "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Glasser.csv.gz"
@@ -4903,17 +5285,9 @@
                 "host": "github-nispace",
                 "remote": "reference/bigbrain/tab/dset-bigbrain_parc-AALCortical.csv.gz"
             },
-            "AALSubcortical": {
-                "host": "github-nispace",
-                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-AALSubcortical.csv.gz"
-            },
             "BrainnetomeCortical": {
                 "host": "github-nispace",
                 "remote": "reference/bigbrain/tab/dset-bigbrain_parc-BrainnetomeCortical.csv.gz"
-            },
-            "BrainnetomeSubcortical": {
-                "host": "github-nispace",
-                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-BrainnetomeSubcortical.csv.gz"
             },
             "DesikanKilliany": {
                 "host": "github-nispace",
@@ -4927,17 +5301,9 @@
                 "host": "github-nispace",
                 "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Destrieux.csv.gz"
             },
-            "Aseg": {
-                "host": "github-nispace",
-                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Aseg.csv.gz"
-            },
             "HarvardOxfordCortical": {
                 "host": "github-nispace",
                 "remote": "reference/bigbrain/tab/dset-bigbrain_parc-HarvardOxfordCortical.csv.gz"
-            },
-            "HarvardOxfordSubcortical": {
-                "host": "github-nispace",
-                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-HarvardOxfordSubcortical.csv.gz"
             },
             "Schaefer100Parcels7Networks": {
                 "host": "github-nispace",
