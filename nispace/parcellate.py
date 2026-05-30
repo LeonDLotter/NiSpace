@@ -17,11 +17,15 @@ from neuromaps.transforms import _check_hemi, _estimate_density
 from neuromaps.nulls.spins import parcels_to_vertices
 
 # monkey patch to neuromaps ALIAS
+# TODO: ALIAS is only still needed for DENSITIES validation (line ~91) and resample_images calls.
+# _volumetric detection and transform branching already use 'mni' in space.lower() instead.
+# Consider replacing the remaining ALIAS uses with explicit 'mni'/'fsaverage'/'fslr' checks
+# and removing this dict entirely.
 ALIAS = dict(
     fslr='fsLR', fsavg='fsaverage', 
     mni152='MNI152', mni='MNI152', 
-    mni152nlin6asym='MNI152', mni152nlin2009asym='MNI152',
-    MNI152NLin6Asym='MNI152', MNI152NLin2009Asym='MNI152',
+    mni152nlin6asym='MNI152', mni152nlin2009asym='MNI152', mni152nlin2009casym='MNI152',
+    MNI152NLin6Asym='MNI152', MNI152NLin2009Asym='MNI152', MNI152NLin2009cAsym='MNI152',
     FSLR='fsLR', CIVET='civet'
 )
 
@@ -72,7 +76,7 @@ class Parcellater():
         self.space = ALIAS.get(space, space)
         self.resampling_target = resampling_target
         self.hemi = hemi
-        self._volumetric = self.space == 'MNI152'
+        self._volumetric = 'mni' in space.lower()
 
         if self.resampling_target == 'parcellation':
             self._resampling = 'transform_to_trg'
@@ -200,7 +204,7 @@ class Parcellater():
         needs_auto = ignore_background_data and any(v in (None, "auto") for v in bg_spec)
 
         if ((self.resampling_target == 'data'
-             and space.lower() == 'mni152')
+             and 'mni' in space.lower())
                 or (self.resampling_target == 'parcellation'
                     and self._volumetric)):
             data = nib.concat_images([nib.squeeze_image(data)])
@@ -230,6 +234,16 @@ class Parcellater():
             bg_arr = _resolve_bg_array(bg_spec, auto_value) if ignore_background_data \
                      else np.array([], dtype=np.float64)
             parcellated = vol_to_vect_arr(darr, parc_arr, self._parc_idc, bg_arr)
+
+        # detect parcels that vanished after resampling and fill their positions with NaN
+        # this ensures output length always equals len(self.parcellation_idc) and prevents
+        # index shifts in the caller (io.py allocates the full-size output array)
+        dropped_mask = ~np.isin(self.parcellation_idc, self._parc_idc)
+        self._parc_idc_dropped = list(self.parcellation_idc[dropped_mask])
+        if fill_dropped and len(self._parc_idc_dropped) > 0:
+            filled = np.full(len(self.parcellation_idc), np.nan, dtype=parcellated.dtype)
+            filled[~dropped_mask] = parcellated
+            parcellated = filled
 
         # drop parcels whose mean equals the background value — only for the scalar case
         if background_parcels_to_nan and len(bg_arr) == 1:
