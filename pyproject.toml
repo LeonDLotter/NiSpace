@@ -38,6 +38,7 @@ dependencies = [
     "nibabel>=4.0.0",
     "nilearn>=0.10.0,<=0.12.1",
     "neuromaps @ git+https://github.com/netneurolab/neuromaps@f0ed67c44d633061b93c6d337a1b233f6895c408",
+    "templateflow>=24.0.0",
     "scipy>=1.6.0",
     "statsmodels>=0.14.0",
     "scikit-learn>=1.5.0",
@@ -51,6 +52,7 @@ dependencies = [
 opt = [
     "brainsmash >=0.10.0",
     "factor-analyzer",
+    "nitransforms>=24.0.0",
 ]
 
 [project.urls]
