@@ -21,8 +21,12 @@ We additionally ask to cite:
 The NiSpace "mRNA" dataset is based on Allen Human Brain Atlas (AHBA) gene expression data published in Hawrylycz et al., 
 2012 (https://doi.org/10.1038/nature11405). The dataset consists of mRNA expression data from postmortem brain tissue of 
 six donors, mapped onto MNI or fsaverage parcels using the abagen toolbox (Markello et al., 2021, https://doi.org/10.7554/eLife.72129).
-The data was extracted using abagen.get_expression_data(..., lr_mirror="bidirectional"), considering parcel hemisphere and 
-cortical vs. subcortical location. Only genes that showed a mean donor-to-donor Spearman correlation of > 0.1 were retained.
+The data was extracted using abagen.get_expression_data(..., lr_mirror="bidirectional", norm_matched=False), considering
+parcel hemisphere and cortical vs. subcortical location. Gene stability was assessed independently of any specific
+parcellation using a voxel-level atlas constructed from Schaefer100 (cortex) and TianS1 (subcortex) at 8mm isotropic
+resolution (each voxel assigned a unique identifier; sample-to-voxel tolerance=8mm). Per-donor expression matrices were
+obtained via abagen and genes were retained if their mean donor-to-donor Spearman rank correlation exceeded 0.2
+(abagen.keep_stable_genes, rank=True, threshold=0.2). This stable gene set was applied uniformly across all parcellations.
 In addition to the two publications listed above, please cite publications associated with gene set collections as appropriate.
 
 

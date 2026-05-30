@@ -2079,9 +2079,29 @@
                 "host": "github-nispace",
                 "remote": "reference/pet/tab/dset-pet_parc-TianS3.csv.gz"
             },
+            "TianS4": {
+                "host": "github-nispace",
+                "remote": "reference/pet/tab/dset-pet_parc-TianS4.csv.gz"
+            },
             "Glasser": {
                 "host": "github-nispace",
                 "remote": "reference/pet/tab/dset-pet_parc-Glasser.csv.gz"
+            },
+            "AALCortical": {
+                "host": "github-nispace",
+                "remote": "reference/pet/tab/dset-pet_parc-AALCortical.csv.gz"
+            },
+            "AALSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/pet/tab/dset-pet_parc-AALSubcortical.csv.gz"
+            },
+            "BrainnetomeCortical": {
+                "host": "github-nispace",
+                "remote": "reference/pet/tab/dset-pet_parc-BrainnetomeCortical.csv.gz"
+            },
+            "BrainnetomeSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/pet/tab/dset-pet_parc-BrainnetomeSubcortical.csv.gz"
             },
             "DesikanKilliany": {
                 "host": "github-nispace",
@@ -2111,13 +2131,49 @@
                 "host": "github-nispace",
                 "remote": "reference/pet/tab/dset-pet_parc-Schaefer100Parcels7Networks.csv.gz"
             },
+            "Schaefer100Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/pet/tab/dset-pet_parc-Schaefer100Parcels17Networks.csv.gz"
+            },
             "Schaefer200Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/pet/tab/dset-pet_parc-Schaefer200Parcels7Networks.csv.gz"
             },
+            "Schaefer200Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/pet/tab/dset-pet_parc-Schaefer200Parcels17Networks.csv.gz"
+            },
             "Schaefer400Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/pet/tab/dset-pet_parc-Schaefer400Parcels7Networks.csv.gz"
+            },
+            "Schaefer400Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/pet/tab/dset-pet_parc-Schaefer400Parcels17Networks.csv.gz"
+            },
+            "Schaefer1000Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/pet/tab/dset-pet_parc-Schaefer1000Parcels7Networks.csv.gz"
+            },
+            "Schaefer1000Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/pet/tab/dset-pet_parc-Schaefer1000Parcels17Networks.csv.gz"
+            },
+            "Yan100": {
+                "host": "github-nispace",
+                "remote": "reference/pet/tab/dset-pet_parc-Yan100.csv.gz"
+            },
+            "Yan200": {
+                "host": "github-nispace",
+                "remote": "reference/pet/tab/dset-pet_parc-Yan200.csv.gz"
+            },
+            "Yan400": {
+                "host": "github-nispace",
+                "remote": "reference/pet/tab/dset-pet_parc-Yan400.csv.gz"
+            },
+            "Yan1000": {
+                "host": "github-nispace",
+                "remote": "reference/pet/tab/dset-pet_parc-Yan1000.csv.gz"
             }
         },
         "collection": {
@@ -2157,9 +2213,29 @@
                 "host": "github-nispace",
                 "remote": "reference/mrna/tab/dset-mrna_parc-TianS3.csv.gz"
             },
+            "TianS4": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/tab/dset-mrna_parc-TianS4.csv.gz"
+            },
             "Glasser": {
                 "host": "github-nispace",
                 "remote": "reference/mrna/tab/dset-mrna_parc-Glasser.csv.gz"
+            },
+            "AALCortical": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/tab/dset-mrna_parc-AALCortical.csv.gz"
+            },
+            "AALSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/tab/dset-mrna_parc-AALSubcortical.csv.gz"
+            },
+            "BrainnetomeCortical": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/tab/dset-mrna_parc-BrainnetomeCortical.csv.gz"
+            },
+            "BrainnetomeSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/tab/dset-mrna_parc-BrainnetomeSubcortical.csv.gz"
             },
             "DesikanKilliany": {
                 "host": "github-nispace",
@@ -2189,13 +2265,49 @@
                 "host": "github-nispace",
                 "remote": "reference/mrna/tab/dset-mrna_parc-Schaefer100Parcels7Networks.csv.gz"
             },
+            "Schaefer100Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/tab/dset-mrna_parc-Schaefer100Parcels17Networks.csv.gz"
+            },
             "Schaefer200Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/mrna/tab/dset-mrna_parc-Schaefer200Parcels7Networks.csv.gz"
             },
+            "Schaefer200Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/tab/dset-mrna_parc-Schaefer200Parcels17Networks.csv.gz"
+            },
             "Schaefer400Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/mrna/tab/dset-mrna_parc-Schaefer400Parcels7Networks.csv.gz"
+            },
+            "Schaefer400Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/tab/dset-mrna_parc-Schaefer400Parcels17Networks.csv.gz"
+            },
+            "Schaefer1000Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/tab/dset-mrna_parc-Schaefer1000Parcels7Networks.csv.gz"
+            },
+            "Schaefer1000Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/tab/dset-mrna_parc-Schaefer1000Parcels17Networks.csv.gz"
+            },
+            "Yan100": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/tab/dset-mrna_parc-Yan100.csv.gz"
+            },
+            "Yan200": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/tab/dset-mrna_parc-Yan200.csv.gz"
+            },
+            "Yan400": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/tab/dset-mrna_parc-Yan400.csv.gz"
+            },
+            "Yan1000": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/tab/dset-mrna_parc-Yan1000.csv.gz"
             }
         },
         "collection": {
@@ -2267,9 +2379,21 @@
                 "host": "github-nispace",
                 "remote": "reference/magicc/tab/dset-magicc_parc-Glasser.csv.gz"
             },
+            "AALCortical": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-AALCortical.csv.gz"
+            },
+            "BrainnetomeCortical": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-BrainnetomeCortical.csv.gz"
+            },
             "DesikanKilliany": {
                 "host": "github-nispace",
                 "remote": "reference/magicc/tab/dset-magicc_parc-DesikanKilliany.csv.gz"
+            },
+            "DesikanKillianyTourville": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-DesikanKillianyTourville.csv.gz"
             },
             "Destrieux": {
                 "host": "github-nispace",
@@ -2283,13 +2407,49 @@
                 "host": "github-nispace",
                 "remote": "reference/magicc/tab/dset-magicc_parc-Schaefer100Parcels7Networks.csv.gz"
             },
+            "Schaefer100Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-Schaefer100Parcels17Networks.csv.gz"
+            },
             "Schaefer200Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/magicc/tab/dset-magicc_parc-Schaefer200Parcels7Networks.csv.gz"
             },
+            "Schaefer200Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-Schaefer200Parcels17Networks.csv.gz"
+            },
             "Schaefer400Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/magicc/tab/dset-magicc_parc-Schaefer400Parcels7Networks.csv.gz"
+            },
+            "Schaefer400Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-Schaefer400Parcels17Networks.csv.gz"
+            },
+            "Schaefer1000Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-Schaefer1000Parcels7Networks.csv.gz"
+            },
+            "Schaefer1000Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-Schaefer1000Parcels17Networks.csv.gz"
+            },
+            "Yan100": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-Yan100.csv.gz"
+            },
+            "Yan200": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-Yan200.csv.gz"
+            },
+            "Yan400": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-Yan400.csv.gz"
+            },
+            "Yan1000": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/tab/dset-magicc_parc-Yan1000.csv.gz"
             }
         },
         "collection": {
@@ -2835,6 +2995,42 @@
             }
         },
         "tab": {
+            "TianS1": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-TianS1.csv.gz"
+            },
+            "TianS2": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-TianS2.csv.gz"
+            },
+            "TianS3": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-TianS3.csv.gz"
+            },
+            "TianS4": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-TianS4.csv.gz"
+            },
+            "Glasser": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-Glasser.csv.gz"
+            },
+            "AALCortical": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-AALCortical.csv.gz"
+            },
+            "AALSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-AALSubcortical.csv.gz"
+            },
+            "BrainnetomeCortical": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-BrainnetomeCortical.csv.gz"
+            },
+            "BrainnetomeSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-BrainnetomeSubcortical.csv.gz"
+            },
             "DesikanKilliany": {
                 "host": "github-nispace",
                 "remote": "reference/rsn/tab/dset-rsn_parc-DesikanKilliany.csv.gz"
@@ -2847,21 +3043,65 @@
                 "host": "github-nispace",
                 "remote": "reference/rsn/tab/dset-rsn_parc-Destrieux.csv.gz"
             },
+            "Aseg": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-Aseg.csv.gz"
+            },
             "HarvardOxfordCortical": {
                 "host": "github-nispace",
                 "remote": "reference/rsn/tab/dset-rsn_parc-HarvardOxfordCortical.csv.gz"
+            },
+            "HarvardOxfordSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-HarvardOxfordSubcortical.csv.gz"
             },
             "Schaefer100Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/rsn/tab/dset-rsn_parc-Schaefer100Parcels7Networks.csv.gz"
             },
+            "Schaefer100Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-Schaefer100Parcels17Networks.csv.gz"
+            },
             "Schaefer200Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/rsn/tab/dset-rsn_parc-Schaefer200Parcels7Networks.csv.gz"
             },
+            "Schaefer200Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-Schaefer200Parcels17Networks.csv.gz"
+            },
             "Schaefer400Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/rsn/tab/dset-rsn_parc-Schaefer400Parcels7Networks.csv.gz"
+            },
+            "Schaefer400Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-Schaefer400Parcels17Networks.csv.gz"
+            },
+            "Schaefer1000Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-Schaefer1000Parcels7Networks.csv.gz"
+            },
+            "Schaefer1000Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-Schaefer1000Parcels17Networks.csv.gz"
+            },
+            "Yan100": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-Yan100.csv.gz"
+            },
+            "Yan200": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-Yan200.csv.gz"
+            },
+            "Yan400": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-Yan400.csv.gz"
+            },
+            "Yan1000": {
+                "host": "github-nispace",
+                "remote": "reference/rsn/tab/dset-rsn_parc-Yan1000.csv.gz"
             }
         },
         "collection": {
@@ -2884,6 +3124,30 @@
             "TianS3": {
                 "host": "github-nispace",
                 "remote": "reference/grf/tab/dset-grf_parc-TianS3.csv.gz"
+            },
+            "TianS4": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-TianS4.csv.gz"
+            },
+            "Glasser": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-Glasser.csv.gz"
+            },
+            "AALCortical": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-AALCortical.csv.gz"
+            },
+            "AALSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-AALSubcortical.csv.gz"
+            },
+            "BrainnetomeCortical": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-BrainnetomeCortical.csv.gz"
+            },
+            "BrainnetomeSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-BrainnetomeSubcortical.csv.gz"
             },
             "DesikanKilliany": {
                 "host": "github-nispace",
@@ -2913,13 +3177,49 @@
                 "host": "github-nispace",
                 "remote": "reference/grf/tab/dset-grf_parc-Schaefer100Parcels7Networks.csv.gz"
             },
+            "Schaefer100Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-Schaefer100Parcels17Networks.csv.gz"
+            },
             "Schaefer200Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/grf/tab/dset-grf_parc-Schaefer200Parcels7Networks.csv.gz"
             },
+            "Schaefer200Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-Schaefer200Parcels17Networks.csv.gz"
+            },
             "Schaefer400Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/grf/tab/dset-grf_parc-Schaefer400Parcels7Networks.csv.gz"
+            },
+            "Schaefer400Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-Schaefer400Parcels17Networks.csv.gz"
+            },
+            "Schaefer1000Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-Schaefer1000Parcels7Networks.csv.gz"
+            },
+            "Schaefer1000Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-Schaefer1000Parcels17Networks.csv.gz"
+            },
+            "Yan100": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-Yan100.csv.gz"
+            },
+            "Yan200": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-Yan200.csv.gz"
+            },
+            "Yan400": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-Yan400.csv.gz"
+            },
+            "Yan1000": {
+                "host": "github-nispace",
+                "remote": "reference/grf/tab/dset-grf_parc-Yan1000.csv.gz"
             }
         },
         "collection": {
@@ -2955,9 +3255,29 @@
                 "host": "github-nispace",
                 "remote": "reference/neurosynth/tab/dset-neurosynth_parc-TianS3.csv.gz"
             },
+            "TianS4": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-TianS4.csv.gz"
+            },
             "Glasser": {
                 "host": "github-nispace",
                 "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Glasser.csv.gz"
+            },
+            "AALCortical": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-AALCortical.csv.gz"
+            },
+            "AALSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-AALSubcortical.csv.gz"
+            },
+            "BrainnetomeCortical": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-BrainnetomeCortical.csv.gz"
+            },
+            "BrainnetomeSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-BrainnetomeSubcortical.csv.gz"
             },
             "DesikanKilliany": {
                 "host": "github-nispace",
@@ -2987,13 +3307,49 @@
                 "host": "github-nispace",
                 "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Schaefer100Parcels7Networks.csv.gz"
             },
+            "Schaefer100Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Schaefer100Parcels17Networks.csv.gz"
+            },
             "Schaefer200Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Schaefer200Parcels7Networks.csv.gz"
             },
+            "Schaefer200Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Schaefer200Parcels17Networks.csv.gz"
+            },
             "Schaefer400Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Schaefer400Parcels7Networks.csv.gz"
+            },
+            "Schaefer400Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Schaefer400Parcels17Networks.csv.gz"
+            },
+            "Schaefer1000Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Schaefer1000Parcels7Networks.csv.gz"
+            },
+            "Schaefer1000Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Schaefer1000Parcels17Networks.csv.gz"
+            },
+            "Yan100": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Yan100.csv.gz"
+            },
+            "Yan200": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Yan200.csv.gz"
+            },
+            "Yan400": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Yan400.csv.gz"
+            },
+            "Yan1000": {
+                "host": "github-nispace",
+                "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Yan1000.csv.gz"
             }
         },
         "collection": {
@@ -3975,33 +4331,113 @@
             }
         },
         "tab": {
+            "TianS1": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-TianS1.csv.gz"
+            },
+            "TianS2": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-TianS2.csv.gz"
+            },
+            "TianS3": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-TianS3.csv.gz"
+            },
+            "TianS4": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-TianS4.csv.gz"
+            },
             "Glasser": {
                 "host": "github-nispace",
                 "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Glasser.csv.gz"
+            },
+            "AALCortical": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-AALCortical.csv.gz"
+            },
+            "AALSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-AALSubcortical.csv.gz"
+            },
+            "BrainnetomeCortical": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-BrainnetomeCortical.csv.gz"
+            },
+            "BrainnetomeSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-BrainnetomeSubcortical.csv.gz"
             },
             "DesikanKilliany": {
                 "host": "github-nispace",
                 "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-DesikanKilliany.csv.gz"
             },
+            "DesikanKillianyTourville": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-DesikanKillianyTourville.csv.gz"
+            },
             "Destrieux": {
                 "host": "github-nispace",
                 "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Destrieux.csv.gz"
+            },
+            "Aseg": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Aseg.csv.gz"
             },
             "HarvardOxfordCortical": {
                 "host": "github-nispace",
                 "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-HarvardOxfordCortical.csv.gz"
             },
+            "HarvardOxfordSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-HarvardOxfordSubcortical.csv.gz"
+            },
             "Schaefer100Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Schaefer100Parcels7Networks.csv.gz"
+            },
+            "Schaefer100Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Schaefer100Parcels17Networks.csv.gz"
             },
             "Schaefer200Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Schaefer200Parcels7Networks.csv.gz"
             },
+            "Schaefer200Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Schaefer200Parcels17Networks.csv.gz"
+            },
             "Schaefer400Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Schaefer400Parcels7Networks.csv.gz"
+            },
+            "Schaefer400Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Schaefer400Parcels17Networks.csv.gz"
+            },
+            "Schaefer1000Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Schaefer1000Parcels7Networks.csv.gz"
+            },
+            "Schaefer1000Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Schaefer1000Parcels17Networks.csv.gz"
+            },
+            "Yan100": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Yan100.csv.gz"
+            },
+            "Yan200": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Yan200.csv.gz"
+            },
+            "Yan400": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Yan400.csv.gz"
+            },
+            "Yan1000": {
+                "host": "github-nispace",
+                "remote": "reference/cortexfeatures/tab/dset-cortexfeatures_parc-Yan1000.csv.gz"
             }
         },
         "collection": {
@@ -4443,33 +4879,113 @@
             }
         },
         "tab": {
+            "TianS1": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-TianS1.csv.gz"
+            },
+            "TianS2": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-TianS2.csv.gz"
+            },
+            "TianS3": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-TianS3.csv.gz"
+            },
+            "TianS4": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-TianS4.csv.gz"
+            },
             "Glasser": {
                 "host": "github-nispace",
                 "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Glasser.csv.gz"
+            },
+            "AALCortical": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-AALCortical.csv.gz"
+            },
+            "AALSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-AALSubcortical.csv.gz"
+            },
+            "BrainnetomeCortical": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-BrainnetomeCortical.csv.gz"
+            },
+            "BrainnetomeSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-BrainnetomeSubcortical.csv.gz"
             },
             "DesikanKilliany": {
                 "host": "github-nispace",
                 "remote": "reference/bigbrain/tab/dset-bigbrain_parc-DesikanKilliany.csv.gz"
             },
+            "DesikanKillianyTourville": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-DesikanKillianyTourville.csv.gz"
+            },
             "Destrieux": {
                 "host": "github-nispace",
                 "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Destrieux.csv.gz"
+            },
+            "Aseg": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Aseg.csv.gz"
             },
             "HarvardOxfordCortical": {
                 "host": "github-nispace",
                 "remote": "reference/bigbrain/tab/dset-bigbrain_parc-HarvardOxfordCortical.csv.gz"
             },
+            "HarvardOxfordSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-HarvardOxfordSubcortical.csv.gz"
+            },
             "Schaefer100Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Schaefer100Parcels7Networks.csv.gz"
+            },
+            "Schaefer100Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Schaefer100Parcels17Networks.csv.gz"
             },
             "Schaefer200Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Schaefer200Parcels7Networks.csv.gz"
             },
+            "Schaefer200Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Schaefer200Parcels17Networks.csv.gz"
+            },
             "Schaefer400Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Schaefer400Parcels7Networks.csv.gz"
+            },
+            "Schaefer400Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Schaefer400Parcels17Networks.csv.gz"
+            },
+            "Schaefer1000Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Schaefer1000Parcels7Networks.csv.gz"
+            },
+            "Schaefer1000Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Schaefer1000Parcels17Networks.csv.gz"
+            },
+            "Yan100": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Yan100.csv.gz"
+            },
+            "Yan200": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Yan200.csv.gz"
+            },
+            "Yan400": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Yan400.csv.gz"
+            },
+            "Yan1000": {
+                "host": "github-nispace",
+                "remote": "reference/bigbrain/tab/dset-bigbrain_parc-Yan1000.csv.gz"
             }
         },
         "collection": {
@@ -4673,9 +5189,29 @@
                 "host": "github-nispace",
                 "remote": "reference/tpm/tab/dset-tpm_parc-TianS3.csv.gz"
             },
+            "TianS4": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-TianS4.csv.gz"
+            },
             "Glasser": {
                 "host": "github-nispace",
                 "remote": "reference/tpm/tab/dset-tpm_parc-Glasser.csv.gz"
+            },
+            "AALCortical": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-AALCortical.csv.gz"
+            },
+            "AALSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-AALSubcortical.csv.gz"
+            },
+            "BrainnetomeCortical": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-BrainnetomeCortical.csv.gz"
+            },
+            "BrainnetomeSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-BrainnetomeSubcortical.csv.gz"
             },
             "DesikanKilliany": {
                 "host": "github-nispace",
@@ -4705,13 +5241,49 @@
                 "host": "github-nispace",
                 "remote": "reference/tpm/tab/dset-tpm_parc-Schaefer100Parcels7Networks.csv.gz"
             },
+            "Schaefer100Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-Schaefer100Parcels17Networks.csv.gz"
+            },
             "Schaefer200Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/tpm/tab/dset-tpm_parc-Schaefer200Parcels7Networks.csv.gz"
             },
+            "Schaefer200Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-Schaefer200Parcels17Networks.csv.gz"
+            },
             "Schaefer400Parcels7Networks": {
                 "host": "github-nispace",
                 "remote": "reference/tpm/tab/dset-tpm_parc-Schaefer400Parcels7Networks.csv.gz"
+            },
+            "Schaefer400Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-Schaefer400Parcels17Networks.csv.gz"
+            },
+            "Schaefer1000Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-Schaefer1000Parcels7Networks.csv.gz"
+            },
+            "Schaefer1000Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-Schaefer1000Parcels17Networks.csv.gz"
+            },
+            "Yan100": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-Yan100.csv.gz"
+            },
+            "Yan200": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-Yan200.csv.gz"
+            },
+            "Yan400": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-Yan400.csv.gz"
+            },
+            "Yan1000": {
+                "host": "github-nispace",
+                "remote": "reference/tpm/tab/dset-tpm_parc-Yan1000.csv.gz"
             }
         },
         "collection": {
