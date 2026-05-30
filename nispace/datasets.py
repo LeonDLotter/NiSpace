@@ -31,6 +31,14 @@ def keys2list(dct):
 def keys2str(dct, sep=", "):
     return sep.join(list(dct.keys()))
 
+# TODO: remove nispace_data_dir parameter support from all fetch functions once deprecated long enough
+def _resolve_nispace_data_dir(nispace_data_dir):
+    if nispace_data_dir is not None:
+        lgr.warning("The 'nispace_data_dir' parameter is deprecated and will be removed in a future version. "
+                    "Please use the NISPACE_DATA_DIR environment variable instead.")
+        os.environ["NISPACE_DATA_DIR"] = str(nispace_data_dir)
+    return os.getenv('NISPACE_DATA_DIR')
+
 # EMPTY NISPACE DATA DIR ===========================================================================
 
 # _EMPTY_DATA_CONFIRMED = False
@@ -104,14 +112,9 @@ def fetch_template(template: str = _SPACE_DEFAULT,
     if template not in template_lib:
         raise ValueError(f"Template '{template}' not found. Available: {keys2str(template_lib)}")
     
-    # data directory
-    # warn if the parameter is used
-    if nispace_data_dir is not None:
-        lgr.warning("The 'nispace_data_dir' parameter is deprecated. Please use the NISPACE_DATA_DIR environment variable instead.")
-        os.environ["NISPACE_DATA_DIR"] = str(nispace_data_dir)
-    nispace_data_dir = os.getenv('NISPACE_DATA_DIR')
-    
-    # paths        
+    nispace_data_dir = _resolve_nispace_data_dir(nispace_data_dir)
+
+    # paths
     base_dir = pathlib.Path(nispace_data_dir) / "template" / template
     map_dir = base_dir / "map"
     
@@ -195,6 +198,22 @@ def _check_parcellation(parcellation: str, force_list: bool = False, force_str: 
     a list of strings containing a cortex-subcortex combination.
     """
     
+    # Path strings are not library names — catch before substring matching eats the path
+    if isinstance(parcellation, os.PathLike) or (
+        isinstance(parcellation, str) and (
+            os.sep in parcellation
+            or "/" in parcellation
+            or any(parcellation.endswith(ext) for ext in (".nii", ".nii.gz", ".gii", ".gii.gz"))
+        )
+    ):
+        if raise_not_found:
+            lgr.critical_raise(
+                f"'{parcellation}' looks like a file path, not an integrated parcellation name. "
+                "Pass a pathlib.Path object or use a registered library name.",
+                ValueError,
+            )
+        return None
+
     # helper function to check if an iterable of n=2 parcellations are cortex-subcortex combinations
     def _check_cortex_subcortex(parc):
         levels = []
@@ -283,13 +302,8 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
     # if list, we need to merge parcellation and associated data , so we need to load stuff
     return_loaded = True if isinstance(parc, str) else return_loaded
     
-    # data directory
-    # warn if the parameter is used
-    if nispace_data_dir is not None:
-        lgr.warning("The 'nispace_data_dir' parameter is deprecated. Please use the NISPACE_DATA_DIR environment variable instead.")
-        os.environ["NISPACE_DATA_DIR"] = str(nispace_data_dir)
-    nispace_data_dir = os.getenv('NISPACE_DATA_DIR')
-    
+    nispace_data_dir = _resolve_nispace_data_dir(nispace_data_dir)
+
     # function to load individual parcellation and associated data
     def load_parc(p, space=space, hemi=hemi, return_labels=return_labels, return_space=return_space,
                   return_resolution=return_resolution, return_symmetric=return_symmetric, return_l2rmap=return_l2rmap,
@@ -585,12 +599,7 @@ def fetch_collection(collection: Union[str, pathlib.Path, np.ndarray, pd.DataFra
                                ValueError)
         else:
             
-            # data directory
-            # warn if the parameter is used
-            if nispace_data_dir is not None:
-                lgr.warning("The 'nispace_data_dir' parameter is deprecated. Please use the NISPACE_DATA_DIR environment variable instead.")
-                os.environ["NISPACE_DATA_DIR"] = str(nispace_data_dir)
-            nispace_data_dir = os.getenv('NISPACE_DATA_DIR')
+            nispace_data_dir = _resolve_nispace_data_dir(nispace_data_dir)
             
             # base dir
             base_dir = pathlib.Path(nispace_data_dir) / "reference" / dataset
@@ -645,7 +654,7 @@ def fetch_collection(collection: Union[str, pathlib.Path, np.ndarray, pd.DataFra
         
 
 def apply_collection(data: pd.DataFrame, collection: pd.DataFrame):
-    if not np.isin(["map", "set"], ["map", "set", "weight"]).all():
+    if not np.isin(["map", "set"], collection.columns).all():
         lgr.critical_raise("collection must have at least a 'set' and a 'map' column.")
     
     maps_intersection = data.index.intersection(collection["map"].unique())
@@ -767,34 +776,9 @@ def _apply_collection_filter(#dataset: str,
                              #overwrite: bool = False,
                              #check_file_hash: bool = True
                              ) -> List[pathlib.Path]:
-    
-    # # base dir
-    # base_dir = pathlib.Path(nispace_data_dir) / "reference" / dataset
-    
-    # # Check if path to custom file
-    # collection_path = pathlib.Path(collection)
-    # if not collection_path.exists():
-    #     # If not exists, search integrated collections
-    #     if collection in reference_lib[dataset]["collection"]:
-    #         collection_path = base_dir / f"collection-{collection}.collect"
-    #         collection_file = get_file(
-    #             collection_path, **reference_lib[dataset]["collection"][collection],
-    #             overwrite=overwrite, hash_check=check_file_hash,
-    #         )
-    #     else:
-    #         lgr.warning(f"Collection '{collection}' not found! Available: "
-    #                     f"{keys2str(reference_lib[dataset]['collection'])}")
-    #         return map_files, None
-
-    # # Load collection file; 1-column df (= maps) or 2-column df (= set and maps)
-    # collection_df = _load_collection(collection_file)
-    # lgr.debug(f"Collection df shape: {collection_df.shape}; "
-    #           f"index names: {collection_df.index.names}; "
-    #           f"column names: {collection_df.columns.names}")
-    
     # Apply maps filter
     lgr.info(f"Filtering maps by collection.")
-    if maps is None:
+    if maps is None or len(maps) == 0:
         filtered_map_files = collection_df["map"].unique()
     elif isinstance(maps[0], pathlib.Path):
         map_names = [_rm_ext(f.name) for f in maps]
@@ -1031,6 +1015,9 @@ def _print_references(dataset: str, meta: pd.DataFrame = None):
     
 # REFERENCE DATA - PUBLIC ==========================================================================
 
+# TODO: fetch_reference is ~280 lines and handles two distinct code paths (image-path fetching vs.
+# parcellated data loading). Consider splitting into fetch_reference_maps() and fetch_reference_tab()
+# with a shared dispatcher, or at minimum extracting the two branches into private helpers.
 def fetch_reference(dataset: str,
                     maps: Union[None, str, List[str], Dict[str, Union[str, list]]] = None,
                     space: str = _SPACE_DEFAULT,
@@ -1078,13 +1065,8 @@ def fetch_reference(dataset: str,
                            TypeError)
     lgr.info(f"Loading {dataset} maps.")
 
-    # data directory
-    # warn if the parameter is used
-    if nispace_data_dir is not None:
-        lgr.warning("The 'nispace_data_dir' parameter is deprecated. Please use the NISPACE_DATA_DIR environment variable instead.")
-        os.environ["NISPACE_DATA_DIR"] = str(nispace_data_dir)
-    nispace_data_dir = os.getenv('NISPACE_DATA_DIR')
-    
+    nispace_data_dir = _resolve_nispace_data_dir(nispace_data_dir)
+
     # base dir
     base_dir = pathlib.Path(nispace_data_dir) / "reference" / dataset
     map_dir = base_dir / "map"
@@ -1154,15 +1136,6 @@ def fetch_reference(dataset: str,
         n_tmp = len(maps_avail)
         lgr.info(f"Applying filter: {maps}")
         maps_avail = _filter_maps(maps_avail, maps)
-        # if "map" not in reference_lib[dataset]:
-        #     maps_avail = _filter_maps(maps_avail, maps)
-        # else:
-        #     if isinstance(maps, str):
-        #         maps = [maps]
-        #     elif not isinstance(maps, (list, tuple, set, pd.Series)):
-        #         lgr.warning(f"For dataset '{dataset}', 'maps' must be list-like. Skipping filter.")
-        #         maps = maps_avail
-        #     maps_avail = list(set(maps_avail).intersection(maps))
         lgr.info(f"Filtered from {n_tmp} to {len(maps_avail)} maps.")
     
     # Filter by 'collection'
@@ -1322,17 +1295,15 @@ def fetch_metadata(dataset: str,
             return None
     else:
         return None
-    
-    # data directory
-    # warn if the parameter is used
-    if nispace_data_dir is not None:
-        lgr.warning("The 'nispace_data_dir' parameter is deprecated. Please use the NISPACE_DATA_DIR environment variable instead.")
-        os.environ["NISPACE_DATA_DIR"] = str(nispace_data_dir)
-    nispace_data_dir = os.getenv('NISPACE_DATA_DIR')
-    
+
+    if "metadata" not in reference_lib[dataset]:
+        return None
+
+    nispace_data_dir = _resolve_nispace_data_dir(nispace_data_dir)
+
     # base dir
     base_dir = pathlib.Path(nispace_data_dir) / "reference" / dataset
-    
+
     # load metadata
     meta = pd.read_csv(
         get_file(
@@ -1367,13 +1338,8 @@ def fetch_example(example: str,
     """
     verbose = set_log(lgr, verbose)
     
-    # data directory
-    # warn if the parameter is used
-    if nispace_data_dir is not None:
-        lgr.warning("The 'nispace_data_dir' parameter is deprecated. Please use the NISPACE_DATA_DIR environment variable instead.")
-        os.environ["NISPACE_DATA_DIR"] = str(nispace_data_dir)
-    nispace_data_dir = os.getenv('NISPACE_DATA_DIR')
-    
+    nispace_data_dir = _resolve_nispace_data_dir(nispace_data_dir)
+
     # base dir
     base_dir = pathlib.Path(nispace_data_dir) / "example"
 
