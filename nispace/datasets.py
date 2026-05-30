@@ -233,12 +233,22 @@ def _check_parcellation(parcellation: str, force_list: bool = False, force_str: 
     # (1) We check if parcellation is a string
     assert isinstance(parcellation, (str)), f"Parcellation must be of type string, not {type(parcellation)}!"
     # (2) We check if it is in parcellation_lib as is
+    parc = None
     if parcellation in parcellation_lib:
         parc = _parc_alias(parcellation)
+        # alias may point to a combined name (e.g. "BrainnetomeCorticalBrainnetomeSubcortical")
+        # that is not itself a key — resolve it through partial matching
+        if isinstance(parc, str) and parc not in parcellation_lib:
+            parcellation = parc
+            parc = None
     # (3) If not, we check if we get a partial match
-    else:
-        # get a list of potential partial matches 
-        parc_matches = list(set([_parc_alias(p) for p in parcellation_lib if p in parcellation]))
+    if parc is None:
+        # get a list of potential partial matches; skip combined-alias keys (their resolved alias
+        # is not itself a library entry, so they would pollute de-nesting in step 3b)
+        parc_matches = list(set([
+            _parc_alias(p) for p in parcellation_lib
+            if p in parcellation and _parc_alias(p) in parcellation_lib
+        ]))
         # (3a) No match found: raise error
         if len(parc_matches) == 0:
             if raise_not_found:
@@ -654,8 +664,8 @@ def fetch_collection(collection: Union[str, pathlib.Path, np.ndarray, pd.DataFra
         
 
 def apply_collection(data: pd.DataFrame, collection: pd.DataFrame):
-    if not np.isin(["map", "set"], collection.columns).all():
-        lgr.critical_raise("collection must have at least a 'set' and a 'map' column.")
+    if not np.isin(["map"], collection.columns).all():
+        lgr.critical_raise("collection must have at least a 'map' column.")
     
     maps_intersection = data.index.intersection(collection["map"].unique())
     collection_df_intersection = collection[collection["map"].isin(maps_intersection)]

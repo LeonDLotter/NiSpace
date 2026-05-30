@@ -1651,6 +1651,12 @@
   "HOS": {
     "alias": "HarvardOxfordSubcortical"
   },
+  "HarvardOxford": {
+    "alias": "HarvardOxfordCorticalHarvardOxfordSubcortical"
+  },
+  "HO": {
+    "alias": "HarvardOxfordCorticalHarvardOxfordSubcortical"
+  },
   "BrainnetomeCortical": {
     "MNI152NLin2009cAsym": {
       "level": "cortex",
@@ -1786,6 +1792,18 @@
       },
       "symmetric": true
     }
+  },
+  "BNC": {
+    "alias": "BrainnetomeCortical"
+  },
+  "BNS": {
+    "alias": "BrainnetomeSubcortical"
+  },
+  "Brainnetome": {
+    "alias": "BrainnetomeCorticalBrainnetomeSubcortical"
+  },
+  "BN": {
+    "alias": "BrainnetomeCorticalBrainnetomeSubcortical"
   },
   "AALCortical": {
     "MNI152NLin2009cAsym": {
@@ -1942,6 +1960,9 @@
       },
       "symmetric": true
     }
+  },
+  "AAL": {
+    "alias": "AALCorticalAALSubcortical"
   },
   "Yan100": {
     "MNI152NLin2009cAsym": {
