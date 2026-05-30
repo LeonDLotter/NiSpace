@@ -1103,8 +1103,15 @@ def _auto_vmin_vmax(data_flat, symmetric, vmin=None, vmax=None):
     return v_min, v_max
 
 
-def _load_fslr_assets(surf_mesh="inflated"):
-    """Load fsLR 32k surface geometry, sulcal background, and medial wall mask.
+def _load_fslr_assets(surf_mesh="inflated", res="32k"):
+    """Load fsLR surface geometry, sulcal background, and medial wall mask.
+
+    Parameters
+    ----------
+    surf_mesh : str
+        Surface geometry descriptor.
+    res : str
+        Resolution, one of "4k", "8k", "32k", "164k".
 
     Returns
     -------
@@ -1113,14 +1120,18 @@ def _load_fslr_assets(surf_mesh="inflated"):
     medial    : (medial_lh_array, medial_rh_array)
     """
     from .datasets import fetch_template
-    valid = ("midthickness", "inflated", "veryinflated", "sphere")
-    if surf_mesh not in valid:
-        raise ValueError(
-            f"surf_mesh='{surf_mesh}' not available for fsLR. Choose from: {valid}"
+    _valid_mesh = {"midthickness", "inflated", "sphere"}
+    if res in ("32k", "164k"):
+        _valid_mesh.add("veryinflated")
+    if surf_mesh not in _valid_mesh:
+        lgr.warning(
+            f"surf_mesh='{surf_mesh}' not available for fsLR/{res}. "
+            f"Choose from: {sorted(_valid_mesh)}. Falling back to 'inflated'."
         )
-    surf_lh, surf_rh = fetch_template("fsLR", desc=surf_mesh, check_file_hash=False, verbose=False)
-    sulc_lh_path, sulc_rh_path = fetch_template("fsLR", desc="sulc", check_file_hash=False, verbose=False)
-    medial_lh_path, medial_rh_path = fetch_template("fsLR", desc="medial", check_file_hash=False, verbose=False)
+        surf_mesh = "inflated"
+    surf_lh, surf_rh = fetch_template("fsLR", res=res, desc=surf_mesh, check_file_hash=False, verbose=False)
+    sulc_lh_path, sulc_rh_path = fetch_template("fsLR", res=res, desc="sulc", check_file_hash=False, verbose=False)
+    medial_lh_path, medial_rh_path = fetch_template("fsLR", res=res, desc="medial", check_file_hash=False, verbose=False)
     surf_lh = images.load_gifti(str(surf_lh))
     surf_rh = images.load_gifti(str(surf_rh))
     sulc_lh = images.load_gifti(str(sulc_lh_path)).agg_data()
@@ -1130,8 +1141,15 @@ def _load_fslr_assets(surf_mesh="inflated"):
     return (surf_lh, surf_rh), (sulc_lh, sulc_rh), (medial_lh, medial_rh)
 
 
-def _load_fsaverage_assets(surf_mesh="pial"):
-    """Load fsaverage 41k surface geometry, sulcal background, and medial wall mask.
+def _load_fsaverage_assets(surf_mesh="pial", res="41k"):
+    """Load fsaverage surface geometry, sulcal background, and medial wall mask.
+
+    Parameters
+    ----------
+    surf_mesh : str
+        Surface geometry descriptor.
+    res : str
+        Resolution, one of "3k", "10k", "41k", "164k".
 
     Returns
     -------
@@ -1140,16 +1158,16 @@ def _load_fsaverage_assets(surf_mesh="pial"):
     medial    : (medial_lh_array, medial_rh_array)
     """
     from .datasets import fetch_template
-    valid = ("pial", "white", "inflated", "sphere")
+    valid = {"pial", "white", "inflated", "sphere"}
     if surf_mesh not in valid:
         lgr.warning(
-            f"surf_mesh='{surf_mesh}' not available for fsaverage. "
-            f"Choose from: {valid}. Falling back to 'pial'."
+            f"surf_mesh='{surf_mesh}' not available for fsaverage/{res}. "
+            f"Choose from: {sorted(valid)}. Falling back to 'pial'."
         )
         surf_mesh = "pial"
-    surf_lh, surf_rh = fetch_template("fsaverage", desc=surf_mesh, check_file_hash=False, verbose=False)
-    sulc_lh_path, sulc_rh_path = fetch_template("fsaverage", desc="sulc", check_file_hash=False, verbose=False)
-    medial_lh_path, medial_rh_path = fetch_template("fsaverage", desc="medial", check_file_hash=False, verbose=False)
+    surf_lh, surf_rh = fetch_template("fsaverage", res=res, desc=surf_mesh, check_file_hash=False, verbose=False)
+    sulc_lh_path, sulc_rh_path = fetch_template("fsaverage", res=res, desc="sulc", check_file_hash=False, verbose=False)
+    medial_lh_path, medial_rh_path = fetch_template("fsaverage", res=res, desc="medial", check_file_hash=False, verbose=False)
     surf_lh = images.load_gifti(str(surf_lh))
     surf_rh = images.load_gifti(str(surf_rh))
     sulc_lh = images.load_gifti(str(sulc_lh_path)).agg_data()
@@ -1388,10 +1406,13 @@ def brainplot(
         and "surface" otherwise. Use "combined" for surface+glass brain side-by-side,
         "glass" or "slice" to render a combined parcellation as a plain MNI volume.
     space : str, optional
-        Parcellation space to use for rendering. Defaults to fslr32k for
-        surface plots and MNI152NLin2009cAsym for volume plots.
+        Parcellation space to use for rendering. Defaults to fsLR for
+        surface plots and MNI152NLin2009cAsym for volume plots. For GIfTI
+        image input, the resolution is auto-detected from vertex count and
+        ``space`` determines fsLR vs fsaverage (default: fsLR).
     surf_mesh : {"inflated", "pial", "midthickness", "veryinflated"}
-        Surface geometry for fslr32k. Ignored for non-surface plots.
+        Surface geometry. For fsLR, available options depend on resolution
+        (``veryinflated`` only at 32k/164k). Ignored for non-surface plots.
     views : list of str, optional
         Surface views as "<hemi>_<perspective>" strings.
         Default: ["left_lateral", "left_medial", "right_medial", "right_lateral"].
@@ -1655,6 +1676,9 @@ def brainplot(
         if threshold == "auto":
             threshold = float(np.float32(_min_abs / 2)) if _min_abs > 0 else None
             lgr.info(f"brainplot: threshold='auto' → {threshold}")
+        # Detect surface resolution from vertex count (same rounding as _img_density_for_neuromaps)
+        _gifti_density = f"{int(np.round(_gifti_pairs[0][0].shape[0] / 1000))}k"
+        lgr.info(f"brainplot: GIfTI input — {_gifti_pairs[0][0].shape[0]} vertices/hemi → density='{_gifti_density}'")
         n_maps = len(_gifti_pairs)
         plot_contours = False  # no parcellation array available for contours
 
@@ -1738,12 +1762,13 @@ def brainplot(
 
     if kind == "surface" or is_combined:
         if _img_mode == "gifti":
-            # GIfTI passthrough: load geometry from templates (assume fslr32k)
+            # Load geometry at the same resolution as the input data.
+            # _gifti_density is e.g. "32k", "10k", "4k" — computed from vertex count above.
             _use_fslr = space is None or "fslr" in (space or "").lower()
             if _use_fslr:
-                surf_geom, bg_data, medial_data = _load_fslr_assets(surf_mesh)
+                surf_geom, bg_data, medial_data = _load_fslr_assets(surf_mesh, res=_gifti_density)
             else:
-                surf_geom, bg_data, medial_data = _load_fsaverage_assets(surf_mesh)
+                surf_geom, bg_data, medial_data = _load_fsaverage_assets(surf_mesh, res=_gifti_density)
         else:
             if surf_space and "fslr" in surf_space.lower():
                 surf_geom, bg_data, medial_data = _load_fslr_assets(surf_mesh)
