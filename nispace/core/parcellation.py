@@ -233,6 +233,25 @@ class Parcellation:
                 lgr.warning("Could not infer parcellation space from image. Setting space='custom'.")
         lgr.info(f"Parcellation space: '{space}'.")
 
+        # warn on obvious space/image-type mismatch
+        _is_surf_img = isinstance(image, tuple) or (
+            hasattr(image, "darrays")  # nib.GiftiImage
+        )
+        _space_looks_mni = "mni" in space.lower()
+        _space_looks_surf = any(k in space.lower() for k in ("fslr", "fsaverage", "fsa"))
+        if _is_surf_img and _space_looks_mni:
+            lgr.warning(
+                f"Parcellation.from_path: image appears to be a surface (GIfTI) "
+                f"but space='{space}' looks like an MNI/volumetric space. "
+                "This may cause errors downstream."
+            )
+        elif not _is_surf_img and _space_looks_surf:
+            lgr.warning(
+                f"Parcellation.from_path: image appears to be volumetric (NIfTI) "
+                f"but space='{space}' looks like a surface space. "
+                "This may cause errors downstream."
+            )
+
         # labels
         if labels is not None:
             p._labels = np.array(load_labels(labels))
