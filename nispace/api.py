@@ -20,7 +20,7 @@ from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_
                                _EMPIRICAL_MC_METHODS)
 from .core.plot import _plot_categorical
 from .core.constants import _PARCS_DEFAULT, _COLOC_METHODS
-from .datasets import fetch_parcellation, fetch_template, _check_parcellation
+from .datasets import fetch_parcellation, fetch_reference, _check_parcellation
 from .nulls import get_distance_matrix, _SPIN_METHODS
 from .stats.coloc import beta, elasticnet, lasso, mlr, partialpearson, pearson, ridge
 from .stats.misc import (mc_correction, residuals_nan, zscore_df, permute_groups,
@@ -82,18 +82,20 @@ class NiSpace:
                  y: Union[np.ndarray, pd.DataFrame, pd.Series, 
                           List[Union[str, Path, nib.Nifti1Image, nib.GiftiImage]],
                           Dict[str, Union[str, Path, nib.Nifti1Image, nib.GiftiImage]]] = None, 
-                 z: Union[Literal["gm"], np.ndarray, pd.DataFrame, pd.Series, 
+                 z: Union[Literal["gm", "wm", "csf", "veins", "arteries"],
+                          List[Literal["gm", "wm", "csf", "veins", "arteries"]],
+                          np.ndarray, pd.DataFrame, pd.Series,
                           List[Union[str, Path, nib.Nifti1Image, nib.GiftiImage]],
-                          Dict[str, Union[str, Path, nib.Nifti1Image, nib.GiftiImage]]] = None, 
+                          Dict[str, Union[str, Path, nib.Nifti1Image, nib.GiftiImage]]] = None,
                  x_labels: Sequence[str] = None, 
                  y_labels: Sequence[str] = None, 
                  z_labels: Sequence[str] = None, 
-                 data_space: Literal["mni152", "fsaverage", "fslr"] = "mni152", 
+                 data_space: Literal["MNI152NLin6Asym", "MNI152NLin2009cAsym", "fsaverage", "fsLR"] = "MNI152NLin6Asym", 
                  standardize: Union[Literal["x", "y", "z", "xy", "xz", "yz", "xyz"], bool] = "xz", 
                  drop_nan: bool = False,    
                  parcellation: Union[str, Path, nib.Nifti1Image, nib.GiftiImage] = None, 
                  parcellation_labels: Sequence[str] = None, 
-                 parcellation_space: Literal["mni152", "fsaverage", "fslr"] = "MNI152NLin2009cAsym", 
+                 parcellation_space: Literal["MNI152NLin6Asym", "MNI152NLin2009cAsym", "fsaverage", "fsLR"] = "MNI152NLin6Asym", 
                  parcellation_hemi: Union[Literal["R", "L"], Sequence[Literal["L", "R"]]] = ["L", "R"], 
                  parcellation_symmetric: bool = False,
                  parcellation_l2rmap: pd.DataFrame = None,
@@ -124,13 +126,13 @@ class NiSpace:
             The target data (i.e., usually your maps of interest). Data types can be the same as 
             for x. Default is None. If None, NiSpace will create a copy of the reference maps to 
             evaluate reference map-to-map intercorrelations.
-        z : array-like of shape(1, n_parcels) or (n_parcels) or (n_target, n_parcels) or len(n_target) list-like of image data, optional
-            Maps to regress from reference/target maps across parcels. Can be "gm", a numpy array, 
-            pandas DataFrame, pandas Series, or a list containing (paths to) image objects. 
-            Default is None. If only one map, this one is regressed from every map. This also 
-            applies to the special case of "gm", which will load and parcellate the 
-            MNI152NLin2009cAsym grey matter probability map. If one map for each target is provided, 
-            these are regressed 1-to-1 from the corresponding target maps.
+        z : str, list of str, or array-like, optional
+            Maps to regress from reference/target maps across parcels. Can be one of the shortcut
+            strings "gm", "wm", "csf", "veins", or "arteries" (or a list of several) to
+            automatically fetch the corresponding tissue probability map (TPM) from the NiSpace
+            data library. Alternatively, accepts a numpy array, pandas DataFrame/Series, or a list
+            of image paths/objects. Default is None. If only one map is provided it is regressed
+            from every Y map; if multiple maps are provided they are used jointly as predictors.
         x_labels : sequence of str, optional
             Labels for the x data. Default is None. If None and x is DataFrame or Series, the 
             labels are taken from x's index (DataFrame) or name (Series).
@@ -141,8 +143,8 @@ class NiSpace:
             Labels for the z data. Default is None. If None and len(z) == len(y) any y is DataFrame 
             or Series, the labels are taken from y's (not z's) index (DataFrame) or name (Series).
         data_space : str, optional
-            The space in which the (x,y,z) data is defined; passed to neuromaps. Can be "mni152" 
-            (default), "fsaverage" or "fslr". Support for "fslr" is currently limited.
+            The space in which the (x,y,z) data is defined; passed to neuromaps. Should be one of
+            "MNI152NLin6Asym", "MNI152NLin2009cAsym", "fsaverage" or "fsLR". 
         standardize : str or bool, optional
             Whether to standardize the parcellated (x,y,z) data within each map across parcels. 
             Default is "xz". If True, will standardize all data. If (combination of) "x", "y", 
@@ -152,7 +154,7 @@ class NiSpace:
             in all following analyses, so False is a good choice. 
         parcellation : str, Path, Nifti1Image, or GiftiImage, optional
             The parcellation image to use. Default is None. Required in following cases: 
-            1) if image (paths) are passed to x, y, or z; 2) if z is "gm"; 3) if "map" permutation 
+            1) if image (paths) are passed to x, y, or z; 2) if z is a TPM shortcut string; 3) if "map" permutation
             is used in NiSpace.permute(); 4) if distance-based cross-validation is used. Cases 3/4
             apply even if initial data is passed pre-parcellated in arrays.
         parcellation_labels : sequence of str, optional
@@ -410,13 +412,18 @@ class NiSpace:
         
         # data to control correlations for
         if self._z is not None:
-            lgr.info("Checking input data for z (should be, e.g., grey matter data):")
-            if isinstance(self._z, str):
-                if self._z in ["GM", "GMV", "gm", "gmv"]:
-                    lgr.info("Using standard grey matter probability map as 'z' for GMV-control.")
-                    gm_template = "MNI152NLin6Asym" if self._parc._is_surface else "MNI152NLin2009cAsym"
-                    self._z = [fetch_template(gm_template, desc="gmprob")]
-                    self._z_lab = ["gm"]
+            lgr.info("Checking input data for z (should be, e.g., grey matter probability):")
+            _TPM_SHORTCUTS = {"gm", "wm", "csf", "veins", "arteries"}
+            _z_list = [self._z] if isinstance(self._z, str) else (
+                list(self._z) if isinstance(self._z, list) else None)
+            if _z_list is not None and all(
+                    isinstance(s, str) and s.lower() in _TPM_SHORTCUTS for s in _z_list):
+                _z_list = [s.lower() for s in _z_list]
+                lgr.info(f"Fetching TPM reference map(s) for z: {_z_list}.")
+                self._z = fetch_reference("tpm", maps=_z_list, space=self._data_space[2],
+                                          print_references=False, verbose=verbose)
+                if self._z_lab is None:
+                    self._z_lab = _z_list
             self._Z = parcellate_data(
                 self._z, 
                 data_labels=self._z_lab,
