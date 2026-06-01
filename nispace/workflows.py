@@ -518,15 +518,14 @@ def group_comparison(y, design,
     if not status["permute"]:
         for method in colocalization_method:
             permute_kwargs_curr = dict(
-                what="groups",
                 method=method,
                 Y_transform=comparison_method,
-                groups_paired=paired, 
+                groups_paired=paired,
                 groups_strategy="proportional",
                 n_perm=n_perm,
                 seed=seed,
                 verbose=verbose,
-            ) | permute_kwargs
+            ) | permute_kwargs | {"what": "groups"}
             nsp.permute(**permute_kwargs_curr)
         permute_what = "groups"
         status["permute"] = True  
