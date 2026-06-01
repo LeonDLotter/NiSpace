@@ -1054,7 +1054,9 @@ def view_surf(data=None, parcellation=None, hemi="L", template="fsaverage", repl
         if not isinstance(parcellation, str):
             raise NotImplementedError(f"For now, parcellation must be a string: {list(parcellation_lib.keys())}")
         else:
-            parc, labels = fetch_parcellation(parcellation, space=space, return_loaded=True, **parcellation_kwargs)
+            parc_obj = fetch_parcellation(parcellation, space=space, return_parcellation_only=True, **parcellation_kwargs)
+            parc = parc_obj.get_image()
+            labels = list(parc_obj.get_labels())
             parc_arr = parc[0 if hemi == "L" else 1].agg_data()
             labels = [l for l in labels if f"hemi-{hemi}" in l]
     if data is None:

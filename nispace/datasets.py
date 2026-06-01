@@ -288,6 +288,8 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                        space: str = None,
                        hemi: Union[List[str], str] = ["L", "R"],
                        bilateral: bool = False,
+                       return_parcellation_only: bool = False,
+                       # TODO: deprecate all return_* together with legacy space= mode in first non-dev release
                        return_labels: bool = True,
                        return_space: bool = False,
                        return_resolution: bool = False,
@@ -478,8 +480,8 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
 
         return out
     
-    # ---- NEW PATH: space=None → return multi-space Parcellation object ----
-    if space is None:
+    # ---- NEW PATH: space=None OR return_parcellation_only=True → Parcellation object ----
+    if space is None or return_parcellation_only:
         from .core.parcellation import Parcellation
         if isinstance(parc, list):
             parc_obj = Parcellation.from_nispace_library(
@@ -513,9 +515,18 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
             h = next(iter(_hemi_set), None)
             if h in ("L", "R"):
                 parc_obj.select_hemi(h, verbose=verbose)
+        # activate the requested space if one was given
+        if space is not None:
+            parc_obj.set_active_space(space)
         return parc_obj
 
-    # ---- LEGACY PATH: space explicitly given → return tuple of values ----
+    # ---- LEGACY PATH: space explicitly given and return_parcellation_only=False ----
+    lgr.warning(
+        "Passing 'space=' to fetch_parcellation() and receiving individual arrays is deprecated "
+        "and will be removed in the first non-dev release. "
+        "Use return_parcellation_only=True (or omit space=) to get a Parcellation object, "
+        "then call .get_image(), .get_dist_mat(), etc. as needed."
+    )
     # run load_parc for a single parcellation
     if isinstance(parc, str):
         out = load_parc(parc)
