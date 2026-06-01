@@ -2148,7 +2148,7 @@ class NiSpace:
 
         # sort_colocs deprecation
         if sort_colocs:
-            lgr.warning("'sort_colocs' is deprecated and will be removed in a future release. "
+            lgr.warning("'sort_colocs' is deprecated and will be removed in the first non-dev release. "
                         "Use sort_by='coloc' instead.")
             if sort_by is None:
                 sort_by = "coloc"

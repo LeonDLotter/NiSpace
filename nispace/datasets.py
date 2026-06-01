@@ -34,7 +34,7 @@ def keys2str(dct, sep=", "):
 # TODO: remove nispace_data_dir parameter support from all fetch functions once deprecated long enough
 def _resolve_nispace_data_dir(nispace_data_dir):
     if nispace_data_dir is not None:
-        lgr.warning("The 'nispace_data_dir' parameter is deprecated and will be removed in a future version. "
+        lgr.warning("The 'nispace_data_dir' parameter is deprecated and will be removed in the first non-dev release. "
                     "Please use the NISPACE_DATA_DIR environment variable instead.")
         os.environ["NISPACE_DATA_DIR"] = str(nispace_data_dir)
     return os.getenv('NISPACE_DATA_DIR')

@@ -155,7 +155,8 @@ def simple_colocalization(y,
                           colocalize_kwargs=None,
                           permute_kwargs=None,
                           correct_p_kwargs=None,
-                          plot_kwargs=None):
+                          plot_kwargs=None,
+                          return_nispace_only=False):
     """Simple colocalization workflow.
     
     Parameters
@@ -210,17 +211,17 @@ def simple_colocalization(y,
         Additional arguments for p-value correction.
     plot_kwargs : dict, default={}
         Additional arguments for plotting.
+    return_nispace_only : bool, default=False
+        If True, return only the NiSpace object. Use ``nsp.get_colocalizations()`` and
+        ``nsp.get_p_values()`` to access results. Setting False is deprecated and will
+        be removed in the first non-dev release.
 
     Returns
     -------
-    colocs : dict or array
-        Colocalization values for each method.
-    p_values : dict or array
-        Uncorrected p-values for each method.
-    pc_values : dict or array
-        Corrected p-values according to mc_mehtod for each colocalization method.
     nsp : NiSpace
-        The NiSpace object containing all results.
+        The NiSpace object containing all results (when ``return_nispace_only=True``).
+    colocs, p_values, pc_values, nsp : tuple
+        Deprecated. Returned when ``return_nispace_only=False`` (current default).
     """
     verbose = set_log(lgr, verbose)
     # kwarg dicts
@@ -341,9 +342,17 @@ def simple_colocalization(y,
     if len(mc_methods) == 1:
         pc_values = pc_values[mc_methods[0]]
 
-    return colocs, p_values, pc_values, nsp
-    
-        
+    if not return_nispace_only:
+        lgr.warning(
+            "Returning a tuple (colocs, p_values, pc_values, nsp) from workflow functions is "
+            "deprecated and will be removed in the first non-dev release. "
+            "Set 'return_nispace_only=True' and use 'nsp.get_colocalizations()' and "
+            "'nsp.get_p_values()' to access results."
+        )
+        return colocs, p_values, pc_values, nsp
+    return nsp
+
+
 def group_comparison(y, design,
                      x="PET",
                      z=None,
@@ -376,7 +385,8 @@ def group_comparison(y, design,
                      colocalize_kwargs=None,
                      permute_kwargs=None,
                      correct_p_kwargs=None,
-                     plot_kwargs=None):
+                     plot_kwargs=None,
+                     return_nispace_only=False):
     verbose = set_log(lgr, verbose)
     # kwarg dicts
     fetch_x_kwargs = {} if fetch_x_kwargs is None else fetch_x_kwargs
@@ -576,8 +586,16 @@ def group_comparison(y, design,
     if len(mc_methods) == 1:
         pc_values = pc_values[mc_methods[0]]
 
-    return colocs, p_values, pc_values, nsp
-    
+    if not return_nispace_only:
+        lgr.warning(
+            "Returning a tuple (colocs, p_values, pc_values, nsp) from workflow functions is "
+            "deprecated and will be removed in the first non-dev release. "
+            "Set 'return_nispace_only=True' and use 'nsp.get_colocalizations()' and "
+            "'nsp.get_p_values()' to access results."
+        )
+        return colocs, p_values, pc_values, nsp
+    return nsp
+
 
 def simple_xsea(y,
                 x="mRNA",
@@ -612,7 +630,8 @@ def simple_xsea(y,
                 colocalize_kwargs=None,
                 permute_kwargs=None,
                 correct_p_kwargs=None,
-                plot_kwargs=None):
+                plot_kwargs=None,
+                return_nispace_only=False):
     verbose = set_log(lgr, verbose)
     # kwarg dicts
     fetch_x_kwargs = {} if fetch_x_kwargs is None else fetch_x_kwargs
@@ -638,7 +657,7 @@ def simple_xsea(y,
             lgr.warning(f"Could not fetch background dataset for input x!")
     
     ## We go the easy way and just call .simple_colocalization() with some kwargs:
-    colocs, p_values, pc_values, nsp = simple_colocalization(
+    return simple_colocalization(
         y=y,
         x=x, z=z,
         x_collection=x_collection,
@@ -675,7 +694,6 @@ def simple_xsea(y,
             "sets_X_background": x_background if permute_sets else None,
         } | permute_kwargs,
         correct_p_kwargs=correct_p_kwargs,
-        plot_kwargs=plot_kwargs
+        plot_kwargs=plot_kwargs,
+        return_nispace_only=return_nispace_only,
     )
-    
-    return colocs, p_values, pc_values, nsp
