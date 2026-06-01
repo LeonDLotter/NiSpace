@@ -25,6 +25,21 @@ template_lib = read_json(datalib_dir / "template.json")
 parcellation_lib = read_json(datalib_dir / "parcellation.json")
 example_lib = read_json(datalib_dir / "example.json")
 
+# ==================================================================================================
+# DEPRECATION MESSAGE STRINGS
+# ==================================================================================================
+
+_DEPR_NISPACE_DATA_DIR = (
+    "The 'nispace_data_dir' parameter is deprecated and will be removed in the first non-dev release. "
+    "Please use the NISPACE_DATA_DIR environment variable instead."
+)
+_DEPR_FETCH_PARC_LEGACY = (
+    "Passing 'space=' to fetch_parcellation() and receiving individual arrays is deprecated "
+    "and will be removed in the first non-dev release. "
+    "Use return_parcellation_only=True (or omit space=) to get a Parcellation object, "
+    "then call .get_image(), .get_dist_mat(), etc. as needed."
+)
+
 def keys2list(dct):
     return list(dct.keys())
 
@@ -34,8 +49,7 @@ def keys2str(dct, sep=", "):
 # TODO (first non-dev release): remove nispace_data_dir parameter from all fetch_* functions and delete _resolve_nispace_data_dir()
 def _resolve_nispace_data_dir(nispace_data_dir):
     if nispace_data_dir is not None:
-        lgr.warning("The 'nispace_data_dir' parameter is deprecated and will be removed in the first non-dev release. "
-                    "Please use the NISPACE_DATA_DIR environment variable instead.")
+        lgr.warning(_DEPR_NISPACE_DATA_DIR)
         os.environ["NISPACE_DATA_DIR"] = str(nispace_data_dir)
     return os.getenv('NISPACE_DATA_DIR')
 
@@ -521,12 +535,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
         return parc_obj
 
     # ---- LEGACY PATH: space explicitly given and return_parcellation_only=False ----
-    lgr.warning(
-        "Passing 'space=' to fetch_parcellation() and receiving individual arrays is deprecated "
-        "and will be removed in the first non-dev release. "
-        "Use return_parcellation_only=True (or omit space=) to get a Parcellation object, "
-        "then call .get_image(), .get_dist_mat(), etc. as needed."
-    )
+    lgr.warning(_DEPR_FETCH_PARC_LEGACY)
     # run load_parc for a single parcellation
     if isinstance(parc, str):
         out = load_parc(parc)

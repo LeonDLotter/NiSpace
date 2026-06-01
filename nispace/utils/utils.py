@@ -90,12 +90,12 @@ def _lower_strip_ws(string):
         raise TypeError("Provide string input!")
     
 
-_DF_STRING_FIELDS = ["xdimred", "ytrans", "coloc", "stat", "xsea", "perm", "mc"]
+_DF_STRING_FIELDS = ["xdimred", "ytrans", "coloc", "stat", "xsea", "perm", "pooled", "mc"]
 
 def _parse_df_string(df_str):
     """Reverse of _get_df_string: parse a key string back into its component fields.
 
-    Returns a dict with any subset of: xdimred, ytrans, coloc, stat, xsea, perm, mc.
+    Returns a dict with any subset of: xdimred, ytrans, coloc, stat, xsea, perm, pooled, mc.
     """
     result = {}
     for i, field in enumerate(_DF_STRING_FIELDS):
@@ -123,34 +123,40 @@ def _parse_bool(s):
     return s
 
 
-def _get_df_string(kind, xdimred=None, ytrans=None, method=None, stat=None, xsea=False, perm=None, mc=None):
-    
+def _get_df_string(kind, xdimred=None, ytrans=None, method=None, stat=None, xsea=False,
+                   perm=None, pooled_p=False, mc=None):
+
     if kind=="ytrans":
         df_str = f"ytrans-{ytrans}"
-        
+
     elif kind=="xdimred":
         df_str = f"xdimred-{xdimred}"
-        
+
     elif kind=="coloc":
         if (method is not None) & (stat is not None):
             df_str = f"xdimred-{xdimred}_ytrans-{ytrans}_coloc-{method}_stat-{stat}_xsea-{xsea}"
         else:
             raise ValueError("Provide both method and stat!")
-        
+
     elif kind=="null":
         if (method is not None) & (perm is not None):
             if "sets" in perm:
                 xsea = True
             df_str = f"xdimred-{xdimred}_ytrans-{ytrans}_coloc-{method}_xsea-{xsea}_perm-{perm}"
+            if pooled_p:
+                df_str += f"_pooled-{pooled_p}"
         else:
             raise ValueError("Provide both method and perm!")
-        
+
     elif kind=="p":
         if (method is not None) & (stat is not None) & (perm is not None):
             if "sets" in perm:
                 xsea = True
             df_str = (f"xdimred-{xdimred}_ytrans-{ytrans}_coloc-{method}_stat-{stat}_xsea-{xsea}_"
-                      f"perm-{perm}_mc-{mc}")
+                      f"perm-{perm}")
+            if pooled_p:
+                df_str += f"_pooled-{pooled_p}"
+            df_str += f"_mc-{mc}"
         else:
             raise ValueError("Provide method, stat, and perm!")
 
@@ -160,12 +166,14 @@ def _get_df_string(kind, xdimred=None, ytrans=None, method=None, stat=None, xsea
                 xsea = True
             df_str = (f"xdimred-{xdimred}_ytrans-{ytrans}_coloc-{method}_stat-{stat}_xsea-{xsea}_"
                       f"perm-{perm}")
+            if pooled_p:
+                df_str += f"_pooled-{pooled_p}"
         else:
             raise ValueError("Provide method, stat, and perm!")
 
     else:
         raise ValueError(f"Kind {kind} not defined!")
-        
+
     return _lower_strip_ws(df_str)
         
 

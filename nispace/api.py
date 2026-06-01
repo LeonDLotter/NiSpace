@@ -65,6 +65,27 @@ def _match_maps(index, queries):
 
 
 # ==================================================================================================
+# DEPRECATION MESSAGE STRINGS
+# ==================================================================================================
+
+_DEPR_RETURN_SELF = (
+    "In the first non-dev release, all NiSpace object methods will return the "
+    "object itself by default. Set NiSpace(return_self=True) to disable this warning."
+)
+_DEPR_COMBAT_KEEP = (
+    "'combat_keep' is deprecated and will be ignored. All regression covariates "
+    "are now automatically protected during ComBat harmonization."
+)
+_DEPR_P_FROM_AVERAGE_Y_COLOC = (
+    "'p_from_average_y_coloc' is deprecated and will be removed in the first "
+    "non-dev release. Use 'pooled_p' instead."
+)
+_DEPR_SORT_COLOCS = (
+    "'sort_colocs' is deprecated and will be removed in the first non-dev release. "
+    "Use sort_by='coloc' instead."
+)
+
+# ==================================================================================================
 # DEFINE CLASS
 # ==================================================================================================
 
@@ -281,6 +302,7 @@ class NiSpace:
             "regress_z": None,
             "mc_method": None,
             "z_method": "robust",
+            "pooled_p": False,
         }
         
         # deprecation adjustment
@@ -325,8 +347,7 @@ class NiSpace:
         # TODO (first non-dev release): remove return_self parameter and all _return_self branches
         #   throughout api.py; methods should unconditionally return self
         if not self._return_self:
-            lgr.warning("In the first non-dev release, all NiSpace object methods will return the "
-                        "object itself by default. Set NiSpace(return_self=True) to disable this warning.")
+            lgr.warning(_DEPR_RETURN_SELF)
     
         ## handle parcellation
         if self._parc is not None:
@@ -637,8 +658,7 @@ class NiSpace:
         self._check_fit()
         # TODO (first non-dev release): remove combat_keep parameter entirely
         if combat_keep is not None:
-            lgr.warning("'combat_keep' is deprecated and will be ignored. All regression covariates "
-                        "are now automatically protected during ComBat harmonization.")
+            lgr.warning(_DEPR_COMBAT_KEEP)
         n_proc = self._n_proc if n_proc is None else n_proc
         combat_kwargs = {} if combat_kwargs is None else combat_kwargs
 
@@ -1152,7 +1172,7 @@ class NiSpace:
                 n_perm=10000,
                 maps_which="X", maps_nulls=None, maps_method=None, dist_mat=None,
                 sets_X_background=None,
-                p_tails=None, p_from_average_y_coloc="auto",
+                p_tails=None, pooled_p="auto", p_from_average_y_coloc=None,
                 n_proc=None, seed=None, store=True, verbose=None, force_dict=False,
                 **kwargs):
         """
@@ -1200,11 +1220,13 @@ class NiSpace:
             P-value tail(s). ``"two"``, ``"upper"``, or ``"lower"``. Can be a
             dict keyed by statistic name (e.g. ``{"rho": "two"}``). Defaults to
             method-appropriate tails.
-        p_from_average_y_coloc : str or bool, optional
+        pooled_p : str or bool, optional
             How to aggregate across Y maps before computing p-values:
             ``"mean"`` or ``"median"`` (average first, one p-value per X map),
             ``False`` (one p-value per Y×X pair),
             ``"auto"`` (default) — ``False`` for single-Y, ``"mean"`` otherwise.
+        p_from_average_y_coloc : str or bool, optional
+            Deprecated. Use ``pooled_p`` instead.
         n_proc : int, optional
             Number of parallel processes. Defaults to the value set at init.
         seed : int, optional
@@ -1464,21 +1486,26 @@ class NiSpace:
         _Z_obs = self._Z
         _Z_obs_arr = np.array(_Z_obs, dtype=dtype)
 
-        ## get averaging method for p_from_average_y_coloc: "auto" -> decide based on number of Y maps,
-        # "median", "mean" -> calculate p based on mean/median colocalization across Y maps, 
+        # TODO (first non-dev release): remove p_from_average_y_coloc parameter
+        if p_from_average_y_coloc is not None:
+            lgr.warning(_DEPR_P_FROM_AVERAGE_Y_COLOC)
+            pooled_p = p_from_average_y_coloc
+
+        ## resolve pooled_p: "auto" -> decide based on number of Y maps,
+        # "median"/"mean" -> calculate p based on mean/median colocalization across Y maps,
         # False -> calculate p for every Y map, anything else -> defaults to mean
-        if p_from_average_y_coloc:
-            if p_from_average_y_coloc == "auto":
+        if pooled_p:
+            if pooled_p == "auto":
                 if _Y_obs.shape[0] == 1 or self._x_with_self:
-                    p_from_average_y_coloc = False
+                    pooled_p = False
                 elif _Y_obs.shape[0] > 1:
-                    p_from_average_y_coloc = "mean"
-            elif p_from_average_y_coloc not in ["mean", "median"]:
-                p_from_average_y_coloc = "mean"
-            if p_from_average_y_coloc:
-                lgr.info("Will calculate p values for mean calculation across Y maps. Set "
-                         "'p_from_average_y_coloc' = False to change this behavior.")
-            self._nulls["p_from_average_y_coloc"] = p_from_average_y_coloc
+                    pooled_p = "mean"
+            elif pooled_p not in ["mean", "median"]:
+                pooled_p = "mean"
+            if pooled_p:
+                lgr.info("Will calculate p values for mean colocalization across Y maps. Set "
+                         "'pooled_p=False' to compute p values for each Y map individually.")
+            self._nulls["pooled_p"] = pooled_p
                     
         ## get observed colocalizations as numpy arrays
         lgr.info(f"Loading observed colocalizations (method = '{method}').")
@@ -1493,9 +1520,9 @@ class NiSpace:
         _colocs_obs = {stat: np.array(df, dtype=dtype) for stat, df in _colocs_obs.items()}
                     
         # get average prediction values of all y if requested
-        if p_from_average_y_coloc:                
+        if pooled_p:
             for stat in _colocs_obs.keys():
-                if p_from_average_y_coloc=="median":
+                if pooled_p == "median":
                     _colocs_obs[stat] = np.nanmedian(_colocs_obs[stat], axis=0)[np.newaxis, :]
                 else:
                     _colocs_obs[stat] = np.nanmean(_colocs_obs[stat], axis=0)[np.newaxis, :]
@@ -1773,9 +1800,9 @@ class NiSpace:
                 dtype=dtype
             )
             # average colocalization if requested
-            if p_from_average_y_coloc:
+            if pooled_p:
                 for stat in null_colocs:
-                    if p_from_average_y_coloc == "median":
+                    if pooled_p == "median":
                         null_colocs[stat] = np.nanmedian(null_colocs[stat], axis=0)[np.newaxis, :]
                     else:
                         null_colocs[stat] = np.nanmean(null_colocs[stat], axis=0)[np.newaxis, :]
@@ -1824,8 +1851,8 @@ class NiSpace:
                 lgr.critical_raise(f"p value array of wrong shape ({p_data[stat].shape})!",
                                    ValueError)
             # index names
-            if (p_from_average_y_coloc in ["mean", "median"]) & (_Y_obs.shape[0]>1):
-                rows = [p_from_average_y_coloc]
+            if (pooled_p in ["mean", "median"]) & (_Y_obs.shape[0]>1):
+                rows = [pooled_p]
             elif "_Y_trans_obs" in locals():
                 rows = _Y_trans_obs.index
             else:
@@ -1837,34 +1864,37 @@ class NiSpace:
             perm = "".join(what).replace("maps", "".join(maps_which)+"maps")
             for stat in p_data:
                 df_str = _get_df_string(
-                    "p", 
-                    xdimred=X_reduction, 
-                    ytrans=Y_transform, 
-                    method=method, 
+                    "p",
+                    xdimred=X_reduction,
+                    ytrans=Y_transform,
+                    method=method,
                     stat=stat,
                     xsea=xsea,
-                    perm=perm
+                    perm=perm,
+                    pooled_p=pooled_p,
                 )
                 self._p_colocs[df_str] = p_data[stat]
             df_str = _get_df_string(
-                "null", 
-                xdimred=X_reduction, 
-                ytrans=Y_transform, 
+                "null",
+                xdimred=X_reduction,
+                ytrans=Y_transform,
                 method=method,
                 xsea=xsea,
-                perm=perm
+                perm=perm,
+                pooled_p=pooled_p,
             )
             self._nulls["_colocs"][df_str] = _colocs_null
             self._nulls[f"p_tails_{df_str}"] = p_tails_resolved
             self._set_last(
-                method=method, 
-                X_reduction=X_reduction, 
-                Y_transform=Y_transform, 
+                method=method,
+                X_reduction=X_reduction,
+                Y_transform=Y_transform,
                 xsea=xsea,
                 rank=rank,
                 zy_matched=zy_matched,
                 regress_z=regress_z,
-                perm=perm
+                perm=perm,
+                pooled_p=pooled_p,
             )
             ## return
             if self._return_self:
@@ -1920,6 +1950,7 @@ class NiSpace:
                 stat     = fields.get("stat")
                 xsea     = _parse_bool(fields.get("xsea", False))
                 perm     = fields.get("perm")
+                pooled   = _parse_bool(fields.get("pooled", False))
 
                 p_str_mc = p_str.replace("mc-none", f"mc-{mc_key}")
                 p_values = self._p_colocs[p_str]
@@ -1989,7 +2020,7 @@ class NiSpace:
                     # get null key and null colocs
                     null_str = _get_df_string(
                         "null", xdimred=xdimred, ytrans=ytrans,
-                        method=coloc, xsea=xsea, perm=perm
+                        method=coloc, xsea=xsea, perm=perm, pooled_p=pooled,
                     )
                     if null_str not in self._nulls["_colocs"]:
                         lgr.critical_raise(
@@ -2070,6 +2101,7 @@ class NiSpace:
             coloc   = fields.get("coloc")
             xsea    = _parse_bool(fields.get("xsea", False))
             perm    = fields.get("perm")
+            pooled  = _parse_bool(fields.get("pooled", False))
 
             null_colocs = self._nulls["_colocs"][null_str]
             stats = _get_coloc_stats(coloc, permuted_only=True)
@@ -2095,7 +2127,7 @@ class NiSpace:
                         "z",
                         xdimred=xdimred, ytrans=ytrans,
                         method=coloc, stat=stat,
-                        xsea=xsea, perm=perm
+                        xsea=xsea, perm=perm, pooled_p=pooled,
                     )
                     self._z_colocs[z_str] = z_df
                     lgr.info(f"Stored normalized colocalizations: {z_str}")
@@ -2150,8 +2182,7 @@ class NiSpace:
 
         # TODO (first non-dev release): remove sort_colocs parameter entirely
         if sort_colocs:
-            lgr.warning("'sort_colocs' is deprecated and will be removed in the first non-dev release. "
-                        "Use sort_by='coloc' instead.")
+            lgr.warning(_DEPR_SORT_COLOCS)
             if sort_by is None:
                 sort_by = "coloc"
             sort_colocs = False
@@ -2700,8 +2731,8 @@ class NiSpace:
     def get_colocalizations(self, method=None, stats=None,
                             X_reduction=None, Y_transform=None, xsea=None,
                             normalized=False, perm=None,
-                            get_nulls=False, nulls_permute_what=None, force_dict=False,
-                            verbose=None):
+                            get_nulls=False, nulls_permute_what=None, pooled_p=None,
+                            force_dict=False, verbose=None):
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
 
@@ -2713,7 +2744,7 @@ class NiSpace:
         )
 
         if normalized:
-            perm = self._get_last(perm=perm)
+            perm, pooled_p = self._get_last(perm=perm, pooled_p=pooled_p)
             if stats is None:
                 stats = _get_coloc_stats(method, permuted_only=True)
             elif isinstance(stats, str):
@@ -2726,7 +2757,7 @@ class NiSpace:
                     "z",
                     xdimred=X_reduction, ytrans=Y_transform,
                     method=method, stat=stat,
-                    xsea=xsea, perm=perm
+                    xsea=xsea, perm=perm, pooled_p=pooled_p,
                 )
                 if z_str not in self._z_colocs:
                     lgr.critical_raise(
@@ -2777,32 +2808,35 @@ class NiSpace:
             get_nulls = False
             
         if get_nulls:
-            if nulls_permute_what not in ["groups", "groupsxmaps", "groupssets", 
+            if nulls_permute_what not in ["groups", "groupsxmaps", "groupssets",
                                           "xmaps", "ymaps", "xymaps", "ymapssets",
                                           "sets"]:
                 lgr.critical_raise("If 'get_nulls' is True, 'nulls_permute_what' must be one of "
                                    "{'groups', '{x|y|xy}maps', 'sets'}!",
                                    ValueError)
+            pooled_p = self._get_last(pooled_p=pooled_p)
             out_null = None
             null_str = _get_df_string(
-                "null", 
+                "null",
                 xdimred=X_reduction,
                 ytrans=Y_transform,
-                method=method, 
+                method=method,
                 xsea=xsea,
-                perm=nulls_permute_what
+                perm=nulls_permute_what,
+                pooled_p=pooled_p,
             )
             if null_str not in self._nulls["_colocs"].keys():
                 available = "\n".join(list(self._nulls["_colocs"].keys()))
                 lgr.error(f"Null colocalizations for '{null_str}' not found! Available: {available}")
             else:
                 nulls = self._nulls["_colocs"][null_str].copy()
-                
+
                 out_null = dict()
                 n_nulls = len(nulls)
                 with _quiet():
                     idx = self.get_p_values(method, nulls_permute_what, _COLOC_METHODS[method][0],
                                             xsea,
+                                            pooled_p=pooled_p,
                                             X_reduction=X_reduction,
                                             Y_transform=Y_transform).index
                 for stat in stats:
@@ -2838,23 +2872,25 @@ class NiSpace:
     # ----------------------------------------------------------------------------------------------
     
     def get_p_values(self, method=None, permute_what=None, stats=None, xsea=None,
-                     mc_method=None,
-                     X_reduction=None, Y_transform=None, force_dict=False, verbose=None, copy=True): 
+                     mc_method=None, pooled_p=None,
+                     X_reduction=None, Y_transform=None, force_dict=False, verbose=None, copy=True):
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
-        
-        method, X_reduction, Y_transform, xsea, permute_what = self._get_last(
-            method=method, 
-            X_reduction=X_reduction, 
-            Y_transform=Y_transform, 
+
+        method, X_reduction, Y_transform, xsea, permute_what, pooled_p = self._get_last(
+            method=method,
+            X_reduction=X_reduction,
+            Y_transform=Y_transform,
             xsea=xsea,
-            perm=permute_what
+            perm=permute_what,
+            pooled_p=pooled_p,
         )
         
         if mc_method is not None:
             mc_method = _get_correct_mc_method(mc_method).replace("-", "").replace("_", "")
 
-        self._check_permute(method, permute_what, mc_method, xsea, stats, X_reduction, Y_transform)
+        self._check_permute(method, permute_what, mc_method, xsea, stats, X_reduction, Y_transform,
+                            pooled_p=pooled_p)
 
         if stats is None:
             stats = _get_coloc_stats(method, permuted_only=True)
@@ -2871,6 +2907,7 @@ class NiSpace:
                 stat=stat,
                 xsea=xsea,
                 perm=permute_what,
+                pooled_p=pooled_p,
                 mc=mc_method,
             )
             if p_str not in self._p_colocs.keys():
@@ -3040,15 +3077,15 @@ class NiSpace:
     # ----------------------------------------------------------------------------------------------
     
     def _check_permute(self, method, permute_what, mc_method=None, xsea=False,
-                       stats=None, xdimred=False, ytrans=False, raise_error=True):
+                       stats=None, xdimred=False, ytrans=False, pooled_p=False, raise_error=True):
         if stats is None:
             stats = _get_coloc_stats(method, drop_optional=True, permuted_only=True)
         elif isinstance(stats, str):
             stats = [stats]
- 
+
         for stat in stats:
             p_str = _get_df_string("p", xdimred=xdimred, ytrans=ytrans, method=method, stat=stat,
-                                    perm=permute_what, mc=mc_method, xsea=xsea).lower()
+                                    perm=permute_what, pooled_p=pooled_p, mc=mc_method, xsea=xsea).lower()
             lgr.debug(p_str)
             if p_str not in self._p_colocs:
                 if raise_error:

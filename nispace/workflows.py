@@ -12,6 +12,22 @@ from .core.constants import (_PARC_DEFAULT,
                                 _COLOC_METHODS)
 from .datasets import fetch_reference, reference_lib, _check_parcellation
 
+_DEPR_POOLED_P = (
+    "'p_from_average_y' is deprecated and will be removed in the first "
+    "non-dev release. Use 'pooled_p' instead."
+)
+_DEPR_RETURN_TUPLE = (
+    "Returning a tuple (colocs, p_values, pc_values, nsp) from workflow functions is "
+    "deprecated and will be removed in the first non-dev release. "
+    "Set 'return_nispace_only=True' and use 'nsp.get_colocalizations()' and "
+    "'nsp.get_p_values()' to access results."
+)
+_DEPR_FUNC_NAME = (
+    "'{old}' is deprecated and will be removed in the first non-dev release. "
+    "Use '{new}()' instead."
+)
+
+
 def _workflow_base(x, y, z, x_collection, #x_load_nulls,
                    space,
                    data_space,
@@ -124,49 +140,49 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
     return status, nsp, null_maps
        
        
-def simple_colocalization(y,
-                          x="PET",
-                          z=None,
-                          x_collection=None,
-                          standardize="xz",
-                          space="MNI152NLin2009cAsym",
-                          data_space=None,
-                          parcellation_space=None,
-                          parcellation=_PARC_DEFAULT,
-                          parcellation_labels=None,
-                          parcellation_hemi=["L", "R"],
-                          y_covariates=None,
-                          colocalization_method="spearman",
-                          mc_method="meff",
-                          normalize_colocalizations=True,
-                          p_from_average_y=False,
-                          plot=True,
-                          combat=False,
-                          n_perm=10000,
-                          seed=None,
-                          #x_load_nulls=True,
-                          n_proc=1,
-                          verbose=True,
-                          nispace_object=None,
-                          fetch_x_kwargs=None,
-                          init_kwargs=None,
-                          fit_kwargs=None,
-                          clean_y_kwargs=None,
-                          colocalize_kwargs=None,
-                          permute_kwargs=None,
-                          correct_p_kwargs=None,
-                          plot_kwargs=None,
-                          return_nispace_only=False):
-    """Simple colocalization workflow.
-    
+def colocalization(y,
+                   x="PET",
+                   z=None,
+                   x_collection=None,
+                   standardize="xz",
+                   space="MNI152NLin2009cAsym",
+                   data_space=None,
+                   parcellation_space=None,
+                   parcellation=_PARC_DEFAULT,
+                   parcellation_labels=None,
+                   parcellation_hemi=["L", "R"],
+                   y_covariates=None,
+                   colocalization_method="spearman",
+                   mc_method="meff",
+                   normalize_colocalizations=True,
+                   pooled_p=False,
+                   p_from_average_y=None,  # TODO (first non-dev release): remove
+                   plot=True,
+                   combat=False,
+                   n_perm=10000,
+                   seed=None,
+                   n_proc=1,
+                   verbose=True,
+                   nispace_object=None,
+                   fetch_x_kwargs=None,
+                   init_kwargs=None,
+                   fit_kwargs=None,
+                   clean_y_kwargs=None,
+                   colocalize_kwargs=None,
+                   permute_kwargs=None,
+                   correct_p_kwargs=None,
+                   plot_kwargs=None,
+                   return_nispace_only=False):
+    """Colocalization workflow.
+
     Parameters
     ----------
     y : array-like or pandas DataFrame or list
         Input Y data to colocalize with X. Can be a numpy array, pandas DataFrame,
         (list of) path(s) to a file(s) or list of image objects.
     x : str or array-like, default="PET"
-        Input X data. Can be a string indicating a reference dataset ("PET", "mRNA", ...), 
-        or inputs types as listed for y.
+        Input X data. Can be a string indicating a reference dataset ("PET", "mRNA", ...),
+        or input types as listed for y.
     z : array-like or None, default=None
         Optional confound data to regress out. Can be "gm", or input types as listed for y.
     x_collection : str or None, default=None
@@ -181,8 +197,13 @@ def simple_colocalization(y,
         Optional covariates to regress from Y data.
     colocalization_method : str or list, default="spearman"
         Method(s) to use for colocalization. Can be "spearman", "pearson", etc.
-    p_from_average_y : bool, default=False
-        Whether to compute p-values from averaged Y values.
+    pooled_p : str or bool, default=False
+        How to aggregate across Y maps before computing p-values. ``False`` (default)
+        computes one p-value per Y×X pair. ``"mean"`` or ``"median"`` averages
+        colocalizations across Y maps first and returns one p-value per X map.
+        ``"auto"`` uses ``False`` for a single Y map and ``"mean"`` otherwise.
+    p_from_average_y : str or bool, optional
+        Deprecated. Use ``pooled_p`` instead.
     plot : bool, default=True
         Whether to generate visualization plots.
     combat : bool, default=False
@@ -191,25 +212,25 @@ def simple_colocalization(y,
         Number of permutations for null distribution.
     seed : int or None, default=None
         Random seed for reproducibility.
-    n_proc : int, default=-1
-        Number of processes for parallel computation. -1 uses all CPUs.
+    n_proc : int, default=1
+        Number of processes for parallel computation.
     verbose : bool, default=True
         Whether to print progress messages.
     nispace_object : NiSpace or None, default=None
         Optional pre-initialized NiSpace object to use.
-    fetch_x_kwargs : dict, default={}
+    fetch_x_kwargs : dict, optional
         Additional arguments for fetching X data.
-    init_kwargs : dict, default={}
+    init_kwargs : dict, optional
         Additional arguments for NiSpace initialization.
-    clean_y_kwargs : dict, default={}
+    clean_y_kwargs : dict, optional
         Additional arguments for Y data cleaning.
-    colocalize_kwargs : dict, default={}
+    colocalize_kwargs : dict, optional
         Additional arguments for colocalization.
-    permute_kwargs : dict, default={}
+    permute_kwargs : dict, optional
         Additional arguments for permutation testing.
-    correct_p_kwargs : dict, default={}
+    correct_p_kwargs : dict, optional
         Additional arguments for p-value correction.
-    plot_kwargs : dict, default={}
+    plot_kwargs : dict, optional
         Additional arguments for plotting.
     return_nispace_only : bool, default=False
         If True, return only the NiSpace object. Use ``nsp.get_colocalizations()`` and
@@ -224,6 +245,10 @@ def simple_colocalization(y,
         Deprecated. Returned when ``return_nispace_only=False`` (current default).
     """
     verbose = set_log(lgr, verbose)
+    # TODO (first non-dev release): remove p_from_average_y parameter
+    if p_from_average_y is not None:
+        lgr.warning(_DEPR_POOLED_P)
+        pooled_p = p_from_average_y
     # kwarg dicts
     fetch_x_kwargs = {} if fetch_x_kwargs is None else fetch_x_kwargs
     init_kwargs = {} if init_kwargs is None else init_kwargs
@@ -233,7 +258,7 @@ def simple_colocalization(y,
     permute_kwargs = {} if permute_kwargs is None else permute_kwargs
     correct_p_kwargs = {} if correct_p_kwargs is None else correct_p_kwargs
     plot_kwargs = {} if plot_kwargs is None else plot_kwargs
-    
+
     ## COMMON FUNCTIONS: COLOC METHOD VALIDATION, DATA LOADING, INIT,
     if isinstance(colocalization_method, str):
         colocalization_method = [colocalization_method]
@@ -290,7 +315,7 @@ def simple_colocalization(y,
                 maps_which="X",
                 maps_nulls=null_maps,
                 method=method,
-                p_from_average_y_coloc=p_from_average_y,
+                pooled_p=pooled_p,
                 n_perm=n_perm,
                 seed=seed,
             ) | permute_kwargs
@@ -345,51 +370,52 @@ def simple_colocalization(y,
     # TODO (first non-dev release): remove return_nispace_only parameter; always return nsp only;
     #   remove colocs/p_values/pc_values construction block above and the if/else here
     if not return_nispace_only:
-        lgr.warning(
-            "Returning a tuple (colocs, p_values, pc_values, nsp) from workflow functions is "
-            "deprecated and will be removed in the first non-dev release. "
-            "Set 'return_nispace_only=True' and use 'nsp.get_colocalizations()' and "
-            "'nsp.get_p_values()' to access results."
-        )
+        lgr.warning(_DEPR_RETURN_TUPLE)
         return colocs, p_values, pc_values, nsp
     return nsp
 
 
-def group_comparison(y, design,
-                     x="PET",
-                     z=None,
-                     x_collection=None,
-                     standardize="xz",
-                     space="MNI152NLin2009cAsym",
-                     data_space=None,
-                     parcellation_space=None,
-                     parcellation=_PARC_DEFAULT,
-                     parcellation_labels=None,
-                     parcellation_hemi=["L", "R"],
-                     colocalization_method="spearman",
-                     comparison_method=None,
-                     mc_method="meff",
-                     normalize_colocalizations=True,
-                     paired=False,
-                     plot_design_between=True,
-                     combat=False,
-                     plot=True,
-                     n_perm=10000,
-                     seed=None,
-                     n_proc=1,
-                     verbose=True,
-                     nispace_object=None,
-                     fetch_x_kwargs=None,
-                     init_kwargs=None,
-                     fit_kwargs=None,
-                     clean_y_kwargs=None,
-                     transform_y_kwargs=None,
-                     colocalize_kwargs=None,
-                     permute_kwargs=None,
-                     correct_p_kwargs=None,
-                     plot_kwargs=None,
-                     return_nispace_only=False):
+def group_colocalization(y, design,
+                         x="PET",
+                         z=None,
+                         x_collection=None,
+                         standardize="xz",
+                         space="MNI152NLin2009cAsym",
+                         data_space=None,
+                         parcellation_space=None,
+                         parcellation=_PARC_DEFAULT,
+                         parcellation_labels=None,
+                         parcellation_hemi=["L", "R"],
+                         colocalization_method="spearman",
+                         comparison_method=None,
+                         mc_method="meff",
+                         normalize_colocalizations=True,
+                         pooled_p=False,
+                         p_from_average_y=None,  # TODO (first non-dev release): remove
+                         paired=False,
+                         plot_design_between=True,
+                         combat=False,
+                         plot=True,
+                         n_perm=10000,
+                         seed=None,
+                         n_proc=1,
+                         verbose=True,
+                         nispace_object=None,
+                         fetch_x_kwargs=None,
+                         init_kwargs=None,
+                         fit_kwargs=None,
+                         clean_y_kwargs=None,
+                         transform_y_kwargs=None,
+                         colocalize_kwargs=None,
+                         permute_kwargs=None,
+                         correct_p_kwargs=None,
+                         plot_kwargs=None,
+                         return_nispace_only=False):
     verbose = set_log(lgr, verbose)
+    # TODO (first non-dev release): remove p_from_average_y parameter
+    if p_from_average_y is not None:
+        lgr.warning(_DEPR_POOLED_P)
+        pooled_p = p_from_average_y
     # kwarg dicts
     fetch_x_kwargs = {} if fetch_x_kwargs is None else fetch_x_kwargs
     init_kwargs = {} if init_kwargs is None else init_kwargs
@@ -534,6 +560,7 @@ def group_comparison(y, design,
                 Y_transform=comparison_method,
                 groups_paired=paired,
                 groups_strategy="proportional",
+                pooled_p=pooled_p,
                 n_perm=n_perm,
                 seed=seed,
                 verbose=verbose,
@@ -591,52 +618,52 @@ def group_comparison(y, design,
     # TODO (first non-dev release): remove return_nispace_only parameter; always return nsp only;
     #   remove colocs/p_values/pc_values construction block above and the if/else here
     if not return_nispace_only:
-        lgr.warning(
-            "Returning a tuple (colocs, p_values, pc_values, nsp) from workflow functions is "
-            "deprecated and will be removed in the first non-dev release. "
-            "Set 'return_nispace_only=True' and use 'nsp.get_colocalizations()' and "
-            "'nsp.get_p_values()' to access results."
-        )
+        lgr.warning(_DEPR_RETURN_TUPLE)
         return colocs, p_values, pc_values, nsp
     return nsp
 
 
-def simple_xsea(y,
-                x="mRNA",
-                z=None,
-                x_collection=None,
-                x_background=None,
-                standardize="xz",
-                space="MNI152NLin2009cAsym",
-                data_space=None,
-                parcellation_space=None,
-                parcellation=_PARC_DEFAULT,
-                parcellation_labels=None,
-                parcellation_hemi=["L", "R"],
-                y_covariates=None,
-                colocalization_method="spearman",
-                mc_method="meff",
-                normalize_colocalizations=True,
-                xsea_aggregation_method="mean",
-                permute_sets=False,
-                p_from_average_y=False,
-                plot=True,
-                combat=False,
-                n_perm=10000,
-                seed=None,
-                n_proc=1,
-                verbose=True,
-                nispace_object=None,
-                fetch_x_kwargs=None,
-                init_kwargs=None,
-                fit_kwargs=None,
-                clean_y_kwargs=None,
-                colocalize_kwargs=None,
-                permute_kwargs=None,
-                correct_p_kwargs=None,
-                plot_kwargs=None,
-                return_nispace_only=False):
+def xsea(y,
+         x="mRNA",
+         z=None,
+         x_collection=None,
+         x_background=None,
+         standardize="xz",
+         space="MNI152NLin2009cAsym",
+         data_space=None,
+         parcellation_space=None,
+         parcellation=_PARC_DEFAULT,
+         parcellation_labels=None,
+         parcellation_hemi=["L", "R"],
+         y_covariates=None,
+         colocalization_method="spearman",
+         mc_method="meff",
+         normalize_colocalizations=True,
+         xsea_aggregation_method="mean",
+         permute_sets=False,
+         pooled_p=False,
+         p_from_average_y=None,  # TODO (first non-dev release): remove
+         plot=True,
+         combat=False,
+         n_perm=10000,
+         seed=None,
+         n_proc=1,
+         verbose=True,
+         nispace_object=None,
+         fetch_x_kwargs=None,
+         init_kwargs=None,
+         fit_kwargs=None,
+         clean_y_kwargs=None,
+         colocalize_kwargs=None,
+         permute_kwargs=None,
+         correct_p_kwargs=None,
+         plot_kwargs=None,
+         return_nispace_only=False):
     verbose = set_log(lgr, verbose)
+    # TODO (first non-dev release): remove p_from_average_y parameter
+    if p_from_average_y is not None:
+        lgr.warning(_DEPR_POOLED_P)
+        pooled_p = p_from_average_y
     # kwarg dicts
     fetch_x_kwargs = {} if fetch_x_kwargs is None else fetch_x_kwargs
     init_kwargs = {} if init_kwargs is None else init_kwargs
@@ -646,7 +673,7 @@ def simple_xsea(y,
     permute_kwargs = {} if permute_kwargs is None else permute_kwargs
     correct_p_kwargs = {} if correct_p_kwargs is None else correct_p_kwargs
     plot_kwargs = {} if plot_kwargs is None else plot_kwargs
-    
+
     # GET THE BACKGROUND
     if permute_sets:
         if x_background is None and isinstance(x, str):
@@ -659,9 +686,8 @@ def simple_xsea(y,
                     x_background = None
         if x_background is None:
             lgr.warning(f"Could not fetch background dataset for input x!")
-    
-    ## We go the easy way and just call .simple_colocalization() with some kwargs:
-    return simple_colocalization(
+
+    return colocalization(
         y=y,
         x=x, z=z,
         x_collection=x_collection,
@@ -676,7 +702,7 @@ def simple_xsea(y,
         colocalization_method=colocalization_method,
         mc_method=mc_method,
         normalize_colocalizations=normalize_colocalizations,
-        p_from_average_y=p_from_average_y,
+        pooled_p=pooled_p,
         plot=plot,
         combat=combat,
         n_perm=n_perm,
@@ -699,5 +725,187 @@ def simple_xsea(y,
         } | permute_kwargs,
         correct_p_kwargs=correct_p_kwargs,
         plot_kwargs=plot_kwargs,
+        return_nispace_only=return_nispace_only,
+    )
+
+
+def group_xsea(y, design,
+               x="mRNA",
+               z=None,
+               x_collection=None,
+               standardize="xz",
+               space="MNI152NLin2009cAsym",
+               data_space=None,
+               parcellation_space=None,
+               parcellation=_PARC_DEFAULT,
+               parcellation_labels=None,
+               parcellation_hemi=["L", "R"],
+               colocalization_method="spearman",
+               comparison_method=None,
+               mc_method="meff",
+               normalize_colocalizations=True,
+               xsea_aggregation_method="mean",
+               pooled_p=False,
+               paired=False,
+               plot_design_between=True,
+               combat=False,
+               plot=True,
+               n_perm=10000,
+               seed=None,
+               n_proc=1,
+               verbose=True,
+               nispace_object=None,
+               fetch_x_kwargs=None,
+               init_kwargs=None,
+               fit_kwargs=None,
+               clean_y_kwargs=None,
+               transform_y_kwargs=None,
+               colocalize_kwargs=None,
+               permute_kwargs=None,
+               correct_p_kwargs=None,
+               plot_kwargs=None,
+               return_nispace_only=False):
+    """Group-comparison XSEA workflow.
+
+    Equivalent to :func:`group_colocalization` with XSEA activated: Y maps are
+    transformed to group-level effect sizes and then colocalized with gene sets,
+    with group-label permutation for p-values.
+
+    Parameters mirror :func:`group_colocalization` with the addition of
+    ``xsea_aggregation_method``.
+    """
+    return group_colocalization(
+        y=y, design=design,
+        x=x, z=z,
+        x_collection=x_collection,
+        standardize=standardize,
+        space=space,
+        data_space=data_space,
+        parcellation_space=parcellation_space,
+        parcellation=parcellation,
+        parcellation_labels=parcellation_labels,
+        parcellation_hemi=parcellation_hemi,
+        colocalization_method=colocalization_method,
+        comparison_method=comparison_method,
+        mc_method=mc_method,
+        normalize_colocalizations=normalize_colocalizations,
+        pooled_p=pooled_p,
+        paired=paired,
+        plot_design_between=plot_design_between,
+        combat=combat,
+        plot=plot,
+        n_perm=n_perm,
+        seed=seed,
+        n_proc=n_proc,
+        verbose=verbose,
+        nispace_object=nispace_object,
+        fetch_x_kwargs=fetch_x_kwargs,
+        init_kwargs=init_kwargs,
+        fit_kwargs=fit_kwargs,
+        clean_y_kwargs=clean_y_kwargs,
+        transform_y_kwargs=transform_y_kwargs,
+        colocalize_kwargs={"xsea": True, "xsea_aggregation_method": xsea_aggregation_method}
+                          | (colocalize_kwargs or {}),
+        permute_kwargs=permute_kwargs,
+        correct_p_kwargs=correct_p_kwargs,
+        plot_kwargs=plot_kwargs,
+        return_nispace_only=return_nispace_only,
+    )
+
+
+# ==============================================================================
+# DEPRECATION WRAPPERS — old function names kept for backward compatibility
+# TODO (first non-dev release): remove these wrappers
+# ==============================================================================
+
+def simple_colocalization(y, x="PET", z=None, x_collection=None, standardize="xz",
+                          space="MNI152NLin2009cAsym", data_space=None,
+                          parcellation_space=None, parcellation=_PARC_DEFAULT,
+                          parcellation_labels=None, parcellation_hemi=["L", "R"],
+                          y_covariates=None, colocalization_method="spearman",
+                          mc_method="meff", normalize_colocalizations=True,
+                          p_from_average_y=False, plot=True, combat=False,
+                          n_perm=10000, seed=None, n_proc=1, verbose=True,
+                          nispace_object=None, fetch_x_kwargs=None, init_kwargs=None,
+                          fit_kwargs=None, clean_y_kwargs=None, colocalize_kwargs=None,
+                          permute_kwargs=None, correct_p_kwargs=None, plot_kwargs=None,
+                          return_nispace_only=False):
+    lgr.warning(_DEPR_FUNC_NAME.format(old="simple_colocalization", new="colocalization"))
+    return colocalization(
+        y=y, x=x, z=z, x_collection=x_collection, standardize=standardize,
+        space=space, data_space=data_space, parcellation_space=parcellation_space,
+        parcellation=parcellation, parcellation_labels=parcellation_labels,
+        parcellation_hemi=parcellation_hemi, y_covariates=y_covariates,
+        colocalization_method=colocalization_method, mc_method=mc_method,
+        normalize_colocalizations=normalize_colocalizations,
+        pooled_p=p_from_average_y,
+        plot=plot, combat=combat, n_perm=n_perm, seed=seed, n_proc=n_proc,
+        verbose=verbose, nispace_object=nispace_object, fetch_x_kwargs=fetch_x_kwargs,
+        init_kwargs=init_kwargs, fit_kwargs=fit_kwargs, clean_y_kwargs=clean_y_kwargs,
+        colocalize_kwargs=colocalize_kwargs, permute_kwargs=permute_kwargs,
+        correct_p_kwargs=correct_p_kwargs, plot_kwargs=plot_kwargs,
+        return_nispace_only=return_nispace_only,
+    )
+
+
+def group_comparison(y, design, x="PET", z=None, x_collection=None, standardize="xz",
+                     space="MNI152NLin2009cAsym", data_space=None,
+                     parcellation_space=None, parcellation=_PARC_DEFAULT,
+                     parcellation_labels=None, parcellation_hemi=["L", "R"],
+                     colocalization_method="spearman", comparison_method=None,
+                     mc_method="meff", normalize_colocalizations=True,
+                     paired=False, plot_design_between=True, combat=False,
+                     plot=True, n_perm=10000, seed=None, n_proc=1, verbose=True,
+                     nispace_object=None, fetch_x_kwargs=None, init_kwargs=None,
+                     fit_kwargs=None, clean_y_kwargs=None, transform_y_kwargs=None,
+                     colocalize_kwargs=None, permute_kwargs=None,
+                     correct_p_kwargs=None, plot_kwargs=None,
+                     return_nispace_only=False):
+    lgr.warning(_DEPR_FUNC_NAME.format(old="group_comparison", new="group_colocalization"))
+    return group_colocalization(
+        y=y, design=design, x=x, z=z, x_collection=x_collection, standardize=standardize,
+        space=space, data_space=data_space, parcellation_space=parcellation_space,
+        parcellation=parcellation, parcellation_labels=parcellation_labels,
+        parcellation_hemi=parcellation_hemi, colocalization_method=colocalization_method,
+        comparison_method=comparison_method, mc_method=mc_method,
+        normalize_colocalizations=normalize_colocalizations,
+        paired=paired, plot_design_between=plot_design_between, combat=combat,
+        plot=plot, n_perm=n_perm, seed=seed, n_proc=n_proc, verbose=verbose,
+        nispace_object=nispace_object, fetch_x_kwargs=fetch_x_kwargs,
+        init_kwargs=init_kwargs, fit_kwargs=fit_kwargs, clean_y_kwargs=clean_y_kwargs,
+        transform_y_kwargs=transform_y_kwargs, colocalize_kwargs=colocalize_kwargs,
+        permute_kwargs=permute_kwargs, correct_p_kwargs=correct_p_kwargs,
+        plot_kwargs=plot_kwargs, return_nispace_only=return_nispace_only,
+    )
+
+
+def simple_xsea(y, x="mRNA", z=None, x_collection=None, x_background=None,
+                standardize="xz", space="MNI152NLin2009cAsym", data_space=None,
+                parcellation_space=None, parcellation=_PARC_DEFAULT,
+                parcellation_labels=None, parcellation_hemi=["L", "R"],
+                y_covariates=None, colocalization_method="spearman",
+                mc_method="meff", normalize_colocalizations=True,
+                xsea_aggregation_method="mean", permute_sets=False,
+                p_from_average_y=False, plot=True, combat=False,
+                n_perm=10000, seed=None, n_proc=1, verbose=True,
+                nispace_object=None, fetch_x_kwargs=None, init_kwargs=None,
+                fit_kwargs=None, clean_y_kwargs=None, colocalize_kwargs=None,
+                permute_kwargs=None, correct_p_kwargs=None, plot_kwargs=None,
+                return_nispace_only=False):
+    lgr.warning(_DEPR_FUNC_NAME.format(old="simple_xsea", new="xsea"))
+    return xsea(
+        y=y, x=x, z=z, x_collection=x_collection, x_background=x_background,
+        standardize=standardize, space=space, data_space=data_space,
+        parcellation_space=parcellation_space, parcellation=parcellation,
+        parcellation_labels=parcellation_labels, parcellation_hemi=parcellation_hemi,
+        y_covariates=y_covariates, colocalization_method=colocalization_method,
+        mc_method=mc_method, normalize_colocalizations=normalize_colocalizations,
+        xsea_aggregation_method=xsea_aggregation_method, permute_sets=permute_sets,
+        pooled_p=p_from_average_y,
+        plot=plot, combat=combat, n_perm=n_perm, seed=seed, n_proc=n_proc,
+        verbose=verbose, nispace_object=nispace_object, fetch_x_kwargs=fetch_x_kwargs,
+        init_kwargs=init_kwargs, fit_kwargs=fit_kwargs, clean_y_kwargs=clean_y_kwargs,
+        colocalize_kwargs=colocalize_kwargs, permute_kwargs=permute_kwargs,
+        correct_p_kwargs=correct_p_kwargs, plot_kwargs=plot_kwargs,
         return_nispace_only=return_nispace_only,
     )

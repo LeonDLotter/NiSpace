@@ -294,7 +294,7 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
         if p_df.shape[0] > 1:
             lgr.warning(
                 "p_df has one row per Y subject — significance annotation requires a single "
-                "aggregated p-value row (set p_from_average_y=True or pass a pre-aggregated "
+                "aggregated p-value row (set pooled_p=True or pass a pre-aggregated "
                 "p_df). Skipping significance annotation."
             )
         else:
