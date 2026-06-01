@@ -422,17 +422,24 @@ class Parcellation:
 
             # ---- spin matrix (surface only) ----
             sm = None
-            if load_spin_mat and not is_vol and "spinmat" in space_lib:
-                sm_paths = tuple(
-                    get_file(
-                        base / f"parc-{name}_space-{space}_hemi-{h}.spin.npy",
-                        **space_lib["spinmat"][h], **gf_kw,
+            if not is_vol and "spinmat" in space_lib:
+                if load_spin_mat:
+                    sm_paths = tuple(
+                        get_file(
+                            base / f"parc-{name}_space-{space}_hemi-{h}.spin.npy",
+                            **space_lib["spinmat"][h], **gf_kw,
+                        )
+                        for h in ["L", "R"]
                     )
-                    for h in ["L", "R"]
-                )
-                sm = load_spinmat(sm_paths)
-            elif load_spin_mat and not is_vol:
-                lgr.info(f"  No pre-computed spin matrix for '{name}' in '{space}'.")
+                    sm = load_spinmat(sm_paths)
+                else:
+                    sm = tuple(
+                        {"path_template": base / f"parc-{name}_space-{space}_hemi-{h}.spin.npy",
+                         "spec": space_lib["spinmat"][h], "gf_kw": gf_kw}
+                        for h in ["L", "R"]
+                    )
+            elif not is_vol:
+                lgr.debug(f"  No pre-computed spin matrix for '{name}' in '{space}'.")
 
             # ---- store image path (lazy load) ----
             p.add_space(space, image=img_path, dist_mat=dm, spin_mat=sm)
@@ -549,15 +556,22 @@ class Parcellation:
                 for h in ["L", "R"]
             )
             cx_sm = None
-            if load_spin_mat and "spinmat" in cx_lib[surf_space]:
-                cx_sm_paths = tuple(
-                    get_file(
-                        base_cx_surf / f"parc-{cx_name}_space-{surf_space}_hemi-{h}.spin.npy",
-                        **cx_lib[surf_space]["spinmat"][h], **gf_kw,
+            if "spinmat" in cx_lib[surf_space]:
+                if load_spin_mat:
+                    cx_sm_paths = tuple(
+                        get_file(
+                            base_cx_surf / f"parc-{cx_name}_space-{surf_space}_hemi-{h}.spin.npy",
+                            **cx_lib[surf_space]["spinmat"][h], **gf_kw,
+                        )
+                        for h in ["L", "R"]
                     )
-                    for h in ["L", "R"]
-                )
-                cx_sm = load_spinmat(cx_sm_paths)
+                    cx_sm = load_spinmat(cx_sm_paths)
+                else:
+                    cx_sm = tuple(
+                        {"path_template": base_cx_surf / f"parc-{cx_name}_space-{surf_space}_hemi-{h}.spin.npy",
+                         "spec": cx_lib[surf_space]["spinmat"][h], "gf_kw": gf_kw}
+                        for h in ["L", "R"]
+                    )
             p._cx_surface[surf_space] = {
                 "img_paths": cx_img_paths,
                 "image": None,   # lazy-loaded on first access
@@ -682,6 +696,16 @@ class Parcellation:
             self._dist_mats[space] = load_distmat(dm)
         elif isinstance(dm, tuple) and dm and isinstance(dm[0], (str, pathlib.Path)):
             self._dist_mats[space] = load_distmat(dm)
+
+    def _ensure_spin_mat_loaded(self, space):
+        """Load spin mat for *space* from lazy spec if not yet loaded."""
+        sm = self._spin_mats.get(space)
+        if sm is None or not (isinstance(sm, tuple) and sm and isinstance(sm[0], dict)):
+            return  # None or already loaded
+        from ..utils.utils_datasets import get_file
+        lgr.info(f"Lazy-loading spin mat for '{self._name}' in space '{space}'.")
+        paths = tuple(get_file(d["path_template"], **d["spec"], **d["gf_kw"]) for d in sm)
+        self._spin_mats[space] = load_spinmat(paths)
 
     def _fit_space(self, space):
         """Compute per-space derived attributes (idc_byhemi, labels_img, etc.)."""
@@ -1064,6 +1088,8 @@ class Parcellation:
                 self._dist_mats[space] = dict(dm, keep_idc=keep_idc)
 
         # --- trim spin_mats: keep the relevant half, zero-out the other ---
+        for space in list(self._spin_mats):
+            self._ensure_spin_mat_loaded(space)
         for space, sm in self._spin_mats.items():
             if sm is None or not (isinstance(sm, tuple) and len(sm) == 2):
                 continue
@@ -1151,6 +1177,7 @@ class Parcellation:
     def get_spin_mat(self, space=None):
         """Return spin matrix for *space* (defaults to active space)."""
         space = space or self._space
+        self._ensure_spin_mat_loaded(space)
         return self._spin_mats.get(space)
 
     def get_image(self, space=None):
@@ -1223,7 +1250,14 @@ class Parcellation:
                 if s.get("image") is None and s.get("img_paths") is not None:
                     lgr.info(f"Lazy-loading cx surface image for '{self._name}' ('{sname}').")
                     s["image"] = load_img(s["img_paths"])
-                return s.get("image"), s.get("spin_mat"), sname
+                cx_sm = s.get("spin_mat")
+                if isinstance(cx_sm, tuple) and cx_sm and isinstance(cx_sm[0], dict):
+                    from ..utils.utils_datasets import get_file
+                    lgr.info(f"Lazy-loading cx surface spin mat for '{self._name}' ('{sname}').")
+                    paths = tuple(get_file(d["path_template"], **d["spec"], **d["gf_kw"]) for d in cx_sm)
+                    cx_sm = load_spinmat(paths)
+                    s["spin_mat"] = cx_sm
+                return s.get("image"), cx_sm, sname
 
         # 3. non-combined MNI-primary but has surface in _images
         for sname in [preferred, "fsaverage", "fsLR"]:
@@ -1231,7 +1265,7 @@ class Parcellation:
                 self._ensure_image_loaded(sname)
                 img = self._images[sname]
                 if isinstance(img, (nib.GiftiImage, tuple)):
-                    sm = self._spin_mats.get(sname)
+                    sm = self.get_spin_mat(sname)
                     return img, sm, sname
 
         lgr.warning(
