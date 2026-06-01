@@ -342,6 +342,8 @@ def simple_colocalization(y,
     if len(mc_methods) == 1:
         pc_values = pc_values[mc_methods[0]]
 
+    # TODO (first non-dev release): remove return_nispace_only parameter; always return nsp only;
+    #   remove colocs/p_values/pc_values construction block above and the if/else here
     if not return_nispace_only:
         lgr.warning(
             "Returning a tuple (colocs, p_values, pc_values, nsp) from workflow functions is "
@@ -586,6 +588,8 @@ def group_comparison(y, design,
     if len(mc_methods) == 1:
         pc_values = pc_values[mc_methods[0]]
 
+    # TODO (first non-dev release): remove return_nispace_only parameter; always return nsp only;
+    #   remove colocs/p_values/pc_values construction block above and the if/else here
     if not return_nispace_only:
         lgr.warning(
             "Returning a tuple (colocs, p_values, pc_values, nsp) from workflow functions is "

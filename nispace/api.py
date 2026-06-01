@@ -322,10 +322,11 @@ class NiSpace:
         verbose = set_log(lgr, self._verbose)
         lgr.info("*** NiSpace.fit() - Data extraction and preparation. ***")
         
-        # TODO: remove this warning in a future version and adjust most methods
+        # TODO (first non-dev release): remove return_self parameter and all _return_self branches
+        #   throughout api.py; methods should unconditionally return self
         if not self._return_self:
-            lgr.warning("In a future version, all NiSpace object methods will return the object itself "
-                        "by default. Set NiSpace(return_self=True) to disable this warning.")
+            lgr.warning("In the first non-dev release, all NiSpace object methods will return the "
+                        "object itself by default. Set NiSpace(return_self=True) to disable this warning.")
     
         ## handle parcellation
         if self._parc is not None:
@@ -634,6 +635,7 @@ class NiSpace:
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.clean_y() - Y covariate regression. ***")
         self._check_fit()
+        # TODO (first non-dev release): remove combat_keep parameter entirely
         if combat_keep is not None:
             lgr.warning("'combat_keep' is deprecated and will be ignored. All regression covariates "
                         "are now automatically protected during ComBat harmonization.")
@@ -2146,7 +2148,7 @@ class NiSpace:
             lgr.critical_raise("Provide either a method name or a colocalization result!",
                                ValueError)
 
-        # sort_colocs deprecation
+        # TODO (first non-dev release): remove sort_colocs parameter entirely
         if sort_colocs:
             lgr.warning("'sort_colocs' is deprecated and will be removed in the first non-dev release. "
                         "Use sort_by='coloc' instead.")

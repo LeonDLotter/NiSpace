@@ -31,7 +31,7 @@ def keys2list(dct):
 def keys2str(dct, sep=", "):
     return sep.join(list(dct.keys()))
 
-# TODO: remove nispace_data_dir parameter support from all fetch functions once deprecated long enough
+# TODO (first non-dev release): remove nispace_data_dir parameter from all fetch_* functions and delete _resolve_nispace_data_dir()
 def _resolve_nispace_data_dir(nispace_data_dir):
     if nispace_data_dir is not None:
         lgr.warning("The 'nispace_data_dir' parameter is deprecated and will be removed in the first non-dev release. "
@@ -289,7 +289,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                        hemi: Union[List[str], str] = ["L", "R"],
                        bilateral: bool = False,
                        return_parcellation_only: bool = False,
-                       # TODO: deprecate all return_* together with legacy space= mode in first non-dev release
+                       # TODO (first non-dev release): remove all return_* kwargs and legacy space= array-return path; keep return_parcellation_only only
                        return_labels: bool = True,
                        return_space: bool = False,
                        return_resolution: bool = False,
