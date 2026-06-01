@@ -1,4 +1,5 @@
 import os
+import logging
 from pathlib import Path
 import shutil
 from threading import local
@@ -11,6 +12,8 @@ import hashlib
 import subprocess
 
 from typing import Literal, Union
+
+lgr = logging.getLogger(__name__)
 from nilearn import image
 from neuromaps.datasets import fetch_annotation
 
@@ -28,8 +31,7 @@ except:
 from nispace.config import DATA_REPO, DATA_REPO_COMMIT, DATA_REPO_PRIVATE, DATA_REPO_PRIVATE_COMMIT
     
 
-def _check_hash(local: Union[str, Path], remote: Union[str, Path] = None, 
-                verbose: bool = False) -> bool:
+def _check_hash(local: Union[str, Path], remote: Union[str, Path] = None) -> bool:
     
     # hash of local file
     hash_local = calculate_sha256_hash(local)
@@ -46,8 +48,7 @@ def _check_hash(local: Union[str, Path], remote: Union[str, Path] = None,
     if hash_local == hash_remote:
         return True
     else:
-        if verbose:
-            print(f"Hash mismatch: {local} -> {hash_local} != {remote} -> {hash_remote}")
+        lgr.warning(f"Hash mismatch: {local} -> {hash_local} != {remote} -> {hash_remote}")
         return False
      
     
@@ -291,7 +292,7 @@ def get_file(local_path, host, remote,
         else:
             # check hash, this is only possible with github-nispace
             if hash_check and host == "github-nispace":
-                if not _check_hash(local_path, remote, verbose=False):
+                if not _check_hash(local_path, remote):
                     redownload = True
                     msg = "Updating"
     

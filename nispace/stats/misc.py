@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import pandas as pd
 from numba import njit
@@ -7,6 +8,8 @@ from joblib import Parallel, delayed
 
 from scipy.stats import zscore, norm
 from statsmodels.stats.multitest import multipletests
+
+lgr = logging.getLogger(__name__)
 
 
 @njit(cache=True)
@@ -184,8 +187,7 @@ def permute_groups(groups, strategy="proportional", paired=False, subjects=None,
     n = len(groups)
     group_labels, group_sizes = np.unique(groups, return_counts=True)
     n_labels = len(group_labels)
-    if verbose == "debug":
-        print(f"{n} samples with labels: {group_labels} with sizes {group_sizes}")
+    lgr.debug(f"{n} samples with labels: {group_labels} with sizes {group_sizes}")
     
     if paired:
         # get subjects

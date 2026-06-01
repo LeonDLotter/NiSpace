@@ -719,8 +719,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
                        dtype=float,
                        n_proc=1, seed=None, verbose=True,
                        **kwargs):
-    if verbose is False:
-        set_log(lgr, verbose)
+    verbose = set_log(lgr, verbose)
 
     ## Checks
     # null method

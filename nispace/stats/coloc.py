@@ -239,14 +239,13 @@ def beta(x, y, intercept=True):
     return beta
 
 
-def dominance(x, y, adj_r2=False, verbose=True):
+def dominance(x, y, adj_r2=False, verbose=False):
 
-    if verbose: lgr.info(f"Running dominance analysis with {x.shape[1]} "
-                         f"predictors and {len(y)} features.")
+    if verbose: print(f"Dominance analysis with {x.shape[1]} predictors and {len(y)} features.")
     
     ## print total rsquare
     rsq_total = r2(x=x, y=y, adj_r2=adj_r2)
-    if verbose: lgr.info(f"Full model R^2 = {rsq_total:.03f}")
+    if verbose: print(f"Full model R^2 = {rsq_total:.03f}")
     dom_stats = dict()
     dom_stats["sum"] = rsq_total
     
@@ -255,7 +254,7 @@ def dominance(x, y, adj_r2=False, verbose=True):
     pred_combs = [list(combinations(range(n_pred), i)) for i in range(1, n_pred+1)]
     
     ## calculate R2s
-    if verbose: lgr.info("Calculating models...")
+    if verbose: print("Calculating models...")
     rsqs = dict()
     for len_group in tqdm(pred_combs, desc='Iterating over len groups', disable=not verbose):
         for pred_idc in tqdm(len_group, desc='Inside loop', disable=True):
@@ -264,14 +263,14 @@ def dominance(x, y, adj_r2=False, verbose=True):
 
     ## collect metrics
     # individual dominance
-    if verbose: lgr.info("Calculating individual dominance.")
+    if verbose: print("Calculating individual dominance.")
     dom_stats["individual"] = np.zeros((n_pred))    
     for i in range(n_pred):
         dom_stats["individual"][i] = rsqs[(i,)]
     dom_stats["individual"] = dom_stats["individual"].reshape(1, -1)
         
     # partial dominance
-    if verbose: lgr.info("Calculating partial dominance.")
+    if verbose: print("Calculating partial dominance.")
     dom_stats["partial"] = np.zeros((n_pred, n_pred-1)) 
     for i in range(n_pred - 1):
         i_len_combs = list(combinations(range(n_pred), i + 2))
@@ -284,7 +283,7 @@ def dominance(x, y, adj_r2=False, verbose=True):
     #dom_stats["partial"] = dom_stats["partial"].mean(axis=1)
 
     # total dominance
-    if verbose: lgr.info("Calculating total dominance.")
+    if verbose: print("Calculating total dominance.")
     dom_stats["total"] = np.mean(np.c_[dom_stats["individual"].T, dom_stats["partial"]], axis=1)
         
     # relative contribution
@@ -292,8 +291,8 @@ def dominance(x, y, adj_r2=False, verbose=True):
     
     ## sanity check
     if not np.allclose(np.sum(dom_stats["total"]), rsq_total):
-        lgr.error(f"Sum of total dominance ({np.sum(dom_stats['total'])}) does not "
-                  f"equal full model R^2 ({rsq_total})! ")
+        raise ValueError(f"Sum of total dominance ({np.sum(dom_stats['total'])}) does not "
+                         f"equal full model R^2 ({rsq_total})! ")
     
     return dom_stats
 

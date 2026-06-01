@@ -58,11 +58,11 @@ def set_log(lgr, verbose=True):
         root.setLevel(logging.INFO)
         return True
     elif verbose in [False, None, 0]:
-        root.setLevel(60)
+        root.setLevel(logging.WARNING)
         return False
     else:
         root.setLevel(verbose)
-        return True
+        return root.level <= logging.INFO
 
 
 @contextmanager

@@ -203,7 +203,6 @@ def _get_colocalize_fun(method,
                 x=X_T[parcel_mask, :], # atlases
                 y=y[parcel_mask], # subject   
                 adj_r2=adj_r2,
-                verbose=True if verbose=="debug" else False
             ) # dict with dom stats
             
             return _colocs
