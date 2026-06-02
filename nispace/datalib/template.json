@@ -1,72 +1,4 @@
 {
-    "MNI152NLin6Asym": {
-        "1mm": {
-            "T1w": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/T1w/tpl-MNI152NLin6Asym_desc-T1w_res-1mm.nii.gz"
-            },
-            "brain": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/brain/tpl-MNI152NLin6Asym_desc-brain_res-1mm.nii.gz"
-            },
-            "mask": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask/tpl-MNI152NLin6Asym_desc-mask_res-1mm.nii.gz"
-            },
-            "mask_gm": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask_gm/tpl-MNI152NLin6Asym_desc-mask_gm_res-1mm.nii.gz"
-            },
-            "mask_gm_tight": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask_gm_tight/tpl-MNI152NLin6Asym_desc-mask_gm_tight_res-1mm.nii.gz"
-            }
-        },
-        "2mm": {
-            "T1w": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/T1w/tpl-MNI152NLin6Asym_desc-T1w_res-2mm.nii.gz"
-            },
-            "brain": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/brain/tpl-MNI152NLin6Asym_desc-brain_res-2mm.nii.gz"
-            },
-            "mask": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask/tpl-MNI152NLin6Asym_desc-mask_res-2mm.nii.gz"
-            },
-            "mask_gm": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask_gm/tpl-MNI152NLin6Asym_desc-mask_gm_res-2mm.nii.gz"
-            },
-            "mask_gm_tight": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask_gm_tight/tpl-MNI152NLin6Asym_desc-mask_gm_tight_res-2mm.nii.gz"
-            }
-        },
-        "3mm": {
-            "T1w": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/T1w/tpl-MNI152NLin6Asym_desc-T1w_res-3mm.nii.gz"
-            },
-            "brain": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/brain/tpl-MNI152NLin6Asym_desc-brain_res-3mm.nii.gz"
-            },
-            "mask": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask/tpl-MNI152NLin6Asym_desc-mask_res-3mm.nii.gz"
-            },
-            "mask_gm": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask_gm/tpl-MNI152NLin6Asym_desc-mask_gm_res-3mm.nii.gz"
-            },
-            "mask_gm_tight": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask_gm_tight/tpl-MNI152NLin6Asym_desc-mask_gm_tight_res-3mm.nii.gz"
-            }
-        }
-    },
     "MNI152NLin2009cAsym": {
         "1mm": {
             "T1w": {
@@ -132,6 +64,74 @@
             "mask_gm_tight": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin2009cAsym/map/mask_gm_tight/tpl-MNI152NLin2009cAsym_desc-mask_gm_tight_res-3mm.nii.gz"
+            }
+        }
+    },
+    "MNI152NLin6Asym": {
+        "1mm": {
+            "T1w": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/T1w/tpl-MNI152NLin6Asym_desc-T1w_res-1mm.nii.gz"
+            },
+            "brain": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/brain/tpl-MNI152NLin6Asym_desc-brain_res-1mm.nii.gz"
+            },
+            "mask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/mask/tpl-MNI152NLin6Asym_desc-mask_res-1mm.nii.gz"
+            },
+            "mask_gm": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/mask_gm/tpl-MNI152NLin6Asym_desc-mask_gm_res-1mm.nii.gz"
+            },
+            "mask_gm_tight": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/mask_gm_tight/tpl-MNI152NLin6Asym_desc-mask_gm_tight_res-1mm.nii.gz"
+            }
+        },
+        "2mm": {
+            "T1w": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/T1w/tpl-MNI152NLin6Asym_desc-T1w_res-2mm.nii.gz"
+            },
+            "brain": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/brain/tpl-MNI152NLin6Asym_desc-brain_res-2mm.nii.gz"
+            },
+            "mask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/mask/tpl-MNI152NLin6Asym_desc-mask_res-2mm.nii.gz"
+            },
+            "mask_gm": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/mask_gm/tpl-MNI152NLin6Asym_desc-mask_gm_res-2mm.nii.gz"
+            },
+            "mask_gm_tight": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/mask_gm_tight/tpl-MNI152NLin6Asym_desc-mask_gm_tight_res-2mm.nii.gz"
+            }
+        },
+        "3mm": {
+            "T1w": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/T1w/tpl-MNI152NLin6Asym_desc-T1w_res-3mm.nii.gz"
+            },
+            "brain": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/brain/tpl-MNI152NLin6Asym_desc-brain_res-3mm.nii.gz"
+            },
+            "mask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/mask/tpl-MNI152NLin6Asym_desc-mask_res-3mm.nii.gz"
+            },
+            "mask_gm": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/mask_gm/tpl-MNI152NLin6Asym_desc-mask_gm_res-3mm.nii.gz"
+            },
+            "mask_gm_tight": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/mask_gm_tight/tpl-MNI152NLin6Asym_desc-mask_gm_tight_res-3mm.nii.gz"
             }
         }
     },

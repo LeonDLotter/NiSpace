@@ -54,6 +54,13 @@ opt = [
     "factor-analyzer",
     "nitransforms>=24.0.0",
 ]
+data = [
+    "abagen",
+    "nimare",
+    "pyreadr",
+    "pyyaml",
+    "nitransforms>=24.0.0",
+]
 
 [project.urls]
 Repository = "https://github.com/LeonDLotter/NiSpace"

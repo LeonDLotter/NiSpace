@@ -318,14 +318,24 @@ class Parcellation:
         """Build a single (non-combined) multi-space Parcellation from the library."""
         from ..utils.utils_datasets import get_file
 
-        spaces = list(lib_entry.keys())
-        lgr.info(f"Building multi-space Parcellation for '{name}' from library.")
+        # Filter to actual space entries (dicts with a "map" key); skip top-level metadata fields
+        # (label, level, symmetric, license, citation) added in the datalib refactor
+        space_entries = {k: v for k, v in lib_entry.items() if isinstance(v, dict) and "map" in v}
+        # Top-level metadata (new in refactor; None for old JSON without these fields)
+        entry_level = lib_entry.get("level")
+        entry_symmetric = lib_entry.get("symmetric")
+        entry_doi = lib_entry.get("citation", {}).get("doi", "")
+        spaces = list(space_entries.keys())
+        lgr.info(
+            f"Building {entry_level or ''} Parcellation for '{name}' from library."
+            + (f" DOI: {entry_doi}" if entry_doi else "")
+        )
         lgr.info(f"Available spaces: {', '.join(spaces)}")
         p = cls(name=name)
 
         shared_loaded = False  # load labels/l2rmap/lrcorr only once
 
-        for space, space_lib in lib_entry.items():
+        for space, space_lib in space_entries.items():
             is_vol = "mni" in space.lower()
             base   = data_dir / "parcellation" / name / space
 
@@ -363,9 +373,13 @@ class Parcellation:
                         )
                         p._labels = np.array(load_labels(label_paths))
 
-                sym = space_lib.get(
-                    "symmetric",
-                    "l2rmap" not in space_lib and "lrcorr" not in space_lib,
+                sym = (
+                    entry_symmetric
+                    if entry_symmetric is not None
+                    else space_lib.get(
+                        "symmetric",
+                        "l2rmap" not in space_lib and "lrcorr" not in space_lib,
+                    )
                 )
                 p._symmetric = sym
 
@@ -383,7 +397,7 @@ class Parcellation:
                     )
                     p._lrcorr = load_l2rmap(lrc_path, threshold=lrcorr_threshold)
 
-                p._level = space_lib.get("level", None)
+                p._level = entry_level or space_lib.get("level", None)
                 shared_loaded = True
 
             # ---- distance matrix ----
@@ -462,9 +476,10 @@ class Parcellation:
 
         lgr.info(f"Building combined Parcellation '{cx_name}+{sc_name}' from library.")
 
-        # find common MNI spaces
-        cx_spaces = list(cx_lib.keys())
-        sc_spaces = list(sc_lib.keys())
+        # find common MNI spaces — filter to actual space entries (dicts with "map" key);
+        # top-level metadata keys (label, level, symmetric, license, citation) are skipped
+        cx_spaces = [k for k, v in cx_lib.items() if isinstance(v, dict) and "map" in v]
+        sc_spaces = [k for k, v in sc_lib.items() if isinstance(v, dict) and "map" in v]
         common_mni = [s for s in cx_spaces if "mni" in s.lower() and s in sc_spaces]
         if not common_mni:
             lgr.critical_raise(
@@ -514,14 +529,23 @@ class Parcellation:
                 sc_labels = load_labels(sc_label_path)
                 p._labels = np.array(cx_labels + sc_labels)
 
-                # symmetry: read from JSON if present, fall back to l2rmap/lrcorr check
-                cx_sym = cx_lib[mni_space].get(
-                    "symmetric",
-                    "l2rmap" not in cx_lib[mni_space] and "lrcorr" not in cx_lib[mni_space],
+                # symmetry: read from top-level JSON field (post-refactor) or fall back to
+                # space-level key / l2rmap/lrcorr presence check (pre-refactor compat)
+                cx_sym = (
+                    cx_lib["symmetric"]
+                    if "symmetric" in cx_lib
+                    else cx_lib[mni_space].get(
+                        "symmetric",
+                        "l2rmap" not in cx_lib[mni_space] and "lrcorr" not in cx_lib[mni_space],
+                    )
                 )
-                sc_sym = sc_lib[mni_space].get(
-                    "symmetric",
-                    "l2rmap" not in sc_lib[mni_space] and "lrcorr" not in sc_lib[mni_space],
+                sc_sym = (
+                    sc_lib["symmetric"]
+                    if "symmetric" in sc_lib
+                    else sc_lib[mni_space].get(
+                        "symmetric",
+                        "l2rmap" not in sc_lib[mni_space] and "lrcorr" not in sc_lib[mni_space],
+                    )
                 )
                 p._cx_symmetric = cx_sym
                 p._sc_symmetric = sc_sym
@@ -1383,7 +1407,7 @@ class Parcellation:
         # and merge results into a single null array.
 
         # moran fallback
-        for preferred in ["MNI152NLin2009cAsym", "MNI152NLin6Asym", "MNI152"]:
+        for preferred in ["MNI152NLin2009cAsym", "MNI152NLin6Asym", "MNI152", "MNIOriginal", "MNI"]:
             if preferred in self.spaces:
                 return preferred, "moran"
         for s in self.spaces:

@@ -38,6 +38,7 @@ def nice_stats_labels(string, add_dollars=True):
         "dominance": "Dominance Analysis",
         "individual": "Individual R^2",
         "total": "Total R^2",
+        "relative": "Relative R^2",
         "ridge": "Ridge",
         "lasso": "Lasso",
         "elasticnet": "ElasticNet",

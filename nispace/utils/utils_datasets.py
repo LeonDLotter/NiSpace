@@ -48,7 +48,7 @@ def _check_hash(local: Union[str, Path], remote: Union[str, Path] = None) -> boo
     if hash_local == hash_remote:
         return True
     else:
-        lgr.warning(f"Hash mismatch: {local} -> {hash_local} != {remote} -> {hash_remote}")
+        lgr.debug(f"Hash mismatch: {local} -> {hash_local} != {remote} -> {hash_remote}")
         return False
      
     
@@ -260,12 +260,13 @@ def _get_file_ext(remote):
     return f"{gii_extra}{ext_nogz}{gz}"
 
 
-def get_file(local_path, host, remote, 
+def get_file(local_path, host, remote,
              ext=None,
              osf_config_file=None,
              github_config_file=None,
              hash_check=True,
-             overwrite=False):
+             overwrite=False,
+             **_ignored):
     
     # local path
     local_path = Path(local_path)
