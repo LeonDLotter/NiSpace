@@ -19,7 +19,7 @@ from .core.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats
 from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_method,
                                _EMPIRICAL_MC_METHODS)
 from .core.plot import _plot_categorical
-from .core.constants import _PARCS_DEFAULT, _COLOC_METHODS
+from .core.constants import _COLOC_METHODS
 from .datasets import fetch_parcellation, fetch_reference, _check_parcellation
 from .nulls import get_distance_matrix, _SPIN_METHODS
 from .stats.coloc import beta, elasticnet, lasso, mlr, partialpearson, pearson, ridge

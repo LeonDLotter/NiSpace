@@ -10,7 +10,7 @@ from requests import Session
 import logging
 lgr = logging.getLogger(__name__)
 from . import __commit__
-from .core.constants import _PARC_DEFAULT, _SPACE_DEFAULT
+from .core.constants import _PARC_DEFAULT, _SPACE_DEFAULT_VOL, _SPACE_DEFAULT_SURF
 from .stats.misc import zscore_df
 from .utils.utils import _rm_ext, set_log, merge_parcellations
 from .utils.utils_datasets import get_file
@@ -85,7 +85,7 @@ def _file_desc(fname, feature_position):
     
 # BRAIN TEMPLATES ==================================================================================
 
-def fetch_template(template: str = _SPACE_DEFAULT, 
+def fetch_template(template: str = "MNI152NLin2009cAsym",
                    res: str = None,
                    desc: str = None,
                    #parcellation: str = None,
@@ -1091,7 +1091,7 @@ def _print_references(dataset: str, meta: pd.DataFrame = None, collection_name: 
 # with a shared dispatcher, or at minimum extracting the two branches into private helpers.
 def fetch_reference(dataset: str,
                     maps: Union[None, str, List[str], Dict[str, Union[str, list]]] = None,
-                    space: str = _SPACE_DEFAULT,
+                    space: str = None,
                     collection: str = None,
                     sets: Union[None, str, List[str]] = None,
                     set_size_range: Union[None, Tuple[int, int]] = None,
@@ -1174,9 +1174,22 @@ def fetch_reference(dataset: str,
             overwrite=overwrite, hash_check=check_file_hash,
         ))["map"].to_list()
     
-    # Check space availability and load map lists   
+    # Check space availability and load map lists
     else:
-            
+
+        # auto-select space when none given: prefer vol default, then surf default, then first available
+        if space is None:
+            _avail_spaces = list({s for m in reference_lib[dataset]["map"].values() for s in m})
+            if _SPACE_DEFAULT_VOL in _avail_spaces:
+                space = _SPACE_DEFAULT_VOL
+            elif _SPACE_DEFAULT_SURF in _avail_spaces:
+                space = _SPACE_DEFAULT_SURF
+            elif _avail_spaces:
+                space = _avail_spaces[0]
+            else:
+                lgr.critical_raise(f"No image maps found for dataset '{dataset}'.", ValueError)
+            lgr.info(f"Auto-selected space '{space}' for dataset '{dataset}'.")
+
         # get list of map image files
         maps_avail = [m for m, v in reference_lib[dataset]["map"].items() if space in v]
         if len(maps_avail) == 0:

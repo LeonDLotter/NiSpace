@@ -7,9 +7,7 @@ import logging
 lgr = logging.getLogger(__name__)
 from . import NiSpace
 from .utils.utils import set_log
-from .core.constants import (_PARC_DEFAULT, 
-                                _COLLECT_DEFAULT,
-                                _COLOC_METHODS)
+from .core.constants import _PARC_DEFAULT, _COLOC_METHODS
 from .datasets import fetch_reference, reference_lib, _check_parcellation
 
 _DEPR_POOLED_P = (
@@ -94,9 +92,9 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
             if x in reference_lib:
                 lgr.info(f"Loading integrated {x} dataset as X data.")
                 if x_collection is None or not isinstance(x_collection, str):
-                    x_collection = _COLLECT_DEFAULT.get(x)
+                    x_collection = reference_lib[x].get("default_collection")
                     if x_collection is not None:
-                        lgr.info(f"Using collection {x_collection}.")
+                        lgr.info(f"Using default collection '{x_collection}'.")
                 fetch_x_kwargs = dict(
                     dataset=x,
                     collection=x_collection,

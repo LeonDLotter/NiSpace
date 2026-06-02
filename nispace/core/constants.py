@@ -1,27 +1,7 @@
-_SPACE_DEFAULT = "MNI152NLin2009cAsym"
+_SPACE_DEFAULT_VOL = "MNI152NLin6Asym"
+_SPACE_DEFAULT_SURF = "fsLR"
 
-_PARCS = ["schaefer100", "schaefer200", "schaefer300", "hcp", "desikankilliany", "destrieux"]
-_PARCS_NICE = ["Schaefer100", "Schaefer200", "Schaefer300", "HCP", "DesikanKilliany", "Destrieux"]
-_PARCS_DEFAULT = "schaefer200"
 _PARC_DEFAULT = "Schaefer200"
-# TODO: remove lists, add default to datalib files
-
-_DSETS = ["pet", "mrna", "rsn", "magicc", "grf"]
-_DSETS_NICE = ["PET", "mRNA", "RSN", "MAGICC", "GRF"]
-_DSETS_TAB_ONLY = ["mrna", "magicc", "grf"]
-_DSETS_CX_ONLY = ["rsn"]
-_DSETS_SC_ONLY = []
-
-_COLLECT_DEFAULT = {
-    "pet": "UniqueTracers",
-    "mrna": "CellTypesPsychEncodeTPM",
-    "magicc": "CellTypesPsychEncodeTPM",
-    "grf": "ByAlpha",
-    "neurosynth": "CognitiveFunctions",
-    "enigmathick": "Adult",
-    "enigmaarea": "Adult",
-}
-# TODO: move this to the datalib files
 
 _COLOC_METHODS = {
     "pearson": ["rho"],
@@ -58,7 +38,7 @@ _COLOC_METHODS_1D = {
     "dominance": ["sum"],
     "pls": ["r2"],
     "pcr": ["r2"],
-    "lasso": ["r2", "alpha"], 
+    "lasso": ["r2", "alpha"],
     "ridge": ["r2", "alpha"],
     "elasticnet": ["r2", "alpha", "l1ratio"],
 }
@@ -93,6 +73,3 @@ _P_TAILS = {
     "ridge": {"r2": "upper", "beta": "two", "alpha": "upper"},
     "elasticnet": {"r2": "upper", "beta": "two", "alpha": "upper", "l1ratio": "upper"},
 }
-
-
-
