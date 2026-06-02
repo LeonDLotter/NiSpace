@@ -337,14 +337,14 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                   return_dist_mat=return_dist_mat, return_spin_mat=return_spin_mat, return_loaded=return_loaded,
                   nispace_data_dir=nispace_data_dir, overwrite=overwrite, check_file_hash=check_file_hash):
         
-        # Check space
+        # Check space — filter to actual space entries (dicts with "map" key)
+        _avail_spaces = {k: v for k, v in parcellation_lib[p].items() if isinstance(v, dict) and "map" in v}
         if space is None:
-            # get default space -> first space listed in parcellation_lib
-            space = list(parcellation_lib[p].keys())[0]
+            space = next(iter(_avail_spaces))
         else:
-            if space not in parcellation_lib[p]:
+            if space not in _avail_spaces:
                 lgr.critical_raise(f"Space '{space}' not found for parcellation '{p}'.\n"
-                                   f"Available: {keys2str(parcellation_lib[p])}",
+                                   f"Available: {', '.join(_avail_spaces)}",
                                    ValueError)
         
         # data directory
@@ -1000,7 +1000,7 @@ def _load_parcellated_data(dataset: str,
 
     # Apply filter to the dataframe index
     lgr.debug(f"Applying filtering based on maps, first 5: {map_files[:5]}")
-    if isinstance(map_files[0], pathlib.Path):
+    if map_files and isinstance(map_files[0], pathlib.Path):
         map_files = [_rm_ext(f.name) for f in map_files]
     data = data.loc[data.index.intersection(map_files)]
     lgr.debug(f"Shape after filtering based on map_names: {data.shape}")
@@ -1053,7 +1053,7 @@ def _print_map_citation_table(meta: pd.DataFrame, map_info_cfg: dict):
             )
         lines.append(("  " + "  ".join(parts) + doi_str).rstrip())
         if note_col and note_col in row.index and not pd.isna(row.get(note_col, float("nan"))):
-            lines.append(f"    CAVE: {row[note_col]}")
+            lines.append(f"   CAVE: {row[note_col]}")
     print("\n".join(lines))
 
 

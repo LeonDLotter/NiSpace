@@ -94,8 +94,9 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
             if x in reference_lib:
                 lgr.info(f"Loading integrated {x} dataset as X data.")
                 if x_collection is None or not isinstance(x_collection, str):
-                    x_collection = _COLLECT_DEFAULT[x]
-                    lgr.info(f"Using collection {x_collection}.")
+                    x_collection = _COLLECT_DEFAULT.get(x)
+                    if x_collection is not None:
+                        lgr.info(f"Using collection {x_collection}.")
                 fetch_x_kwargs = dict(
                     dataset=x,
                     collection=x_collection,
