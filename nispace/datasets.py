@@ -611,13 +611,62 @@ def fetch_collection(collection: Union[str, pathlib.Path, np.ndarray, pd.DataFra
                      check_file_hash: bool = True,
                      verbose: bool = True):
     """
-    Fetch a collection to subset a map dataset.
-    
-    Args:
-        dataset: str
-        collection: Union[str, pathlib.Path, np.ndarray, pd.DataFrame, pd.Series, list]
-        nispace_data_dir: Union[str, pathlib.Path]
-        verbose: bool
+    Fetch a collection that defines a subset (and optional grouping) of maps.
+
+    A collection is a mapping from map IDs to optional set labels and weights. The result
+    is a DataFrame with columns ``["map"]``, ``["set", "map"]``, or ``["set", "map", "weight"]``
+    depending on the collection content.
+
+    Three `.collect` file formats are supported:
+
+    1. **Simple list** — plain text, one map ID per line, ``map`` header.
+    2. **JSON set dict** — ``{"set_name": ["map1", "map2", ...], ...}``.
+    3. **CSV set table** — columns: ``map``, ``set, map``, or ``set, map, weight``.
+
+    Parameters
+    ----------
+    collection : str, Path, ndarray, DataFrame, Series, or list
+        When ``dataset`` is given: the name of an integrated collection (e.g. ``"All"``,
+        ``"BrainSpanWeights"``).
+        When ``dataset`` is None: a path to a ``.collect`` file, or an in-memory
+        array-like / DataFrame that is used directly.
+    dataset : str, optional
+        Name of an integrated NiSpace reference dataset (e.g. ``"mrna"``, ``"pet"``).
+        If provided, ``collection`` must be the name of one of that dataset's registered
+        collections.
+    maps : list, optional
+        Restrict to this subset of map IDs after loading.
+    set_size_range : tuple (int, int), optional
+        Keep only sets whose membership count falls within ``[min, max]`` (inclusive).
+    weight_range : tuple (float, float), optional
+        Keep only entries whose weight is within ``[min, max]`` (inclusive).
+        Ignored when the collection has no weights.
+    weight_quantile : float, optional
+        Within each set, keep only entries with weight ≥ this quantile. Ignored when
+        the collection has no weights.
+    set_specificity : float in (0, 1], optional
+        Keep only maps that appear in ≤ ``set_specificity`` fraction of all sets,
+        i.e. discard ubiquitous maps.
+    return_maps : bool, default False
+        If True, return a tuple ``(collection_df, maps_avail)`` where ``maps_avail`` is
+        the deduplicated list of map IDs after all filters.
+    nispace_data_dir : str or Path, optional
+        Override the NiSpace data directory (default: ``$NISPACE_DATA_DIR``).
+    overwrite : bool, default False
+        Re-download the collection file even if it is already cached.
+    check_file_hash : bool, default True
+        Verify the SHA-256 hash of the downloaded file.
+    verbose : bool, default True
+        Print progress messages.
+
+    Returns
+    -------
+    collection_df : DataFrame
+        Columns: ``["map"]`` for unstructured collections; ``["set", "map"]`` for grouped
+        collections; ``["set", "map", "weight"]`` for weighted collections.
+    maps_avail : list of str
+        Only returned when ``return_maps=True``. Deduplicated map IDs present in
+        ``collection_df`` after filtering.
     """
     verbose = set_log(lgr, verbose)
     
