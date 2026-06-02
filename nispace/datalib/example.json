@@ -1,114 +1,116 @@
 {
     "anorexianervosa": {
         "tab": {
-            "Glasser": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Glasser.csv.gz"
-            },
-            "DesikanKilliany": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-DesikanKilliany.csv.gz"
-            },
-            "DesikanKillianyTourville": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-DesikanKillianyTourville.csv.gz"
-            },
-            "Destrieux": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Destrieux.csv.gz"
-            },
-            "Schaefer100Parcels7Networks": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Schaefer100Parcels7Networks.csv.gz"
-            },
-            "Schaefer100Parcels17Networks": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Schaefer100Parcels17Networks.csv.gz"
-            },
-            "Schaefer200Parcels7Networks": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Schaefer200Parcels7Networks.csv.gz"
-            },
-            "Schaefer200Parcels17Networks": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Schaefer200Parcels17Networks.csv.gz"
-            },
-            "Schaefer400Parcels7Networks": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Schaefer400Parcels7Networks.csv.gz"
-            },
-            "Schaefer400Parcels17Networks": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Schaefer400Parcels17Networks.csv.gz"
-            },
-            "Schaefer1000Parcels7Networks": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Schaefer1000Parcels7Networks.csv.gz"
-            },
-            "Schaefer1000Parcels17Networks": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Schaefer1000Parcels17Networks.csv.gz"
-            },
-            "Yan100": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Yan100.csv.gz"
-            },
-            "Yan200": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Yan200.csv.gz"
-            },
-            "Yan400": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Yan400.csv.gz"
-            },
-            "Yan1000": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Yan1000.csv.gz"
-            },
             "AALCortical": {
                 "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-AALCortical.csv.gz"
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-AALCortical.csv.gz"
             },
             "AALSubcortical": {
                 "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-AALSubcortical.csv.gz"
-            },
-            "BrainnetomeCortical": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-BrainnetomeCortical.csv.gz"
-            },
-            "BrainnetomeSubcortical": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-BrainnetomeSubcortical.csv.gz"
-            },
-            "HarvardOxfordCortical": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-HarvardOxfordCortical.csv.gz"
-            },
-            "HarvardOxfordSubcortical": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-HarvardOxfordSubcortical.csv.gz"
-            },
-            "TianS1": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-TianS1.csv.gz"
-            },
-            "TianS2": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-TianS2.csv.gz"
-            },
-            "TianS3": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-TianS3.csv.gz"
-            },
-            "TianS4": {
-                "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-TianS4.csv.gz"
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-AALSubcortical.csv.gz"
             },
             "Aseg": {
                 "host": "github-nispace",
-                "remote": "example/example-anorexianervosa_parc-Aseg.csv.gz"
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-Aseg.csv.gz"
+            },
+            "BrainnetomeCortical": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-BrainnetomeCortical.csv.gz"
+            },
+            "BrainnetomeSubcortical": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-BrainnetomeSubcortical.csv.gz"
+            },
+            "DesikanKilliany": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-DesikanKilliany.csv.gz"
+            },
+            "DesikanKillianyTourville": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-DesikanKillianyTourville.csv.gz"
+            },
+            "Destrieux": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-Destrieux.csv.gz"
+            },
+            "Glasser": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-Glasser.csv.gz"
+            },
+            "HarvardOxfordCortical": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-HarvardOxfordCortical.csv.gz"
+            },
+            "HarvardOxfordSubcortical": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-HarvardOxfordSubcortical.csv.gz"
+            },
+            "Schaefer1000Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-Schaefer1000Parcels17Networks.csv.gz"
+            },
+            "Schaefer1000Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-Schaefer1000Parcels7Networks.csv.gz"
+            },
+            "Schaefer100Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-Schaefer100Parcels17Networks.csv.gz"
+            },
+            "Schaefer100Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-Schaefer100Parcels7Networks.csv.gz"
+            },
+            "Schaefer200Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-Schaefer200Parcels17Networks.csv.gz"
+            },
+            "Schaefer200Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-Schaefer200Parcels7Networks.csv.gz"
+            },
+            "Schaefer400Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-Schaefer400Parcels17Networks.csv.gz"
+            },
+            "Schaefer400Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-Schaefer400Parcels7Networks.csv.gz"
+            },
+            "TianS1": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-TianS1.csv.gz"
+            },
+            "TianS2": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-TianS2.csv.gz"
+            },
+            "TianS3": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-TianS3.csv.gz"
+            },
+            "TianS4": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-TianS4.csv.gz"
+            },
+            "Yan100": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-Yan100.csv.gz"
+            },
+            "Yan1000": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-Yan1000.csv.gz"
+            },
+            "Yan200": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-Yan200.csv.gz"
+            },
+            "Yan400": {
+                "host": "github-nispace",
+                "remote": "example/anorexianervosa/example-anorexianervosa_parc-Yan400.csv.gz"
             }
-        }
+        },
+        "label": "Toy dataset simulated from ENIGMA AN maps.",
+        "description": "Simulated gray matter data for 50 patients with acute anorexia nervosa (acAN) and 50 healthy controls, parcellated across all NiSpace parcellations. Patient data are constructed as GM probability (TPM) + scaled ENIGMA acAN cortical volume effect (Cohen's d, dx-an_subtype-acAN_pub-walton2022, estimated as thickness × area in DesikanKilliany + subcortical volume in Aseg) + Gaussian noise; controls are GM probability + noise only (seed 42, n=50 per group). Intended as a toy dataset for NiSpace tutorials. NOT FOR SCIENTIFIC USE!\n"
     }
 }

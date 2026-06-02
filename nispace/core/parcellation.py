@@ -318,14 +318,20 @@ class Parcellation:
         """Build a single (non-combined) multi-space Parcellation from the library."""
         from ..utils.utils_datasets import get_file
 
-        spaces = list(lib_entry.keys())
+        # Filter to actual space entries (dicts with a "map" key); skip top-level metadata fields
+        # (label, level, symmetric, license, citation) added in the datalib refactor
+        space_entries = {k: v for k, v in lib_entry.items() if isinstance(v, dict) and "map" in v}
+        # Top-level metadata (new in refactor; None for old JSON without these fields)
+        entry_level = lib_entry.get("level")
+        entry_symmetric = lib_entry.get("symmetric")
+        spaces = list(space_entries.keys())
         lgr.info(f"Building multi-space Parcellation for '{name}' from library.")
         lgr.info(f"Available spaces: {', '.join(spaces)}")
         p = cls(name=name)
 
         shared_loaded = False  # load labels/l2rmap/lrcorr only once
 
-        for space, space_lib in lib_entry.items():
+        for space, space_lib in space_entries.items():
             is_vol = "mni" in space.lower()
             base   = data_dir / "parcellation" / name / space
 
@@ -363,9 +369,13 @@ class Parcellation:
                         )
                         p._labels = np.array(load_labels(label_paths))
 
-                sym = space_lib.get(
-                    "symmetric",
-                    "l2rmap" not in space_lib and "lrcorr" not in space_lib,
+                sym = (
+                    entry_symmetric
+                    if entry_symmetric is not None
+                    else space_lib.get(
+                        "symmetric",
+                        "l2rmap" not in space_lib and "lrcorr" not in space_lib,
+                    )
                 )
                 p._symmetric = sym
 
@@ -383,7 +393,7 @@ class Parcellation:
                     )
                     p._lrcorr = load_l2rmap(lrc_path, threshold=lrcorr_threshold)
 
-                p._level = space_lib.get("level", None)
+                p._level = entry_level or space_lib.get("level", None)
                 shared_loaded = True
 
             # ---- distance matrix ----

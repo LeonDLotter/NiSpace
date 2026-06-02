@@ -232,8 +232,7 @@ def _check_parcellation(parcellation: str, force_list: bool = False, force_str: 
     def _check_cortex_subcortex(parc):
         levels = []
         for p in parc:
-            p_space = list(parcellation_lib[p].keys())[0]
-            levels.append(parcellation_lib[p][p_space]["level"])
+            levels.append(parcellation_lib[p]["level"])
         if set(levels) != {"cortex", "subcortex"}:
             lgr.critical_raise(f"Only cortex-subcortex combinations are allowed, not: {', '.join(levels)} ",
                                 ValueError)
@@ -357,7 +356,12 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
             symmetric = True
         
         # LOAD
-        lgr.info(f"Loading {parcellation_lib[p][space]['level']} parcellation '{p}' in '{space}' space.")
+        _level = parcellation_lib[p].get("level") or parcellation_lib[p][space].get("level", "")
+        _doi = parcellation_lib[p].get("citation", {}).get("doi", "")
+        lgr.info(
+            f"Loading {_level} parcellation '{p}' in '{space}' space."
+            + (f"  DOI: {_doi}" if _doi else "")
+        )
         
         # get kwargs
         get_file_kwargs = dict(overwrite=overwrite, hash_check=check_file_hash)
@@ -1022,74 +1026,48 @@ def _load_parcellated_data(dataset: str,
     return data
     
 
-def _print_references(dataset: str, meta: pd.DataFrame = None):
-    
-    # info file
-    def get_ref_info(dataset, add_commit=True):
-        get_line = False
-        msg = ""
-        with open(datalib_dir / "reference.txt", "r") as f:
-            for line in f:
-                if line.lower().startswith(f"# {dataset.lower()}"):
-                    get_line = True
-                    continue                
-                if get_line and line == "\n":
-                    break
-                if get_line:
-                    msg += line
-        if add_commit:
-            msg += f"To ensure reproducibility, note the NiSpace commit/version: {__commit__}\n"
-        msg += "\n"
-        return msg
-                    
-    # PET
-    if dataset.lower() == "pet":
-        msg = get_ref_info(dataset)
-        if meta is not None:
-            atlas_maxlen = max([len(x) for x in meta["atlas"]])
-            author_maxlen = max([len(x) for x in meta["publication"]])
-            license_maxlen = max([len(x) for x in meta["license"]])
-            for atlas, pub, doi, license, note in zip(
-                meta["atlas"], meta["publication"], meta["doi"], meta["license"], meta["note"]
-                ):
-                
-                doi_list = [f"https://doi.org/{doi}" for doi in doi.replace(" ", "").split(";")]
-                if "" in doi_list: doi_list.remove("")
-                doi_str = ", ".join(doi_list)
-                atlas = atlas.ljust(atlas_maxlen)
-                author = pub.capitalize().ljust(author_maxlen)
-                license = license.ljust(license_maxlen)
-                msg += f"- {atlas}  Source: {author}  {license}  {doi_str}\n"
-                
-                if not pd.isna(note):
-                    msg += f"    CAVE: {note}\n"
-    
-    # all others
-    else:
-        msg = get_ref_info(dataset)
-        if meta is not None:
-            if len(meta) > 0:
-                collection_maxlen = max([len(x) for x in meta["collection"]])
-                author_maxlen = max([len(x) for x in meta["author"]])
-                for collection, pub, doi in zip(meta["collection"], meta["author"], meta["doi"]):
-                    collection = collection.ljust(collection_maxlen)
-                    author = pub.capitalize().ljust(author_maxlen)
-                    msg += f"- {collection}  Source: {author}  https://doi.org/{doi}\n"
-    
-    # RSN
-    # elif dataset.lower() == "rsn":
-    #     msg = get_ref_info(dataset)
-    #     if meta is not None:
-    #         if len(meta) > 0:
-    #             author_maxlen = max([len(x) for x in meta["author"]])
-    #             for pub, doi in zip(meta["author"], meta["doi"]):
-    #                 author = pub.capitalize().ljust(author_maxlen)
-    #                 msg += f"- {author}  https://doi.org/{doi}\n"
+def _print_map_citation_table(meta: pd.DataFrame, map_info_cfg: dict):
+    if meta is None or len(meta) == 0:
+        return
+    cite_col = map_info_cfg.get("cite_column", "doi")
+    display_cols = [c for c in map_info_cfg.get("display_columns", []) if c in meta.columns]
+    note_col = map_info_cfg.get("note_column")
+    lines = []
+    for _, row in meta.iterrows():
+        parts = [str(row[c]) for c in display_cols if not pd.isna(row.get(c, float("nan")))]
+        doi_str = ""
+        if cite_col in row.index and not pd.isna(row[cite_col]):
+            dois = [d.strip() for d in str(row[cite_col]).split(";") if d.strip()]
+            doi_str = "  " + "  ".join(
+                f"https://doi.org/{d}" if not d.startswith("http") else d for d in dois
+            )
+        lines.append(f"  - {', '.join(parts)}{doi_str}")
+        if note_col and note_col in row.index and not pd.isna(row.get(note_col, float("nan"))):
+            lines.append(f"    CAVE: {row[note_col]}")
+    print("\n".join(lines))
 
-    # print
-    # if msg[-2:] != "\n":
-    #     msg += "\n"
-    print(msg)
+
+def _print_references(dataset: str, meta: pd.DataFrame = None, collection_name: str = None):
+    cfg = reference_lib[dataset]
+
+    # 1. Description (replaces reference.txt)
+    if "description" in cfg:
+        print(cfg["description"])
+
+    # 2. Dataset-level citations
+    for c in cfg.get("citations", []):
+        print(f"  - {c['ref']}  https://doi.org/{c['doi']}")
+
+    print(f"To ensure reproducibility, note the NiSpace commit/version: {__commit__}\n")
+
+    # 3. Per-map citation table (PET / enigma / cortexfeatures / tpm / bigbrain)
+    if meta is not None and "map_info" in cfg:
+        _print_map_citation_table(meta, cfg["map_info"])
+
+    # 4. Collection-level citations (mrna / magicc gene sets)
+    if collection_name and collection_name in cfg.get("collection", {}):
+        for c in cfg["collection"][collection_name].get("citations", []):
+            print(f"  [{collection_name}] {c['ref']}  https://doi.org/{c['doi']}")
     
     
 # REFERENCE DATA - PUBLIC ==========================================================================
@@ -1344,63 +1322,62 @@ def fetch_reference(dataset: str,
                         "(parcellation= must be set). Full images returned."
                     )
 
-    # Print references
-    # for maps if "pet", or for sets if "mrna"
+    # Print references / return per-map info
     if return_metadata or print_references:
-        if dataset == "pet":
-            meta = fetch_metadata(dataset, maps_avail, overwrite=overwrite, check_file_hash=check_file_hash)
-        elif dataset in ["mrna", "magicc"] and collection_df is not None:
-            meta = fetch_metadata(dataset, collection=collection, overwrite=overwrite, check_file_hash=check_file_hash)
-        else: 
+        if "map_info" in reference_lib[dataset]:
+            meta = fetch_map_info(dataset, maps_avail, overwrite=overwrite, check_file_hash=check_file_hash)
+        else:
             meta = None
- 
+
         if return_metadata:
             data = (data + (meta,)) if isinstance(data, tuple) else (data, meta)
         if print_references & verbose:
-            _print_references(dataset, meta)
+            _print_references(dataset, meta, collection_name=collection)
 
     return data
 
 
-def fetch_metadata(dataset: str, 
-                   maps: Union[str, list] = None, 
-                   collection: str = None,
+def fetch_map_info(dataset: str,
+                   maps: Union[str, list] = None,
                    overwrite: bool = False,
                    check_file_hash: bool = True,
                    nispace_data_dir: Union[str, pathlib.Path] = None):
-    if isinstance(dataset, str):
-        dataset = dataset.lower()
-        if dataset not in reference_lib:
-            return None
-    else:
+    if not isinstance(dataset, str):
         return None
-
+    dataset = dataset.lower()
+    if dataset not in reference_lib:
+        return None
     if "metadata" not in reference_lib[dataset]:
         return None
 
     nispace_data_dir = _resolve_nispace_data_dir(nispace_data_dir)
-
-    # base dir
     base_dir = pathlib.Path(nispace_data_dir) / "reference" / dataset
 
-    # load metadata
     meta = pd.read_csv(
         get_file(
-            base_dir / "metadata.csv", **reference_lib[dataset]["metadata"],
+            base_dir / "map_info.csv", **reference_lib[dataset]["metadata"],
             overwrite=overwrite, hash_check=check_file_hash,
-        )
+        ),
+        index_col=0,
     )
-    
-    if dataset == "pet" and maps is not None:
+
+    if maps is not None:
         if isinstance(maps, str):
             maps = [maps]
-        meta = meta[meta.atlas.str.contains("|".join(maps), na=False)]
-    elif dataset in ["mrna", "magicc"] and collection is not None:
-        meta = meta.query("collection == @collection")
-    elif dataset == "rsn":
-        meta = None
-            
+        meta = meta[meta.index.isin(maps)]
+
     return meta
+
+
+def fetch_metadata(dataset: str,
+                   maps: Union[str, list] = None,
+                   collection: str = None,
+                   overwrite: bool = False,
+                   check_file_hash: bool = True,
+                   nispace_data_dir: Union[str, pathlib.Path] = None):
+    """Deprecated alias for fetch_map_info()."""
+    return fetch_map_info(dataset, maps=maps, overwrite=overwrite,
+                          check_file_hash=check_file_hash, nispace_data_dir=nispace_data_dir)
 
 
 # EXAMPLE DATA =====================================================================================
