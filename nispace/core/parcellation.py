@@ -1393,7 +1393,7 @@ class Parcellation:
         # and merge results into a single null array.
 
         # moran fallback
-        for preferred in ["MNI152NLin2009cAsym", "MNI152NLin6Asym", "MNI152"]:
+        for preferred in ["MNI152NLin2009cAsym", "MNI152NLin6Asym", "MNI152", "MNIOriginal", "MNI"]:
             if preferred in self.spaces:
                 return preferred, "moran"
         for s in self.spaces:

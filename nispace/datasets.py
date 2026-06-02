@@ -1,5 +1,6 @@
 from typing import Union, List, Dict, Tuple
 import pathlib
+import textwrap
 import pandas as pd
 import numpy as np
 import os
@@ -360,7 +361,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
         _doi = parcellation_lib[p].get("citation", {}).get("doi", "")
         lgr.info(
             f"Loading {_level} parcellation '{p}' in '{space}' space."
-            + (f"  DOI: {_doi}" if _doi else "")
+            + (f" DOI: {_doi}" if _doi else "")
         )
         
         # get kwargs
@@ -1032,16 +1033,25 @@ def _print_map_citation_table(meta: pd.DataFrame, map_info_cfg: dict):
     cite_col = map_info_cfg.get("cite_column", "doi")
     display_cols = [c for c in map_info_cfg.get("display_columns", []) if c in meta.columns]
     note_col = map_info_cfg.get("note_column")
+
+    col_widths = {
+        col: max((len(str(v)) for v in meta[col] if not pd.isna(v)), default=0)
+        for col in display_cols
+    }
+
     lines = []
     for _, row in meta.iterrows():
-        parts = [str(row[c]) for c in display_cols if not pd.isna(row.get(c, float("nan")))]
+        parts = [
+            ("" if pd.isna(row.get(col, float("nan"))) else str(row[col])).ljust(col_widths[col])
+            for col in display_cols
+        ]
         doi_str = ""
         if cite_col in row.index and not pd.isna(row[cite_col]):
             dois = [d.strip() for d in str(row[cite_col]).split(";") if d.strip()]
-            doi_str = "  " + "  ".join(
+            doi_str = " " + "; ".join(
                 f"https://doi.org/{d}" if not d.startswith("http") else d for d in dois
             )
-        lines.append(f"  - {', '.join(parts)}{doi_str}")
+        lines.append(("  " + "  ".join(parts) + doi_str).rstrip())
         if note_col and note_col in row.index and not pd.isna(row.get(note_col, float("nan"))):
             lines.append(f"    CAVE: {row[note_col]}")
     print("\n".join(lines))
@@ -1052,7 +1062,11 @@ def _print_references(dataset: str, meta: pd.DataFrame = None, collection_name: 
 
     # 1. Description (replaces reference.txt)
     if "description" in cfg:
-        print(cfg["description"])
+        paragraphs = cfg["description"].split("\n\n")
+        print("\n\n".join(
+            textwrap.fill(p.replace("\n", " "), width=100, break_long_words=False)
+            for p in paragraphs
+        ))
 
     # 2. Dataset-level citations
     for c in cfg.get("citations", []):
@@ -1171,17 +1185,17 @@ def fetch_reference(dataset: str,
             
         # Remove private maps
         if not osf_config_file and not github_config_file:
-            if "mni152" in space.lower():
+            if "mni" in space.lower():
                 maps_avail = [
-                    m for m in maps_avail 
+                    m for m in maps_avail
                     if reference_lib[dataset]["map"][m][space]["host"] not in ["osfprivate", "github-nispace-private"]
                 ]
             else:
                 maps_avail = [
-                    m for m in maps_avail 
-                    if (reference_lib[dataset]["map"][m][space]["L"]["host"] 
-                        if "L" in reference_lib[dataset]["map"][m][space] 
-                        else reference_lib[dataset]["map"][m][space]["R"]["host"]) 
+                    m for m in maps_avail
+                    if (reference_lib[dataset]["map"][m][space]["L"]["host"]
+                        if "L" in reference_lib[dataset]["map"][m][space]
+                        else reference_lib[dataset]["map"][m][space]["R"]["host"])
                     not in ["osfprivate", "github-nispace-private"]
                 ]
         
@@ -1279,7 +1293,7 @@ def fetch_reference(dataset: str,
             osf_config_file=osf_config_file, github_config_file=github_config_file)
         
         # MNI: one file per map
-        if "mni152" in space.lower():
+        if "mni" in space.lower():
             data = [
                 get_file(
                     map_dir / m / f"{m}_space-{space}.%s", **reference_lib[dataset]["map"][m][space], 

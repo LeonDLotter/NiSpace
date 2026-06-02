@@ -2664,8 +2664,6 @@
             "display_columns": [
                 "target",
                 "tracer",
-                "metric",
-                "sample_size",
                 "license"
             ],
             "note_column": "note"
