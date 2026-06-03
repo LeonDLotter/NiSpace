@@ -1,0 +1,116 @@
+{
+    "MNI152NLin2009cAsym": {
+        "MNI152Lin": {
+            "backward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin2009cAsym/from-MNI152Lin_to-MNI152NLin2009cAsym_dir-backward_field.nii.gz"
+            },
+            "forward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin2009cAsym/from-MNI152Lin_to-MNI152NLin2009cAsym_dir-forward_field.nii.gz"
+            }
+        },
+        "MNI152NLin2009cSym": {
+            "backward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin2009cAsym/from-MNI152NLin2009cSym_to-MNI152NLin2009cAsym_dir-backward_field.nii.gz"
+            },
+            "forward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin2009cAsym/from-MNI152NLin2009cSym_to-MNI152NLin2009cAsym_dir-forward_field.nii.gz"
+            }
+        },
+        "MNI152NLin6Asym": {
+            "backward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin2009cAsym/from-MNI152NLin6Asym_to-MNI152NLin2009cAsym_dir-backward_field.nii.gz"
+            },
+            "forward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin2009cAsym/from-MNI152NLin6Asym_to-MNI152NLin2009cAsym_dir-forward_field.nii.gz"
+            }
+        },
+        "MNI152NLin6Sym": {
+            "backward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin2009cAsym/from-MNI152NLin6Sym_to-MNI152NLin2009cAsym_dir-backward_field.nii.gz"
+            },
+            "forward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin2009cAsym/from-MNI152NLin6Sym_to-MNI152NLin2009cAsym_dir-forward_field.nii.gz"
+            }
+        },
+        "MNI305": {
+            "backward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin2009cAsym/from-MNI305_to-MNI152NLin2009cAsym_dir-backward_field.nii.gz"
+            },
+            "forward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin2009cAsym/from-MNI305_to-MNI152NLin2009cAsym_dir-forward_field.nii.gz"
+            }
+        },
+        "MNIColin27": {
+            "backward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin2009cAsym/from-MNIColin27_to-MNI152NLin2009cAsym_dir-backward_field.nii.gz"
+            },
+            "forward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin2009cAsym/from-MNIColin27_to-MNI152NLin2009cAsym_dir-forward_field.nii.gz"
+            }
+        }
+    },
+    "MNI152NLin6Asym": {
+        "MNI152Lin": {
+            "backward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin6Asym/from-MNI152Lin_to-MNI152NLin6Asym_dir-backward_field.nii.gz"
+            },
+            "forward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin6Asym/from-MNI152Lin_to-MNI152NLin6Asym_dir-forward_field.nii.gz"
+            }
+        },
+        "MNI152NLin2009cSym": {
+            "backward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin6Asym/from-MNI152NLin2009cSym_to-MNI152NLin6Asym_dir-backward_field.nii.gz"
+            },
+            "forward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin6Asym/from-MNI152NLin2009cSym_to-MNI152NLin6Asym_dir-forward_field.nii.gz"
+            }
+        },
+        "MNI152NLin6Sym": {
+            "backward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin6Asym/from-MNI152NLin6Sym_to-MNI152NLin6Asym_dir-backward_field.nii.gz"
+            },
+            "forward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin6Asym/from-MNI152NLin6Sym_to-MNI152NLin6Asym_dir-forward_field.nii.gz"
+            }
+        },
+        "MNI305": {
+            "backward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin6Asym/from-MNI305_to-MNI152NLin6Asym_dir-backward_field.nii.gz"
+            },
+            "forward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin6Asym/from-MNI305_to-MNI152NLin6Asym_dir-forward_field.nii.gz"
+            }
+        },
+        "MNIColin27": {
+            "backward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin6Asym/from-MNIColin27_to-MNI152NLin6Asym_dir-backward_field.nii.gz"
+            },
+            "forward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin6Asym/from-MNIColin27_to-MNI152NLin6Asym_dir-forward_field.nii.gz"
+            }
+        }
+    }
+}

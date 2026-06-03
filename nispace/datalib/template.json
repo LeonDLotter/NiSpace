@@ -13,6 +13,10 @@
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin2009cAsym/map/mask/tpl-MNI152NLin2009cAsym_desc-mask_res-1mm.nii.gz"
             },
+            "gmprob": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/gmprob/tpl-MNI152NLin2009cAsym_desc-gmprob_res-1mm.nii.gz"
+            },
             "mask_gm": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin2009cAsym/map/mask_gm/tpl-MNI152NLin2009cAsym_desc-mask_gm_res-1mm.nii.gz"
@@ -35,6 +39,10 @@
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin2009cAsym/map/mask/tpl-MNI152NLin2009cAsym_desc-mask_res-2mm.nii.gz"
             },
+            "gmprob": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/gmprob/tpl-MNI152NLin2009cAsym_desc-gmprob_res-2mm.nii.gz"
+            },
             "mask_gm": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin2009cAsym/map/mask_gm/tpl-MNI152NLin2009cAsym_desc-mask_gm_res-2mm.nii.gz"
@@ -56,6 +64,10 @@
             "mask": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin2009cAsym/map/mask/tpl-MNI152NLin2009cAsym_desc-mask_res-3mm.nii.gz"
+            },
+            "gmprob": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/gmprob/tpl-MNI152NLin2009cAsym_desc-gmprob_res-3mm.nii.gz"
             },
             "mask_gm": {
                 "host": "github-nispace",
@@ -81,6 +93,10 @@
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin6Asym/map/mask/tpl-MNI152NLin6Asym_desc-mask_res-1mm.nii.gz"
             },
+            "gmprob": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/gmprob/tpl-MNI152NLin6Asym_desc-gmprob_res-1mm.nii.gz"
+            },
             "mask_gm": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin6Asym/map/mask_gm/tpl-MNI152NLin6Asym_desc-mask_gm_res-1mm.nii.gz"
@@ -103,6 +119,10 @@
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin6Asym/map/mask/tpl-MNI152NLin6Asym_desc-mask_res-2mm.nii.gz"
             },
+            "gmprob": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/gmprob/tpl-MNI152NLin6Asym_desc-gmprob_res-2mm.nii.gz"
+            },
             "mask_gm": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin6Asym/map/mask_gm/tpl-MNI152NLin6Asym_desc-mask_gm_res-2mm.nii.gz"
@@ -124,6 +144,10 @@
             "mask": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin6Asym/map/mask/tpl-MNI152NLin6Asym_desc-mask_res-3mm.nii.gz"
+            },
+            "gmprob": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/gmprob/tpl-MNI152NLin6Asym_desc-gmprob_res-3mm.nii.gz"
             },
             "mask_gm": {
                 "host": "github-nispace",

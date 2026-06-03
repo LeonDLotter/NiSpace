@@ -763,14 +763,22 @@ def apply_transform(img, mni_from=None, mni_to=None, transform=None, order=3, re
 
     # Determine output resolution
     _available_res = [1, 2, 3]
+    vox_size = float(np.min(np.abs(img.header.get_zooms()[:3])))
     if res is None:
-        vox_size = float(np.min(np.abs(img.header.get_zooms()[:3])))
         res = min(_available_res, key=lambda r: abs(r - vox_size))
     else:
         if isinstance(res, str):
             res = int(res.lower().replace("mm", ""))
         if res not in _available_res:
             raise ValueError(f"res={res} not supported. Choose from {_available_res}.")
+        if res < round(vox_size):
+            import warnings as _warnings
+            _warnings.warn(
+                f"Requested output resolution ({res}mm) is finer than the input image "
+                f"voxel size ({vox_size:.1f}mm). The output grid will be denser but "
+                f"effective resolution remains limited by the input.",
+                UserWarning, stacklevel=2,
+            )
 
     # Build reference image from nispace template (defines output grid)
     # Deferred import avoids circular dependency (datasets.py imports utils.py)

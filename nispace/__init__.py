@@ -33,4 +33,5 @@ if not os.environ.get("NISPACE_SHOW_FUTURE_WARNINGS"):
 from .api import NiSpace
 from .workflows import (colocalization, group_colocalization, xsea, group_xsea,
                         simple_colocalization, simple_xsea, group_comparison)
+from .transforms import mni_to_mni
 
