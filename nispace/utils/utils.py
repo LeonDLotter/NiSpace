@@ -786,7 +786,7 @@ def apply_transform(img, mni_from=None, mni_to=None, transform=None, order=3, re
     if target_space is not None:
         try:
             from nispace.datasets import fetch_template
-            tpl_path = fetch_template(target_space, res=f"{res}mm", desc="mask", verbose=False)
+            tpl_path = fetch_template(target_space, res=f"{res}mm", desc="brainmask", verbose=False)
             reference = nib.load(str(tpl_path))
         except Exception:
             pass  # fall through to warp-grid fallback below

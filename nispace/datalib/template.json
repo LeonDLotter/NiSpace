@@ -9,21 +9,33 @@
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin2009cAsym/map/brain/tpl-MNI152NLin2009cAsym_desc-brain_res-1mm.nii.gz"
             },
-            "mask": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin2009cAsym/map/mask/tpl-MNI152NLin2009cAsym_desc-mask_res-1mm.nii.gz"
-            },
             "gmprob": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin2009cAsym/map/gmprob/tpl-MNI152NLin2009cAsym_desc-gmprob_res-1mm.nii.gz"
             },
-            "mask_gm": {
+            "brainmask": {
                 "host": "github-nispace",
-                "remote": "template/MNI152NLin2009cAsym/map/mask_gm/tpl-MNI152NLin2009cAsym_desc-mask_gm_res-1mm.nii.gz"
+                "remote": "template/MNI152NLin2009cAsym/map/brainmask/tpl-MNI152NLin2009cAsym_desc-brainmask_res-1mm.nii.gz"
             },
-            "mask_gm_tight": {
+            "cortexmask": {
                 "host": "github-nispace",
-                "remote": "template/MNI152NLin2009cAsym/map/mask_gm_tight/tpl-MNI152NLin2009cAsym_desc-mask_gm_tight_res-1mm.nii.gz"
+                "remote": "template/MNI152NLin2009cAsym/map/cortexmask/tpl-MNI152NLin2009cAsym_desc-cortexmask_res-1mm.nii.gz"
+            },
+            "tightcortexmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/tightcortexmask/tpl-MNI152NLin2009cAsym_desc-tightcortexmask_res-1mm.nii.gz"
+            },
+            "subcortexmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/subcortexmask/tpl-MNI152NLin2009cAsym_desc-subcortexmask_res-1mm.nii.gz"
+            },
+            "gmmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/gmmask/tpl-MNI152NLin2009cAsym_desc-gmmask_res-1mm.nii.gz"
+            },
+            "tightgmmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/tightgmmask/tpl-MNI152NLin2009cAsym_desc-tightgmmask_res-1mm.nii.gz"
             }
         },
         "2mm": {
@@ -35,21 +47,33 @@
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin2009cAsym/map/brain/tpl-MNI152NLin2009cAsym_desc-brain_res-2mm.nii.gz"
             },
-            "mask": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin2009cAsym/map/mask/tpl-MNI152NLin2009cAsym_desc-mask_res-2mm.nii.gz"
-            },
             "gmprob": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin2009cAsym/map/gmprob/tpl-MNI152NLin2009cAsym_desc-gmprob_res-2mm.nii.gz"
             },
-            "mask_gm": {
+            "brainmask": {
                 "host": "github-nispace",
-                "remote": "template/MNI152NLin2009cAsym/map/mask_gm/tpl-MNI152NLin2009cAsym_desc-mask_gm_res-2mm.nii.gz"
+                "remote": "template/MNI152NLin2009cAsym/map/brainmask/tpl-MNI152NLin2009cAsym_desc-brainmask_res-2mm.nii.gz"
             },
-            "mask_gm_tight": {
+            "cortexmask": {
                 "host": "github-nispace",
-                "remote": "template/MNI152NLin2009cAsym/map/mask_gm_tight/tpl-MNI152NLin2009cAsym_desc-mask_gm_tight_res-2mm.nii.gz"
+                "remote": "template/MNI152NLin2009cAsym/map/cortexmask/tpl-MNI152NLin2009cAsym_desc-cortexmask_res-2mm.nii.gz"
+            },
+            "tightcortexmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/tightcortexmask/tpl-MNI152NLin2009cAsym_desc-tightcortexmask_res-2mm.nii.gz"
+            },
+            "subcortexmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/subcortexmask/tpl-MNI152NLin2009cAsym_desc-subcortexmask_res-2mm.nii.gz"
+            },
+            "gmmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/gmmask/tpl-MNI152NLin2009cAsym_desc-gmmask_res-2mm.nii.gz"
+            },
+            "tightgmmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/tightgmmask/tpl-MNI152NLin2009cAsym_desc-tightgmmask_res-2mm.nii.gz"
             }
         },
         "3mm": {
@@ -61,21 +85,33 @@
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin2009cAsym/map/brain/tpl-MNI152NLin2009cAsym_desc-brain_res-3mm.nii.gz"
             },
-            "mask": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin2009cAsym/map/mask/tpl-MNI152NLin2009cAsym_desc-mask_res-3mm.nii.gz"
-            },
             "gmprob": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin2009cAsym/map/gmprob/tpl-MNI152NLin2009cAsym_desc-gmprob_res-3mm.nii.gz"
             },
-            "mask_gm": {
+            "brainmask": {
                 "host": "github-nispace",
-                "remote": "template/MNI152NLin2009cAsym/map/mask_gm/tpl-MNI152NLin2009cAsym_desc-mask_gm_res-3mm.nii.gz"
+                "remote": "template/MNI152NLin2009cAsym/map/brainmask/tpl-MNI152NLin2009cAsym_desc-brainmask_res-3mm.nii.gz"
             },
-            "mask_gm_tight": {
+            "cortexmask": {
                 "host": "github-nispace",
-                "remote": "template/MNI152NLin2009cAsym/map/mask_gm_tight/tpl-MNI152NLin2009cAsym_desc-mask_gm_tight_res-3mm.nii.gz"
+                "remote": "template/MNI152NLin2009cAsym/map/cortexmask/tpl-MNI152NLin2009cAsym_desc-cortexmask_res-3mm.nii.gz"
+            },
+            "tightcortexmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/tightcortexmask/tpl-MNI152NLin2009cAsym_desc-tightcortexmask_res-3mm.nii.gz"
+            },
+            "subcortexmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/subcortexmask/tpl-MNI152NLin2009cAsym_desc-subcortexmask_res-3mm.nii.gz"
+            },
+            "gmmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/gmmask/tpl-MNI152NLin2009cAsym_desc-gmmask_res-3mm.nii.gz"
+            },
+            "tightgmmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/tightgmmask/tpl-MNI152NLin2009cAsym_desc-tightgmmask_res-3mm.nii.gz"
             }
         }
     },
@@ -89,21 +125,33 @@
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin6Asym/map/brain/tpl-MNI152NLin6Asym_desc-brain_res-1mm.nii.gz"
             },
-            "mask": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask/tpl-MNI152NLin6Asym_desc-mask_res-1mm.nii.gz"
-            },
             "gmprob": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin6Asym/map/gmprob/tpl-MNI152NLin6Asym_desc-gmprob_res-1mm.nii.gz"
             },
-            "mask_gm": {
+            "brainmask": {
                 "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask_gm/tpl-MNI152NLin6Asym_desc-mask_gm_res-1mm.nii.gz"
+                "remote": "template/MNI152NLin6Asym/map/brainmask/tpl-MNI152NLin6Asym_desc-brainmask_res-1mm.nii.gz"
             },
-            "mask_gm_tight": {
+            "cortexmask": {
                 "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask_gm_tight/tpl-MNI152NLin6Asym_desc-mask_gm_tight_res-1mm.nii.gz"
+                "remote": "template/MNI152NLin6Asym/map/cortexmask/tpl-MNI152NLin6Asym_desc-cortexmask_res-1mm.nii.gz"
+            },
+            "tightcortexmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/tightcortexmask/tpl-MNI152NLin6Asym_desc-tightcortexmask_res-1mm.nii.gz"
+            },
+            "subcortexmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/subcortexmask/tpl-MNI152NLin6Asym_desc-subcortexmask_res-1mm.nii.gz"
+            },
+            "gmmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/gmmask/tpl-MNI152NLin6Asym_desc-gmmask_res-1mm.nii.gz"
+            },
+            "tightgmmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/tightgmmask/tpl-MNI152NLin6Asym_desc-tightgmmask_res-1mm.nii.gz"
             }
         },
         "2mm": {
@@ -115,21 +163,33 @@
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin6Asym/map/brain/tpl-MNI152NLin6Asym_desc-brain_res-2mm.nii.gz"
             },
-            "mask": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask/tpl-MNI152NLin6Asym_desc-mask_res-2mm.nii.gz"
-            },
             "gmprob": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin6Asym/map/gmprob/tpl-MNI152NLin6Asym_desc-gmprob_res-2mm.nii.gz"
             },
-            "mask_gm": {
+            "brainmask": {
                 "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask_gm/tpl-MNI152NLin6Asym_desc-mask_gm_res-2mm.nii.gz"
+                "remote": "template/MNI152NLin6Asym/map/brainmask/tpl-MNI152NLin6Asym_desc-brainmask_res-2mm.nii.gz"
             },
-            "mask_gm_tight": {
+            "cortexmask": {
                 "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask_gm_tight/tpl-MNI152NLin6Asym_desc-mask_gm_tight_res-2mm.nii.gz"
+                "remote": "template/MNI152NLin6Asym/map/cortexmask/tpl-MNI152NLin6Asym_desc-cortexmask_res-2mm.nii.gz"
+            },
+            "tightcortexmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/tightcortexmask/tpl-MNI152NLin6Asym_desc-tightcortexmask_res-2mm.nii.gz"
+            },
+            "subcortexmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/subcortexmask/tpl-MNI152NLin6Asym_desc-subcortexmask_res-2mm.nii.gz"
+            },
+            "gmmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/gmmask/tpl-MNI152NLin6Asym_desc-gmmask_res-2mm.nii.gz"
+            },
+            "tightgmmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/tightgmmask/tpl-MNI152NLin6Asym_desc-tightgmmask_res-2mm.nii.gz"
             }
         },
         "3mm": {
@@ -141,21 +201,33 @@
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin6Asym/map/brain/tpl-MNI152NLin6Asym_desc-brain_res-3mm.nii.gz"
             },
-            "mask": {
-                "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask/tpl-MNI152NLin6Asym_desc-mask_res-3mm.nii.gz"
-            },
             "gmprob": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin6Asym/map/gmprob/tpl-MNI152NLin6Asym_desc-gmprob_res-3mm.nii.gz"
             },
-            "mask_gm": {
+            "brainmask": {
                 "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask_gm/tpl-MNI152NLin6Asym_desc-mask_gm_res-3mm.nii.gz"
+                "remote": "template/MNI152NLin6Asym/map/brainmask/tpl-MNI152NLin6Asym_desc-brainmask_res-3mm.nii.gz"
             },
-            "mask_gm_tight": {
+            "cortexmask": {
                 "host": "github-nispace",
-                "remote": "template/MNI152NLin6Asym/map/mask_gm_tight/tpl-MNI152NLin6Asym_desc-mask_gm_tight_res-3mm.nii.gz"
+                "remote": "template/MNI152NLin6Asym/map/cortexmask/tpl-MNI152NLin6Asym_desc-cortexmask_res-3mm.nii.gz"
+            },
+            "tightcortexmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/tightcortexmask/tpl-MNI152NLin6Asym_desc-tightcortexmask_res-3mm.nii.gz"
+            },
+            "subcortexmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/subcortexmask/tpl-MNI152NLin6Asym_desc-subcortexmask_res-3mm.nii.gz"
+            },
+            "gmmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/gmmask/tpl-MNI152NLin6Asym_desc-gmmask_res-3mm.nii.gz"
+            },
+            "tightgmmask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/tightgmmask/tpl-MNI152NLin6Asym_desc-tightgmmask_res-3mm.nii.gz"
             }
         }
     },
