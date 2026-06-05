@@ -16,6 +16,11 @@ There is currently no dedicated toolbox paper for ``NiSpace``. Please cite at le
   * "burt2018": `Burt et al., Nat. Neurosci. 2018 <https://doi.org/10.1038/s41593-018-0195-0>`_
   * "spin" / "alexander_bloch": `Alexander-Bloch et al., NeuroImage 2018 <https://doi.org/10.1016/j.neuroimage.2018.05.070>`_
   * "vasa" / "hungarian": `Váša et al., Cereb. Cortex 2018 <https://doi.org/10.1093/cercor/bhx249>`_
+* If you use MNI space transform functionality (``mni_to_mni``):
+
+  * EasyReg: `Iglesias, Sci. Rep. 2023 <https://doi.org/10.1038/s41598-023-33781-0>`_
+  * SynthMorph: `Hoffmann et al., IEEE TMI 2022 <https://doi.org/10.1109/TMI.2021.3116879>`_
+  * SynthSeg: `Billot et al., Med. Image Anal. 2023 <https://doi.org/10.1016/j.media.2023.102789>`_
 * If you use combat-harmonization functionality: `Fortin et al., NeuroImage 2017 <https://doi.org/10.1016/j.neuroimage.2017.11.024>`_; `Pomponio et al., NeuroImage 2019 <https://doi.org/10.1016/j.neuroimage.2019.116450>`_
 * When fetching included reference datasets, ``NiSpace`` will automatically print information on references we ask you to cite
 

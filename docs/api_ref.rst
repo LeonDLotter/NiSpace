@@ -217,6 +217,20 @@ Reference API
    linewidth_from_data_units
 
 
+.. _api_transforms:
+
+:mod:`nispace.transforms` – MNI space transforms
+--------------------------------------------------
+.. currentmodule:: nispace.transforms
+
+.. autosummary::
+   :template: function.rst
+   :toctree: generated/
+
+   mni_to_mni
+   compute_transform_displacement
+
+
 .. _api_utils_utils:
 
 :mod:`nispace.utils` – Utility functions
