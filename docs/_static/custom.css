@@ -32,6 +32,7 @@ table.nispace-table td {
     text-align: left;
     padding: 4px 8px;
     vertical-align: top;
+    hyphens: auto;
 }
 table.nispace-table thead tr {
     border-bottom: 2px solid currentColor;

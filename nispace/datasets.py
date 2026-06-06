@@ -9,7 +9,7 @@ from requests import Session
 
 import logging
 lgr = logging.getLogger(__name__)
-from . import __commit__
+from . import __version__, __commit__
 from .core.constants import _PARC_DEFAULT, _SPACE_DEFAULT_VOL, _SPACE_DEFAULT_SURF
 from .stats.misc import zscore_df
 from .utils.utils import _rm_ext, set_log, merge_parcellations
@@ -1072,7 +1072,7 @@ def _print_references(dataset: str, meta: pd.DataFrame = None, collection_name: 
     for c in cfg.get("citations", []):
         print(f"  - {c['ref']}  https://doi.org/{c['doi']}")
 
-    print(f"To ensure reproducibility, note the NiSpace commit/version: {__commit__}\n")
+    print(f"To ensure reproducibility, note the NiSpace version: {__version__} (commit: {__commit__}).\n")
 
     # 3. Per-map citation table (PET / enigma / cortexfeatures / tpm / bigbrain)
     if meta is not None and "map_info" in cfg:
