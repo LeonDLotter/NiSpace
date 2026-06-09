@@ -241,6 +241,8 @@ def _check_parcellation(parcellation: str, force_list: bool = False, force_str: 
             # if we got to here, we have a cortex-subcortex combination; now ensure correct order
             return [parc[levels.index("cortex")], parc[levels.index("subcortex")]]
     
+    # TODO (combined parc naming): support "Schaefer100+TianS1" and ("Schaefer100", "TianS1")
+    # as input formats alongside the current concatenated/spaced forms.
     # Parcellation can be a string as it appears in parcellation_lib (e.g., "Schaefer100")
     # OR multiple strings from parcellation_lib concatenated without (e.g., "Schaefer100TianS1")
     # or with a space in between (e.g., "Schaefer100 TianS1")

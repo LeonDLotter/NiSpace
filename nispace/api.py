@@ -18,10 +18,11 @@ from .core.transform_y import _dummy_code_groups, _num_code_subjects, _get_trans
 from .core.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats, _rank_regress
 from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_method,
                                _EMPIRICAL_MC_METHODS)
+from .core.nullmaps import NullMaps
 from .core.plot import _plot_categorical
 from .core.constants import _COLOC_METHODS
 from .datasets import fetch_parcellation, fetch_reference, _check_parcellation
-from .nulls import get_distance_matrix, _SPIN_METHODS
+from .nulls import get_distance_matrix, _SPIN_METHODS, _DISTMAT_FREE_METHODS, _parse_null_method
 from .stats.coloc import beta, elasticnet, lasso, mlr, partialpearson, pearson, ridge
 from .stats.misc import (mc_correction, residuals_nan, zscore_df, permute_groups,
                           compute_meff, meff_sidak_correction,
@@ -1388,32 +1389,41 @@ class NiSpace:
             "null_method": maps_method,
             "spin_mat": None,
             "lr_mirror_dist_mat": False,
-            "cx_sc_minmax_scale": False,
             "parc_resample": 2,
             "parc_name": self._parc._name if self._parc else None,
         }
         for k in [k for k in kwargs.keys() if k.startswith("maps_")]:
             maps_kwargs[k.removeprefix("maps_")] = kwargs.pop(k)
-        # resolve null_method and null_space from parcellation when not explicitly set
-        # TODO: combined spin+moran: get_null_space() currently returns a single (space, method).
-        # For combined parcellations it should return a split strategy and permute() should
-        # pass a sc-only dist_mat to _get_null_maps alongside the cx spin path.
+        # resolve null_method and null_space from parcellation
         if self._parc is not None:
-            if maps_kwargs["null_method"] is None:
-                null_space, null_method = self._parc.get_null_space()
-                maps_kwargs["null_method"] = null_method
-                lgr.info(f"Using default null method '{null_method}' "
-                         f"(parcellation null space: '{null_space}').")
+            null_space_result = self._parc.get_null_space()
+            _is_split_strategy = isinstance(null_space_result[0], tuple)
+            if _is_split_strategy:
+                (cx_null_space, _), (sc_null_space, _) = null_space_result
+                # null_space = MNI sc space for image loading; cx surface handled in _get_null_maps
+                null_space = sc_null_space
             else:
-                null_space, _ = self._parc.get_null_space()
+                null_space = null_space_result[0]
+            if maps_kwargs["null_method"] is None:
+                if _is_split_strategy:
+                    _, cx_m = null_space_result[0]
+                    _, sc_m = null_space_result[1]
+                    maps_kwargs["null_method"] = (cx_m, sc_m)
+                    lgr.info(f"Using default split null method (cx='{cx_m}', sc='{sc_m}') "
+                             f"(cx space: '{cx_null_space}', sc space: '{sc_null_space}').")
+                else:
+                    maps_kwargs["null_method"] = null_space_result[1]
+                    lgr.info(f"Using default null method '{null_space_result[1]}' "
+                             f"(parcellation null space: '{null_space}').")
             # ensure null_space is loaded and fitted so backward-compat properties work in _get_null_maps
             self._parc._ensure_image_loaded(null_space)
             if null_space not in self._parc._hemi_dict:
                 self._parc._fit_space(null_space)
             if self._parc._space is None:
                 self._parc._space = null_space
-            # pass precomputed spin matrix for the resolved null space
-            if maps_kwargs["null_method"] in {"alexander_bloch", "spin"}:
+            # pass precomputed spin matrix for the cx component if it is a spin method
+            _cx_m = maps_kwargs["null_method"][0] if isinstance(maps_kwargs["null_method"], tuple) else maps_kwargs["null_method"]
+            if _cx_m in {"alexander_bloch", "spin"}:
                 maps_kwargs["spin_mat"] = (
                     self._parc_spin_mat
                     or self._parc.get_spin_mat(null_space)
@@ -1536,10 +1546,27 @@ class NiSpace:
             for XY in maps_which:
                 lgr.info(f"Generating permuted {XY} maps.")
                 
-                # if no null maps & also no distance matrix given, generate distance matrix
-                # (spin methods don't use a dist_mat — skip generation)
-                if maps_nulls is None and dist_mat is None \
-                        and maps_kwargs["null_method"] not in _SPIN_METHODS:
+                # if no null maps & no distance matrix given, generate distance matrix
+                # Skip for: pure spin; split+spin where sc dist_mat comes from parc.get_sc_dist_mat()
+                _cx_m_check, _sc_m_check = _parse_null_method(maps_kwargs["null_method"])
+                _skip_distmat = (
+                    # pure spin or split+spin where sc dist_mat comes from get_sc_dist_mat()
+                    (_cx_m_check in _SPIN_METHODS and (
+                        _sc_m_check is None or (
+                            self._parc is not None
+                            and self._parc._sc_dist_mat_spec is not None
+                        )
+                    ))
+                    # split non-spin where both component dist_mats can be lazy-loaded
+                    or (_sc_m_check is not None
+                        and self._parc is not None
+                        and self._parc._cx_dist_mat_spec is not None
+                        and self._parc._sc_dist_mat_spec is not None)
+                    # dist-mat-free method (e.g. random): no dist_mat ever needed
+                    or (_cx_m_check in _DISTMAT_FREE_METHODS
+                        and _sc_m_check in _DISTMAT_FREE_METHODS | {None})
+                )
+                if maps_nulls is None and dist_mat is None and not _skip_distmat:
                     dist_mat = self._get_dist_mat(**dist_mat_kwargs)
                 
                 # get null maps, will not generate new maps if already existing and use of 
@@ -1553,102 +1580,119 @@ class NiSpace:
                     else:
                         data_obs = _Y_obs
                     standardize_nulls = True if "y" in self._zscore else False
-                maps_nulls = _get_null_maps(
+                maps_nulls, new_spin_mat = _get_null_maps(
                     data_obs=data_obs,
                     dist_mat=dist_mat,
                     parc=self._parc,
                     #parc_kwargs=self._parc_info,
                     #standardize=False,
                     standardize=standardize_nulls,
-                    n_perm=n_perm, 
-                    seed=seed, 
-                    n_proc=n_proc, 
+                    n_perm=n_perm,
+                    seed=seed,
+                    n_proc=n_proc,
                     dtype=dtype,
-                    verbose=verbose,        
+                    verbose=verbose,
+                    permute_which=XY,
                     **maps_kwargs
                 )
-                
-                # store null maps
-                self._nulls["maps_null_method"] = maps_kwargs["null_method"]
-                self._nulls["maps_null"] = maps_nulls
-                self._nulls["maps_null_which"] = XY
-                # cache newly generated spin matrix for reuse
-                if maps_kwargs["null_method"] in {"alexander_bloch", "spin"} \
-                        and self._parc_spin_mat is None \
-                        and self._nulls.get("maps_spin") is not None:
-                    self._parc_spin_mat = self._nulls["maps_spin"]
 
-                # sort null map data into lists of length n_perm, each element being one 
-                # permuted array of observed values 
+                # tag null maps with X/Y identity and store
+                maps_nulls.null_which = XY
+                self._nulls["maps_null"] = maps_nulls
+                # promote newly generated spin matrix to instance attribute for reuse
+                if new_spin_mat is not None and self._parc_spin_mat is None:
+                    self._parc_spin_mat = new_spin_mat
+
+                # sort null map data into lists of length n_perm, each element being one
+                # permuted array of observed values
                 lgr.debug("Sorting null map data into arrays.")
                 if XY=="X":
-                    _X_null = [np.c_[[maps[i, :] for maps in maps_nulls.values()]].astype(self._dtype) 
-                               for i in range(n_perm)]
+                    _X_null = maps_nulls.perm_list(dtype=self._dtype)
                     # case: xsea requested: re-sort into a list of dicts of set-wise arrays
                     if isinstance(_X_obs_arr, dict):
                         idc_set = np.array(_X_obs.index.get_level_values("set"))
-                        _X_null = [{set_name: null[idc_set == set_name, :] 
-                                    for set_name in _X_obs_arr.keys()} 
+                        _X_null = [{set_name: null[idc_set == set_name, :]
+                                    for set_name in _X_obs_arr.keys()}
                                    for null in _X_null]
                 elif XY=="Y":
-                    _Y_null = [np.c_[[maps[i, :] for maps in maps_nulls.values()]].astype(self._dtype) 
-                               for i in range(n_perm)]
+                    _Y_null = maps_nulls.perm_list(dtype=self._dtype)
             
         # case permute Y groups
         if ("groups" in what) and Y_transform:
             lgr.info(f"Generating permuted Y groups.")
-            
-            # get groups without nan values
-            groups = self._groups_no_nan
-            if hasattr(self, "_subjects_no_nan"):
-                subjects = self._subjects_no_nan
-            else:
-                subjects = None
-            
-            # Y values without nan values in group vector
-            _Y_obs_arr_nonan = _Y_obs_arr[~self._groups_nan_idc, :]
-            
-            ## prepare formula & transform function
-            # TODO: get stored transform function
+
+            # clean transform name early so cache comparison is consistent
             Y_transform = _lower_strip_ws(Y_transform)
-            apply_transform, paired = _get_transform_fun(Y_transform, return_df=False, 
-                                                         return_paired=True, dtype=dtype,
-                                                         ignore_nan_warnings=True)
-            
-            # paired permutations?
-            if groups_kwargs["paired"] not in ["auto", True, False]:
-                lgr.warning("Argument 'groups_paired' must be of boolean type or 'auto' not "
-                            f"'{groups_kwargs['paired']}'! Setting to 'auto'.")
-                groups_kwargs["paired"] = "auto"
-            if groups_kwargs["paired"] == "auto":
-                groups_kwargs["paired"] = paired
-            
-            # get list of permuted group labels
-            lgr.info(f"Permuting groups/sessions vector, strategy: "
-                     f"{'paired' if groups_kwargs['paired'] else 'unpaired'}, {groups_kwargs['strategy']}.")
-            groups_null = permute_groups(
-                groups=groups, 
-                subjects=subjects, 
-                n_perm=n_perm, 
-                n_proc=n_proc,
-                seed=seed,
-                verbose=verbose,
-                **groups_kwargs
-            )
-            
-            # get permuted group comparison results
-            # parallelization function
-            def par_fun(group_null):
-                # apply transform with random groups
-                Y_null = apply_transform(y=_Y_obs_arr_nonan, groups=group_null, subjects=subjects)
-                return Y_null
-            # run in parallel
-            _Y_null = Parallel(n_jobs=n_proc)(
-                delayed(par_fun)(g) for g in tqdm(
-                    groups_null, 
-                    desc=f"Null transformations ({method}, {n_proc} proc)", disable=not verbose
+
+            # check for cached group permutation null maps
+            _groups_null_cached = self._nulls.get("groups_null")
+            if (_groups_null_cached is not None and use_existing_maps
+                    and _groups_null_cached.null_method == Y_transform
+                    and _groups_null_cached.n_perm >= n_perm):
+                lgr.info("Using cached group permutation null maps.")
+                _needed_labels = list(_Y_trans_obs.index)
+                _Y_null = _groups_null_cached.subset(_needed_labels).perm_list(dtype=self._dtype)
+            else:
+                # get groups without nan values
+                groups = self._groups_no_nan
+                if hasattr(self, "_subjects_no_nan"):
+                    subjects = self._subjects_no_nan
+                else:
+                    subjects = None
+
+                # Y values without nan values in group vector
+                _Y_obs_arr_nonan = _Y_obs_arr[~self._groups_nan_idc, :]
+
+                ## prepare formula & transform function
+                # TODO: get stored transform function
+                apply_transform, paired = _get_transform_fun(Y_transform, return_df=False,
+                                                             return_paired=True, dtype=dtype,
+                                                             ignore_nan_warnings=True)
+
+                # paired permutations?
+                if groups_kwargs["paired"] not in ["auto", True, False]:
+                    lgr.warning("Argument 'groups_paired' must be of boolean type or 'auto' not "
+                                f"'{groups_kwargs['paired']}'! Setting to 'auto'.")
+                    groups_kwargs["paired"] = "auto"
+                if groups_kwargs["paired"] == "auto":
+                    groups_kwargs["paired"] = paired
+
+                # get list of permuted group labels
+                lgr.info(f"Permuting groups/sessions vector, strategy: "
+                         f"{'paired' if groups_kwargs['paired'] else 'unpaired'}, {groups_kwargs['strategy']}.")
+                groups_null = permute_groups(
+                    groups=groups,
+                    subjects=subjects,
+                    n_perm=n_perm,
+                    n_proc=n_proc,
+                    seed=seed,
+                    verbose=verbose,
+                    **groups_kwargs
                 )
-            )
+
+                # get permuted group comparison results
+                # parallelization function
+                def par_fun(group_null):
+                    # apply transform with random groups
+                    Y_null = apply_transform(y=_Y_obs_arr_nonan, groups=group_null, subjects=subjects)
+                    return Y_null
+                # run in parallel
+                _Y_null = Parallel(n_jobs=n_proc)(
+                    delayed(par_fun)(g) for g in tqdm(
+                        groups_null,
+                        desc=f"Null transformations ({method}, {n_proc} proc)", disable=not verbose
+                    )
+                )
+
+                # wrap in NullMaps and cache for reuse across coloc method changes
+                # _Y_null is list of n_perm arrays, each (n_contrasts, n_parcels)
+                # stack → (n_perm, n_contrasts, n_parcels); transpose → NullMaps invariant
+                self._nulls["groups_null"] = NullMaps(
+                    np.stack(_Y_null).transpose(1, 0, 2),
+                    labels=list(_Y_trans_obs.index),
+                    null_method=Y_transform,
+                    null_type="group",
+                )
         
         # case permute Y groups but no comparison is provided 
         elif ("groups" in what) & (not Y_transform):
@@ -3012,9 +3056,23 @@ class NiSpace:
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, verbose)
 
-        # load   
+        # load
         nispace_object = from_pickle(filepath, use_dill=True)
         lgr.debug(f"Loaded NiSpace object from {filepath}.")
+
+        # migrate legacy null map storage (pre-NullMaps refactor)
+        _mn = nispace_object._nulls.get("maps_null")
+        if isinstance(_mn, dict):
+            lgr.info("Migrating legacy null maps dict to NullMaps.")
+            method = nispace_object._nulls.pop("maps_null_method", None)
+            nispace_object._nulls["maps_null"] = NullMaps.from_dict(_mn, null_method=method)
+        elif isinstance(_mn, NullMaps) and _mn.null_method is None:
+            # intermediate pickle: NullMaps present but null_method not yet an attribute
+            nispace_object._nulls["maps_null"].null_method = \
+                nispace_object._nulls.pop("maps_null_method", None)
+        # clean up keys superseded by NullMaps attributes
+        nispace_object._nulls.pop("maps_null_which", None)  # now NullMaps.null_which
+        nispace_object._nulls.pop("maps_spin", None)        # now _parc_spin_mat
 
         # return
         lgr.setLevel(loglevel)
@@ -3151,7 +3209,9 @@ class NiSpace:
                 generate_dist_mat = False
             
         if generate_dist_mat:
-            null_space, _ = self._parc.get_null_space()
+            _ns_result = self._parc.get_null_space()
+            # for combined parcellations get_null_space returns nested tuple — use sc (MNI) space
+            null_space = _ns_result[1][0] if isinstance(_ns_result[0], tuple) else _ns_result[0]
             # ensure the null space is loaded and its derived attrs (hemi, idc, …) are computed
             self._parc._ensure_image_loaded(null_space)
             if null_space not in self._parc._hemi_dict:

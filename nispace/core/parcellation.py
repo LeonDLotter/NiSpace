@@ -147,6 +147,11 @@ class Parcellation:
         self._is_combined = is_combined
         self._cx_name = cx_name      # name of cortex component (combined only)
         self._sc_name = sc_name      # name of subcortex component (combined only)
+        self._n_cx_labels = None     # number of cx labels in combined parcellation
+        self._sc_dist_mat = None     # loaded sc dist_mat (combined only)
+        self._sc_dist_mat_spec = None  # lazy-load spec for sc dist_mat (combined only)
+        self._cx_dist_mat = None     # loaded cx dist_mat (combined only)
+        self._cx_dist_mat_spec = None  # lazy-load spec for cx dist_mat (combined only)
         self._labels = np.array(labels) if labels is not None else None
         self._symmetric = symmetric
         self._l2rmap = left2right_mapping
@@ -489,6 +494,8 @@ class Parcellation:
             )
         lgr.info(f"  Common MNI space(s) for combined: {common_mni}.")
 
+        # TODO (combined parc naming): migrate to "+" separator, e.g. f"{cx_name}+{sc_name}",
+        # and support tuple input ("Schaefer100", "TianS1") in fetch_parcellation/_check_parcellation.
         combined_name = f"{cx_name}{sc_name}"
         p = cls(name=combined_name, level="combined", is_combined=True,
                 cx_name=cx_name, sc_name=sc_name)
@@ -528,6 +535,7 @@ class Parcellation:
                 cx_labels = load_labels(cx_label_path)
                 sc_labels = load_labels(sc_label_path)
                 p._labels = np.array(cx_labels + sc_labels)
+                p._n_cx_labels = len(cx_labels)
 
                 # symmetry: read from top-level JSON field (post-refactor) or fall back to
                 # space-level key / l2rmap/lrcorr presence check (pre-refactor compat)
@@ -566,6 +574,32 @@ class Parcellation:
                     p._lrcorr = load_l2rmap(lrc_path, threshold=lrcorr_threshold)
 
             p.add_space(mni_space, image=merged_img, dist_mat=None, spin_mat=None)
+
+        # ---- component dist_mat lazy specs (split-null avoids recomputing full combined dist_mat) ----
+        for pref_sc_space in ["MNI152NLin6Asym", "MNI152NLin2009cAsym"]:
+            if pref_sc_space in common_mni and "distmat" in sc_lib.get(pref_sc_space, {}):
+                p._sc_dist_mat_spec = {
+                    "space": pref_sc_space,
+                    "path_template": (
+                        data_dir / "parcellation" / sc_name / pref_sc_space
+                        / f"parc-{sc_name}_space-{pref_sc_space}.dist.csv.gz"
+                    ),
+                    "spec": sc_lib[pref_sc_space]["distmat"],
+                    "gf_kw": gf_kw,
+                }
+                break
+        for pref_cx_space in ["MNI152NLin6Asym", "MNI152NLin2009cAsym"]:
+            if pref_cx_space in common_mni and "distmat" in cx_lib.get(pref_cx_space, {}):
+                p._cx_dist_mat_spec = {
+                    "space": pref_cx_space,
+                    "path_template": (
+                        data_dir / "parcellation" / cx_name / pref_cx_space
+                        / f"parc-{cx_name}_space-{pref_cx_space}.dist.csv.gz"
+                    ),
+                    "spec": cx_lib[pref_cx_space]["distmat"],
+                    "gf_kw": gf_kw,
+                }
+                break
 
         # ---- cx surface data for future split-null support ----
         cx_surface_spaces = [s for s in cx_spaces if "mni" not in s.lower()]
@@ -849,15 +883,9 @@ class Parcellation:
         """Number of subcortex parcels (combined only)."""
         if not self._is_combined or self._sc_name is None:
             return 0
-        # sc parcels are at the end of _labels; we can detect them by hemi-tag absence
-        # simple heuristic: count labels without hemi- prefix that are not in cx
-        # fall back to 0 if uncertain
-        try:
-            sc_count = sum(1 for l in self._labels if "hemi-" not in str(l)
-                           and not any(cx in str(l) for cx in [self._cx_name or ""]))
-            return sc_count if sc_count > 0 else 0
-        except Exception:
-            return 0
+        if self._n_cx_labels is not None:
+            return len(self._labels) - self._n_cx_labels
+        return 0
 
     # ------------------------------------------------------------------
     # Bilateral transformation
@@ -1253,7 +1281,7 @@ class Parcellation:
         space = space or self._space
         return self._is_surface_dict.get(space, False)
 
-    def get_surface_for_spins(self, preferred="fsaverage"):
+    def get_surface_for_spins(self, preferred="fsLR"):
         """Return *(surface_image, spin_mat, space_name)* for spin tests.
 
         For surface-primary parcellations returns the primary image.
@@ -1272,12 +1300,12 @@ class Parcellation:
             if sname in self._cx_surface:
                 s = self._cx_surface[sname]
                 if s.get("image") is None and s.get("img_paths") is not None:
-                    lgr.info(f"Lazy-loading cx surface image for '{self._name}' ('{sname}').")
+                    lgr.info(f"Lazy-loading cx surface image for '{self._cx_name or self._name}' ('{sname}').")
                     s["image"] = load_img(s["img_paths"])
                 cx_sm = s.get("spin_mat")
                 if isinstance(cx_sm, tuple) and cx_sm and isinstance(cx_sm[0], dict):
                     from ..utils.utils_datasets import get_file
-                    lgr.info(f"Lazy-loading cx surface spin mat for '{self._name}' ('{sname}').")
+                    lgr.info(f"Lazy-loading cx surface spin mat for '{self._cx_name or self._name}' ('{sname}').")
                     paths = tuple(get_file(d["path_template"], **d["spec"], **d["gf_kw"]) for d in cx_sm)
                     cx_sm = load_spinmat(paths)
                     s["spin_mat"] = cx_sm
@@ -1380,19 +1408,57 @@ class Parcellation:
         return bool(self._cx_surface)
 
     def get_null_space(self):
-        """Return ``(space_name, null_method)`` for optimal null map generation.
+        """Return optimal null strategy for null map generation.
+
+        For non-combined parcellations returns ``(space_name, null_method)``.
+
+        For combined (cx+sc) parcellations returns a nested tuple
+        ``((cx_space, cx_method), (sc_space, sc_method))`` when cx and sc
+        strategies differ, or a plain ``(space, "moran")`` when no surface
+        space is available for the cx component.
 
         Priority
         --------
-        Spin (alexander_bloch) — cortex-only parcellation with any surface space:
+        Spin (alexander_bloch) — cortex-only or cx component with surface space:
             fsLR  >  fsaverage  >  any surface space name
-        Moran — combined (cx+sc) parcellation, or no surface available:
+        Moran — combined (cx+sc) sc component, or no surface available:
             MNI152NLin2009cAsym  >  MNI152NLin6Asym  >  any MNI  >  first available
         """
         def _is_surf(s):
             return any(k in s.lower() for k in ("fsa", "fsaverage", "fslr", "fs_lr"))
 
-        if not self._is_combined and not self._bilateral:
+        def _best_mni():
+            for preferred in ["MNI152NLin6Asym", "MNI152NLin2009cAsym", "MNI152", "MNIOriginal", "MNI"]:
+                if preferred in self.spaces:
+                    return preferred
+            for s in self.spaces:
+                if "mni" in s.lower():
+                    return s
+            return self.spaces[0]
+
+        if self._is_combined:
+            # cx: prefer surface space for spin — combined parcs store surface in _cx_surface
+            cx_surface_spaces = list(self._cx_surface.keys()) if self._cx_surface else []
+            cx_space = None
+            for preferred in ["fsLR", "fsaverage"]:
+                if preferred in cx_surface_spaces:
+                    cx_space = preferred
+                    break
+            if cx_space is None:
+                for s in cx_surface_spaces:
+                    if _is_surf(s):
+                        cx_space = s
+                        break
+            sc_space = _best_mni()
+            cx_method = "alexander_bloch" if cx_space is not None else "moran"
+            if cx_space is None:
+                cx_space = sc_space
+            # if both strategies are identical, return single pair
+            if cx_method == "moran" and cx_space == sc_space:
+                return sc_space, "moran"
+            return ((cx_space, cx_method), (sc_space, "moran"))
+
+        if not self._bilateral:
             for preferred in ["fsLR", "fsaverage"]:
                 if preferred in self.spaces:
                     return preferred, "alexander_bloch"
@@ -1400,26 +1466,73 @@ class Parcellation:
                 if _is_surf(s):
                     return s, "alexander_bloch"
 
-        # TODO: combined parcellations always fall through to moran.
-        # For proper combined null maps, return a split strategy, e.g.:
-        #   ((cx_surf_space, "alexander_bloch"), (mni_space, "moran"))
-        # and update _get_null_maps + generate_null_maps to run both pipelines
-        # and merge results into a single null array.
+        return _best_mni(), "moran"
 
-        # moran fallback
-        for preferred in ["MNI152NLin2009cAsym", "MNI152NLin6Asym", "MNI152", "MNIOriginal", "MNI"]:
-            if preferred in self.spaces:
-                return preferred, "moran"
-        for s in self.spaces:
-            if "mni" in s.lower():
-                return s, "moran"
-        return self.spaces[0], "moran"
+    def get_sc_idc(self):
+        """Subcortex parcel indices in the combined data vector; ``None`` for non-combined.
+
+        Computes cx/sc split on demand if ``set_active_space()`` has not yet been called.
+        """
+        if not self._is_combined:
+            return None
+        if self._cx_idc_lh is None:
+            # use already-fitted space, or fit a MNI space on demand
+            space = self._space or next(iter(self._idc_byhemi_dict), None)
+            if space is None:
+                for preferred in ["MNI152NLin6Asym", "MNI152NLin2009cAsym", "MNI152", "MNIOriginal"]:
+                    if preferred in self.spaces:
+                        space = preferred
+                        break
+                if space is None:
+                    space = self.spaces[0]
+            self._fit_space(space)
+            self._compute_cx_idc(space)
+        if self._cx_idc_lh is None:
+            lgr.warning("get_sc_idc: cx_idc not yet computed.")
+            return None
+        cx_all = np.concatenate([self._cx_idc_lh, self._cx_idc_rh])
+        return np.setdiff1d(np.arange(len(self._labels)), cx_all)
+
+    def get_sc_dist_mat(self):
+        """Lazy-load and return ``(dist_mat, space)`` for sc parcels; ``(None, None)`` otherwise.
+
+        Used by the split-null path to avoid computing a full combined dist_mat.
+        """
+        if not self._is_combined or self._sc_dist_mat_spec is None:
+            return None, None
+        if self._sc_dist_mat is not None:
+            return self._sc_dist_mat, self._sc_dist_mat_spec["space"]
+        spec = self._sc_dist_mat_spec
+        from ..utils.utils_datasets import get_file
+        lgr.info(f"Lazy-loading sc dist mat for '{self._sc_name or self._name}' (space '{spec['space']}').")
+        local_path = get_file(spec["path_template"], **spec["spec"], **spec["gf_kw"])
+        self._sc_dist_mat = load_distmat(local_path)
+        return self._sc_dist_mat, spec["space"]
+
+    def get_cx_dist_mat(self):
+        """Lazy-load and return ``(dist_mat, space)`` for cx parcels; ``(None, None)`` otherwise.
+
+        Used by the split-null path to avoid computing a full combined dist_mat.
+        """
+        if not self._is_combined or self._cx_dist_mat_spec is None:
+            return None, None
+        if self._cx_dist_mat is not None:
+            return self._cx_dist_mat, self._cx_dist_mat_spec["space"]
+        spec = self._cx_dist_mat_spec
+        from ..utils.utils_datasets import get_file
+        lgr.info(f"Lazy-loading cx dist mat for '{self._cx_name or self._name}' (space '{spec['space']}').")
+        local_path = get_file(spec["path_template"], **spec["spec"], **spec["gf_kw"])
+        self._cx_dist_mat = load_distmat(local_path)
+        return self._cx_dist_mat, spec["space"]
 
     @property
     def default_null_method(self):
         """Recommended null method based on available spaces (see ``get_null_space``)."""
-        _, method = self.get_null_space()
-        return method
+        result = self.get_null_space()
+        if isinstance(result[0], tuple):
+            # combined: return (cx_method, sc_method)
+            return (result[0][1], result[1][1])
+        return result[1]
 
     # ------------------------------------------------------------------
     # Distance-matrix helper (kept for api._get_dist_mat compat)

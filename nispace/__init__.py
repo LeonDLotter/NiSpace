@@ -23,4 +23,5 @@ from .api import NiSpace
 from .workflows import (colocalization, group_colocalization, xsea, group_xsea,
                         simple_colocalization, simple_xsea, group_comparison)
 from .transforms import mni_to_mni, compute_transform_displacement
+from .core.nullmaps import NullMaps
 
