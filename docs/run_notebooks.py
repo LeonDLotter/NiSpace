@@ -25,7 +25,29 @@ from pathlib import Path
 from typing import List, Optional
 
 import nbformat
+from nbformat.v4 import new_code_cell
 from nbconvert.preprocessors import ExecutePreprocessor, CellExecutionError
+
+# Injected as the very first cell before any NiSpace import so that
+# 'from tqdm.auto import tqdm' in NiSpace modules binds our subclass.
+# miniters/mininterval=inf suppresses intermediate refresh calls;
+# tqdm.close() still calls display() once (the final 100% line).
+_TQDM_PATCH_CODE = """\
+import tqdm, tqdm.std, tqdm.auto, tqdm.notebook as _tqdm_nb
+_OrigTqdm = tqdm.std.tqdm
+class _SingleLineTqdm(_OrigTqdm):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("miniters", float("inf"))
+        kwargs.setdefault("mininterval", float("inf"))
+        super().__init__(*args, **kwargs)
+    def display(self, msg=None, pos=None):
+        if self.n > 0:  # skip the initial 0% line emitted by __init__
+            super().display(msg, pos)
+tqdm.tqdm = _SingleLineTqdm
+tqdm.std.tqdm = _SingleLineTqdm
+tqdm.auto.tqdm = _SingleLineTqdm
+_tqdm_nb.tqdm = _SingleLineTqdm
+"""
 
 DOCS_DIR = Path(__file__).parent
 NB_DIRS = {
@@ -70,7 +92,11 @@ def _run_notebook(nb_path: Path, kernel: Optional[str], timeout: int) -> _NBResu
 
         k = kernel or nb.get("metadata", {}).get("kernelspec", {}).get("name", "python3")
         ep = ExecutePreprocessor(timeout=timeout, kernel_name=k)
-        ep.preprocess(nb, {"metadata": {"path": str(nb_path.parent)}})
+        nb.cells.insert(0, new_code_cell(source=_TQDM_PATCH_CODE))
+        try:
+            ep.preprocess(nb, {"metadata": {"path": str(nb_path.parent)}})
+        finally:
+            nb.cells.pop(0)
 
         with open(nb_path, "w") as f:
             nbformat.write(nb, f)
