@@ -186,7 +186,7 @@ def _symmetrize_nans(data_1d, idc):
     # return
     return data_1d
 
-def correlate_hemis_parc(data, parc_idc_lh=None, parc_idc_rh=None, l2rmap=None, rank=False):
+def correlate_hemis_parc(data, parc_idc_lh=None, parc_idc_rh=None, rank=False):
     data = np.atleast_2d(np.array(data))
     n = data.shape[1]
     n_hemi = n // 2
@@ -198,15 +198,6 @@ def correlate_hemis_parc(data, parc_idc_lh=None, parc_idc_rh=None, l2rmap=None, 
     parc_idc_rh = np.array(parc_idc_rh)
     data_lh = data[:, parc_idc_lh]
     data_rh = data[:, parc_idc_rh]
-    if l2rmap is not None:
-        l2rmap = np.nan_to_num(np.array(l2rmap)).astype(data.dtype)
-        for i in range(data.shape[0]):
-            lh_1d = data[i, parc_idc_lh]
-            notnan = ~np.isnan(lh_1d)
-            if notnan.any():
-                data_lh[i, :] = np.dot(lh_1d[notnan], l2rmap[notnan, :])
-            else:
-                data_lh[i, :] = np.nan
     r = []
     for i in range(data.shape[0]):
         lh, rh = data_lh[i,:], data_rh[i,:]
