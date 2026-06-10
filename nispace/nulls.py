@@ -358,7 +358,7 @@ _DISTMAT_FREE_METHODS = {"random"}  # methods that never need a distance matrix
 
 _SPIN_METHOD_MAP = {
     "alexander_bloch": "original",
-    "spin": "original",
+    "spin": "cornblath",
     "vasa": "vasa",
     "hungarian": "hungarian",
     "baum": "baum",
@@ -388,7 +388,7 @@ _NULL_METHODS = {
 
 # Canonical names for aliases — normalised at parse time so cache keys are stable
 _NULL_METHOD_ALIASES = {
-    "spin": "alexander_bloch",
+    "spin": "cornblath",
     "brainspace": "moran",
     "brainsmash": "burt2020",
     "variogram": "burt2020",
@@ -404,7 +404,7 @@ def _parse_null_method(method):
     - ``tuple[str, str]``: ``(cx_method, sc_method)`` → returned as-is
 
     All components are normalised through ``_NULL_METHOD_ALIASES`` so that aliases
-    (e.g. ``"spin"`` / ``"alexander_bloch"``) map to the same canonical name and
+    (e.g. ``"spin"`` / ``"cornblath"``) map to the same canonical name and
     do not cause spurious cache invalidation.
     """
     def _canon(m):
@@ -722,13 +722,27 @@ def apply_cornblath_mat(data_1d, T_lh, T_rh, idc_lh, idc_rh, n_perm=None):
     data_lh = data_1d[idc_lh].astype(np.float32)
     data_rh = data_1d[idc_rh].astype(np.float32)
 
-    # fully vectorized across all permutations: (n_perm, n_parc_hemi, n_parc_hemi) @ (n_parc_hemi,)
-    null_lh = np.einsum("kij,j->ki", T_lh, data_lh)   # (n_perm, n_lh)
-    null_rh = np.einsum("kij,j->ki", T_rh, data_rh)   # (n_perm, n_rh)
+    def _apply_hemi(T, d):
+        """Apply T to d, masking out NaN input parcels by re-normalising each row."""
+        nan_mask = np.isnan(d)
+        if nan_mask.any():
+            T = T.copy()
+            T[:, :, nan_mask] = 0.0          # zero weight for NaN-input parcels
+            d = np.where(nan_mask, 0.0, d)
+            row_sums = T.sum(axis=2, keepdims=True)   # (n_perm, n_parc, 1)
+            np.divide(T, row_sums, out=T, where=row_sums != 0)
+        null = np.einsum("kij,j->ki", T, d)  # (n_perm, n_parc)
+        if nan_mask.any():
+            # parcels whose full weight came from NaN inputs → all-zero row after zero-fill → NaN
+            null[T.sum(axis=2) == 0] = np.nan
+        return T, null
+
+    T_lh, null_lh = _apply_hemi(T_lh, data_lh)
+    T_rh, null_rh = _apply_hemi(T_rh, data_rh)
 
     # parcels where all source vertices rotated to medial wall → column sum == 0 → NaN
-    null_lh[T_lh.sum(axis=1) == 0] = np.nan  # T_lh.sum(axis=1): (n_perm, n_lh)
-    null_rh[T_rh.sum(axis=1) == 0] = np.nan
+    null_lh[T_lh.sum(axis=2) == 0] = np.nan
+    null_rh[T_rh.sum(axis=2) == 0] = np.nan
 
     null_data = np.full((n_perm, len(data_1d)), np.nan, dtype=data_1d.dtype)
     null_data[:, idc_lh] = null_lh

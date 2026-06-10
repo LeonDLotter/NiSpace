@@ -34,7 +34,7 @@ class NullMaps:
     null_method : str, optional
         The method that generated these nulls.
         Spatial: ``"moran"``, ``"random"``, ``"burt2018"``, ``"burt2020"``,
-        ``"alexander_bloch"``, ``"spin"``, ``"vasa"``, ``"hungarian"``
+        ``"cornblath"`` / ``"spin"`` (default), ``"alexander_bloch"``, ``"vasa"``, ``"hungarian"``
         (and their aliases ``"brainspace"``, ``"brainsmash"``, ``"variogram"``).
         Group: the transform name, e.g. ``"cohend"``, ``"mean"``, ``"centile"``.
         Future spatial: ``"spin+moran"`` (Stage 2 / issue #44).
