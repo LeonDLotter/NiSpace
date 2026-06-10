@@ -1,5 +1,5 @@
 
-import pathlib
+from pathlib import Path
 import nibabel as nib
 import numpy as np
 import pandas as pd
@@ -298,7 +298,7 @@ class Parcellation:
         from ..utils.utils_datasets import get_file
         from ..utils.utils import merge_parcellations
 
-        data_dir = pathlib.Path(data_dir)
+        data_dir =Path(data_dir)
         gf_kw = dict(overwrite=overwrite, hash_check=check_file_hash)
         is_combined = isinstance(name_or_list, list)
 
@@ -442,10 +442,12 @@ class Parcellation:
             # ---- spin matrix (surface only) ----
             sm = None
             if not is_vol and "spinmat" in space_lib:
+                # derive local extension from remote path (.npy legacy or .npz new)
+                _sm_ext = Path(space_lib["spinmat"]["L"]["remote"]).suffix
                 if load_spin_mat:
                     sm_paths = tuple(
                         get_file(
-                            base / f"parc-{name}_space-{space}_hemi-{h}.spin.npy",
+                            base / f"parc-{name}_space-{space}_hemi-{h}.spin{_sm_ext}",
                             **space_lib["spinmat"][h], **gf_kw,
                         )
                         for h in ["L", "R"]
@@ -453,7 +455,7 @@ class Parcellation:
                     sm = load_spinmat(sm_paths)
                 else:
                     sm = tuple(
-                        {"path_template": base / f"parc-{name}_space-{space}_hemi-{h}.spin.npy",
+                        {"path_template": base / f"parc-{name}_space-{space}_hemi-{h}.spin{_sm_ext}",
                          "spec": space_lib["spinmat"][h], "gf_kw": gf_kw}
                         for h in ["L", "R"]
                     )
@@ -588,18 +590,36 @@ class Parcellation:
                     "gf_kw": gf_kw,
                 }
                 break
-        for pref_cx_space in ["MNI152NLin6Asym", "MNI152NLin2009cAsym"]:
-            if pref_cx_space in common_mni and "distmat" in cx_lib.get(pref_cx_space, {}):
+        # Prefer surface geodesic dist_mat (fsLR/fsaverage) for cx; fall back to MNI Euclidean.
+        # Surface spaces store per-hemi files (L+R) → use "hemi_specs" key instead of "path_template".
+        for pref_cx_space in ["fsLR", "fsaverage", "MNI152NLin6Asym", "MNI152NLin2009cAsym"]:
+            cx_space_lib = cx_lib.get(pref_cx_space, {})
+            if "distmat" not in cx_space_lib:
+                continue
+            dm_entry = cx_space_lib["distmat"]
+            _is_hemi = isinstance(dm_entry, dict) and any(h in dm_entry for h in ("L", "R"))
+            base_cx = data_dir / "parcellation" / cx_name / pref_cx_space
+            if _is_hemi:
                 p._cx_dist_mat_spec = {
                     "space": pref_cx_space,
-                    "path_template": (
-                        data_dir / "parcellation" / cx_name / pref_cx_space
-                        / f"parc-{cx_name}_space-{pref_cx_space}.dist.csv.gz"
+                    "hemi_specs": tuple(
+                        {
+                            "path_template": base_cx / f"parc-{cx_name}_space-{pref_cx_space}_hemi-{h}.dist.csv.gz",
+                            "spec": dm_entry[h],
+                            "gf_kw": gf_kw,
+                        }
+                        for h in ("L", "R")
+                        if dm_entry.get(h) is not None
                     ),
-                    "spec": cx_lib[pref_cx_space]["distmat"],
+                }
+            else:
+                p._cx_dist_mat_spec = {
+                    "space": pref_cx_space,
+                    "path_template": base_cx / f"parc-{cx_name}_space-{pref_cx_space}.dist.csv.gz",
+                    "spec": dm_entry,
                     "gf_kw": gf_kw,
                 }
-                break
+            break
 
         # ---- cx surface data for future split-null support ----
         cx_surface_spaces = [s for s in cx_spaces if "mni" not in s.lower()]
@@ -615,10 +635,11 @@ class Parcellation:
             )
             cx_sm = None
             if "spinmat" in cx_lib[surf_space]:
+                _cx_sm_ext = Path(cx_lib[surf_space]["spinmat"]["L"]["remote"]).suffix
                 if load_spin_mat:
                     cx_sm_paths = tuple(
                         get_file(
-                            base_cx_surf / f"parc-{cx_name}_space-{surf_space}_hemi-{h}.spin.npy",
+                            base_cx_surf / f"parc-{cx_name}_space-{surf_space}_hemi-{h}.spin{_cx_sm_ext}",
                             **cx_lib[surf_space]["spinmat"][h], **gf_kw,
                         )
                         for h in ["L", "R"]
@@ -626,7 +647,7 @@ class Parcellation:
                     cx_sm = load_spinmat(cx_sm_paths)
                 else:
                     cx_sm = tuple(
-                        {"path_template": base_cx_surf / f"parc-{cx_name}_space-{surf_space}_hemi-{h}.spin.npy",
+                        {"path_template": base_cx_surf / f"parc-{cx_name}_space-{surf_space}_hemi-{h}.spin{_cx_sm_ext}",
                          "spec": cx_lib[surf_space]["spinmat"][h], "gf_kw": gf_kw}
                         for h in ["L", "R"]
                     )
@@ -716,8 +737,8 @@ class Parcellation:
                 f"(available: {self.spaces}).",
                 KeyError,
             )
-        is_path = isinstance(img, (str, pathlib.Path)) or (
-            isinstance(img, tuple) and isinstance(img[0], (str, pathlib.Path))
+        is_path = isinstance(img, (str,Path)) or (
+            isinstance(img, tuple) and isinstance(img[0], (str,Path))
         )
         if is_path:
             lgr.info(f"Lazy-loading parcellation image for space '{space}'.")
@@ -729,7 +750,7 @@ class Parcellation:
         if dm is None:
             return
         if isinstance(dm, (np.ndarray, tuple)) and not (
-            isinstance(dm, tuple) and dm and isinstance(dm[0], (str, pathlib.Path, dict))
+            isinstance(dm, tuple) and dm and isinstance(dm[0], (str,Path, dict))
         ):
             return  # already loaded
         # lazy-load: dm is a path, tuple of paths, or a lazy-spec dict / tuple of dicts
@@ -750,9 +771,9 @@ class Parcellation:
                 for d in dm
             )
             self._dist_mats[space] = load_distmat(paths)
-        elif isinstance(dm, (str, pathlib.Path)):
+        elif isinstance(dm, (str,Path)):
             self._dist_mats[space] = load_distmat(dm)
-        elif isinstance(dm, tuple) and dm and isinstance(dm[0], (str, pathlib.Path)):
+        elif isinstance(dm, tuple) and dm and isinstance(dm[0], (str,Path)):
             self._dist_mats[space] = load_distmat(dm)
 
     def _ensure_spin_mat_loaded(self, space):
@@ -938,10 +959,10 @@ class Parcellation:
 
         # --- relabel images ---
         for space in list(self._images.keys()):
-            is_path = isinstance(self._images[space], (str, pathlib.Path)) or (
+            is_path = isinstance(self._images[space], (str,Path)) or (
                 isinstance(self._images[space], tuple)
                 and self._images[space]
-                and isinstance(self._images[space][0], (str, pathlib.Path))
+                and isinstance(self._images[space][0], (str,Path))
             )
             if is_path:
                 self._ensure_image_loaded(space)
@@ -1086,7 +1107,7 @@ class Parcellation:
 
             is_surf_path = (
                 isinstance(img, tuple) and img
-                and isinstance(img[0], (str, pathlib.Path))
+                and isinstance(img[0], (str,Path))
             )
             is_surf_loaded = (
                 isinstance(img, tuple) and img
@@ -1105,7 +1126,7 @@ class Parcellation:
                 data[~mask] = 0
                 self._images[space] = nib.Nifti1Image(data, img.affine, img.header)
 
-            elif isinstance(img, (str, pathlib.Path)):
+            elif isinstance(img, (str,Path)):
                 # lazy volume path — load now and mask immediately
                 loaded = load_img(img)
                 if isinstance(loaded, nib.Nifti1Image):
@@ -1146,18 +1167,29 @@ class Parcellation:
             if sm is None or not (isinstance(sm, tuple) and len(sm) == 2):
                 continue
             spins_lh, spins_rh = sm
-            if keep_hemi == "L":
-                n_perm = spins_lh.shape[1] if spins_lh is not None and spins_lh.ndim == 2 else 0
-                self._spin_mats[space] = (
-                    spins_lh,
-                    np.zeros((0, n_perm), dtype=spins_rh.dtype if spins_rh is not None else np.int32),
-                )
+            is_t_mat = spins_lh is not None and hasattr(spins_lh, "ndim") and spins_lh.ndim == 3
+            if is_t_mat:
+                # Cornblath T-matrix: shape (n_perm, n_hemi, n_hemi)
+                n_perm = spins_lh.shape[0]
+                empty = np.zeros((n_perm, 0, 0), dtype=np.float32)
+                if keep_hemi == "L":
+                    self._spin_mats[space] = (spins_lh, empty)
+                else:
+                    self._spin_mats[space] = (empty, spins_rh)
             else:
-                n_perm = spins_rh.shape[1] if spins_rh is not None and spins_rh.ndim == 2 else 0
-                self._spin_mats[space] = (
-                    np.zeros((0, n_perm), dtype=spins_lh.dtype if spins_lh is not None else np.int32),
-                    spins_rh,
-                )
+                # parcel-index spin_mat: shape (n_hemi, n_perm)
+                if keep_hemi == "L":
+                    n_perm = spins_lh.shape[1] if spins_lh is not None and spins_lh.ndim == 2 else 0
+                    self._spin_mats[space] = (
+                        spins_lh,
+                        np.zeros((0, n_perm), dtype=spins_rh.dtype if spins_rh is not None else np.int32),
+                    )
+                else:
+                    n_perm = spins_rh.shape[1] if spins_rh is not None and spins_rh.ndim == 2 else 0
+                    self._spin_mats[space] = (
+                        np.zeros((0, n_perm), dtype=spins_lh.dtype if spins_lh is not None else np.int32),
+                        spins_rh,
+                    )
 
         # --- l2rmap / lrcorr are irrelevant for a single hemisphere ---
         self._l2rmap = None
@@ -1402,7 +1434,7 @@ class Parcellation:
             if self._is_surface_dict.get(space):
                 return True
             # check image type if available
-            if isinstance(img, (nib.GiftiImage, tuple)) and not isinstance(img, (str, pathlib.Path)):
+            if isinstance(img, (nib.GiftiImage, tuple)) and not isinstance(img, (str,Path)):
                 return True
         # also check cx_surface
         return bool(self._cx_surface)
@@ -1450,7 +1482,7 @@ class Parcellation:
                         cx_space = s
                         break
             sc_space = _best_mni()
-            cx_method = "alexander_bloch" if cx_space is not None else "moran"
+            cx_method = "cornblath" if cx_space is not None else "moran"
             if cx_space is None:
                 cx_space = sc_space
             # if both strategies are identical, return single pair
@@ -1461,10 +1493,10 @@ class Parcellation:
         if not self._bilateral:
             for preferred in ["fsLR", "fsaverage"]:
                 if preferred in self.spaces:
-                    return preferred, "alexander_bloch"
+                    return preferred, "cornblath"
             for s in self.spaces:
                 if _is_surf(s):
-                    return s, "alexander_bloch"
+                    return s, "cornblath"
 
         return _best_mni(), "moran"
 
@@ -1521,8 +1553,17 @@ class Parcellation:
         spec = self._cx_dist_mat_spec
         from ..utils.utils_datasets import get_file
         lgr.info(f"Lazy-loading cx dist mat for '{self._cx_name or self._name}' (space '{spec['space']}').")
-        local_path = get_file(spec["path_template"], **spec["spec"], **spec["gf_kw"])
-        self._cx_dist_mat = load_distmat(local_path)
+        if "hemi_specs" in spec:
+            # per-hemisphere surface geodesic dist_mat
+            paths = tuple(
+                get_file(hs["path_template"], **hs["spec"], **hs["gf_kw"])
+                for hs in spec["hemi_specs"]
+            )
+            self._cx_dist_mat = load_distmat(paths)
+        else:
+            # single-file MNI Euclidean
+            local_path = get_file(spec["path_template"], **spec["spec"], **spec["gf_kw"])
+            self._cx_dist_mat = load_distmat(local_path)
         return self._cx_dist_mat, spec["space"]
 
     @property
@@ -1636,14 +1677,18 @@ class Parcellation:
             if idc and idc.get("L") is not None:
                 n_lh = len(idc["L"])
                 n_rh = len(idc["R"])
-                if spins_lh.shape[0] != n_lh:
+                # Cornblath T-matrix: (n_perm, n_hemi, n_hemi); parcel-index: (n_hemi, n_perm)
+                is_t_mat = hasattr(spins_lh, "ndim") and spins_lh.ndim == 3
+                lh_parc_dim = spins_lh.shape[1] if is_t_mat else spins_lh.shape[0]
+                rh_parc_dim = spins_rh.shape[1] if is_t_mat else spins_rh.shape[0]
+                if lh_parc_dim != n_lh:
                     lgr.warning(
-                        f"{prefix} space '{space}': spins_lh rows ({spins_lh.shape[0]}) "
+                        f"{prefix} space '{space}': spins_lh parcel dim ({lh_parc_dim}) "
                         f"!= n_lh ({n_lh})."
                     )
-                if spins_rh.shape[0] != n_rh:
+                if rh_parc_dim != n_rh:
                     lgr.warning(
-                        f"{prefix} space '{space}': spins_rh rows ({spins_rh.shape[0]}) "
+                        f"{prefix} space '{space}': spins_rh parcel dim ({rh_parc_dim}) "
                         f"!= n_rh ({n_rh})."
                     )
 

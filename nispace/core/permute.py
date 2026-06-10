@@ -21,7 +21,7 @@ def _null_method_key(m):
     return str(m)
 
 
-def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=True, standardize=True,
+def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing=True, standardize=True,
                    n_perm=1000, null_method="moran",
                    dist_mat=None, spin_mat=None, parc=None, centroids=False, parc_resample=2,
                    lr_mirror_dist_mat=False, split_hemi=None,
@@ -45,7 +45,7 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
             _custom = True
 
     # case null maps not given but existing
-    elif null_maps is None and use_existing_maps:
+    elif null_maps is None and use_existing:
         try:
             null_maps = nispace_nulls.get("maps_null")
             if null_maps is not None:

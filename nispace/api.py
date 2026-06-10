@@ -376,13 +376,17 @@ class NiSpace:
                         active_space = parc_obj.get_image_for_dataspace(self._parc["space"])
                         parc_obj.set_active_space(active_space)
                     self._parc = parc_obj
-                    # populate dist_mat dict from Parcellation for backward compat
-                    dm = parc_obj.get_dist_mat(compute_if_missing=False)
+                    # populate dist_mat dict from Parcellation — use null space explicitly
+                    # (parc._space may be None when data is already parcellated)
+                    _ns_result = parc_obj.get_null_space()
+                    _null_dm_space = _ns_result[1][0] if isinstance(_ns_result[0], tuple) else _ns_result[0]
+                    dm = parc_obj.get_dist_mat(space=_null_dm_space, compute_if_missing=False)
                     self._parc_dist_mat["null_maps"] = dm
                     if not isinstance(dm, tuple):
                         self._parc_dist_mat["cv"] = dm
                     if self._parc_spin_mat is None:
-                        self._parc_spin_mat = parc_obj.get_spin_mat()
+                        _cx_space = _ns_result[0][0] if isinstance(_ns_result[0], tuple) else _ns_result[0]
+                        self._parc_spin_mat = parc_obj.get_spin_mat(space=_cx_space)
 
             # custom parcellation (string file path not matched as integrated)
             if not isinstance(self._parc, Parcellation):
@@ -1384,7 +1388,7 @@ class NiSpace:
         maps_separate_sc = kwargs.pop("maps_separate_sc", False)
         maps_kwargs = {
             "nispace_nulls": self._nulls,
-            "use_existing_maps": True,
+            "use_existing": True,
             "null_maps": maps_nulls,
             "null_method": maps_method,
             "spin_mat": None,
@@ -1421,13 +1425,12 @@ class NiSpace:
                 self._parc._fit_space(null_space)
             if self._parc._space is None:
                 self._parc._space = null_space
-            # pass precomputed spin matrix for the cx component if it is a spin method
+            # pass precomputed spin matrix for any spin method (generate_null_maps validates shape)
             _cx_m = maps_kwargs["null_method"][0] if isinstance(maps_kwargs["null_method"], tuple) else maps_kwargs["null_method"]
-            if _cx_m in {"alexander_bloch", "spin"}:
-                maps_kwargs["spin_mat"] = (
-                    self._parc_spin_mat
-                    or self._parc.get_spin_mat(null_space)
-                )
+            if _cx_m in _SPIN_METHODS:
+                cached = self._parc_spin_mat or self._parc.get_spin_mat(null_space)
+                if cached is not None:
+                    maps_kwargs["spin_mat"] = cached
         else:
             if maps_kwargs["null_method"] is None:
                 maps_kwargs["null_method"] = "moran"
@@ -1626,7 +1629,7 @@ class NiSpace:
 
             # check for cached group permutation null maps
             _groups_null_cached = self._nulls.get("groups_null")
-            if (_groups_null_cached is not None and use_existing_maps
+            if (_groups_null_cached is not None and use_existing
                     and _groups_null_cached.null_method == Y_transform
                     and _groups_null_cached.n_perm >= n_perm):
                 lgr.info("Using cached group permutation null maps.")

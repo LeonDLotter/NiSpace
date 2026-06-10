@@ -501,7 +501,12 @@ def load_spinmat(spinmat):
         if isinstance(s, np.ndarray):
             loaded.append(s)
         elif isinstance(s, (str, Path)):
-            loaded.append(np.load(Path(s), allow_pickle=False, mmap_mode='c'))
+            p = Path(s)
+            if p.suffix == ".npz":
+                f = np.load(p, allow_pickle=False)
+                loaded.append(f["data"])
+            else:
+                loaded.append(np.load(p, allow_pickle=False, mmap_mode='c'))
         else:
             raise ValueError(f"Unsupported spinmat element type: {type(s)}")
     return loaded[0] if len(loaded) == 1 else tuple(loaded)

@@ -5,7 +5,7 @@ from joblib import Parallel, delayed
 from nilearn.image import resample_img, coord_transform
 from neuromaps.images import load_gifti, load_nifti, load_data, PARCIGNORE
 from neuromaps.nulls.nulls import batch_surrogates
-from neuromaps.nulls.spins import gen_spinsamples, get_parcel_centroids
+from neuromaps.nulls.spins import gen_spinsamples, get_parcel_centroids, spin_parcels
 from collections import namedtuple
 from neuromaps.points import make_surf_graph
 from scipy.sparse.csgraph import dijkstra
@@ -280,9 +280,7 @@ def _avg_dist_mats(D1, D2):
     return (D1 + D2) / 2
 
 
-def nulls_burt2020(data_1d, dist_mat, n_nulls=1000, seed=None, resample=True, **kwargs):
-    # resample=True (default): rank-based resampling from input values → preserves full distribution
-    # resample=False: de-mean surrogates → does NOT preserve mean or scale
+def nulls_burt2020(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
     data_1d = np.array(data_1d).flatten()
     # results array with shape (n_nulls, n_parcels)
     null_data = np.full((n_nulls, len(data_1d)), np.nan)
@@ -290,14 +288,17 @@ def nulls_burt2020(data_1d, dist_mat, n_nulls=1000, seed=None, resample=True, **
     mask = _get_null_data_mask(data_1d, dist_mat)
     data_1d = data_1d[mask]
     dist_mat = dist_mat[np.ix_(mask, mask)]
+    # default settings
+    n = len(data_1d)                                       # true parcel count after masking
+    kwargs.setdefault("resample", True)                    # preserves full distribution, False de-means nulls
+    batch_size = kwargs.pop("batch_size", 100)             # expose
     # null maps
     null_data[:, mask] = Base(
         x=data_1d,
         D=dist_mat,
         seed=seed,
-        resample=resample,
         **kwargs
-    )(n_nulls, 50)
+    )(n_nulls, batch_size)
     # return
     return null_data.astype(data_1d.dtype)
 
@@ -312,7 +313,8 @@ def nulls_burt2018(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
     # batch_surrogates requires positive values (Box-Cox transform); shift and undo on output
     # so that the returned nulls have the same value distribution as the original input
     shift = np.abs(np.nanmin(data_1d)) + 0.1
-    null_data[:, mask] = batch_surrogates(dist_mat, data_1d + shift, n_surr=n_nulls, seed=seed, **kwargs).T - shift
+    null_data[:, mask] = batch_surrogates(
+        dist_mat, data_1d + shift, n_surr=n_nulls, seed=seed, **kwargs).T - shift
     # return
     return null_data.astype(data_1d.dtype)
 
@@ -350,8 +352,8 @@ def nulls_random(data_1d, dist_mat=None, n_nulls=1000, seed=None):
     # return
     return null_data.astype(data_1d.dtype)
 
-
-_SPIN_METHODS = {"alexander_bloch", "spin", "vasa", "hungarian"}
+_DISTMAT_METHODS = {"moran", "burt2018", "burt2020"}
+_SPIN_METHODS = {"alexander_bloch", "spin", "vasa", "hungarian", "cornblath", "baum"}
 _DISTMAT_FREE_METHODS = {"random"}  # methods that never need a distance matrix
 
 _SPIN_METHOD_MAP = {
@@ -359,6 +361,8 @@ _SPIN_METHOD_MAP = {
     "spin": "original",
     "vasa": "vasa",
     "hungarian": "hungarian",
+    "baum": "baum",
+    "cornblath": "cornblath",
 }
 
 _NULL_METHODS = {
@@ -373,11 +377,13 @@ _NULL_METHODS = {
     "variogram": nulls_burt2020,
     # Smoothing-method from Burt2018 -> volumetric and surface
     "burt2018": nulls_burt2018,
-    # Spin tests -> surface only
-    "alexander_bloch": None,  # handled via spin code path
+    # Spin tests -> surface only (handled via spin code path)
+    "alexander_bloch": None,
     "spin": None,
     "vasa": None,
     "hungarian": None,
+    "baum": None,
+    "cornblath": None,
 }
 
 # Canonical names for aliases — normalised at parse time so cache keys are stable
@@ -429,6 +435,73 @@ def _get_surface_atlas(parc_space, density):
         L, R = fetch_template(space, desc=desc, res=density, check_file_hash=False, verbose=False)
         atlas[desc] = _SurfPair(L, R)
     return atlas, surf_key
+
+
+def _gen_spinsamples_parallel(coords, hemiid, n_perm, seed=None, n_proc=1, out=None):
+    """Wrapper for ``gen_spinsamples`` with optional thread-based parallelism.
+
+    Designed for vertex-level (65k coord) calls where the bottleneck is
+    ``cKDTree.query`` (C-level, GIL-releasing).  Splits ``n_perm`` across
+    ``n_proc`` threads, each with an independent child seed from ``seed`` via
+    ``np.random.SeedSequence``.  Results are statistically equivalent (i.i.d.
+    rotations) but not byte-identical to a single seeded call when n_proc > 1.
+
+    If *out* is provided (pre-allocated ``(n_vert, n_perm)`` array, ideally
+    F-contiguous so column reads are fast), workers write directly into it
+    instead of returning slices to be concatenated.  This avoids a transient
+    copy and is required when *out* is a memmap-backed array.
+    """
+    from joblib import effective_n_jobs
+    n_workers = effective_n_jobs(n_proc)  # resolves -1/-2/etc. to actual core count
+    if n_workers == 1:
+        result = gen_spinsamples(
+            coords, hemiid, n_rotate=n_perm, method="original",
+            check_duplicates=False, seed=seed,
+        )
+        if out is not None:
+            out[:] = result
+            return out
+        return result
+    seq = np.random.SeedSequence(seed)
+    child_seeds = [int(s.generate_state(1)[0]) for s in seq.spawn(n_workers)]
+    batches = np.array_split(np.arange(n_perm), n_workers)
+
+    def _run_batch(b, s):
+        res = gen_spinsamples(
+            coords, hemiid, n_rotate=len(b), method="original",
+            check_duplicates=False, seed=s,
+        )
+        if out is not None:
+            out[:, b[0]: b[-1] + 1] = res  # write to non-overlapping column slice
+            return None
+        return res
+
+    results = Parallel(n_jobs=n_workers, prefer="threads")(
+        delayed(_run_batch)(b, s)
+        for b, s in zip(batches, child_seeds) if len(b) > 0
+    )
+    if out is not None:
+        return out
+    return np.concatenate(results, axis=1)
+
+
+def _spin_parcels_parallel(surfaces, parcellation, n_perm, seed=None, n_proc=1):
+    """Wrapper for ``spin_parcels`` (Baum) with optional thread-based parallelism."""
+    from joblib import effective_n_jobs
+    n_workers = effective_n_jobs(n_proc)
+    if n_workers == 1:
+        return spin_parcels(
+            surfaces, parcellation, n_rotate=n_perm, seed=seed, check_duplicates=False)
+    seq = np.random.SeedSequence(seed)
+    child_seeds = [int(s.generate_state(1)[0]) for s in seq.spawn(n_workers)]
+    batches = np.array_split(np.arange(n_perm), n_workers)
+    results = Parallel(n_jobs=n_workers, prefer="threads")(
+        delayed(spin_parcels)(
+            surfaces, parcellation, n_rotate=len(b), seed=s, check_duplicates=False,
+        )
+        for b, s in zip(batches, child_seeds) if len(b) > 0
+    )
+    return np.concatenate(results, axis=1)
 
 
 def generate_spins(parc, parc_space, n_perm=1000, method="original", seed=None,
@@ -495,9 +568,178 @@ def generate_spins(parc, parc_space, n_perm=1000, method="original", seed=None,
     return spins_lh, spins_rh
 
 
+def generate_baum_spins(parc, parc_space, n_perm=1000, seed=None, n_proc=1):
+    """Generate Baum-method spin matrix via vertex-level rotation + modal parcel assignment.
+
+    Returns ``(spins_lh, spins_rh)`` int32 arrays of shape ``(n_lh_parcels, n_perm)`` /
+    ``(n_rh_parcels, n_perm)``.  Values are parcel indices (0-based, local to each hemisphere);
+    -1 indicates a parcel fully absorbed by the medial wall after rotation.
+    """
+    if not isinstance(parc, tuple):
+        lgr.critical_raise(
+            "generate_baum_spins requires a bilateral surface parcellation tuple (lh_img, rh_img).",
+            ValueError)
+    parc_lh, parc_rh = parc
+    density = _img_density_for_neuromaps(parc_lh)
+    atlas, _ = _get_surface_atlas(parc_space, density)
+    spheres = atlas["sphere"]
+
+    # spin_parcels generates vertex-level spins and assigns each parcel the modal label
+    # check_duplicates=False: vertex-level coords make duplicates physically impossible
+    regions = _spin_parcels_parallel(
+        surfaces=(spheres.L, spheres.R),
+        parcellation=(parc_lh, parc_rh),
+        n_perm=n_perm,
+        seed=seed,
+        n_proc=n_proc,
+    )  # (n_parcels_total, n_perm), global 0-based indices, -1 = dropped
+
+    n_lh = len(np.unique(parc_lh.agg_data())) - 1  # subtract background label 0
+    spins_lh = regions[:n_lh, :].astype(np.int32)  # already LH-local (0..n_lh-1)
+    raw_rh = regions[n_lh:, :]
+    spins_rh = np.where(raw_rh >= 0, raw_rh - n_lh, -1).astype(np.int32)
+    return spins_lh, spins_rh
+
+
+def generate_cornblath_mat(parc, parc_space, n_perm=1000, seed=None, n_proc=1,
+                           dtype=np.float32, memmap_dir=None):
+    """Generate Cornblath fractional transition matrices.
+
+    For each rotation k, ``T[k, j, i]`` = fraction of parcel i's vertices that land in
+    parcel j.  When all of parcel i's vertices rotate into the medial wall,
+    ``T[k, :, i].sum() == 0`` and the corresponding null value is set to NaN at application.
+
+    Returns ``(T_lh, T_rh)`` arrays of shape
+    ``(n_perm, n_lh_parcels, n_lh_parcels)`` / ``(n_perm, n_rh_parcels, n_rh_parcels)``.
+    With *memmap_dir* these are ``np.memmap``-backed arrays (file-backed, low RAM footprint).
+
+    Parameters
+    ----------
+    memmap_dir : path-like or None
+        Directory for temporary memmap files.  When set, vertex spin indices and both T
+        matrices are kept on disk rather than in RAM.  The vertex spin file is deleted
+        after the T-matrix loop; the T-matrix files persist until the caller deletes them
+        (or the directory is cleaned up, e.g. via ``tempfile.TemporaryDirectory``).
+        Recommended for large parcellations (n_lh > 200) or high n_perm (> 5000).
+    """
+    import os
+    import tempfile
+
+    if not isinstance(parc, tuple):
+        lgr.critical_raise(
+            "generate_cornblath_mat requires a bilateral surface parcellation tuple (lh_img, rh_img).",
+            ValueError)
+    parc_lh, parc_rh = parc
+    density = _img_density_for_neuromaps(parc_lh)
+    atlas, _ = _get_surface_atlas(parc_space, density)
+    spheres = atlas["sphere"]
+
+    # vertex-level coordinates
+    coords, hemiid = get_parcel_centroids(
+        surfaces=(spheres.L, spheres.R), method="surface")
+    n_vert = len(coords)
+    n_vert_lh = int((hemiid == 0).sum())
+
+    # allocate vertex spin index array — F-contiguous so column reads ([:, k]) are fast
+    if memmap_dir is not None:
+        _spins_fd, _spins_path = tempfile.mkstemp(suffix=".spins.dat", dir=memmap_dir)
+        os.close(_spins_fd)
+        all_spins = np.memmap(_spins_path, dtype=np.int32, mode="w+",
+                              shape=(n_vert, n_perm), order="F")
+    else:
+        all_spins = None  # returned by _gen_spinsamples_parallel
+
+    all_spins = _gen_spinsamples_parallel(
+        coords=coords, hemiid=hemiid, n_perm=n_perm, seed=seed, n_proc=n_proc,
+        out=all_spins,
+    )  # (n_vert_total, n_perm)
+
+    vert_spins_lh = all_spins[:n_vert_lh, :]                # (n_vert_lh, n_perm) — global lh indices
+    vert_spins_rh = all_spins[n_vert_lh:, :] - n_vert_lh    # (n_vert_rh, n_perm) — local rh indices
+
+    # vertex → parcel label arrays (0 = medial wall, 1..n_parc = parcel, 1-based global)
+    labels_lh = parc_lh.agg_data().astype(int)   # (n_vert_lh,)
+    labels_rh_global = parc_rh.agg_data().astype(int)  # (n_vert_rh,), global: n_lh+1..n_lh+n_rh
+    n_lh = len(np.unique(labels_lh)) - 1
+    n_rh = len(np.unique(labels_rh_global)) - 1
+    labels_rh = np.where(labels_rh_global > 0, labels_rh_global - n_lh, 0)  # localize: 1..n_rh
+
+    # source parcel vertex counts (denominator)
+    src_counts_lh = np.bincount(labels_lh[labels_lh > 0], minlength=n_lh + 1)[1:].astype(dtype)
+    src_counts_rh = np.bincount(labels_rh[labels_rh > 0], minlength=n_rh + 1)[1:].astype(dtype)
+    src_counts_lh[src_counts_lh == 0] = 1.0
+    src_counts_rh[src_counts_rh == 0] = 1.0
+
+    # allocate T matrices
+    if memmap_dir is not None:
+        _T_lh_fd, _T_lh_path = tempfile.mkstemp(suffix=".T_lh.dat", dir=memmap_dir)
+        _T_rh_fd, _T_rh_path = tempfile.mkstemp(suffix=".T_rh.dat", dir=memmap_dir)
+        os.close(_T_lh_fd); os.close(_T_rh_fd)
+        T_lh = np.memmap(_T_lh_path, dtype=dtype, mode="w+", shape=(n_perm, n_lh, n_lh))
+        T_rh = np.memmap(_T_rh_path, dtype=dtype, mode="w+", shape=(n_perm, n_rh, n_rh))
+    else:
+        T_lh = np.zeros((n_perm, n_lh, n_lh), dtype=dtype)
+        T_rh = np.zeros((n_perm, n_rh, n_rh), dtype=dtype)
+
+    for k in range(n_perm):
+        src_lh = labels_lh[vert_spins_lh[:, k]]
+        dst_lh = labels_lh
+        valid = (src_lh > 0) & (dst_lh > 0)
+        s, d = src_lh[valid] - 1, dst_lh[valid] - 1
+        np.add.at(T_lh[k], (d, s), 1.0 / src_counts_lh[s])
+
+        src_rh = labels_rh[vert_spins_rh[:, k]]
+        dst_rh = labels_rh
+        valid = (src_rh > 0) & (dst_rh > 0)
+        s, d = src_rh[valid] - 1, dst_rh[valid] - 1
+        np.add.at(T_rh[k], (d, s), 1.0 / src_counts_rh[s])
+
+    # release vertex spin array and delete its backing file (no longer needed)
+    if memmap_dir is not None:
+        del vert_spins_lh, vert_spins_rh, all_spins
+        os.unlink(_spins_path)
+        T_lh.flush()
+        T_rh.flush()
+
+    return T_lh, T_rh
+
+
+def apply_cornblath_mat(data_1d, T_lh, T_rh, idc_lh, idc_rh, n_perm=None):
+    """Apply precomputed Cornblath transition matrices to a 1D data array.
+
+    ``T_lh`` / ``T_rh``: float32 ``(n_perm, n_parc_hemi, n_parc_hemi)`` as returned by
+    :func:`generate_cornblath_mat`.  If ``n_perm`` is less than ``T_lh.shape[0]``, only
+    the first ``n_perm`` rotations are used.
+
+    Returns ``null_data`` of shape ``(n_perm, n_parcels)``.
+    """
+    if n_perm is None:
+        n_perm = T_lh.shape[0]
+    T_lh = T_lh[:n_perm]
+    T_rh = T_rh[:n_perm]
+    idc_lh = np.asarray(idc_lh, dtype=int)
+    idc_rh = np.asarray(idc_rh, dtype=int)
+    data_lh = data_1d[idc_lh].astype(np.float32)
+    data_rh = data_1d[idc_rh].astype(np.float32)
+
+    # fully vectorized across all permutations: (n_perm, n_parc_hemi, n_parc_hemi) @ (n_parc_hemi,)
+    null_lh = np.einsum("kij,j->ki", T_lh, data_lh)   # (n_perm, n_lh)
+    null_rh = np.einsum("kij,j->ki", T_rh, data_rh)   # (n_perm, n_rh)
+
+    # parcels where all source vertices rotated to medial wall → column sum == 0 → NaN
+    null_lh[T_lh.sum(axis=1) == 0] = np.nan  # T_lh.sum(axis=1): (n_perm, n_lh)
+    null_rh[T_rh.sum(axis=1) == 0] = np.nan
+
+    null_data = np.full((n_perm, len(data_1d)), np.nan, dtype=data_1d.dtype)
+    null_data[:, idc_lh] = null_lh
+    null_data[:, idc_rh] = null_rh
+    return null_data
+
+
 def apply_spins(data_1d, spins_lh, spins_rh, idc_lh, idc_rh, n_perm=None):
     """Apply precomputed spin indices to a 1D data array.
 
+    Handles -1 entries (Baum dropped parcels) by setting those positions to NaN.
     Returns null_data of shape (n_perm, n_parcels).
     """
     if n_perm is None:
@@ -508,9 +750,20 @@ def apply_spins(data_1d, spins_lh, spins_rh, idc_lh, idc_rh, n_perm=None):
     idc_rh = np.asarray(idc_rh, dtype=int)
     data_lh = data_1d[idc_lh]
     data_rh = data_1d[idc_rh]
+    has_neg = spins_lh.min() < 0 or spins_rh.min() < 0
     for k in range(n_perm):
-        null_data[k, idc_lh] = data_lh[spins_lh[:, k]]
-        null_data[k, idc_rh] = data_rh[spins_rh[:, k]]
+        if has_neg:
+            m = spins_lh[:, k] >= 0
+            v = data_lh[np.where(m, spins_lh[:, k], 0)]
+            v[~m] = np.nan
+            null_data[k, idc_lh] = v
+            m = spins_rh[:, k] >= 0
+            v = data_rh[np.where(m, spins_rh[:, k], 0)]
+            v[~m] = np.nan
+            null_data[k, idc_rh] = v
+        else:
+            null_data[k, idc_lh] = data_lh[spins_lh[:, k]]
+            null_data[k, idc_rh] = data_rh[spins_rh[:, k]]
     return null_data
 
 
@@ -874,7 +1127,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
         if sc_method in _SPIN_METHODS:
             lgr.critical_raise(
                 f"Spin methods are cortex-only; sc_method='{sc_method}' is not valid. "
-                f"Use a distance-based method (moran, burt2018, burt2020, random) for subcortex.",
+                f"Use one of {_DISTMAT_METHODS} for subcortex.",
                 ValueError)
         parc_idc_sc = np.asarray(parc_idc_sc)
         parc_idc_cx = np.setdiff1d(np.arange(data.shape[1]), parc_idc_sc)
@@ -909,7 +1162,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
                 method=cx_method, data=data_cx, parcellation=None,
                 parc_space=parc_space_cx or parc_space,
                 dist_mat=_dist_mat_cx, n_nulls=n_nulls, centroids=centroids,
-                split_hemi=False, parc_idc_lh=None, parc_idc_rh=None,
+                split_hemi=None, parc_idc_lh=None, parc_idc_rh=None,
                 parc_name=parc_name, dtype=dtype, n_proc=n_proc, seed=seed,
                 verbose=verbose, **kwargs)
             # cx_nulls: (n_maps, n_perm, n_cx)
@@ -959,8 +1212,6 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
 
     ## spin nulls -> separate code path, bypass dist_mat entirely
     if method in _SPIN_METHODS:
-        spin_method = _SPIN_METHOD_MAP[method]
-
         # validate: surface parcellation required (bilateral tuple or unilateral GiftiImage)
         if not isinstance(parcellation, (tuple, nib.GiftiImage)):
             lgr.critical_raise(
@@ -978,44 +1229,81 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
         idc_lh = np.array(parc_idc_lh)
         idc_rh = np.array(parc_idc_rh)
 
-        # use precomputed spins only for alexander_bloch/spin; vasa/hungarian always generate
-        if spin_mat is not None and spin_method == "original":
-            if isinstance(spin_mat, tuple) and len(spin_mat) == 2:
-                spins_lh, spins_rh = spin_mat
-                if spins_lh.shape[1] < n_nulls:
-                    lgr.warning(f"Precomputed spin matrix has {spins_lh.shape[1]} spins but "
-                                f"n_perm={n_nulls} requested. Regenerating.")
-                    spin_mat = None
+        ## --- Cornblath: fractional transition matrix path ---
+        if method == "cornblath":
+            if not isinstance(parcellation, tuple):
+                lgr.critical_raise(
+                    "Null method 'cornblath' requires a bilateral surface parcellation tuple.",
+                    ValueError)
+            if spin_mat is not None:
+                if (isinstance(spin_mat, tuple) and len(spin_mat) == 2
+                        and isinstance(spin_mat[0], np.ndarray)
+                        and spin_mat[0].ndim == 3 and spin_mat[0].shape[0] >= n_nulls):
+                    T_lh, T_rh = spin_mat[0], spin_mat[1]
+                    lgr.info("Using provided precomputed Cornblath transition matrix.")
                 else:
-                    lgr.info("Using provided precomputed spin matrix.")
-            else:
-                lgr.warning("Provided 'spin_mat' must be a tuple (spins_lh, spins_rh). Regenerating.")
-                spin_mat = None
-        if spin_mat is None or spin_method != "original":
-            lgr.info(f"Generating spin samples (method='{spin_method}', n={n_nulls}).")
-            spins_lh, spins_rh = generate_spins(
-                parc=parcellation,
-                parc_space=parc_space,
-                n_perm=n_nulls,
-                method=spin_method,
-                seed=seed,
-                parc_hemi=parc_hemi,
-            )
-            spin_mat = (spins_lh, spins_rh)
+                    lgr.warning("Provided 'spin_mat' is not a valid Cornblath T-matrix "
+                                "(expected 3-D float32 tuple with n_perm >= n_nulls). Regenerating.")
+                    spin_mat = None
+            if spin_mat is None:
+                lgr.info(f"Generating Cornblath transition matrices (n={n_nulls}).")
+                T_lh, T_rh = generate_cornblath_mat(
+                    parc=parcellation, parc_space=parc_space, n_perm=n_nulls, seed=seed,
+                    n_proc=n_proc)
+                spin_mat = (T_lh, T_rh)
+            _null_list = []
+            for i, lab in enumerate(tqdm(data_labs, desc="Cornblath null maps", disable=not verbose)):
+                _null_list.append(apply_cornblath_mat(
+                    data_1d=data[i, :].astype(dtype),
+                    T_lh=T_lh, T_rh=T_rh,
+                    idc_lh=idc_lh, idc_rh=idc_rh,
+                    n_perm=n_nulls,
+                ))
 
-        # apply spins to each data row
-        _null_list = []
-        for i, lab in enumerate(tqdm(data_labs,
-                                     desc="Spin null maps",
-                                     disable=not verbose)):
-            _null_list.append(apply_spins(
-                data_1d=data[i, :].astype(dtype),
-                spins_lh=spins_lh,
-                spins_rh=spins_rh,
-                idc_lh=idc_lh,
-                idc_rh=idc_rh,
-                n_perm=n_nulls,
-            ))
+        ## --- Baum / Alexander-Bloch / Vasa / Hungarian: parcel-index path ---
+        else:
+            spin_method = _SPIN_METHOD_MAP[method]
+
+            # precomputed spin_mat accepted for alexander_bloch/spin and baum; always regen for vasa/hungarian
+            if spin_mat is not None and spin_method in ("original", "baum"):
+                if (isinstance(spin_mat, tuple) and len(spin_mat) == 2
+                        and isinstance(spin_mat[0], np.ndarray)
+                        and spin_mat[0].ndim == 2 and spin_mat[0].shape[1] >= n_nulls):
+                    spins_lh, spins_rh = spin_mat[0], spin_mat[1]
+                    lgr.info("Using provided precomputed spin matrix.")
+                else:
+                    lgr.warning("Provided 'spin_mat' must be a 2-D int tuple with n_perm >= n_nulls. Regenerating.")
+                    spin_mat = None
+            elif spin_mat is not None:
+                spin_mat = None  # vasa/hungarian always regenerate
+
+            if spin_mat is None:
+                if method == "baum":
+                    if not isinstance(parcellation, tuple):
+                        lgr.critical_raise(
+                            "Null method 'baum' requires a bilateral surface parcellation tuple.",
+                            ValueError)
+                    lgr.info(f"Generating Baum spin samples (vertex-modal, n={n_nulls}).")
+                    spins_lh, spins_rh = generate_baum_spins(
+                        parc=parcellation, parc_space=parc_space, n_perm=n_nulls, seed=seed,
+                        n_proc=n_proc)
+                else:
+                    lgr.info(f"Generating spin samples (method='{spin_method}', n={n_nulls}).")
+                    spins_lh, spins_rh = generate_spins(
+                        parc=parcellation, parc_space=parc_space, n_perm=n_nulls,
+                        method=spin_method, seed=seed, parc_hemi=parc_hemi,
+                    )
+                spin_mat = (spins_lh, spins_rh)
+
+            _null_list = []
+            for i, lab in enumerate(tqdm(data_labs, desc="Spin null maps", disable=not verbose)):
+                _null_list.append(apply_spins(
+                    data_1d=data[i, :].astype(dtype),
+                    spins_lh=spins_lh, spins_rh=spins_rh,
+                    idc_lh=idc_lh, idc_rh=idc_rh,
+                    n_perm=n_nulls,
+                ))
+
         # stack: (n_maps, n_perm, n_parcels) — always 3-D even for n_maps=1
         nulls = NullMaps(np.stack(_null_list), data_labs, dtype=dtype,
                          null_method=method, null_type="spatial")
