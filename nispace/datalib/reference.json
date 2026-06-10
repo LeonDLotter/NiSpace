@@ -1,7 +1,7 @@
 {
     "bigbrain": {
         "label": "BigBrain",
-        "description": "The NiSpace \"BigBrain\" dataset is adopted from the BigBrainWarp toolbox (https://bigbrainwarp.readthedocs.io) by Paquola et al. The maps are fetched directly from the BigBrainWarp Sciebo folder (space=\"fsaverageOriginal\") or downloaded from the NiSpace-data GitHub repo (space=\"fsLR\" or \"fsaverage\"; recommended). The data is subject to a CC BY-NC-SA 4.0 license. Please cite the appropriate original publication for each map when used (see map info table).",
+        "description": "The NiSpace \"BigBrain\" dataset contains histological, microstructural, and functional differentiation maps. The data is adopted from the BigBrainWarp toolbox (https://bigbrainwarp.readthedocs.io) by Paquola et al. The maps are fetched directly from the BigBrainWarp Sciebo folder (space=\"fsaverageOriginal\") or downloaded from the NiSpace-data GitHub repo (space=\"fsLR\" or \"fsaverage\"; recommended). The data is subject to a CC BY-NC-SA 4.0 license. Please cite the appropriate original publication for each map when used (see map info table).",
         "cortex_only": true,
         "citations": [
             {
@@ -541,7 +541,7 @@
     },
     "cortexfeatures": {
         "label": "CortexFeatures",
-        "description": "The NiSpace \"CortexFeatures\" dataset consists of different features of cortical topology available via neuromaps (https://neuromaps-main.readthedocs.io/). Many of these maps were used in Shafiei et al., 2023. The maps are fetched directly from neuromaps (space=\"fsLROriginal\" or \"fsaverageOriginal\") or downloaded from the NiSpace-data GitHub repo (space=\"fsLR\" or \"fsaverage\"; recommended). Please cite the original publication for each map when used.",
+        "description": "The NiSpace \"CortexFeatures\" dataset consists of different features of cortical topology available via neuromaps. Many of these maps were used in Shafiei et al., 2023. The maps are fetched directly from neuromaps (space=\"fsLROriginal\" or \"fsaverageOriginal\") or downloaded from the NiSpace-data GitHub repo (space=\"fsLR\" or \"fsaverage\"; recommended). Please cite neuromaps (https://neuromaps-main.readthedocs.io/) and the original publication for each map when used.",
         "cortex_only": true,
         "citations": [
             {
@@ -1634,7 +1634,7 @@
     },
     "enigmaarea": {
         "label": "ENIGMAarea",
-        "description": "The NiSpace \"ENIGMAarea\" dataset is based on ENIGMA (Enhancing NeuroImaging Genetics through Meta-Analysis) working group summary statistics as provided via the ENIGMA Toolbox v2.0.3 (https://github.com/MICA-MNI/ENIGMA). It contains Cohen's d effect sizes (d_icv, largely ICV-corrected) for case-vs-control differences in cortical surface area and subcortical volume across several neurological and psychiatric disorders. Cortical values are provided in the Desikan parcellation, subcortical values in the Aseg parcellation. For some disorders, effect size maps are split by subtype and/or age group. Use collection \"Main\" for a reduced collection of the main effect size maps. For each disorder, please cite the appropriate ENIGMA working group publication (see map info table).",
+        "description": "The NiSpace \"ENIGMAarea\" dataset is based on ENIGMA analyses of brain structure across several neuro-psychiatric disorders. The original data is provided via the ENIGMA Toolbox v2.0.3 (https://github.com/MICA-MNI/ENIGMA). It contains Cohen's d effect sizes (d_icv, largely ICV-corrected) for case-vs-control differences in cortical surface area and subcortical volume. Cortical values are provided in the Desikan parcellation, subcortical values in the Aseg parcellation. For some disorders, effect size maps are split by subtype and/or age group. Use collection \"Main\" for a reduced collection of the main effect size maps. For each disorder, please cite the appropriate ENIGMA working group publication (see map info table).",
         "default_collection": "Main",
         "cortex_only": false,
         "citations": [
@@ -1681,7 +1681,7 @@
     },
     "enigmathick": {
         "label": "ENIGMAthick",
-        "description": "The NiSpace \"ENIGMAthick\" dataset is based on ENIGMA (Enhancing NeuroImaging Genetics through Meta-Analysis) working group summary statistics as provided via the ENIGMA Toolbox v2.0.3 (https://github.com/MICA-MNI/ENIGMA). It contains Cohen's d effect sizes (d_icv, largely ICV-corrected) for case-vs-control differences in cortical thickness and subcortical volume across several neurological and psychiatric disorders. Cortical values are provided in the Desikan parcellation, subcortical values in the Aseg parcellation. For some disorders, effect size maps are split by subtype and/or age group. Use collection \"Main\" for a reduced collection of the main effect size maps. For each disorder, please cite the appropriate ENIGMA working group publication (see map info table).",
+        "description": "The NiSpace \"ENIGMAthick\" dataset is based on ENIGMA analyses of brain structure across several neuro-psychiatric disorders. The original data is provided via the ENIGMA Toolbox v2.0.3 (https://github.com/MICA-MNI/ENIGMA). It contains Cohen's d effect sizes (d_icv, largely ICV-corrected) for case-vs-control differences in cortical thickness and subcortical volume. Cortical values are provided in the Desikan parcellation, subcortical values in the Aseg parcellation. For some disorders, effect size maps are split by subtype and/or age group. Use collection \"Main\" for a reduced collection of the main effect size maps. For each disorder, please cite the appropriate ENIGMA working group publication (see map info table).",
         "default_collection": "Main",
         "cortex_only": false,
         "citations": [
@@ -1728,7 +1728,7 @@
     },
     "grf": {
         "label": "GRF",
-        "description": "The NiSpace \"GRF\" dataset consists of many thousands of \"Gaussian Random Field Maps\" (GRFs) generated with different levels of spatial smoothness. The parameter \"alpha\" controls the smoothness of the field and therefore the spatial autocorrelation of the resulting brain maps. The maps are mirrored across hemispheres exactly at MNI coordinate (0,0,0). There are 1,000 maps for each alpha level. The code was adopted from Markello et al., 2021 and Burt et al., 2020.",
+        "description": "The NiSpace \"GRF\" dataset consists of Gaussian Random Field Maps (GRFs) generated with varying spatial smoothness. The parameter \"alpha\" controls the smoothness of the field and therefore the spatial autocorrelation of the resulting brain maps. The maps are mirrored across hemispheres exactly at MNI coordinate (0,0,0). There are 10,000 maps for alpha=0 (spatially unstructured, white noise) and 1,000 maps for each of the three smoothness levels (alpha=1, 2, 3). The code was adopted from Markello et al., 2021 and Burt et al., 2020.",
         "default_collection": "ByAlpha",
         "cortex_only": false,
         "citations": [
@@ -1876,7 +1876,7 @@
     },
     "magicc": {
         "label": "MAGICC",
-        "description": "The NiSpace \"MAGICC\" dataset is based on Allen Human Brain Atlas (AHBA) gene expression data published in Hawrylycz et al., 2012. The dataset consists of mRNA expression data from postmortem brain tissue of six donors, mapped onto continuous fsLR space as described in Wagstyl et al., 2024, and parcellated with integrated parcellation. Only genes that showed a high reproducibility (>= 0.5, see paper) were retained. Please also cite publications associated with gene set collections as appropriate.",
+        "description": "The NiSpace \"MAGICC\" dataset contains cortical gene expression maps for > 10,000 genes based on a continuous reconstruction. The dataset consists of Allen Brain Atlas mRNA expression data from postmortem brain tissue of six donors (Hawrylycz et al., 2012), mapped onto continuous fsLR space as described in Wagstyl et al., 2024, and parcellated with integrated parcellation. Only genes that showed a high reproducibility (>= 0.5, see paper) were retained. Please cite the source publications, as well as publications associated with gene set collections as appropriate.",
         "default_collection": "CellTypesPsychEncodeTPM",
         "cortex_only": true,
         "citations": [
@@ -2176,7 +2176,7 @@
     },
     "mitobrain": {
         "label": "MitoBrain",
-        "description": "Brain-wide maps of mitochondrial phenotypes (Mosharov et al., 2025, Nature) from MitoBrainMap (http://humanmitobrainmap.bcblab.com). Maps were generated by profiling OXPHOS enzyme activities and mitochondria density in a whole human hemisphere post-mortem at 3mm voxel-like resolution and reconstruction into MNIs space. Original maps are retrieved from NeuroVault (https://identifiers.org/neurovault.collection:16418; space MNIOriginal), masked, resampled to 2mm MNI152NLin6Asym space, and transformed to MNI152NLin2009cAsym, fsLR, and fsaverage surface spaces.",
+        "description": "The NiSpace \"MitoBrain\" datasets contains mitochondrial phenotypes reconstructed from histological data. The source data is provided by MitoBrainMap (http://humanmitobrainmap.bcblab.com; Mosharov et al., 2025, Nature). Maps were generated by profiling OXPHOS enzyme activities and mitochondria density in a whole human hemisphere at 3mm voxel-like resolution and reconstruction into MNIs space. Original maps are retrieved from NeuroVault (https://identifiers.org/neurovault.collection:16418; space MNIOriginal), masked, resampled to 2mm MNI152NLin6Asym space, and transformed to MNI152NLin2009cAsym, fsLR, and fsaverage surface spaces.",
         "cortex_only": false,
         "citations": [
             {
@@ -2521,7 +2521,7 @@
     },
     "mrna": {
         "label": "mRNA",
-        "description": "The NiSpace \"mRNA\" dataset is based on Allen Human Brain Atlas (AHBA) gene expression data published in Hawrylycz et al., 2012. The dataset consists of mRNA expression data from postmortem brain tissue of six donors, mapped onto MNI or fsaverage parcels using the abagen toolbox (Markello et al., 2021). The data was extracted using abagen.get_expression_data(..., lr_mirror=\"bidirectional\", norm_matched=False). Gene stability was assessed using a voxel-level atlas at 8mm isotropic resolution; genes were retained if their mean donor-to-donor Spearman rank correlation exceeded 0.2. Please also cite publications associated with gene set collections as appropriate.",
+        "description": "The NiSpace \"mRNA\" dataset contains whole-brain gene expression maps for > 10,000 genes based on parcel-wise mapping. The dataset consists of Allen Brain Atlas mRNA expression data from postmortem brain tissue of six donors (Hawrylycz et al., 2012), mapped onto MNI or fsaverage parcels using the abagen toolbox (Markello et al., 2021; abagen.get_expression_data(..., lr_mirror=\"bidirectional\", norm_matched=False)). Gene stability was assessed using a voxel-level atlas at 8mm isotropic resolution; genes were retained if their mean donor-to-donor Spearman rank correlation exceeded 0.2. Please cite the source publications, as well as publications associated with gene set collections as appropriate.",
         "default_collection": "CellTypesPsychEncodeTPM",
         "cortex_only": false,
         "citations": [
@@ -2853,7 +2853,7 @@
     },
     "neurosynth": {
         "label": "Neurosynth",
-        "description": "The NiSpace \"Neurosynth\" dataset is based on the Neurosynth database (https://neurosynth.org/). The dataset consists of all terms in the Neurosynth database as preselected by the authors. For each term, a \"MKDAChi2\" meta-analysis map was generated in MNI152NLin6Asym-2mm space using the nimare package. The resulting \"z_desc-association\" maps were parcellated and are available only as parcellation tables.",
+        "description": "The NiSpace \"Neurosynth\" dataset contains > 1,000 meta-analytic maps for terms from the Neurosynth database. For each Neurosynth term (https://neurosynth.org/) of interest for spatial correlation analysis, a \"MKDAChi2\" meta-analysis map was generated in MNI152NLin6Asym-2mm space using the nimare package. The resulting \"z_desc-association\" maps are available only as parcellation tables.",
         "default_collection": "CognitiveFunctions",
         "cortex_only": false,
         "citations": [
@@ -2995,7 +2995,7 @@
     },
     "pet": {
         "label": "PET",
-        "description": "The NiSpace \"PET\" dataset is based on openly available nuclear imaging maps largely accessed via neuromaps (https://neuromaps-main.readthedocs.io/). If requested in the varying original spaces and resolutions (termed \"MNIOriginal\", \"fsaverageOriginal\", or \"fsLROriginal\"), the maps are downloaded directly from the source and cached locally. If, as is highly recommended, the maps are requested in a defined space (\"MNI152NLin2009cAsym\", \"MNI152NLin6Asym\", \"fsaverage\", or \"fsLR\"), they are downloaded from the NiSpace-data GitHub repo. The NiSpace-hosted MNI maps were directly registered to 2mm MNI152NLin6Asym space, and transformed to 2mm MNI152NLin2009cAsym with a pre-estimated MNI-to-MNI transformation using SynthMorph v4. The resulting maps were masked with a liberal grey matter mask generated from the Harvard-Oxford atlas and scaled from 1e-6 to 1. The accompanying metadata table contains detailed information about tracers, source samples, original publications and data sources, as well as the publication licenses. Every map should be cited when used. The responsibility for this lies with the user!",
+        "description": "The NiSpace \"PET\" dataset contains a growing collection of nuclear imaging maps from different source publications. Most maps were originally accessed via neuromaps (https://neuromaps-main.readthedocs.io/) and can be downloaded directly via neuromaps using the \"original\" spaces \"MNIOriginal\", \"fsaverageOriginal\", or \"fsLROriginal\". Maps requested in a defined space (\"MNI152NLin2009cAsym\", \"MNI152NLin6Asym\", \"fsaverage\", or \"fsLR\") are sourced from the NiSpace-data GitHub repo. These maps were directly registered to 2mm MNI152NLin6Asym space, and transformed to 2mm MNI152NLin2009cAsym with a pre-estimated MNI-to-MNI transformation using SynthMorph v4. The resulting maps were masked with a liberal grey matter mask generated from the Harvard-Oxford atlas and scaled from 1e-6 to 1. The accompanying metadata table contains detailed information about tracers, source samples, original publications and data sources, as well as the publication licenses. Every map should be cited when used. The responsibility for this lies with the user!",
         "default_collection": "UniqueTracers",
         "cortex_only": false,
         "citations": [
@@ -5800,7 +5800,7 @@
     },
     "rsn17": {
         "label": "RSN17",
-        "description": "The NiSpace \"RSN17\" dataset contains probabilistic resting-state network maps derived from individual-level cortical parcellations of 1029 HCP subjects into 17 functional networks, generated as described in Kong et al., 2021 and made available at https://github.com/ThomasYeoLab/Kong2022_ArealMSHBM. The maps are only available in fsLR and fsaverage spaces. Note that the networks follow the Kong et al. naming convention, which differs from the 17 \"Yeo networks\". Please cite the original publication when using these maps.",
+        "description": "The NiSpace \"RSN17\" dataset contains resting-state network probability maps describing the 17 \"Kong\" networks. The maps were derived from individual-level cortical parcellations of 1029 HCP subjects into 17 functional networks, generated as described in Kong et al., 2021 and made available at https://github.com/ThomasYeoLab/Kong2022_ArealMSHBM. The maps are only available in fsLR and fsaverage spaces. Note that the networks follow the Kong et al. naming convention, which differs from the 17 \"Yeo networks\". Please cite the original publication when using these maps.",
         "cortex_only": true,
         "citations": [
             {

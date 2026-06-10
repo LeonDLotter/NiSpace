@@ -1,7 +1,7 @@
 _SPACE_DEFAULT_VOL = "MNI152NLin6Asym"
 _SPACE_DEFAULT_SURF = "fsLR"
 
-_PARC_DEFAULT = "Schaefer200"
+_PARC_DEFAULT = "Yan200"
 
 _COLOC_METHODS = {
     "pearson": ["rho"],

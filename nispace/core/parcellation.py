@@ -2,7 +2,6 @@
 from pathlib import Path
 import nibabel as nib
 import numpy as np
-import pandas as pd
 
 from neuromaps.images import load_data
 
@@ -12,7 +11,7 @@ from ..nulls import (
     _img_space_for_neuromaps, _img_density_for_neuromaps,
     find_parcel_hemispheres, get_distance_matrix,
 )
-from ..io import load_distmat, load_spinmat, load_img, load_labels, load_l2rmap
+from ..io import load_distmat, load_spinmat, load_img, load_labels
 from ..utils.utils import set_log, relabel_nifti_parc, relabel_gifti_parc
 
 
@@ -133,7 +132,7 @@ class Parcellation:
         self,
         # legacy single-space init (kept for backward compat)
         parcellation=None, space=None, labels=None, resolution=None,
-        hemi=None, symmetric=False, left2right_mapping=None, lrcorr=None,
+        hemi=None, symmetric=False,
         labels_lh=None, labels_rh=None, labels_img_lh=None, labels_img_rh=None,
         idc_lh=None, idc_rh=None, dist_mat=None, spin_mat=None, name=None,
         # multi-space / combined
@@ -154,8 +153,6 @@ class Parcellation:
         self._cx_dist_mat_spec = None  # lazy-load spec for cx dist_mat (combined only)
         self._labels = np.array(labels) if labels is not None else None
         self._symmetric = symmetric
-        self._l2rmap = left2right_mapping
-        self._lrcorr = lrcorr
 
         # --- per-space storage (keyed by space name string) ---
         # Values in _images may be: loaded nib objects OR path strings/tuples
@@ -213,7 +210,7 @@ class Parcellation:
     @classmethod
     def from_path(
         cls, source, space=None, labels=None, dist_mat=None, spin_mat=None,
-        symmetric=False, l2rmap=None, lrcorr=None, hemi=None, name=None,
+        symmetric=False, hemi=None, name=None,
         level=None, verbose=True,
     ):
         """Build a single-space Parcellation from a user-provided image.
@@ -225,8 +222,7 @@ class Parcellation:
         """
         set_log(lgr, verbose)
         lgr.info(f"Building Parcellation from path / image{f' ({name})' if name else ''}.")
-        p = cls(name=name, level=level, symmetric=symmetric,
-                left2right_mapping=l2rmap, lrcorr=lrcorr)
+        p = cls(name=name, level=level, symmetric=symmetric)
 
         # load image
         image = load_img(source)
@@ -283,7 +279,7 @@ class Parcellation:
     @classmethod
     def from_nispace_library(
         cls, name_or_list, lib_entry_or_list, data_dir,
-        load_dist_mat=True, load_spin_mat=True, lrcorr_threshold=0.0,
+        load_dist_mat=True, load_spin_mat=True,
         overwrite=False, check_file_hash=True, verbose=True,
     ):
         """Build a multi-space Parcellation from the NiSpace parcellation library.
@@ -305,20 +301,20 @@ class Parcellation:
         if is_combined:
             return cls._from_nispace_library_combined(
                 name_or_list, lib_entry_or_list, data_dir,
-                load_dist_mat, load_spin_mat, lrcorr_threshold,
+                load_dist_mat, load_spin_mat,
                 gf_kw, verbose,
             )
         else:
             return cls._from_nispace_library_single(
                 name_or_list, lib_entry_or_list, data_dir,
-                load_dist_mat, load_spin_mat, lrcorr_threshold,
+                load_dist_mat, load_spin_mat,
                 gf_kw, verbose,
             )
 
     @classmethod
     def _from_nispace_library_single(
         cls, name, lib_entry, data_dir, load_dist_mat, load_spin_mat,
-        lrcorr_threshold, gf_kw, verbose,
+        gf_kw, verbose,
     ):
         """Build a single (non-combined) multi-space Parcellation from the library."""
         from ..utils.utils_datasets import get_file
@@ -338,7 +334,7 @@ class Parcellation:
         lgr.info(f"Available spaces: {', '.join(spaces)}")
         p = cls(name=name)
 
-        shared_loaded = False  # load labels/l2rmap/lrcorr only once
+        shared_loaded = False  # load labels only once
 
         for space, space_lib in space_entries.items():
             is_vol = "mni" in space.lower()
@@ -378,30 +374,11 @@ class Parcellation:
                         )
                         p._labels = np.array(load_labels(label_paths))
 
-                sym = (
+                p._symmetric = (
                     entry_symmetric
                     if entry_symmetric is not None
-                    else space_lib.get(
-                        "symmetric",
-                        "l2rmap" not in space_lib and "lrcorr" not in space_lib,
-                    )
+                    else space_lib.get("symmetric", True)
                 )
-                p._symmetric = sym
-
-                if not sym and "l2rmap" in space_lib:
-                    l2r_path = get_file(
-                        base / f"parc-{name}_space-{space}.l2rmap.csv.gz",
-                        **space_lib["l2rmap"], **gf_kw,
-                    )
-                    p._l2rmap = load_l2rmap(l2r_path, threshold=lrcorr_threshold)
-
-                if not sym and "lrcorr" in space_lib:
-                    lrc_path = get_file(
-                        base / f"parc-{name}_space-{space}.lrcorr.csv.gz",
-                        **space_lib["lrcorr"], **gf_kw,
-                    )
-                    p._lrcorr = load_l2rmap(lrc_path, threshold=lrcorr_threshold)
-
                 p._level = entry_level or space_lib.get("level", None)
                 shared_loaded = True
 
@@ -471,7 +448,7 @@ class Parcellation:
     @classmethod
     def _from_nispace_library_combined(
         cls, names, lib_entries, data_dir, load_dist_mat, load_spin_mat,
-        lrcorr_threshold, gf_kw, verbose,
+        gf_kw, verbose,
     ):
         """Build a combined (cx+sc) multi-space Parcellation from the library."""
         set_log(lgr, verbose)
@@ -496,9 +473,7 @@ class Parcellation:
             )
         lgr.info(f"  Common MNI space(s) for combined: {common_mni}.")
 
-        # TODO (combined parc naming): migrate to "+" separator, e.g. f"{cx_name}+{sc_name}",
-        # and support tuple input ("Schaefer100", "TianS1") in fetch_parcellation/_check_parcellation.
-        combined_name = f"{cx_name}{sc_name}"
+        combined_name = f"{cx_name}+{sc_name}"
         p = cls(name=combined_name, level="combined", is_combined=True,
                 cx_name=cx_name, sc_name=sc_name)
 
@@ -539,41 +514,19 @@ class Parcellation:
                 p._labels = np.array(cx_labels + sc_labels)
                 p._n_cx_labels = len(cx_labels)
 
-                # symmetry: read from top-level JSON field (post-refactor) or fall back to
-                # space-level key / l2rmap/lrcorr presence check (pre-refactor compat)
                 cx_sym = (
                     cx_lib["symmetric"]
                     if "symmetric" in cx_lib
-                    else cx_lib[mni_space].get(
-                        "symmetric",
-                        "l2rmap" not in cx_lib[mni_space] and "lrcorr" not in cx_lib[mni_space],
-                    )
+                    else cx_lib[mni_space].get("symmetric", True)
                 )
                 sc_sym = (
                     sc_lib["symmetric"]
                     if "symmetric" in sc_lib
-                    else sc_lib[mni_space].get(
-                        "symmetric",
-                        "l2rmap" not in sc_lib[mni_space] and "lrcorr" not in sc_lib[mni_space],
-                    )
+                    else sc_lib[mni_space].get("symmetric", True)
                 )
                 p._cx_symmetric = cx_sym
                 p._sc_symmetric = sc_sym
                 p._symmetric = cx_sym and sc_sym
-
-                if not cx_sym and "l2rmap" in cx_lib[mni_space]:
-                    l2r_path = get_file(
-                        base_cx / f"parc-{cx_name}_space-{mni_space}.l2rmap.csv.gz",
-                        **cx_lib[mni_space]["l2rmap"], **gf_kw,
-                    )
-                    p._l2rmap = load_l2rmap(l2r_path, threshold=lrcorr_threshold)
-
-                if not cx_sym and "lrcorr" in cx_lib[mni_space]:
-                    lrc_path = get_file(
-                        base_cx / f"parc-{cx_name}_space-{mni_space}.lrcorr.csv.gz",
-                        **cx_lib[mni_space]["lrcorr"], **gf_kw,
-                    )
-                    p._lrcorr = load_l2rmap(lrc_path, threshold=lrcorr_threshold)
 
             p.add_space(mni_space, image=merged_img, dist_mat=None, spin_mat=None)
 
@@ -953,10 +906,6 @@ class Parcellation:
 
         self._labels = np.array(bilateral_labels)
 
-        # clear l2rmap / lrcorr (irrelevant after bilateral)
-        self._l2rmap = None
-        self._lrcorr = None
-
         # --- relabel images ---
         for space in list(self._images.keys()):
             is_path = isinstance(self._images[space], (str,Path)) or (
@@ -1190,10 +1139,6 @@ class Parcellation:
                         np.zeros((0, n_perm), dtype=spins_lh.dtype if spins_lh is not None else np.int32),
                         spins_rh,
                     )
-
-        # --- l2rmap / lrcorr are irrelevant for a single hemisphere ---
-        self._l2rmap = None
-        self._lrcorr = None
 
         # --- clear per-space derived caches (recomputed on next set_active_space) ---
         self._idc_byhemi_dict.clear()
@@ -1692,21 +1637,7 @@ class Parcellation:
                         f"!= n_rh ({n_rh})."
                     )
 
-        # 6. l2rmap shape
-        if self._l2rmap is not None and isinstance(self._l2rmap, pd.DataFrame):
-            for space, idc in self._idc_byhemi_dict.items():
-                idc_l = idc.get("L")
-                idc_r = idc.get("R")
-                if idc_l is None or idc_r is None:
-                    continue
-                exp_shape = (len(idc_l), len(idc_r))
-                if self._l2rmap.shape != exp_shape:
-                    lgr.warning(
-                        f"{prefix}: l2rmap shape {self._l2rmap.shape} does not match "
-                        f"expected ({exp_shape}) for space '{space}'."
-                    )
-
-        # 7. combined: cx indices
+        # 6. combined: cx indices
         if self._is_combined and not pre_activation:
             if self._cx_idc_lh is None or self._cx_idc_rh is None:
                 lgr.warning(f"{prefix}: cx_idc not yet computed (call set_active_space first).")

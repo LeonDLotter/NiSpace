@@ -85,6 +85,10 @@ _DEPR_SORT_COLOCS = (
     "'sort_colocs' is deprecated and will be removed in the first non-dev release. "
     "Use sort_by='coloc' instead."
 )
+_DEPR_L2RMAP = (
+    "'parcellation_l2rmap' is deprecated and will be removed in the first non-dev release. "
+    "Left-to-right parcel mapping is no longer supported. The parameter is silently ignored."
+)
 
 # ==================================================================================================
 # DEFINE CLASS
@@ -230,6 +234,12 @@ class NiSpace:
         self._data_space = data_space
         if "parc" in kwargs and parcellation is None:
             parcellation = kwargs.pop("parc")
+        # Convert tuple/list combined parcellation to "+" string before type dispatch
+        if isinstance(parcellation, (tuple, list)) and all(isinstance(p, str) for p in parcellation):
+            parcellation = "+".join(parcellation)
+        if parcellation_l2rmap is not None:
+            lgr.warning(_DEPR_L2RMAP)
+            # TODO (first non-dev release): remove parcellation_l2rmap param entirely
         # custom image/path parcellations are built immediately; integrated strings
         # and already-constructed Parcellation objects are handled in fit()
         if parcellation is None:
@@ -243,7 +253,6 @@ class NiSpace:
                 dist_mat=parcellation_dist_mat,
                 spin_mat=parcellation_spin_mat,
                 symmetric=parcellation_symmetric,
-                l2rmap=parcellation_l2rmap,
                 hemi=parcellation_hemi,
             )
         else:
@@ -254,7 +263,6 @@ class NiSpace:
                 "space": parcellation_space,
                 "hemi": parcellation_hemi,
                 "symmetric": parcellation_symmetric,
-                "l2rmap": parcellation_l2rmap,
                 "idc_lh": parcellation_idc_lh,
                 "idc_rh": parcellation_idc_rh,
                 "idc_sc": parcellation_idc_sc,
@@ -396,7 +404,6 @@ class NiSpace:
                     labels=self._parc["labels"],
                     dist_mat=self._parc_dist_mat["null_maps"],
                     symmetric=self._parc["symmetric"],
-                    l2rmap=self._parc["l2rmap"],
                     hemi=self._parc["hemi"],
                 )
 
