@@ -14,7 +14,9 @@ There is currently no dedicated toolbox paper for ``NiSpace``. Please cite at le
   * "moran": `Vos de Wael et al., Comm. Biol. 2020 <https://doi.org/10.1038/s42003-020-0794-7>`_
   * "burt2020": `Burt et al., NeuroImage 2020 <https://doi.org/10.1016/j.neuroimage.2020.117038>`_
   * "burt2018": `Burt et al., Nat. Neurosci. 2018 <https://doi.org/10.1038/s41593-018-0195-0>`_
-  * "spin" / "alexander_bloch": `Alexander-Bloch et al., NeuroImage 2018 <https://doi.org/10.1016/j.neuroimage.2018.05.070>`_
+  * "spin" / "cornblath": `Cornblath et al., Comm. Biol. 2020 <https://doi.org/10.1038/s42003-020-0961-x>`_
+  * "baum": `Baum et al., PNAS 2020 <https://doi.org/10.1073/pnas.1912034117>`_
+  * "alexander_bloch": `Alexander-Bloch et al., NeuroImage 2018 <https://doi.org/10.1016/j.neuroimage.2018.05.070>`_
   * "vasa" / "hungarian": `Váša et al., Cereb. Cortex 2018 <https://doi.org/10.1093/cercor/bhx249>`_
 * If you use MNI space transform functionality (``mni_to_mni``):
 

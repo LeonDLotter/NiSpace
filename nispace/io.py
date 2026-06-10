@@ -436,23 +436,6 @@ def load_labels(labels, concat=True, header=None, index=None):
     return labels_load
 
 
-def load_l2rmap(l2rmap, header=0, index=0, threshold=0.0):
-    # catch None content
-    if l2rmap is None:
-        return l2rmap
-    # catch DataFrame
-    elif isinstance(l2rmap, pd.DataFrame):
-        df = l2rmap
-    # catch path
-    elif isinstance(l2rmap, (str, Path)):
-        df = pd.read_csv(l2rmap, header=header, index_col=index)
-    else:
-        raise ValueError("Input must be str, path, or DataFrame")
-    if threshold is not None:
-        df = df.where(df >= threshold, other=0.0)
-    return df
-
-
 def load_distmat(distmat):
     # catch None content
     if distmat is None or (isinstance(distmat, tuple) and all([d is None for d in distmat])):
@@ -501,7 +484,12 @@ def load_spinmat(spinmat):
         if isinstance(s, np.ndarray):
             loaded.append(s)
         elif isinstance(s, (str, Path)):
-            loaded.append(np.load(Path(s), allow_pickle=False, mmap_mode='c'))
+            p = Path(s)
+            if p.suffix == ".npz":
+                f = np.load(p, allow_pickle=False)
+                loaded.append(f["data"])
+            else:
+                loaded.append(np.load(p, allow_pickle=False, mmap_mode='c'))
         else:
             raise ValueError(f"Unsupported spinmat element type: {type(s)}")
     return loaded[0] if len(loaded) == 1 else tuple(loaded)

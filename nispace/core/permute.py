@@ -4,62 +4,105 @@ from tqdm.auto import tqdm
 
 import logging
 lgr = logging.getLogger(__name__)
-from ..nulls import generate_null_maps
+from ..nulls import generate_null_maps, _SPIN_METHODS, _parse_null_method
 from ..stats.misc import null_to_p, zscore_df
 from ..utils.utils import set_log
 from .colocalize import _get_coloc_stats
 from .constants import _P_TAILS
+from .nullmaps import NullMaps
 
 
-def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=True, standardize=True,
+def _null_method_key(m):
+    """Normalize null_method to a comparable string (handles str and tuple)."""
+    if m is None:
+        return ""
+    if isinstance(m, tuple):
+        return "+".join(str(x) for x in m)
+    return str(m)
+
+
+def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing=True, standardize=True,
                    n_perm=1000, null_method="moran",
                    dist_mat=None, spin_mat=None, parc=None, centroids=False, parc_resample=2,
-                   lr_mirror_dist_mat=False, split_hemi=None, split_cxsc=False,
-                   cx_sc_minmax_scale=False,
+                   lr_mirror_dist_mat=False, split_hemi=None,
                    parc_name=None,
+                   memmap_path=None,
+                   permute_which=None,
                    seed=None, n_proc=-1, dtype=np.float32, verbose=True, **kwargs):
 
     # case null maps given
     _custom = False
+    null_method_stored = None
     if null_maps is not None:
-        if not isinstance(null_maps, dict):
-            lgr.warning("Provided null maps are not a dictionary. Will re-generate.")
+        if isinstance(null_maps, dict):
+            lgr.info("Wrapping provided dict null maps into NullMaps.")
+            null_maps = NullMaps.from_dict(null_maps)
+        elif not isinstance(null_maps, NullMaps):
+            lgr.warning("Provided null maps are not a dict or NullMaps. Will re-generate.")
             null_maps = None
-        else:
-            lgr.info(f"Using provided null maps.")
+        if null_maps is not None:
+            lgr.info("Using provided null maps.")
             _custom = True
 
     # case null maps not given but existing
-    elif (null_maps is None) & (use_existing_maps==True):
-        null_method_stored = None
+    elif null_maps is None and use_existing:
         try:
-            permute, null_method_stored, null_maps = \
-                [nispace_nulls[k] for k in ["maps_null_which", "maps_null_method", "maps_null"]]
-            lgr.info(f"Found existing null maps.")
-        except:
+            null_maps = nispace_nulls.get("maps_null")
+            if null_maps is not None:
+                null_method_stored = null_maps.null_method
+                lgr.info("Found existing null maps.")
+        except Exception:
             lgr.info("No null maps found.")
 
     # check existing null maps
     if null_maps is not None:
-        if not all([x in null_maps.keys() for x in data_obs.index]):
-            lgr.warning("Not all X/Y variables in null maps. Will re-generate.")
+        if not all(x in null_maps for x in data_obs.index):
+            missing = [x for x in data_obs.index if x not in null_maps]
+            lgr.warning(f"{len(missing)} map(s) missing from null map cache. Will re-generate.")
             null_maps = None
-        else:
-            if any(np.array([null_maps[x].shape[0] for x in data_obs.index]) < n_perm):
-                lgr.warning(f"Number of null maps < n_perm ({n_perm}). Will re-generate.")
-                null_maps = None
-        if not _custom and null_method_stored != null_method:
+        elif null_maps.n_perm < n_perm:
+            lgr.warning(f"Number of null maps ({null_maps.n_perm}) < n_perm ({n_perm}). Will re-generate.")
+            null_maps = None
+        elif not _custom and _null_method_key(null_method_stored) != _null_method_key(null_method):
             lgr.warning("Null method changed. Will re-generate.")
             null_maps = None
+        elif (not _custom and permute_which is not None
+              and null_maps.null_which is not None
+              and null_maps.null_which != permute_which):
+            lgr.warning(
+                f"Cached null maps are for '{null_maps.null_which}', "
+                f"need '{permute_which}'. Will re-generate."
+            )
+            null_maps = None
+        else:
+            # subset() trims superset cache to exactly the active labels — correctness fix:
+            # without this, perm_list() returns (n_cache_maps, n_parcels) while _X_obs_arr
+            # is (n_active_maps, n_parcels) → silent shape mismatch in colocalization.
+            needed = list(data_obs.index)
+            if null_maps.labels != needed:
+                null_maps = null_maps.subset(needed)
 
     # datatype
     if null_maps is not None:
-        for k in null_maps.keys():
-            null_maps[k] = null_maps[k].astype(dtype)
+        if null_maps.dtype != np.dtype(dtype):
+            null_maps = null_maps.astype(dtype)
 
     # case null maps not given & not existing
     if null_maps is None:
-        lgr.info(f"Generating null maps (n = {n_perm}, null_method = '{null_method}').")
+        lgr.info(f"Generating null maps (n = {n_perm}, null_method = '{_null_method_key(null_method)}').")
+
+        # resolve the cx component for method-type checks
+        _cx_method, _sc_method = _parse_null_method(null_method)
+
+        # for non-combined parcellations, collapse a tuple method to the relevant side
+        if _sc_method is not None and not (parc is not None and parc._is_combined):
+            _parc_level = parc._level if parc is not None else None
+            null_method = _sc_method if _parc_level == "subcortex" else _cx_method
+            lgr.info(
+                f"Collapsing split null method ('{_cx_method}', '{_sc_method}') → '{null_method}' "
+                f"for non-combined parcellation (level='{_parc_level}')."
+            )
+            _cx_method, _sc_method = _parse_null_method(null_method)
 
         if parc is not None:
             idc_lh     = parc._idc_byhemi["L"]
@@ -73,14 +116,26 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
             parc_img = parc_space_ = parc_hemi_ = None
             parc_sym = False
 
-        # for spin methods: resolve surface image and cached spin matrix
-        from ..nulls import _SPIN_METHODS
-        if null_method in _SPIN_METHODS:
-            if spin_mat is None:
-                try:
-                    spin_mat = nispace_nulls.get("maps_spin", None)
-                except Exception:
-                    pass
+        # sc indices and component dist_mats for split methods
+        parc_idc_sc = parc.get_sc_idc() if parc is not None else None
+        # for combined parcellations: lazy-load component dist_mats to avoid computing full combined one
+        _sc_dist_mat, _sc_dist_mat_space = (
+            parc.get_sc_dist_mat() if parc is not None and parc._is_combined else (None, None)
+        )
+        _cx_dist_mat, _cx_dist_mat_space = (
+            parc.get_cx_dist_mat() if parc is not None and parc._is_combined else (None, None)
+        )
+
+        # for spin cx methods: resolve surface image and cached spin matrix
+        if _cx_method in _SPIN_METHODS:
+            if parc is not None and parc._is_combined and _sc_method is None:
+                lgr.critical_raise(
+                    f"Spin method '{_cx_method}' cannot be used as a single null method for "
+                    f"combined (cx+sc) parcellation '{parc._name}': subcortex parcels would not "
+                    f"be randomised, invalidating the null distribution.\n"
+                    f"Use a tuple instead, e.g. null_method=('{_cx_method}', 'moran').",
+                    ValueError,
+                )
             if parc is not None:
                 # get surface image (may differ from the active MNI image for MNI-primary parcs)
                 surf_img, surf_spin_mat, surf_space = parc.get_surface_for_spins()
@@ -92,17 +147,19 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
                     if parc._is_combined and parc._cx_idc_lh is not None:
                         idc_lh = parc._cx_idc_lh
                         idc_rh = parc._cx_idc_rh
-                        # TODO: combined spin+moran: after spin fills cx null maps, run moran
-                        # separately for sc parcels (parc_idc_sc) and merge both into the output.
-                        # Currently parc_idc_sc=None below, so sc parcels get no null variation.
                     if spin_mat is None and surf_spin_mat is not None:
                         spin_mat = surf_spin_mat
                 else:
                     lgr.warning(
-                        f"Spin method '{null_method}' requested but no surface data found for "
+                        f"Spin method '{_cx_method}' requested but no surface data found for "
                         f"parcellation '{parc._name}'. Falling back to 'moran'."
                     )
-                    null_method = "moran"
+                    # fall back: for split method replace cx; for single replace whole
+                    if _sc_method is not None:
+                        null_method = ("moran", _sc_method)
+                    else:
+                        null_method = "moran"
+                    _cx_method = "moran"
 
         # null data for all maps
         null_maps, result_mat = generate_null_maps(
@@ -119,11 +176,13 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
             spin_mat=spin_mat,
             parc_idc_lh=idc_lh,
             parc_idc_rh=idc_rh,
-            parc_idc_sc=None,
+            parc_idc_sc=parc_idc_sc,
+            dist_mat_sc=_sc_dist_mat,
+            parc_space_sc=_sc_dist_mat_space,
+            dist_mat_cx=_cx_dist_mat,
+            parc_space_cx=_cx_dist_mat_space,
             lr_mirror_dist_mat=lr_mirror_dist_mat,
             split_hemi=split_hemi,
-            split_cxsc=split_cxsc,
-            cx_sc_minmax_scale=cx_sc_minmax_scale,
             parc_name=parc_name,
             dtype=dtype,
             n_proc=n_proc,
@@ -132,18 +191,21 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing_maps=Tr
             **kwargs
         )
 
-        # cache spin or dist mat
-        if null_method in _SPIN_METHODS:
-            nispace_nulls["maps_spin"] = result_mat
-        else:
-            dist_mat = result_mat
-            
-    # standardize
+        # return spin mat explicitly so the caller can promote it to _parc_spin_mat
+        new_spin_mat = result_mat if _cx_method in _SPIN_METHODS else None
+    else:
+        new_spin_mat = None
+
+    # memmap (before standardize — memmap holds raw maps; standardize always returns plain array)
+    if memmap_path is not None:
+        null_maps.to_memmap(memmap_path)
+
+    # standardize (spatial null maps only; group null maps are not z-scored)
     if standardize:
         lgr.info("Z-standardizing null maps.")
-        null_maps = {k: zscore_df(null_maps[k], along="rows", force_df=False) for k in null_maps.keys()}
-    
-    return null_maps
+        null_maps = null_maps.standardize()
+
+    return null_maps, new_spin_mat
 
 
 def _get_exact_p_values(method, colocs_obs, colocs_null, 

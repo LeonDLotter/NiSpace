@@ -1,5 +1,5 @@
 from typing import Union, List, Dict, Tuple
-import pathlib
+from pathlib import Path
 import textwrap
 import pandas as pd
 import numpy as np
@@ -14,13 +14,13 @@ from .core.constants import _PARC_DEFAULT, _SPACE_DEFAULT_VOL, _SPACE_DEFAULT_SU
 from .stats.misc import zscore_df
 from .utils.utils import _rm_ext, set_log, merge_parcellations
 from .utils.utils_datasets import get_file
-from .io import read_json, write_json, load_img, load_distmat, load_spinmat, load_labels, load_l2rmap
+from .io import read_json, write_json, load_img, load_distmat, load_spinmat, load_labels
 from .nulls import _img_density_for_neuromaps
 
 # Set the default nispace data directory environment variable
-os.environ['NISPACE_DATA_DIR'] = str(pathlib.Path.home() / "nispace-data")
+os.environ['NISPACE_DATA_DIR'] = str(Path.home() / "nispace-data")
 
-datalib_dir = pathlib.Path(__file__).parent / "datalib"
+datalib_dir =Path(__file__).parent / "datalib"
 reference_lib = read_json(datalib_dir / "reference.json")
 template_lib = read_json(datalib_dir / "template.json")
 parcellation_lib = read_json(datalib_dir / "parcellation.json")
@@ -40,6 +40,12 @@ _DEPR_FETCH_PARC_LEGACY = (
     "Use return_parcellation_only=True (or omit space=) to get a Parcellation object, "
     "then call .get_image(), .get_dist_mat(), etc. as needed."
 )
+_DEPR_COMBINED_PARC_NAME = (
+    "Combined parcellation '{old}' uses a deprecated naming format "
+    "(concatenated or space-separated). "
+    "Use the '+' separator or a tuple instead: '{new}'. "
+    "Support for the old format will be removed in the first non-dev release."
+)
 
 def keys2list(dct):
     return list(dct.keys())
@@ -57,10 +63,10 @@ def _resolve_nispace_data_dir(nispace_data_dir):
 # EMPTY NISPACE DATA DIR ===========================================================================
 
 # _EMPTY_DATA_CONFIRMED = False
-# def empty_nispace_data_dir(nispace_data_dir: Union[str, pathlib.Path] = None):
+# def empty_nispace_data_dir(nispace_data_dir: Union[str,Path] = None):
 #     global _EMPTY_DATA_CONFIRMED
 #     if nispace_data_dir is None:
-#         nispace_data_dir = pathlib.Path.home() / "nispace-data"
+#         nispace_data_dir =Path.home() / "nispace-data"
 #     if not _EMPTY_DATA_CONFIRMED:
 #         lgr.warning("If you call this function again, it will remove all contents of your NiSpace "
 #                     f"data directory at {nispace_data_dir}.")
@@ -75,7 +81,7 @@ def _resolve_nispace_data_dir(nispace_data_dir):
 # FILE HANDLING ====================================================================================
 
 def _file_desc(fname, feature_position):
-    if isinstance(fname, pathlib.Path):
+    if isinstance(fname,Path):
         fname = fname.name
     fname = fname.split(".")[0]
     if isinstance(feature_position, int):
@@ -90,7 +96,7 @@ def fetch_template(template: str = "MNI152NLin2009cAsym",
                    desc: str = None,
                    #parcellation: str = None,
                    hemi: Union[List[str], str] = ["L", "R"],
-                   nispace_data_dir: Union[str, pathlib.Path] = None,
+                   nispace_data_dir: Union[str,Path] = None,
                    overwrite: bool = False,
                    check_file_hash: bool = True,
                    verbose: bool = True):
@@ -114,7 +120,7 @@ def fetch_template(template: str = "MNI152NLin2009cAsym",
     hemi : list of str, optional
         The hemispheres to fetch. Default is ["L", "R"].
         
-    nispace_data_dir : str or pathlib.Path, optional
+    nispace_data_dir : str orPath, optional
         The directory containing the NiSpace data. Default is None.
         
     Returns
@@ -130,7 +136,7 @@ def fetch_template(template: str = "MNI152NLin2009cAsym",
     nispace_data_dir = _resolve_nispace_data_dir(nispace_data_dir)
 
     # paths
-    base_dir = pathlib.Path(nispace_data_dir) / "template" / template
+    base_dir =Path(nispace_data_dir) / "template" / template
     map_dir = base_dir / "map"
     
     # set defaults:
@@ -206,13 +212,23 @@ def _parc_symmetric(parc_labels):
 def _print_parcellations():
     return ", ".join([p for p in parcellation_lib.keys() if "alias" not in parcellation_lib[p]])
 
-def _check_parcellation(parcellation: str, force_list: bool = False, force_str: bool = False,
+def _check_parcellation(parcellation, force_list: bool = False, force_str: bool = False,
                         raise_not_found=True):
     """
     Check if a parcellation name is valid and return the correct parcellation name as a string or
     a list of strings containing a cortex-subcortex combination.
+
+    Accepts:
+    - Single name string: ``"Schaefer100"`` or ``"Schaefer100Parcels7Networks"``
+    - "+" combined string: ``"Schaefer100+TianS1"`` — preferred new format
+    - Tuple of two names: ``("Schaefer100", "TianS1")`` — converted to "+" form
+    - Concatenated string: ``"Schaefer100TianS1"`` — deprecated, use "+" form instead
     """
-    
+
+    # 0a. Accept tuple/list → convert to "+" string
+    if isinstance(parcellation, (tuple, list)):
+        parcellation = "+".join(str(p) for p in parcellation)
+
     # Path strings are not library names — catch before substring matching eats the path
     if isinstance(parcellation, os.PathLike) or (
         isinstance(parcellation, str) and (
@@ -240,22 +256,50 @@ def _check_parcellation(parcellation: str, force_list: bool = False, force_str: 
         else:
             # if we got to here, we have a cortex-subcortex combination; now ensure correct order
             return [parc[levels.index("cortex")], parc[levels.index("subcortex")]]
-    
-    # Parcellation can be a string as it appears in parcellation_lib (e.g., "Schaefer100")
-    # OR multiple strings from parcellation_lib concatenated without (e.g., "Schaefer100TianS1")
-    # or with a space in between (e.g., "Schaefer100 TianS1")
-    # (1) We check if parcellation is a string
-    assert isinstance(parcellation, (str)), f"Parcellation must be of type string, not {type(parcellation)}!"
-    # (2) We check if it is in parcellation_lib as is
+
+    assert isinstance(parcellation, str), \
+        f"Parcellation must be a string or tuple/list of strings, not {type(parcellation)}!"
+
+    # (2) Check if it is in parcellation_lib as is, or resolve via alias
     parc = None
     if parcellation in parcellation_lib:
         parc = _parc_alias(parcellation)
-        # alias may point to a combined name (e.g. "BrainnetomeCorticalBrainnetomeSubcortical")
-        # that is not itself a key — resolve it through partial matching
+        # alias may point to a "+" combined name (e.g. "BrainnetomeCortical+BrainnetomeSubcortical")
+        # that is not itself a library key — fall through to the "+" split path below
         if isinstance(parc, str) and parc not in parcellation_lib:
             parcellation = parc
             parc = None
-    # (3) If not, we check if we get a partial match
+
+    # (2b) "+" combined form: split, resolve each part, validate cx+sc.
+    # Handles both direct user input ("Schaefer100+TianS1") and alias-resolved "+" targets.
+    if parc is None and "+" in parcellation:
+        parts = [p.strip() for p in parcellation.split("+")]
+        if len(parts) != 2:
+            lgr.critical_raise(
+                f"Combined parcellation '{parcellation}' must contain exactly 2 '+'-separated names.",
+                ValueError,
+            )
+            return None
+        resolved = []
+        for p in parts:
+            r = _check_parcellation(p, raise_not_found=raise_not_found)
+            if r is None:
+                return None
+            if isinstance(r, list):
+                lgr.critical_raise(
+                    f"Each part of a '+'-combined name must resolve to a single parcellation, not '{p}'.",
+                    ValueError,
+                )
+                return None
+            resolved.append(r)
+        parc = _check_cortex_subcortex(resolved)
+        if force_list and not force_str:
+            return parc
+        elif force_str and not force_list:
+            return "+".join(parc)
+        return parc
+
+    # (3) Partial match — old concatenated or space-separated combined form (deprecated)
     if parc is None:
         # get a list of potential partial matches; skip combined-alias keys (their resolved alias
         # is not itself a library entry, so they would pollute de-nesting in step 3b)
@@ -270,7 +314,7 @@ def _check_parcellation(parcellation: str, force_list: bool = False, force_str: 
                                    f"(cortex-subcortex-combinations allowed): {_print_parcellations()}",
                                    FileNotFoundError)
             else:
-                return 
+                return
         # (3b) > 2 matches found: check if matches are contained in each other or raise error
         elif len(parc_matches) > 2:
             # (3b1) check if matches are contained in each other and remove the contained ones
@@ -289,12 +333,16 @@ def _check_parcellation(parcellation: str, force_list: bool = False, force_str: 
         # (3d) 2 matches found: check if they are cortex-subcortex combinations
         else:
             parc = _check_cortex_subcortex(parc_matches)
-                
+        # Deprecation: combined name resolved via old concatenated/space-separated form
+        # TODO (first non-dev release): remove partial-match resolution for combined names
+        if isinstance(parc, list):
+            lgr.warning(_DEPR_COMBINED_PARC_NAME.format(old=parcellation, new="+".join(parc)))
+
     # output format
     if force_list and not force_str and isinstance(parc, str):
         parc = [parc]
     elif force_str and not force_list and isinstance(parc, list):
-        parc = "".join(parc)
+        parc = "+".join(parc)
     return parc
                 
 
@@ -308,13 +356,10 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                        return_space: bool = False,
                        return_resolution: bool = False,
                        return_symmetric: bool = False,
-                       return_l2rmap: bool = False,
-                       return_lrcorr: bool = False,
                        return_dist_mat: bool = False,
                        return_spin_mat: bool = False,
                        return_loaded: bool = True,
-                       lrcorr_threshold: float = 0.0,
-                       nispace_data_dir: Union[str, pathlib.Path] = None,
+                       nispace_data_dir: Union[str,Path] = None,
                        overwrite: bool = False,
                        check_file_hash: bool = True,
                        verbose: bool = True):
@@ -332,8 +377,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
 
     # function to load individual parcellation and associated data
     def load_parc(p, space=space, hemi=hemi, return_labels=return_labels, return_space=return_space,
-                  return_resolution=return_resolution, return_symmetric=return_symmetric, return_l2rmap=return_l2rmap,
-                  return_lrcorr=return_lrcorr,
+                  return_resolution=return_resolution, return_symmetric=return_symmetric,
                   return_dist_mat=return_dist_mat, return_spin_mat=return_spin_mat, return_loaded=return_loaded,
                   nispace_data_dir=nispace_data_dir, overwrite=overwrite, check_file_hash=check_file_hash):
         
@@ -348,13 +392,10 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                                    ValueError)
         
         # data directory
-        base_dir = pathlib.Path(nispace_data_dir) / "parcellation" / p / space
+        base_dir =Path(nispace_data_dir) / "parcellation" / p / space
         
         # Symmetry
-        if "l2rmap" in parcellation_lib[p][space] or "lrcorr" in parcellation_lib[p][space]:
-            symmetric = False
-        else:
-            symmetric = True
+        symmetric = parcellation_lib[p].get("symmetric", parcellation_lib[p][space].get("symmetric", True))
         
         # LOAD
         _level = parcellation_lib[p].get("level") or parcellation_lib[p][space].get("level", "")
@@ -380,20 +421,6 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                     base_dir / f"parc-{p}_space-{space}.label.txt", **parcellation_lib[p][space]["label"],
                     **get_file_kwargs,
                 )
-            if return_l2rmap and not symmetric:
-                l2rmap_file = get_file(
-                    base_dir / f"parc-{p}_space-{space}.l2rmap.csv.gz", **parcellation_lib[p][space]["l2rmap"],
-                    **get_file_kwargs,
-                )
-            elif return_l2rmap and symmetric:
-                l2rmap_file = None
-            if return_lrcorr and not symmetric and "lrcorr" in parcellation_lib[p][space]:
-                lrcorr_file = get_file(
-                    base_dir / f"parc-{p}_space-{space}.lrcorr.csv.gz", **parcellation_lib[p][space]["lrcorr"],
-                    **get_file_kwargs,
-                )
-            else:
-                lrcorr_file = None
             if return_dist_mat:
                 distmat_file = get_file(
                     base_dir / f"parc-{p}_space-{space}.dist.csv.gz", **parcellation_lib[p][space]["distmat"],
@@ -440,20 +467,6 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                         ),
                     else:
                         spinmat_file += None,
-            if return_l2rmap and not symmetric:
-                l2rmap_file = get_file(
-                    base_dir / f"parc-{p}_space-{space}.l2rmap.csv.gz", **parcellation_lib[p][space]["l2rmap"],
-                    **get_file_kwargs,
-                )
-            elif return_l2rmap and symmetric:
-                l2rmap_file = None
-            if return_lrcorr and not symmetric and "lrcorr" in parcellation_lib[p][space]:
-                lrcorr_file = get_file(
-                    base_dir / f"parc-{p}_space-{space}.lrcorr.csv.gz", **parcellation_lib[p][space]["lrcorr"],
-                    **get_file_kwargs,
-                )
-            else:
-                lrcorr_file = None
             if return_spin_mat and "spinmat" not in parcellation_lib[p][space]:
                 lgr.info(f"No pre-computed spin matrix available for '{p}' in '{space}' space.")
             if len(parcellation_file) == 1:
@@ -464,7 +477,6 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                     distmat_file = distmat_file[0]
                 if return_spin_mat:
                     spinmat_file = spinmat_file[0]
-                l2rmap_file = None
             
         # return      
         
@@ -484,12 +496,6 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
         # symmetric
         if return_symmetric:
             out["sym"] = symmetric
-        # l2rmap
-        if return_l2rmap:
-            out["l2rmap"] = load_l2rmap(l2rmap_file, threshold=lrcorr_threshold) if return_loaded else l2rmap_file
-        # lrcorr
-        if return_lrcorr:
-            out["lrcorr"] = load_l2rmap(lrcorr_file, threshold=lrcorr_threshold) if return_loaded else lrcorr_file
         # distmat
         if return_dist_mat:
             out["distmat"] = load_distmat(distmat_file) if return_loaded else distmat_file
@@ -509,7 +515,6 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                 nispace_data_dir,
                 load_dist_mat=return_dist_mat,
                 load_spin_mat=return_spin_mat,
-                lrcorr_threshold=lrcorr_threshold,
                 overwrite=overwrite,
                 check_file_hash=check_file_hash,
                 verbose=verbose,
@@ -521,7 +526,6 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                 nispace_data_dir,
                 load_dist_mat=return_dist_mat,
                 load_spin_mat=return_spin_mat,
-                lrcorr_threshold=lrcorr_threshold,
                 overwrite=overwrite,
                 check_file_hash=check_file_hash,
                 verbose=verbose,
@@ -552,7 +556,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
     # run load_parc for 2 parcellations
     out_cortex = load_parc(parc[0])
     out_subcortex = load_parc(parc[1])
-    lgr.info(f"Merging to cortex-subcortex parcellation '{parc[0]}{parc[1]}'.")
+    lgr.info(f"Merging to cortex-subcortex parcellation '{parc[0]}+{parc[1]}'.")
         
     # now, we will have to combine the data
     out = {}
@@ -570,25 +574,6 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
     # symmetric
     if return_symmetric:
         out["sym"] = True if out_cortex["sym"] and out_subcortex["sym"] else False
-    # lrcorr (merged case: just use cortex lrcorr, subcortex is symmetric)
-    if return_lrcorr:
-        out["lrcorr"] = out_cortex.get("lrcorr", None)
-    # l2rmap
-    if return_l2rmap:
-        if out_cortex["l2rmap"] is None and out_subcortex["l2rmap"] is None:
-            out["l2rmap"] = None
-        else:
-            if not return_labels:
-                lgr.critical_raise("Cannot return merged l2rmap when return_labels=False!", ValueError)
-            out["l2rmap"] = pd.DataFrame(
-                np.eye(len(out["label"]) // 2),
-                index=[l for l in out["label"] if "hemi-L" in l],
-                columns=[l for l in out["label"] if "hemi-R" in l]
-            )
-            if out_cortex["l2rmap"] is not None:
-                out["l2rmap"].loc[out_cortex["l2rmap"].index, out_cortex["l2rmap"].columns] = out_cortex["l2rmap"]
-            if out_subcortex["l2rmap"] is not None:
-                out["l2rmap"].loc[out_subcortex["l2rmap"].index, out_subcortex["l2rmap"].columns] = out_subcortex["l2rmap"]
     # distmat
     if return_dist_mat:
         lgr.info("Distance matrices for merged parcellations are currently not available. Returning None.")
@@ -603,7 +588,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
     else:
         return tuple(out.values())
 
-def fetch_collection(collection: Union[str, pathlib.Path, np.ndarray, pd.DataFrame, pd.Series, list],
+def fetch_collection(collection: Union[str,Path, np.ndarray, pd.DataFrame, pd.Series, list],
                      dataset: str = None,
                      maps: list = None,
                      set_size_range: Union[None, Tuple[int, int]] = None,
@@ -611,7 +596,7 @@ def fetch_collection(collection: Union[str, pathlib.Path, np.ndarray, pd.DataFra
                      weight_quantile: float = None,
                      set_specificity: float = None,
                      return_maps: bool = False,
-                     nispace_data_dir: Union[str, pathlib.Path] = None,
+                     nispace_data_dir: Union[str,Path] = None,
                      overwrite: bool = False,
                      check_file_hash: bool = True,
                      verbose: bool = True):
@@ -686,7 +671,7 @@ def fetch_collection(collection: Union[str, pathlib.Path, np.ndarray, pd.DataFra
             nispace_data_dir = _resolve_nispace_data_dir(nispace_data_dir)
             
             # base dir
-            base_dir = pathlib.Path(nispace_data_dir) / "reference" / dataset
+            base_dir =Path(nispace_data_dir) / "reference" / dataset
             
             # get integrated collection
             if collection in reference_lib[dataset]["collection"]:
@@ -705,8 +690,8 @@ def fetch_collection(collection: Union[str, pathlib.Path, np.ndarray, pd.DataFra
     else:
         
         # check if collection is a file
-        if isinstance(collection, (str, pathlib.Path)):
-            collection_file = pathlib.Path(collection)
+        if isinstance(collection, (str,Path)):
+            collection_file =Path(collection)
             if collection_file.exists():
                 lgr.info(f"Loading custom collection from file: {collection_file}")
             else:
@@ -752,7 +737,7 @@ def apply_collection(data: pd.DataFrame, collection: pd.DataFrame):
 # REFERENCE DATA - PRIVATE =========================================================================
 
 def _filter_maps(maps_avail: List[str], 
-                 maps: Union[str, List[str], Dict[str, Union[str, list]]]) -> List[pathlib.Path]:
+                 maps: Union[str, List[str], Dict[str, Union[str, list]]]) -> List[Path]:
     
     def matches_filters(map_name: str, filters: Dict[str, Union[str, List[str]]]) -> bool:
         for filter_name, filter_content in filters.items():
@@ -790,8 +775,8 @@ def _filter_maps(maps_avail: List[str],
 def _load_collection(collection_path):
     
     # if path, read file
-    if isinstance(collection_path, (str, pathlib.Path)):
-        collection_path = pathlib.Path(collection_path)
+    if isinstance(collection_path, (str,Path)):
+        collection_path =Path(collection_path)
         ext = collection_path.suffix
         
         # if "collect" file, detect if dict or table
@@ -850,21 +835,21 @@ def _load_collection(collection_path):
 
 def _apply_collection_filter(#dataset: str,
                              collection_df: pd.DataFrame,
-                             maps: List[Union[str, pathlib.Path]] = None, 
+                             maps: List[Union[str,Path]] = None, 
                              #collection: str,
-                             #nispace_data_dir: Union[str, pathlib.Path],
+                             #nispace_data_dir: Union[str,Path],
                              set_size_range: Union[None, Tuple[int, int]] = None,
                              weight_range: Union[None, Tuple[float, float]] = None,
                              weight_quantile: Union[None, float] = None,
                              set_specificity: Union[None, float] = None,
                              #overwrite: bool = False,
                              #check_file_hash: bool = True
-                             ) -> List[pathlib.Path]:
+                             ) -> List[Path]:
     # Apply maps filter
     lgr.info(f"Filtering maps by collection.")
     if maps is None or len(maps) == 0:
         filtered_map_files = collection_df["map"].unique()
-    elif isinstance(maps[0], pathlib.Path):
+    elif isinstance(maps[0],Path):
         map_names = [_rm_ext(f.name) for f in maps]
         filtered_map_files = [
             maps[map_names.index(f_name)] for f_name in collection_df["map"].unique()
@@ -944,7 +929,7 @@ def _apply_collection_filter(#dataset: str,
 
 
 def _load_parcellated_data(dataset: str,
-                           nispace_data_dir: Union[str, pathlib.Path],
+                           nispace_data_dir: Union[str,Path],
                            parc: Union[str, List[str]],
                            map_files: List[str],
                            collection_df: pd.DataFrame,
@@ -957,7 +942,7 @@ def _load_parcellated_data(dataset: str,
     verbose = set_log(lgr, verbose)
     
     # tab dir
-    tab_dir = pathlib.Path(nispace_data_dir) / "reference" / dataset / "tab"
+    tab_dir =Path(nispace_data_dir) / "reference" / dataset / "tab"
     
     # parcellation can be string with one parcellation name or list of two parcellation names
     if isinstance(parc, str):
@@ -1000,7 +985,7 @@ def _load_parcellated_data(dataset: str,
 
     # Apply filter to the dataframe index
     lgr.debug(f"Applying filtering based on maps, first 5: {map_files[:5]}")
-    if map_files and isinstance(map_files[0], pathlib.Path):
+    if map_files and isinstance(map_files[0],Path):
         map_files = [_rm_ext(f.name) for f in map_files]
     data = data.loc[data.index.intersection(map_files)]
     lgr.debug(f"Shape after filtering based on map_names: {data.shape}")
@@ -1106,7 +1091,7 @@ def fetch_reference(dataset: str,
                     print_references: bool = True,
                     osf_config_file: str = None,
                     github_config_file: str = None,
-                    nispace_data_dir: Union[str, pathlib.Path] = None,
+                    nispace_data_dir: Union[str,Path] = None,
                     overwrite: bool = False,
                     check_file_hash: bool = True,
                     verbose: bool = True):
@@ -1139,7 +1124,7 @@ def fetch_reference(dataset: str,
     nispace_data_dir = _resolve_nispace_data_dir(nispace_data_dir)
 
     # base dir
-    base_dir = pathlib.Path(nispace_data_dir) / "reference" / dataset
+    base_dir =Path(nispace_data_dir) / "reference" / dataset
     map_dir = base_dir / "map"
     tab_dir = base_dir / "tab"
     
@@ -1155,10 +1140,7 @@ def fetch_reference(dataset: str,
                 if not isinstance(_pname, str) or _pname not in parcellation_lib:
                     continue
                 is_sym = all(
-                    space_data.get(
-                        "symmetric",
-                        "l2rmap" not in space_data and "lrcorr" not in space_data,
-                    )
+                    space_data.get("symmetric", True)
                     for space_data in parcellation_lib[_pname].values()
                     if isinstance(space_data, dict)
                 )
@@ -1368,7 +1350,7 @@ def fetch_map_info(dataset: str,
                    maps: Union[str, list] = None,
                    overwrite: bool = False,
                    check_file_hash: bool = True,
-                   nispace_data_dir: Union[str, pathlib.Path] = None):
+                   nispace_data_dir: Union[str,Path] = None):
     if not isinstance(dataset, str):
         return None
     dataset = dataset.lower()
@@ -1378,7 +1360,7 @@ def fetch_map_info(dataset: str,
         return None
 
     nispace_data_dir = _resolve_nispace_data_dir(nispace_data_dir)
-    base_dir = pathlib.Path(nispace_data_dir) / "reference" / dataset
+    base_dir =Path(nispace_data_dir) / "reference" / dataset
 
     meta = pd.read_csv(
         get_file(
@@ -1401,7 +1383,7 @@ def fetch_metadata(dataset: str,
                    collection: str = None,
                    overwrite: bool = False,
                    check_file_hash: bool = True,
-                   nispace_data_dir: Union[str, pathlib.Path] = None):
+                   nispace_data_dir: Union[str,Path] = None):
     """Deprecated alias for fetch_map_info()."""
     return fetch_map_info(dataset, maps=maps, overwrite=overwrite,
                           check_file_hash=check_file_hash, nispace_data_dir=nispace_data_dir)
@@ -1412,7 +1394,7 @@ def fetch_metadata(dataset: str,
 def fetch_example(example: str,
                   parcellation: str = None,
                   return_associated_data: bool = True,
-                  nispace_data_dir: Union[str, pathlib.Path] = None,
+                  nispace_data_dir: Union[str,Path] = None,
                   overwrite: bool = False,
                   check_file_hash: bool = True,
                   verbose: bool = True):
@@ -1424,7 +1406,7 @@ def fetch_example(example: str,
     nispace_data_dir = _resolve_nispace_data_dir(nispace_data_dir)
 
     # base dir
-    base_dir = pathlib.Path(nispace_data_dir) / "example"
+    base_dir =Path(nispace_data_dir) / "example"
 
     # check available
     example = example.lower()
@@ -1444,7 +1426,7 @@ def fetch_example(example: str,
         
     # load tabulated data
     if all(p in example_lib[example]["tab"] for p in parc):
-        lgr.info(f"Loading example dataset: '{example}', parcellated with: {''.join(parc)}.")
+        lgr.info(f"Loading example dataset: '{example}', parcellated with: {'+'.join(parc)}.")
         example_data = pd.concat([
             pd.read_csv(
                 get_file(

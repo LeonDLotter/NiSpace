@@ -5,12 +5,11 @@ from joblib import Parallel, delayed
 from nilearn.image import resample_img, coord_transform
 from neuromaps.images import load_gifti, load_nifti, load_data, PARCIGNORE
 from neuromaps.nulls.nulls import batch_surrogates
-from neuromaps.nulls.spins import gen_spinsamples, get_parcel_centroids
+from neuromaps.nulls.spins import gen_spinsamples, get_parcel_centroids, spin_parcels
 from collections import namedtuple
 from neuromaps.points import make_surf_graph
 from scipy.sparse.csgraph import dijkstra
 from scipy.spatial.distance import cdist
-from sklearn.preprocessing import minmax_scale
 from tqdm.auto import tqdm
 
 _SurfPair = namedtuple("_SurfPair", ["L", "R"])
@@ -31,6 +30,16 @@ import logging
 lgr = logging.getLogger(__name__)
 from .stats.coloc import corr
 from .utils.utils import set_log
+from .core.nullmaps import NullMaps
+
+# ==================================================================================================
+# DEPRECATION MESSAGE STRINGS
+# ==================================================================================================
+
+_DEPR_RETURN_DICT = (
+    "return_dict=True is deprecated and will be removed in a future release. "
+    "The returned NullMaps supports dict-like access."
+)
 
 
 def _dist_mat_from_coords(coords, dtype=np.float32):
@@ -177,7 +186,7 @@ def _symmetrize_nans(data_1d, idc):
     # return
     return data_1d
 
-def correlate_hemis_parc(data, parc_idc_lh=None, parc_idc_rh=None, l2rmap=None, rank=False):
+def correlate_hemis_parc(data, parc_idc_lh=None, parc_idc_rh=None, rank=False):
     data = np.atleast_2d(np.array(data))
     n = data.shape[1]
     n_hemi = n // 2
@@ -189,15 +198,6 @@ def correlate_hemis_parc(data, parc_idc_lh=None, parc_idc_rh=None, l2rmap=None, 
     parc_idc_rh = np.array(parc_idc_rh)
     data_lh = data[:, parc_idc_lh]
     data_rh = data[:, parc_idc_rh]
-    if l2rmap is not None:
-        l2rmap = np.nan_to_num(np.array(l2rmap)).astype(data.dtype)
-        for i in range(data.shape[0]):
-            lh_1d = data[i, parc_idc_lh]
-            notnan = ~np.isnan(lh_1d)
-            if notnan.any():
-                data_lh[i, :] = np.dot(lh_1d[notnan], l2rmap[notnan, :])
-            else:
-                data_lh[i, :] = np.nan
     r = []
     for i in range(data.shape[0]):
         lh, rh = data_lh[i,:], data_rh[i,:]
@@ -279,13 +279,17 @@ def nulls_burt2020(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
     mask = _get_null_data_mask(data_1d, dist_mat)
     data_1d = data_1d[mask]
     dist_mat = dist_mat[np.ix_(mask, mask)]
+    # default settings
+    n = len(data_1d)                                       # true parcel count after masking
+    kwargs.setdefault("resample", True)                    # preserves full distribution, False de-means nulls
+    batch_size = kwargs.pop("batch_size", 100)             # expose
     # null maps
     null_data[:, mask] = Base(
-        x=data_1d, 
-        D=dist_mat, 
+        x=data_1d,
+        D=dist_mat,
         seed=seed,
         **kwargs
-    )(n_nulls, 50)
+    )(n_nulls, batch_size)
     # return
     return null_data.astype(data_1d.dtype)
 
@@ -297,10 +301,11 @@ def nulls_burt2018(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
     mask = _get_null_data_mask(data_1d, dist_mat)
     data_1d = data_1d[mask]
     dist_mat = dist_mat[np.ix_(mask, mask)]
-    # data adjustment
-    data_1d += np.abs(np.nanmin(data_1d)) + 0.1
-    # null maps
-    null_data[:, mask] = batch_surrogates(dist_mat, data_1d, n_surr=n_nulls, seed=seed, **kwargs).T
+    # batch_surrogates requires positive values (Box-Cox transform); shift and undo on output
+    # so that the returned nulls have the same value distribution as the original input
+    shift = np.abs(np.nanmin(data_1d)) + 0.1
+    null_data[:, mask] = batch_surrogates(
+        dist_mat, data_1d + shift, n_surr=n_nulls, seed=seed, **kwargs).T - shift
     # return
     return null_data.astype(data_1d.dtype)
 
@@ -338,14 +343,17 @@ def nulls_random(data_1d, dist_mat=None, n_nulls=1000, seed=None):
     # return
     return null_data.astype(data_1d.dtype)
 
-
-_SPIN_METHODS = {"alexander_bloch", "spin", "vasa", "hungarian"}
+_DISTMAT_METHODS = {"moran", "burt2018", "burt2020"}
+_SPIN_METHODS = {"alexander_bloch", "spin", "vasa", "hungarian", "cornblath", "baum"}
+_DISTMAT_FREE_METHODS = {"random"}  # methods that never need a distance matrix
 
 _SPIN_METHOD_MAP = {
     "alexander_bloch": "original",
-    "spin": "original",
+    "spin": "cornblath",
     "vasa": "vasa",
     "hungarian": "hungarian",
+    "baum": "baum",
+    "cornblath": "cornblath",
 }
 
 _NULL_METHODS = {
@@ -360,12 +368,45 @@ _NULL_METHODS = {
     "variogram": nulls_burt2020,
     # Smoothing-method from Burt2018 -> volumetric and surface
     "burt2018": nulls_burt2018,
-    # Spin tests -> surface only
-    "alexander_bloch": None,  # handled via spin code path
+    # Spin tests -> surface only (handled via spin code path)
+    "alexander_bloch": None,
     "spin": None,
     "vasa": None,
     "hungarian": None,
+    "baum": None,
+    "cornblath": None,
 }
+
+# Canonical names for aliases — normalised at parse time so cache keys are stable
+_NULL_METHOD_ALIASES = {
+    "spin": "cornblath",
+    "brainspace": "moran",
+    "brainsmash": "burt2020",
+    "variogram": "burt2020",
+}
+
+
+def _parse_null_method(method):
+    """Parse and canonicalise null method to ``(cx_method, sc_method)`` or ``(method, None)``.
+
+    Accepts:
+    - ``str``: single method → ``(method, None)``
+    - ``"cx+sc"`` shorthand, e.g. ``"spin+moran"`` → ``("spin", "moran")``
+    - ``tuple[str, str]``: ``(cx_method, sc_method)`` → returned as-is
+
+    All components are normalised through ``_NULL_METHOD_ALIASES`` so that aliases
+    (e.g. ``"spin"`` / ``"cornblath"``) map to the same canonical name and
+    do not cause spurious cache invalidation.
+    """
+    def _canon(m):
+        return _NULL_METHOD_ALIASES.get(m, m) if m is not None else None
+
+    if isinstance(method, tuple) and len(method) == 2:
+        return (_canon(method[0]), _canon(method[1]))
+    if isinstance(method, str) and "+" in method:
+        parts = method.split("+", 1)
+        return (_canon(parts[0]), _canon(parts[1]))
+    return (_canon(method), None)
 
 
 def _get_surface_atlas(parc_space, density):
@@ -385,6 +426,73 @@ def _get_surface_atlas(parc_space, density):
         L, R = fetch_template(space, desc=desc, res=density, check_file_hash=False, verbose=False)
         atlas[desc] = _SurfPair(L, R)
     return atlas, surf_key
+
+
+def _gen_spinsamples_parallel(coords, hemiid, n_perm, seed=None, n_proc=1, out=None):
+    """Wrapper for ``gen_spinsamples`` with optional thread-based parallelism.
+
+    Designed for vertex-level (65k coord) calls where the bottleneck is
+    ``cKDTree.query`` (C-level, GIL-releasing).  Splits ``n_perm`` across
+    ``n_proc`` threads, each with an independent child seed from ``seed`` via
+    ``np.random.SeedSequence``.  Results are statistically equivalent (i.i.d.
+    rotations) but not byte-identical to a single seeded call when n_proc > 1.
+
+    If *out* is provided (pre-allocated ``(n_vert, n_perm)`` array, ideally
+    F-contiguous so column reads are fast), workers write directly into it
+    instead of returning slices to be concatenated.  This avoids a transient
+    copy and is required when *out* is a memmap-backed array.
+    """
+    from joblib import effective_n_jobs
+    n_workers = effective_n_jobs(n_proc)  # resolves -1/-2/etc. to actual core count
+    if n_workers == 1:
+        result = gen_spinsamples(
+            coords, hemiid, n_rotate=n_perm, method="original",
+            check_duplicates=False, seed=seed,
+        )
+        if out is not None:
+            out[:] = result
+            return out
+        return result
+    seq = np.random.SeedSequence(seed)
+    child_seeds = [int(s.generate_state(1)[0]) for s in seq.spawn(n_workers)]
+    batches = np.array_split(np.arange(n_perm), n_workers)
+
+    def _run_batch(b, s):
+        res = gen_spinsamples(
+            coords, hemiid, n_rotate=len(b), method="original",
+            check_duplicates=False, seed=s,
+        )
+        if out is not None:
+            out[:, b[0]: b[-1] + 1] = res  # write to non-overlapping column slice
+            return None
+        return res
+
+    results = Parallel(n_jobs=n_workers, prefer="threads")(
+        delayed(_run_batch)(b, s)
+        for b, s in zip(batches, child_seeds) if len(b) > 0
+    )
+    if out is not None:
+        return out
+    return np.concatenate(results, axis=1)
+
+
+def _spin_parcels_parallel(surfaces, parcellation, n_perm, seed=None, n_proc=1):
+    """Wrapper for ``spin_parcels`` (Baum) with optional thread-based parallelism."""
+    from joblib import effective_n_jobs
+    n_workers = effective_n_jobs(n_proc)
+    if n_workers == 1:
+        return spin_parcels(
+            surfaces, parcellation, n_rotate=n_perm, seed=seed, check_duplicates=False)
+    seq = np.random.SeedSequence(seed)
+    child_seeds = [int(s.generate_state(1)[0]) for s in seq.spawn(n_workers)]
+    batches = np.array_split(np.arange(n_perm), n_workers)
+    results = Parallel(n_jobs=n_workers, prefer="threads")(
+        delayed(spin_parcels)(
+            surfaces, parcellation, n_rotate=len(b), seed=s, check_duplicates=False,
+        )
+        for b, s in zip(batches, child_seeds) if len(b) > 0
+    )
+    return np.concatenate(results, axis=1)
 
 
 def generate_spins(parc, parc_space, n_perm=1000, method="original", seed=None,
@@ -451,9 +559,192 @@ def generate_spins(parc, parc_space, n_perm=1000, method="original", seed=None,
     return spins_lh, spins_rh
 
 
+def generate_baum_spins(parc, parc_space, n_perm=1000, seed=None, n_proc=1):
+    """Generate Baum-method spin matrix via vertex-level rotation + modal parcel assignment.
+
+    Returns ``(spins_lh, spins_rh)`` int32 arrays of shape ``(n_lh_parcels, n_perm)`` /
+    ``(n_rh_parcels, n_perm)``.  Values are parcel indices (0-based, local to each hemisphere);
+    -1 indicates a parcel fully absorbed by the medial wall after rotation.
+    """
+    if not isinstance(parc, tuple):
+        lgr.critical_raise(
+            "generate_baum_spins requires a bilateral surface parcellation tuple (lh_img, rh_img).",
+            ValueError)
+    parc_lh, parc_rh = parc
+    density = _img_density_for_neuromaps(parc_lh)
+    atlas, _ = _get_surface_atlas(parc_space, density)
+    spheres = atlas["sphere"]
+
+    # spin_parcels generates vertex-level spins and assigns each parcel the modal label
+    # check_duplicates=False: vertex-level coords make duplicates physically impossible
+    regions = _spin_parcels_parallel(
+        surfaces=(spheres.L, spheres.R),
+        parcellation=(parc_lh, parc_rh),
+        n_perm=n_perm,
+        seed=seed,
+        n_proc=n_proc,
+    )  # (n_parcels_total, n_perm), global 0-based indices, -1 = dropped
+
+    n_lh = len(np.unique(parc_lh.agg_data())) - 1  # subtract background label 0
+    spins_lh = regions[:n_lh, :].astype(np.int32)  # already LH-local (0..n_lh-1)
+    raw_rh = regions[n_lh:, :]
+    spins_rh = np.where(raw_rh >= 0, raw_rh - n_lh, -1).astype(np.int32)
+    return spins_lh, spins_rh
+
+
+def generate_cornblath_mat(parc, parc_space, n_perm=1000, seed=None, n_proc=1,
+                           dtype=np.float32, memmap_dir=None):
+    """Generate Cornblath fractional transition matrices.
+
+    For each rotation k, ``T[k, j, i]`` = fraction of parcel i's vertices that land in
+    parcel j.  When all of parcel i's vertices rotate into the medial wall,
+    ``T[k, :, i].sum() == 0`` and the corresponding null value is set to NaN at application.
+
+    Returns ``(T_lh, T_rh)`` arrays of shape
+    ``(n_perm, n_lh_parcels, n_lh_parcels)`` / ``(n_perm, n_rh_parcels, n_rh_parcels)``.
+    With *memmap_dir* these are ``np.memmap``-backed arrays (file-backed, low RAM footprint).
+
+    Parameters
+    ----------
+    memmap_dir : path-like or None
+        Directory for temporary memmap files.  When set, vertex spin indices and both T
+        matrices are kept on disk rather than in RAM.  The vertex spin file is deleted
+        after the T-matrix loop; the T-matrix files persist until the caller deletes them
+        (or the directory is cleaned up, e.g. via ``tempfile.TemporaryDirectory``).
+        Recommended for large parcellations (n_lh > 200) or high n_perm (> 5000).
+    """
+    import os
+    import tempfile
+
+    if not isinstance(parc, tuple):
+        lgr.critical_raise(
+            "generate_cornblath_mat requires a bilateral surface parcellation tuple (lh_img, rh_img).",
+            ValueError)
+    parc_lh, parc_rh = parc
+    density = _img_density_for_neuromaps(parc_lh)
+    atlas, _ = _get_surface_atlas(parc_space, density)
+    spheres = atlas["sphere"]
+
+    # vertex-level coordinates
+    coords, hemiid = get_parcel_centroids(
+        surfaces=(spheres.L, spheres.R), method="surface")
+    n_vert = len(coords)
+    n_vert_lh = int((hemiid == 0).sum())
+
+    # allocate vertex spin index array — F-contiguous so column reads ([:, k]) are fast
+    if memmap_dir is not None:
+        _spins_fd, _spins_path = tempfile.mkstemp(suffix=".spins.dat", dir=memmap_dir)
+        os.close(_spins_fd)
+        all_spins = np.memmap(_spins_path, dtype=np.int32, mode="w+",
+                              shape=(n_vert, n_perm), order="F")
+    else:
+        all_spins = None  # returned by _gen_spinsamples_parallel
+
+    all_spins = _gen_spinsamples_parallel(
+        coords=coords, hemiid=hemiid, n_perm=n_perm, seed=seed, n_proc=n_proc,
+        out=all_spins,
+    )  # (n_vert_total, n_perm)
+
+    vert_spins_lh = all_spins[:n_vert_lh, :]                # (n_vert_lh, n_perm) — global lh indices
+    vert_spins_rh = all_spins[n_vert_lh:, :] - n_vert_lh    # (n_vert_rh, n_perm) — local rh indices
+
+    # vertex → parcel label arrays (0 = medial wall, 1..n_parc = parcel, 1-based global)
+    labels_lh = parc_lh.agg_data().astype(int)   # (n_vert_lh,)
+    labels_rh_global = parc_rh.agg_data().astype(int)  # (n_vert_rh,), global: n_lh+1..n_lh+n_rh
+    n_lh = len(np.unique(labels_lh)) - 1
+    n_rh = len(np.unique(labels_rh_global)) - 1
+    labels_rh = np.where(labels_rh_global > 0, labels_rh_global - n_lh, 0)  # localize: 1..n_rh
+
+    # source parcel vertex counts (denominator)
+    src_counts_lh = np.bincount(labels_lh[labels_lh > 0], minlength=n_lh + 1)[1:].astype(dtype)
+    src_counts_rh = np.bincount(labels_rh[labels_rh > 0], minlength=n_rh + 1)[1:].astype(dtype)
+    src_counts_lh[src_counts_lh == 0] = 1.0
+    src_counts_rh[src_counts_rh == 0] = 1.0
+
+    # allocate T matrices
+    if memmap_dir is not None:
+        _T_lh_fd, _T_lh_path = tempfile.mkstemp(suffix=".T_lh.dat", dir=memmap_dir)
+        _T_rh_fd, _T_rh_path = tempfile.mkstemp(suffix=".T_rh.dat", dir=memmap_dir)
+        os.close(_T_lh_fd); os.close(_T_rh_fd)
+        T_lh = np.memmap(_T_lh_path, dtype=dtype, mode="w+", shape=(n_perm, n_lh, n_lh))
+        T_rh = np.memmap(_T_rh_path, dtype=dtype, mode="w+", shape=(n_perm, n_rh, n_rh))
+    else:
+        T_lh = np.zeros((n_perm, n_lh, n_lh), dtype=dtype)
+        T_rh = np.zeros((n_perm, n_rh, n_rh), dtype=dtype)
+
+    for k in range(n_perm):
+        src_lh = labels_lh[vert_spins_lh[:, k]]
+        dst_lh = labels_lh
+        valid = (src_lh > 0) & (dst_lh > 0)
+        s, d = src_lh[valid] - 1, dst_lh[valid] - 1
+        np.add.at(T_lh[k], (d, s), 1.0 / src_counts_lh[s])
+
+        src_rh = labels_rh[vert_spins_rh[:, k]]
+        dst_rh = labels_rh
+        valid = (src_rh > 0) & (dst_rh > 0)
+        s, d = src_rh[valid] - 1, dst_rh[valid] - 1
+        np.add.at(T_rh[k], (d, s), 1.0 / src_counts_rh[s])
+
+    # release vertex spin array and delete its backing file (no longer needed)
+    if memmap_dir is not None:
+        del vert_spins_lh, vert_spins_rh, all_spins
+        os.unlink(_spins_path)
+        T_lh.flush()
+        T_rh.flush()
+
+    return T_lh, T_rh
+
+
+def apply_cornblath_mat(data_1d, T_lh, T_rh, idc_lh, idc_rh, n_perm=None):
+    """Apply precomputed Cornblath transition matrices to a 1D data array.
+
+    ``T_lh`` / ``T_rh``: float32 ``(n_perm, n_parc_hemi, n_parc_hemi)`` as returned by
+    :func:`generate_cornblath_mat`.  If ``n_perm`` is less than ``T_lh.shape[0]``, only
+    the first ``n_perm`` rotations are used.
+
+    Returns ``null_data`` of shape ``(n_perm, n_parcels)``.
+    """
+    if n_perm is None:
+        n_perm = T_lh.shape[0]
+    T_lh = T_lh[:n_perm]
+    T_rh = T_rh[:n_perm]
+    idc_lh = np.asarray(idc_lh, dtype=int)
+    idc_rh = np.asarray(idc_rh, dtype=int)
+    data_lh = data_1d[idc_lh].astype(np.float32)
+    data_rh = data_1d[idc_rh].astype(np.float32)
+
+    def _apply_hemi(T, d):
+        """Apply T to d, masking out NaN input parcels by re-normalising each row."""
+        nan_mask = np.isnan(d)
+        if nan_mask.any():
+            T = T.copy()
+            T[:, :, nan_mask] = 0.0          # zero weight for NaN-input parcels
+            d = np.where(nan_mask, 0.0, d)
+            row_sums = T.sum(axis=2, keepdims=True)   # (n_perm, n_parc, 1)
+            np.divide(T, row_sums, out=T, where=row_sums != 0)
+        null = np.einsum("kij,j->ki", T, d)  # (n_perm, n_parc)
+        if nan_mask.any():
+            # parcels whose full weight came from NaN inputs → all-zero row after zero-fill → NaN
+            null[T.sum(axis=2) == 0] = np.nan
+        return T, null
+
+    T_lh, null_lh = _apply_hemi(T_lh, data_lh)
+    T_rh, null_rh = _apply_hemi(T_rh, data_rh)
+
+    # parcels where all source vertices rotated to medial wall → column sum == 0 → NaN
+    null_lh[T_lh.sum(axis=2) == 0] = np.nan
+    null_rh[T_rh.sum(axis=2) == 0] = np.nan
+
+    null_data = np.full((n_perm, len(data_1d)), np.nan, dtype=data_1d.dtype)
+    null_data[:, idc_lh] = null_lh
+    null_data[:, idc_rh] = null_rh
+    return null_data
+
+
 def apply_spins(data_1d, spins_lh, spins_rh, idc_lh, idc_rh, n_perm=None):
     """Apply precomputed spin indices to a 1D data array.
 
+    Handles -1 entries (Baum dropped parcels) by setting those positions to NaN.
     Returns null_data of shape (n_perm, n_parcels).
     """
     if n_perm is None:
@@ -464,9 +755,20 @@ def apply_spins(data_1d, spins_lh, spins_rh, idc_lh, idc_rh, n_perm=None):
     idc_rh = np.asarray(idc_rh, dtype=int)
     data_lh = data_1d[idc_lh]
     data_rh = data_1d[idc_rh]
+    has_neg = spins_lh.min() < 0 or spins_rh.min() < 0
     for k in range(n_perm):
-        null_data[k, idc_lh] = data_lh[spins_lh[:, k]]
-        null_data[k, idc_rh] = data_rh[spins_rh[:, k]]
+        if has_neg:
+            m = spins_lh[:, k] >= 0
+            v = data_lh[np.where(m, spins_lh[:, k], 0)]
+            v[~m] = np.nan
+            null_data[k, idc_lh] = v
+            m = spins_rh[:, k] >= 0
+            v = data_rh[np.where(m, spins_rh[:, k], 0)]
+            v[~m] = np.nan
+            null_data[k, idc_rh] = v
+        else:
+            null_data[k, idc_lh] = data_lh[spins_lh[:, k]]
+            null_data[k, idc_rh] = data_rh[spins_rh[:, k]]
     return null_data
 
 
@@ -713,28 +1015,20 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
                        parc_space=None, parc_hemi=None, parc_symmetric=False,
                        n_nulls=1000, parc_resample=2, centroids=False,
                        parc_idc_lh=None, parc_idc_rh=None, parc_idc_sc=None,
-                       lr_mirror_dist_mat=False, split_hemi=None, split_cxsc=False,
-                       cx_sc_minmax_scale=False,
+                       lr_mirror_dist_mat=False, split_hemi=None,
                        parc_name=None,
+                       dist_mat_sc=None, parc_space_sc=None,
+                       dist_mat_cx=None, parc_space_cx=None,
                        dtype=float,
                        n_proc=1, seed=None, verbose=True,
+                       return_dict=False,
                        **kwargs):
     verbose = set_log(lgr, verbose)
 
-    ## Checks
-    # null method
-    if method not in _NULL_METHODS:
-        lgr.critical_raise(f"Null method {method} not implemented!",
-                           ValueError)
-    null_fun = _NULL_METHODS[method]
-    random_nulls = False
-    if null_fun is not None and null_fun.__name__ == "nulls_burt2020" and not _BRAINSMASH_AVAILABLE:
-        lgr.critical_raise("Null method 'burt2020' requires brainsmash! Run 'pip install brainsmash'!",
-                           ImportError)
-    elif null_fun is not None and null_fun.__name__ == "nulls_random":
-        random_nulls = True
-        
-    # input data
+    # parse method: supports tuple (cx_method, sc_method) and "cx+sc" shorthand
+    cx_method, sc_method = _parse_null_method(method)
+
+    # input data (needed before split path so data_labs is available)
     if not isinstance(data, (pd.DataFrame, pd.Series, np.ndarray)):
         lgr.critical_raise(f"Input data not array-like! Type: {type(data)}",
                            ValueError)
@@ -748,15 +1042,181 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
     n_data = data.shape[0]
     if "data_labs" not in locals():
         data_labs = list(range(n_data))
-        
+
+    # accept Parcellation object: unpack to flat image/space/index parameters
+    if parcellation is not None:
+        from .core.parcellation import Parcellation as _Parcellation
+        if isinstance(parcellation, _Parcellation):
+            _parc = parcellation
+            if parc_name is None:
+                parc_name = _parc._name
+            parc_symmetric = _parc._symmetric
+            # ensure an active space is set (needed for _image_obj, _idc_byhemi, _cx_idc_lh/rh)
+            if _parc._space is None:
+                _ns = _parc.get_null_space()
+                if isinstance(_ns[0], tuple):
+                    # combined: use sc/MNI space (holds the merged volumetric image)
+                    _auto_space = _ns[1][0]
+                elif cx_method in _SPIN_METHODS:
+                    # spin: use the surface space from get_null_space()
+                    _auto_space = _ns[0]
+                else:
+                    # non-spin: prefer MNI volume (stored Euclidean dist_mat, faster)
+                    _auto_space = next(
+                        (s for s in ["MNI152NLin6Asym", "MNI152NLin2009cAsym", "MNI152",
+                                     "MNIOriginal", "MNI"]
+                         if s in _parc.spaces),
+                        _ns[0],  # fallback to get_null_space() suggestion
+                    )
+                lgr.info(f"Parcellation '{_parc._name}' has no active space; "
+                         f"auto-selecting '{_auto_space}'.")
+                _parc.set_active_space(_auto_space)
+            # sc indices for combined parcellations (needed for split path below)
+            if parc_idc_sc is None and _parc._is_combined:
+                parc_idc_sc = _parc.get_sc_idc()
+            # component dist_mats for combined + split method (lazy, avoids computing full combined)
+            if sc_method is not None and _parc._is_combined:
+                if dist_mat_sc is None:
+                    dist_mat_sc, _sc_spc = _parc.get_sc_dist_mat()
+                    if parc_space_sc is None:
+                        parc_space_sc = _sc_spc
+                if dist_mat_cx is None:
+                    dist_mat_cx, _cx_spc = _parc.get_cx_dist_mat()
+                    if parc_space_cx is None:
+                        parc_space_cx = _cx_spc
+            # resolve image and spatial metadata
+            if cx_method in _SPIN_METHODS:
+                surf_img, surf_spin_mat, surf_space = _parc.get_surface_for_spins()
+                if surf_img is not None:
+                    parcellation = surf_img
+                    if parc_space is None:
+                        parc_space = surf_space
+                    if parc_hemi is None:
+                        parc_hemi = ("L", "R")
+                    if spin_mat is None and surf_spin_mat is not None:
+                        spin_mat = surf_spin_mat
+                    if parc_idc_lh is None:
+                        parc_idc_lh = (_parc._cx_idc_lh
+                                       if _parc._is_combined and _parc._cx_idc_lh is not None
+                                       else _parc._idc_byhemi.get("L"))
+                    if parc_idc_rh is None:
+                        parc_idc_rh = (_parc._cx_idc_rh
+                                       if _parc._is_combined and _parc._cx_idc_rh is not None
+                                       else _parc._idc_byhemi.get("R"))
+                else:
+                    parcellation = _parc._image_obj
+                    if parc_space is None:
+                        parc_space = _parc._space
+                    if parc_hemi is None:
+                        parc_hemi = _parc._hemi
+            else:
+                parcellation = _parc._image_obj
+                if parc_space is None:
+                    parc_space = _parc._space
+                if parc_hemi is None:
+                    parc_hemi = _parc._hemi
+                if parc_idc_lh is None:
+                    parc_idc_lh = _parc._idc_byhemi.get("L")
+                if parc_idc_rh is None:
+                    parc_idc_rh = _parc._idc_byhemi.get("R")
+                # lazy-load stored dist_mat — avoids recomputing from the image
+                if dist_mat is None:
+                    dist_mat = _parc._dist_mat
+
+    ## SPLIT PATH: cx_method + sc_method differ (or same — handles (m,m) as well)
+    if sc_method is not None:
+        if parc_idc_sc is None:
+            lgr.critical_raise(
+                "Split null method requires 'parc_idc_sc' to identify subcortex parcels.",
+                ValueError)
+        if sc_method in _SPIN_METHODS:
+            lgr.critical_raise(
+                f"Spin methods are cortex-only; sc_method='{sc_method}' is not valid. "
+                f"Use one of {_DISTMAT_METHODS} for subcortex.",
+                ValueError)
+        parc_idc_sc = np.asarray(parc_idc_sc)
+        parc_idc_cx = np.setdiff1d(np.arange(data.shape[1]), parc_idc_sc)
+
+        lgr.info(f"Split null method: cx='{cx_method}' ({len(parc_idc_cx)} parcels), "
+                 f"sc='{sc_method}' ({len(parc_idc_sc)} parcels).")
+
+        # CX PATH
+        if cx_method in _SPIN_METHODS:
+            # spin: full data + surface parcellation; sc positions → NaN in output
+            cx_nulls, result_mat = generate_null_maps(
+                method=cx_method, data=data, parcellation=parcellation,
+                dist_mat=None, spin_mat=spin_mat,
+                parc_space=parc_space, parc_hemi=parc_hemi, parc_symmetric=parc_symmetric,
+                parc_resample=parc_resample, n_nulls=n_nulls, centroids=centroids,
+                parc_idc_lh=parc_idc_lh, parc_idc_rh=parc_idc_rh, parc_idc_sc=None,
+                lr_mirror_dist_mat=lr_mirror_dist_mat, split_hemi=split_hemi,
+                parc_name=parc_name, dtype=dtype, n_proc=n_proc, seed=seed,
+                verbose=verbose, **kwargs)
+            # cx_nulls: (n_maps, n_perm, n_parcels) — sc positions are NaN
+            merged = cx_nulls.data.copy()
+        else:
+            # non-spin: subset cx data + cx dist_mat (prefer pre-loaded, else slice from full)
+            data_cx = data[:, parc_idc_cx]
+            if dist_mat_cx is not None:
+                _dist_mat_cx = dist_mat_cx
+            elif dist_mat is not None:
+                _dist_mat_cx = dist_mat[np.ix_(parc_idc_cx, parc_idc_cx)]
+            else:
+                _dist_mat_cx = None
+            cx_nulls, result_mat = generate_null_maps(
+                method=cx_method, data=data_cx, parcellation=None,
+                parc_space=parc_space_cx or parc_space,
+                dist_mat=_dist_mat_cx, n_nulls=n_nulls, centroids=centroids,
+                split_hemi=None, parc_idc_lh=None, parc_idc_rh=None,
+                parc_name=parc_name, dtype=dtype, n_proc=n_proc, seed=seed,
+                verbose=verbose, **kwargs)
+            # cx_nulls: (n_maps, n_perm, n_cx)
+            merged = np.full((n_data, n_nulls, data.shape[1]), np.nan, dtype=dtype)
+            merged[:, :, parc_idc_cx] = cx_nulls.data
+
+        # SC PATH (always non-spin)
+        data_sc = data[:, parc_idc_sc]
+        # use pre-provided sc dist_mat (preferred), else slice from full dist_mat
+        if dist_mat_sc is not None:
+            _dist_mat_sc = dist_mat_sc
+        elif dist_mat is not None:
+            _dist_mat_sc = dist_mat[np.ix_(parc_idc_sc, parc_idc_sc)]
+        else:
+            _dist_mat_sc = None
+        sc_nulls, _ = generate_null_maps(
+            method=sc_method, data=data_sc, parcellation=None,
+            parc_space=parc_space_sc,
+            dist_mat=_dist_mat_sc, n_nulls=n_nulls, centroids=centroids,
+            parc_name=parc_name, dtype=dtype, n_proc=n_proc, seed=seed,
+            verbose=verbose, **kwargs)
+        # sc_nulls: (n_maps, n_perm, n_sc)
+        merged[:, :, parc_idc_sc] = sc_nulls.data
+
+        return NullMaps(merged, data_labs, dtype=dtype,
+                        null_method=(cx_method, sc_method), null_type="spatial"), result_mat
+
+    ## SINGLE METHOD PATH
+    method = cx_method  # unwrap from parse result
+
+    ## Checks
+    # null method
+    if method not in _NULL_METHODS:
+        lgr.critical_raise(f"Null method {method} not implemented!",
+                           ValueError)
+    null_fun = _NULL_METHODS[method]
+    random_nulls = False
+    if null_fun is not None and null_fun.__name__ == "nulls_burt2020" and not _BRAINSMASH_AVAILABLE:
+        lgr.critical_raise("Null method 'burt2020' requires brainsmash! Run 'pip install brainsmash'!",
+                           ImportError)
+    elif null_fun is not None and null_fun.__name__ == "nulls_random":
+        random_nulls = True
+
     # print
     lgr.info(f"Null map generation: Assuming n = {n_data} data vector(s) for "
              f"n = {data.shape[1]} parcels.")
 
     ## spin nulls -> separate code path, bypass dist_mat entirely
     if method in _SPIN_METHODS:
-        spin_method = _SPIN_METHOD_MAP[method]
-
         # validate: surface parcellation required (bilateral tuple or unilateral GiftiImage)
         if not isinstance(parcellation, (tuple, nib.GiftiImage)):
             lgr.critical_raise(
@@ -774,48 +1234,90 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
         idc_lh = np.array(parc_idc_lh)
         idc_rh = np.array(parc_idc_rh)
 
-        # use precomputed spins only for alexander_bloch/spin; vasa/hungarian always generate
-        if spin_mat is not None and spin_method == "original":
-            if isinstance(spin_mat, tuple) and len(spin_mat) == 2:
-                spins_lh, spins_rh = spin_mat
-                if spins_lh.shape[1] < n_nulls:
-                    lgr.warning(f"Precomputed spin matrix has {spins_lh.shape[1]} spins but "
-                                f"n_perm={n_nulls} requested. Regenerating.")
-                    spin_mat = None
+        ## --- Cornblath: fractional transition matrix path ---
+        if method == "cornblath":
+            if not isinstance(parcellation, tuple):
+                lgr.critical_raise(
+                    "Null method 'cornblath' requires a bilateral surface parcellation tuple.",
+                    ValueError)
+            if spin_mat is not None:
+                if (isinstance(spin_mat, tuple) and len(spin_mat) == 2
+                        and isinstance(spin_mat[0], np.ndarray)
+                        and spin_mat[0].ndim == 3 and spin_mat[0].shape[0] >= n_nulls):
+                    T_lh, T_rh = spin_mat[0], spin_mat[1]
+                    lgr.info("Using provided precomputed Cornblath transition matrix.")
                 else:
-                    lgr.info("Using provided precomputed spin matrix.")
-            else:
-                lgr.warning("Provided 'spin_mat' must be a tuple (spins_lh, spins_rh). Regenerating.")
-                spin_mat = None
-        if spin_mat is None or spin_method != "original":
-            lgr.info(f"Generating spin samples (method='{spin_method}', n={n_nulls}).")
-            spins_lh, spins_rh = generate_spins(
-                parc=parcellation,
-                parc_space=parc_space,
-                n_perm=n_nulls,
-                method=spin_method,
-                seed=seed,
-                parc_hemi=parc_hemi,
-            )
-            spin_mat = (spins_lh, spins_rh)
+                    lgr.warning("Provided 'spin_mat' is not a valid Cornblath T-matrix "
+                                "(expected 3-D float32 tuple with n_perm >= n_nulls). Regenerating.")
+                    spin_mat = None
+            if spin_mat is None:
+                lgr.info(f"Generating Cornblath transition matrices (n={n_nulls}).")
+                T_lh, T_rh = generate_cornblath_mat(
+                    parc=parcellation, parc_space=parc_space, n_perm=n_nulls, seed=seed,
+                    n_proc=n_proc)
+                spin_mat = (T_lh, T_rh)
+            _null_list = []
+            for i, lab in enumerate(tqdm(data_labs, desc="Cornblath null maps", disable=not verbose)):
+                _null_list.append(apply_cornblath_mat(
+                    data_1d=data[i, :].astype(dtype),
+                    T_lh=T_lh, T_rh=T_rh,
+                    idc_lh=idc_lh, idc_rh=idc_rh,
+                    n_perm=n_nulls,
+                ))
 
-        # apply spins to each data row
-        nulls = {}
-        for i, lab in enumerate(tqdm(data_labs,
-                                     desc="Spin null maps",
-                                     disable=not verbose)):
-            nulls[lab] = apply_spins(
-                data_1d=data[i, :].astype(dtype),
-                spins_lh=spins_lh,
-                spins_rh=spins_rh,
-                idc_lh=idc_lh,
-                idc_rh=idc_rh,
-                n_perm=n_nulls,
-            )
+        ## --- Baum / Alexander-Bloch / Vasa / Hungarian: parcel-index path ---
+        else:
+            spin_method = _SPIN_METHOD_MAP[method]
+
+            # precomputed spin_mat accepted for alexander_bloch/spin and baum; always regen for vasa/hungarian
+            if spin_mat is not None and spin_method in ("original", "baum"):
+                if (isinstance(spin_mat, tuple) and len(spin_mat) == 2
+                        and isinstance(spin_mat[0], np.ndarray)
+                        and spin_mat[0].ndim == 2 and spin_mat[0].shape[1] >= n_nulls):
+                    spins_lh, spins_rh = spin_mat[0], spin_mat[1]
+                    lgr.info("Using provided precomputed spin matrix.")
+                else:
+                    lgr.warning("Provided 'spin_mat' must be a 2-D int tuple with n_perm >= n_nulls. Regenerating.")
+                    spin_mat = None
+            elif spin_mat is not None:
+                spin_mat = None  # vasa/hungarian always regenerate
+
+            if spin_mat is None:
+                if method == "baum":
+                    if not isinstance(parcellation, tuple):
+                        lgr.critical_raise(
+                            "Null method 'baum' requires a bilateral surface parcellation tuple.",
+                            ValueError)
+                    lgr.info(f"Generating Baum spin samples (vertex-modal, n={n_nulls}).")
+                    spins_lh, spins_rh = generate_baum_spins(
+                        parc=parcellation, parc_space=parc_space, n_perm=n_nulls, seed=seed,
+                        n_proc=n_proc)
+                else:
+                    lgr.info(f"Generating spin samples (method='{spin_method}', n={n_nulls}).")
+                    spins_lh, spins_rh = generate_spins(
+                        parc=parcellation, parc_space=parc_space, n_perm=n_nulls,
+                        method=spin_method, seed=seed, parc_hemi=parc_hemi,
+                    )
+                spin_mat = (spins_lh, spins_rh)
+
+            _null_list = []
+            for i, lab in enumerate(tqdm(data_labs, desc="Spin null maps", disable=not verbose)):
+                _null_list.append(apply_spins(
+                    data_1d=data[i, :].astype(dtype),
+                    spins_lh=spins_lh, spins_rh=spins_rh,
+                    idc_lh=idc_lh, idc_rh=idc_rh,
+                    n_perm=n_nulls,
+                ))
+
+        # stack: (n_maps, n_perm, n_parcels) — always 3-D even for n_maps=1
+        nulls = NullMaps(np.stack(_null_list), data_labs, dtype=dtype,
+                         null_method=method, null_type="spatial")
 
         lgr.info("Null data generation finished.")
-        # TODO: combined spin+moran: instead of returning here, continue to the moran
-        # path for parc_idc_sc parcels, merge spin nulls (cx) + moran nulls (sc), then return.
+        # TODO (first non-dev release): remove return_dict parameter
+        if return_dict:
+            lgr.warning(_DEPR_RETURN_DICT)
+            return {lbl: nulls[lbl] for lbl in nulls.keys()}, spin_mat
         return nulls, spin_mat
 
     ## random nulls -> no distmat
@@ -955,18 +1457,6 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
                     else:
                         parc_idc_lh = np.setdiff1d(np.arange(data.shape[1]), idc)
             
-    # check if separate indices for subcortex are provided as array
-    if parc_idc_sc is not None:
-        if not isinstance(parc_idc_sc, (list, np.ndarray)):
-            lgr.warning("'parc_idc_sc' must be a list or array! Setting 'parc_idc_sc' to None!")
-            parc_idc_sc = None
-    
-    # create indices for cortex
-    if parc_idc_sc is not None:
-        parc_idc_cx = np.setdiff1d(np.arange(data.shape[1]), parc_idc_sc)
-        if len(parc_idc_cx) == 0:
-            parc_idc_sc, parc_idc_cx = None, None
-            
     # auto-detect split_hemi: True for surface (tuple dist_mat), False for volumetric
     if split_hemi is None:
         split_hemi = isinstance(dist_mat, tuple)
@@ -989,27 +1479,12 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
             np.arange(dist_mat[0].shape[0]), # left hemisphere
             np.arange(dist_mat[1].shape[0]) + dist_mat[0].shape[0], # right hemisphere
         )
-    elif split_hemi and split_cxsc and parc_idc_lh is not None and parc_idc_sc is not None:
-        lgr.info("Generating null data separately for left and right cortex and subcortex.")
-        split_by_idc = (
-            np.intersect1d(parc_idc_lh, parc_idc_cx),  # left cortex
-            np.intersect1d(parc_idc_rh, parc_idc_cx),  # right cortex
-            np.intersect1d(parc_idc_lh, parc_idc_sc),  # left subcortex
-            np.intersect1d(parc_idc_rh, parc_idc_sc),  # right subcortex
-        )
     elif split_hemi and parc_idc_lh is not None:
         lgr.info("Generating null data separately for left and right hemisphere.")
         split_by_idc = (
             parc_idc_lh,  # whole left hemisphere
             parc_idc_rh,  # whole right hemisphere
         )
-    elif split_cxsc and parc_idc_sc is not None:
-        lgr.info("Generating null data separately for cortex and subcortex.")
-        split_by_idc = (
-            parc_idc_cx, # whole cortex
-            parc_idc_sc, # whole subcortex
-        )
-        lr_mirror_dist_mat = False
     else:
         split_by_idc = (np.arange(data.shape[1]),) # whole-brain (default)
         
@@ -1096,7 +1571,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
     # run null data generation
     if seed is None:
         seed = np.random.randint(0, 2**32 - 1)
-    nulls = Parallel(n_jobs=n_proc)(
+    null_list = Parallel(n_jobs=n_proc)(
         delayed(par_fun)(data[i, :], seed + i)
         for i in tqdm(
             range(n_data),
@@ -1104,26 +1579,16 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
             disable=not verbose
         )
     )
-    nulls = {l: n.astype(dtype) for l, n in zip(data_labs, nulls)}
+    # stack: (n_maps, n_perm, n_parcels) — always 3-D even for n_maps=1
+    nulls = NullMaps(np.stack(null_list).astype(dtype), data_labs, dtype=dtype,
+                     null_method=method, null_type="spatial")
 
-    # adjust scaling
-    if cx_sc_minmax_scale:
-        if parc_idc_sc is None:
-            lgr.warning("To perform subcortical and cortical scaling adjustment, provide 'parc_idc_sc'!")
-        else:
-            lgr.info("Matching min-max range of subcortical and cortical null data to observed data.")
-            for i, (l, n) in enumerate(nulls.items()):
-                # get min, max, and mean of original subcortical data
-                scale_sc = (np.nanmin(data[i, parc_idc_sc]), np.nanmax(data[i, parc_idc_sc]))
-                # get min, max, and mean of original cortical data
-                scale_cx = (np.nanmin(data[i, parc_idc_cx]), np.nanmax(data[i, parc_idc_cx]))
-                # scale subcortical null data
-                nulls[l][:, parc_idc_sc] = minmax_scale(n[:, parc_idc_sc], feature_range=scale_sc, axis=1)
-                # scale cortical null data
-                nulls[l][:, parc_idc_cx] = minmax_scale(n[:, parc_idc_cx], feature_range=scale_cx, axis=1)
-                
     ## return
     lgr.info("Null data generation finished.")
+    # TODO (first non-dev release): remove return_dict parameter
+    if return_dict:
+        lgr.warning(_DEPR_RETURN_DICT)
+        return {lbl: nulls[lbl] for lbl in nulls.keys()}, dist_mat
     return nulls, dist_mat
         
     

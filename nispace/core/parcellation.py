@@ -1,8 +1,7 @@
 
-import pathlib
+from pathlib import Path
 import nibabel as nib
 import numpy as np
-import pandas as pd
 
 from neuromaps.images import load_data
 
@@ -12,7 +11,7 @@ from ..nulls import (
     _img_space_for_neuromaps, _img_density_for_neuromaps,
     find_parcel_hemispheres, get_distance_matrix,
 )
-from ..io import load_distmat, load_spinmat, load_img, load_labels, load_l2rmap
+from ..io import load_distmat, load_spinmat, load_img, load_labels
 from ..utils.utils import set_log, relabel_nifti_parc, relabel_gifti_parc
 
 
@@ -133,7 +132,7 @@ class Parcellation:
         self,
         # legacy single-space init (kept for backward compat)
         parcellation=None, space=None, labels=None, resolution=None,
-        hemi=None, symmetric=False, left2right_mapping=None, lrcorr=None,
+        hemi=None, symmetric=False,
         labels_lh=None, labels_rh=None, labels_img_lh=None, labels_img_rh=None,
         idc_lh=None, idc_rh=None, dist_mat=None, spin_mat=None, name=None,
         # multi-space / combined
@@ -147,10 +146,13 @@ class Parcellation:
         self._is_combined = is_combined
         self._cx_name = cx_name      # name of cortex component (combined only)
         self._sc_name = sc_name      # name of subcortex component (combined only)
+        self._n_cx_labels = None     # number of cx labels in combined parcellation
+        self._sc_dist_mat = None     # loaded sc dist_mat (combined only)
+        self._sc_dist_mat_spec = None  # lazy-load spec for sc dist_mat (combined only)
+        self._cx_dist_mat = None     # loaded cx dist_mat (combined only)
+        self._cx_dist_mat_spec = None  # lazy-load spec for cx dist_mat (combined only)
         self._labels = np.array(labels) if labels is not None else None
         self._symmetric = symmetric
-        self._l2rmap = left2right_mapping
-        self._lrcorr = lrcorr
 
         # --- per-space storage (keyed by space name string) ---
         # Values in _images may be: loaded nib objects OR path strings/tuples
@@ -208,7 +210,7 @@ class Parcellation:
     @classmethod
     def from_path(
         cls, source, space=None, labels=None, dist_mat=None, spin_mat=None,
-        symmetric=False, l2rmap=None, lrcorr=None, hemi=None, name=None,
+        symmetric=False, hemi=None, name=None,
         level=None, verbose=True,
     ):
         """Build a single-space Parcellation from a user-provided image.
@@ -220,8 +222,7 @@ class Parcellation:
         """
         set_log(lgr, verbose)
         lgr.info(f"Building Parcellation from path / image{f' ({name})' if name else ''}.")
-        p = cls(name=name, level=level, symmetric=symmetric,
-                left2right_mapping=l2rmap, lrcorr=lrcorr)
+        p = cls(name=name, level=level, symmetric=symmetric)
 
         # load image
         image = load_img(source)
@@ -278,7 +279,7 @@ class Parcellation:
     @classmethod
     def from_nispace_library(
         cls, name_or_list, lib_entry_or_list, data_dir,
-        load_dist_mat=True, load_spin_mat=True, lrcorr_threshold=0.0,
+        load_dist_mat=True, load_spin_mat=True,
         overwrite=False, check_file_hash=True, verbose=True,
     ):
         """Build a multi-space Parcellation from the NiSpace parcellation library.
@@ -293,27 +294,27 @@ class Parcellation:
         from ..utils.utils_datasets import get_file
         from ..utils.utils import merge_parcellations
 
-        data_dir = pathlib.Path(data_dir)
+        data_dir =Path(data_dir)
         gf_kw = dict(overwrite=overwrite, hash_check=check_file_hash)
         is_combined = isinstance(name_or_list, list)
 
         if is_combined:
             return cls._from_nispace_library_combined(
                 name_or_list, lib_entry_or_list, data_dir,
-                load_dist_mat, load_spin_mat, lrcorr_threshold,
+                load_dist_mat, load_spin_mat,
                 gf_kw, verbose,
             )
         else:
             return cls._from_nispace_library_single(
                 name_or_list, lib_entry_or_list, data_dir,
-                load_dist_mat, load_spin_mat, lrcorr_threshold,
+                load_dist_mat, load_spin_mat,
                 gf_kw, verbose,
             )
 
     @classmethod
     def _from_nispace_library_single(
         cls, name, lib_entry, data_dir, load_dist_mat, load_spin_mat,
-        lrcorr_threshold, gf_kw, verbose,
+        gf_kw, verbose,
     ):
         """Build a single (non-combined) multi-space Parcellation from the library."""
         from ..utils.utils_datasets import get_file
@@ -333,7 +334,7 @@ class Parcellation:
         lgr.info(f"Available spaces: {', '.join(spaces)}")
         p = cls(name=name)
 
-        shared_loaded = False  # load labels/l2rmap/lrcorr only once
+        shared_loaded = False  # load labels only once
 
         for space, space_lib in space_entries.items():
             is_vol = "mni" in space.lower()
@@ -373,30 +374,11 @@ class Parcellation:
                         )
                         p._labels = np.array(load_labels(label_paths))
 
-                sym = (
+                p._symmetric = (
                     entry_symmetric
                     if entry_symmetric is not None
-                    else space_lib.get(
-                        "symmetric",
-                        "l2rmap" not in space_lib and "lrcorr" not in space_lib,
-                    )
+                    else space_lib.get("symmetric", True)
                 )
-                p._symmetric = sym
-
-                if not sym and "l2rmap" in space_lib:
-                    l2r_path = get_file(
-                        base / f"parc-{name}_space-{space}.l2rmap.csv.gz",
-                        **space_lib["l2rmap"], **gf_kw,
-                    )
-                    p._l2rmap = load_l2rmap(l2r_path, threshold=lrcorr_threshold)
-
-                if not sym and "lrcorr" in space_lib:
-                    lrc_path = get_file(
-                        base / f"parc-{name}_space-{space}.lrcorr.csv.gz",
-                        **space_lib["lrcorr"], **gf_kw,
-                    )
-                    p._lrcorr = load_l2rmap(lrc_path, threshold=lrcorr_threshold)
-
                 p._level = entry_level or space_lib.get("level", None)
                 shared_loaded = True
 
@@ -437,10 +419,12 @@ class Parcellation:
             # ---- spin matrix (surface only) ----
             sm = None
             if not is_vol and "spinmat" in space_lib:
+                # derive local extension from remote path (.npy legacy or .npz new)
+                _sm_ext = Path(space_lib["spinmat"]["L"]["remote"]).suffix
                 if load_spin_mat:
                     sm_paths = tuple(
                         get_file(
-                            base / f"parc-{name}_space-{space}_hemi-{h}.spin.npy",
+                            base / f"parc-{name}_space-{space}_hemi-{h}.spin{_sm_ext}",
                             **space_lib["spinmat"][h], **gf_kw,
                         )
                         for h in ["L", "R"]
@@ -448,7 +432,7 @@ class Parcellation:
                     sm = load_spinmat(sm_paths)
                 else:
                     sm = tuple(
-                        {"path_template": base / f"parc-{name}_space-{space}_hemi-{h}.spin.npy",
+                        {"path_template": base / f"parc-{name}_space-{space}_hemi-{h}.spin{_sm_ext}",
                          "spec": space_lib["spinmat"][h], "gf_kw": gf_kw}
                         for h in ["L", "R"]
                     )
@@ -464,7 +448,7 @@ class Parcellation:
     @classmethod
     def _from_nispace_library_combined(
         cls, names, lib_entries, data_dir, load_dist_mat, load_spin_mat,
-        lrcorr_threshold, gf_kw, verbose,
+        gf_kw, verbose,
     ):
         """Build a combined (cx+sc) multi-space Parcellation from the library."""
         set_log(lgr, verbose)
@@ -489,7 +473,7 @@ class Parcellation:
             )
         lgr.info(f"  Common MNI space(s) for combined: {common_mni}.")
 
-        combined_name = f"{cx_name}{sc_name}"
+        combined_name = f"{cx_name}+{sc_name}"
         p = cls(name=combined_name, level="combined", is_combined=True,
                 cx_name=cx_name, sc_name=sc_name)
 
@@ -528,44 +512,67 @@ class Parcellation:
                 cx_labels = load_labels(cx_label_path)
                 sc_labels = load_labels(sc_label_path)
                 p._labels = np.array(cx_labels + sc_labels)
+                p._n_cx_labels = len(cx_labels)
 
-                # symmetry: read from top-level JSON field (post-refactor) or fall back to
-                # space-level key / l2rmap/lrcorr presence check (pre-refactor compat)
                 cx_sym = (
                     cx_lib["symmetric"]
                     if "symmetric" in cx_lib
-                    else cx_lib[mni_space].get(
-                        "symmetric",
-                        "l2rmap" not in cx_lib[mni_space] and "lrcorr" not in cx_lib[mni_space],
-                    )
+                    else cx_lib[mni_space].get("symmetric", True)
                 )
                 sc_sym = (
                     sc_lib["symmetric"]
                     if "symmetric" in sc_lib
-                    else sc_lib[mni_space].get(
-                        "symmetric",
-                        "l2rmap" not in sc_lib[mni_space] and "lrcorr" not in sc_lib[mni_space],
-                    )
+                    else sc_lib[mni_space].get("symmetric", True)
                 )
                 p._cx_symmetric = cx_sym
                 p._sc_symmetric = sc_sym
                 p._symmetric = cx_sym and sc_sym
 
-                if not cx_sym and "l2rmap" in cx_lib[mni_space]:
-                    l2r_path = get_file(
-                        base_cx / f"parc-{cx_name}_space-{mni_space}.l2rmap.csv.gz",
-                        **cx_lib[mni_space]["l2rmap"], **gf_kw,
-                    )
-                    p._l2rmap = load_l2rmap(l2r_path, threshold=lrcorr_threshold)
-
-                if not cx_sym and "lrcorr" in cx_lib[mni_space]:
-                    lrc_path = get_file(
-                        base_cx / f"parc-{cx_name}_space-{mni_space}.lrcorr.csv.gz",
-                        **cx_lib[mni_space]["lrcorr"], **gf_kw,
-                    )
-                    p._lrcorr = load_l2rmap(lrc_path, threshold=lrcorr_threshold)
-
             p.add_space(mni_space, image=merged_img, dist_mat=None, spin_mat=None)
+
+        # ---- component dist_mat lazy specs (split-null avoids recomputing full combined dist_mat) ----
+        for pref_sc_space in ["MNI152NLin6Asym", "MNI152NLin2009cAsym"]:
+            if pref_sc_space in common_mni and "distmat" in sc_lib.get(pref_sc_space, {}):
+                p._sc_dist_mat_spec = {
+                    "space": pref_sc_space,
+                    "path_template": (
+                        data_dir / "parcellation" / sc_name / pref_sc_space
+                        / f"parc-{sc_name}_space-{pref_sc_space}.dist.csv.gz"
+                    ),
+                    "spec": sc_lib[pref_sc_space]["distmat"],
+                    "gf_kw": gf_kw,
+                }
+                break
+        # Prefer surface geodesic dist_mat (fsLR/fsaverage) for cx; fall back to MNI Euclidean.
+        # Surface spaces store per-hemi files (L+R) → use "hemi_specs" key instead of "path_template".
+        for pref_cx_space in ["fsLR", "fsaverage", "MNI152NLin6Asym", "MNI152NLin2009cAsym"]:
+            cx_space_lib = cx_lib.get(pref_cx_space, {})
+            if "distmat" not in cx_space_lib:
+                continue
+            dm_entry = cx_space_lib["distmat"]
+            _is_hemi = isinstance(dm_entry, dict) and any(h in dm_entry for h in ("L", "R"))
+            base_cx = data_dir / "parcellation" / cx_name / pref_cx_space
+            if _is_hemi:
+                p._cx_dist_mat_spec = {
+                    "space": pref_cx_space,
+                    "hemi_specs": tuple(
+                        {
+                            "path_template": base_cx / f"parc-{cx_name}_space-{pref_cx_space}_hemi-{h}.dist.csv.gz",
+                            "spec": dm_entry[h],
+                            "gf_kw": gf_kw,
+                        }
+                        for h in ("L", "R")
+                        if dm_entry.get(h) is not None
+                    ),
+                }
+            else:
+                p._cx_dist_mat_spec = {
+                    "space": pref_cx_space,
+                    "path_template": base_cx / f"parc-{cx_name}_space-{pref_cx_space}.dist.csv.gz",
+                    "spec": dm_entry,
+                    "gf_kw": gf_kw,
+                }
+            break
 
         # ---- cx surface data for future split-null support ----
         cx_surface_spaces = [s for s in cx_spaces if "mni" not in s.lower()]
@@ -581,10 +588,11 @@ class Parcellation:
             )
             cx_sm = None
             if "spinmat" in cx_lib[surf_space]:
+                _cx_sm_ext = Path(cx_lib[surf_space]["spinmat"]["L"]["remote"]).suffix
                 if load_spin_mat:
                     cx_sm_paths = tuple(
                         get_file(
-                            base_cx_surf / f"parc-{cx_name}_space-{surf_space}_hemi-{h}.spin.npy",
+                            base_cx_surf / f"parc-{cx_name}_space-{surf_space}_hemi-{h}.spin{_cx_sm_ext}",
                             **cx_lib[surf_space]["spinmat"][h], **gf_kw,
                         )
                         for h in ["L", "R"]
@@ -592,7 +600,7 @@ class Parcellation:
                     cx_sm = load_spinmat(cx_sm_paths)
                 else:
                     cx_sm = tuple(
-                        {"path_template": base_cx_surf / f"parc-{cx_name}_space-{surf_space}_hemi-{h}.spin.npy",
+                        {"path_template": base_cx_surf / f"parc-{cx_name}_space-{surf_space}_hemi-{h}.spin{_cx_sm_ext}",
                          "spec": cx_lib[surf_space]["spinmat"][h], "gf_kw": gf_kw}
                         for h in ["L", "R"]
                     )
@@ -682,8 +690,8 @@ class Parcellation:
                 f"(available: {self.spaces}).",
                 KeyError,
             )
-        is_path = isinstance(img, (str, pathlib.Path)) or (
-            isinstance(img, tuple) and isinstance(img[0], (str, pathlib.Path))
+        is_path = isinstance(img, (str,Path)) or (
+            isinstance(img, tuple) and isinstance(img[0], (str,Path))
         )
         if is_path:
             lgr.info(f"Lazy-loading parcellation image for space '{space}'.")
@@ -695,7 +703,7 @@ class Parcellation:
         if dm is None:
             return
         if isinstance(dm, (np.ndarray, tuple)) and not (
-            isinstance(dm, tuple) and dm and isinstance(dm[0], (str, pathlib.Path, dict))
+            isinstance(dm, tuple) and dm and isinstance(dm[0], (str,Path, dict))
         ):
             return  # already loaded
         # lazy-load: dm is a path, tuple of paths, or a lazy-spec dict / tuple of dicts
@@ -716,9 +724,9 @@ class Parcellation:
                 for d in dm
             )
             self._dist_mats[space] = load_distmat(paths)
-        elif isinstance(dm, (str, pathlib.Path)):
+        elif isinstance(dm, (str,Path)):
             self._dist_mats[space] = load_distmat(dm)
-        elif isinstance(dm, tuple) and dm and isinstance(dm[0], (str, pathlib.Path)):
+        elif isinstance(dm, tuple) and dm and isinstance(dm[0], (str,Path)):
             self._dist_mats[space] = load_distmat(dm)
 
     def _ensure_spin_mat_loaded(self, space):
@@ -849,15 +857,9 @@ class Parcellation:
         """Number of subcortex parcels (combined only)."""
         if not self._is_combined or self._sc_name is None:
             return 0
-        # sc parcels are at the end of _labels; we can detect them by hemi-tag absence
-        # simple heuristic: count labels without hemi- prefix that are not in cx
-        # fall back to 0 if uncertain
-        try:
-            sc_count = sum(1 for l in self._labels if "hemi-" not in str(l)
-                           and not any(cx in str(l) for cx in [self._cx_name or ""]))
-            return sc_count if sc_count > 0 else 0
-        except Exception:
-            return 0
+        if self._n_cx_labels is not None:
+            return len(self._labels) - self._n_cx_labels
+        return 0
 
     # ------------------------------------------------------------------
     # Bilateral transformation
@@ -904,16 +906,12 @@ class Parcellation:
 
         self._labels = np.array(bilateral_labels)
 
-        # clear l2rmap / lrcorr (irrelevant after bilateral)
-        self._l2rmap = None
-        self._lrcorr = None
-
         # --- relabel images ---
         for space in list(self._images.keys()):
-            is_path = isinstance(self._images[space], (str, pathlib.Path)) or (
+            is_path = isinstance(self._images[space], (str,Path)) or (
                 isinstance(self._images[space], tuple)
                 and self._images[space]
-                and isinstance(self._images[space][0], (str, pathlib.Path))
+                and isinstance(self._images[space][0], (str,Path))
             )
             if is_path:
                 self._ensure_image_loaded(space)
@@ -1058,7 +1056,7 @@ class Parcellation:
 
             is_surf_path = (
                 isinstance(img, tuple) and img
-                and isinstance(img[0], (str, pathlib.Path))
+                and isinstance(img[0], (str,Path))
             )
             is_surf_loaded = (
                 isinstance(img, tuple) and img
@@ -1077,7 +1075,7 @@ class Parcellation:
                 data[~mask] = 0
                 self._images[space] = nib.Nifti1Image(data, img.affine, img.header)
 
-            elif isinstance(img, (str, pathlib.Path)):
+            elif isinstance(img, (str,Path)):
                 # lazy volume path — load now and mask immediately
                 loaded = load_img(img)
                 if isinstance(loaded, nib.Nifti1Image):
@@ -1118,22 +1116,29 @@ class Parcellation:
             if sm is None or not (isinstance(sm, tuple) and len(sm) == 2):
                 continue
             spins_lh, spins_rh = sm
-            if keep_hemi == "L":
-                n_perm = spins_lh.shape[1] if spins_lh is not None and spins_lh.ndim == 2 else 0
-                self._spin_mats[space] = (
-                    spins_lh,
-                    np.zeros((0, n_perm), dtype=spins_rh.dtype if spins_rh is not None else np.int32),
-                )
+            is_t_mat = spins_lh is not None and hasattr(spins_lh, "ndim") and spins_lh.ndim == 3
+            if is_t_mat:
+                # Cornblath T-matrix: shape (n_perm, n_hemi, n_hemi)
+                n_perm = spins_lh.shape[0]
+                empty = np.zeros((n_perm, 0, 0), dtype=np.float32)
+                if keep_hemi == "L":
+                    self._spin_mats[space] = (spins_lh, empty)
+                else:
+                    self._spin_mats[space] = (empty, spins_rh)
             else:
-                n_perm = spins_rh.shape[1] if spins_rh is not None and spins_rh.ndim == 2 else 0
-                self._spin_mats[space] = (
-                    np.zeros((0, n_perm), dtype=spins_lh.dtype if spins_lh is not None else np.int32),
-                    spins_rh,
-                )
-
-        # --- l2rmap / lrcorr are irrelevant for a single hemisphere ---
-        self._l2rmap = None
-        self._lrcorr = None
+                # parcel-index spin_mat: shape (n_hemi, n_perm)
+                if keep_hemi == "L":
+                    n_perm = spins_lh.shape[1] if spins_lh is not None and spins_lh.ndim == 2 else 0
+                    self._spin_mats[space] = (
+                        spins_lh,
+                        np.zeros((0, n_perm), dtype=spins_rh.dtype if spins_rh is not None else np.int32),
+                    )
+                else:
+                    n_perm = spins_rh.shape[1] if spins_rh is not None and spins_rh.ndim == 2 else 0
+                    self._spin_mats[space] = (
+                        np.zeros((0, n_perm), dtype=spins_lh.dtype if spins_lh is not None else np.int32),
+                        spins_rh,
+                    )
 
         # --- clear per-space derived caches (recomputed on next set_active_space) ---
         self._idc_byhemi_dict.clear()
@@ -1253,7 +1258,7 @@ class Parcellation:
         space = space or self._space
         return self._is_surface_dict.get(space, False)
 
-    def get_surface_for_spins(self, preferred="fsaverage"):
+    def get_surface_for_spins(self, preferred="fsLR"):
         """Return *(surface_image, spin_mat, space_name)* for spin tests.
 
         For surface-primary parcellations returns the primary image.
@@ -1272,12 +1277,12 @@ class Parcellation:
             if sname in self._cx_surface:
                 s = self._cx_surface[sname]
                 if s.get("image") is None and s.get("img_paths") is not None:
-                    lgr.info(f"Lazy-loading cx surface image for '{self._name}' ('{sname}').")
+                    lgr.info(f"Lazy-loading cx surface image for '{self._cx_name or self._name}' ('{sname}').")
                     s["image"] = load_img(s["img_paths"])
                 cx_sm = s.get("spin_mat")
                 if isinstance(cx_sm, tuple) and cx_sm and isinstance(cx_sm[0], dict):
                     from ..utils.utils_datasets import get_file
-                    lgr.info(f"Lazy-loading cx surface spin mat for '{self._name}' ('{sname}').")
+                    lgr.info(f"Lazy-loading cx surface spin mat for '{self._cx_name or self._name}' ('{sname}').")
                     paths = tuple(get_file(d["path_template"], **d["spec"], **d["gf_kw"]) for d in cx_sm)
                     cx_sm = load_spinmat(paths)
                     s["spin_mat"] = cx_sm
@@ -1374,52 +1379,146 @@ class Parcellation:
             if self._is_surface_dict.get(space):
                 return True
             # check image type if available
-            if isinstance(img, (nib.GiftiImage, tuple)) and not isinstance(img, (str, pathlib.Path)):
+            if isinstance(img, (nib.GiftiImage, tuple)) and not isinstance(img, (str,Path)):
                 return True
         # also check cx_surface
         return bool(self._cx_surface)
 
     def get_null_space(self):
-        """Return ``(space_name, null_method)`` for optimal null map generation.
+        """Return optimal null strategy for null map generation.
+
+        For non-combined parcellations returns ``(space_name, null_method)``.
+
+        For combined (cx+sc) parcellations returns a nested tuple
+        ``((cx_space, cx_method), (sc_space, sc_method))`` when cx and sc
+        strategies differ, or a plain ``(space, "moran")`` when no surface
+        space is available for the cx component.
 
         Priority
         --------
-        Spin (alexander_bloch) — cortex-only parcellation with any surface space:
+        Spin (alexander_bloch) — cortex-only or cx component with surface space:
             fsLR  >  fsaverage  >  any surface space name
-        Moran — combined (cx+sc) parcellation, or no surface available:
+        Moran — combined (cx+sc) sc component, or no surface available:
             MNI152NLin2009cAsym  >  MNI152NLin6Asym  >  any MNI  >  first available
         """
         def _is_surf(s):
             return any(k in s.lower() for k in ("fsa", "fsaverage", "fslr", "fs_lr"))
 
-        if not self._is_combined and not self._bilateral:
+        def _best_mni():
+            for preferred in ["MNI152NLin6Asym", "MNI152NLin2009cAsym", "MNI152", "MNIOriginal", "MNI"]:
+                if preferred in self.spaces:
+                    return preferred
+            for s in self.spaces:
+                if "mni" in s.lower():
+                    return s
+            return self.spaces[0]
+
+        if self._is_combined:
+            # cx: prefer surface space for spin — combined parcs store surface in _cx_surface
+            cx_surface_spaces = list(self._cx_surface.keys()) if self._cx_surface else []
+            cx_space = None
+            for preferred in ["fsLR", "fsaverage"]:
+                if preferred in cx_surface_spaces:
+                    cx_space = preferred
+                    break
+            if cx_space is None:
+                for s in cx_surface_spaces:
+                    if _is_surf(s):
+                        cx_space = s
+                        break
+            sc_space = _best_mni()
+            cx_method = "cornblath" if cx_space is not None else "moran"
+            if cx_space is None:
+                cx_space = sc_space
+            # if both strategies are identical, return single pair
+            if cx_method == "moran" and cx_space == sc_space:
+                return sc_space, "moran"
+            return ((cx_space, cx_method), (sc_space, "moran"))
+
+        if not self._bilateral:
             for preferred in ["fsLR", "fsaverage"]:
                 if preferred in self.spaces:
-                    return preferred, "alexander_bloch"
+                    return preferred, "cornblath"
             for s in self.spaces:
                 if _is_surf(s):
-                    return s, "alexander_bloch"
+                    return s, "cornblath"
 
-        # TODO: combined parcellations always fall through to moran.
-        # For proper combined null maps, return a split strategy, e.g.:
-        #   ((cx_surf_space, "alexander_bloch"), (mni_space, "moran"))
-        # and update _get_null_maps + generate_null_maps to run both pipelines
-        # and merge results into a single null array.
+        return _best_mni(), "moran"
 
-        # moran fallback
-        for preferred in ["MNI152NLin2009cAsym", "MNI152NLin6Asym", "MNI152", "MNIOriginal", "MNI"]:
-            if preferred in self.spaces:
-                return preferred, "moran"
-        for s in self.spaces:
-            if "mni" in s.lower():
-                return s, "moran"
-        return self.spaces[0], "moran"
+    def get_sc_idc(self):
+        """Subcortex parcel indices in the combined data vector; ``None`` for non-combined.
+
+        Computes cx/sc split on demand if ``set_active_space()`` has not yet been called.
+        """
+        if not self._is_combined:
+            return None
+        if self._cx_idc_lh is None:
+            # use already-fitted space, or fit a MNI space on demand
+            space = self._space or next(iter(self._idc_byhemi_dict), None)
+            if space is None:
+                for preferred in ["MNI152NLin6Asym", "MNI152NLin2009cAsym", "MNI152", "MNIOriginal"]:
+                    if preferred in self.spaces:
+                        space = preferred
+                        break
+                if space is None:
+                    space = self.spaces[0]
+            self._fit_space(space)
+            self._compute_cx_idc(space)
+        if self._cx_idc_lh is None:
+            lgr.warning("get_sc_idc: cx_idc not yet computed.")
+            return None
+        cx_all = np.concatenate([self._cx_idc_lh, self._cx_idc_rh])
+        return np.setdiff1d(np.arange(len(self._labels)), cx_all)
+
+    def get_sc_dist_mat(self):
+        """Lazy-load and return ``(dist_mat, space)`` for sc parcels; ``(None, None)`` otherwise.
+
+        Used by the split-null path to avoid computing a full combined dist_mat.
+        """
+        if not self._is_combined or self._sc_dist_mat_spec is None:
+            return None, None
+        if self._sc_dist_mat is not None:
+            return self._sc_dist_mat, self._sc_dist_mat_spec["space"]
+        spec = self._sc_dist_mat_spec
+        from ..utils.utils_datasets import get_file
+        lgr.info(f"Lazy-loading sc dist mat for '{self._sc_name or self._name}' (space '{spec['space']}').")
+        local_path = get_file(spec["path_template"], **spec["spec"], **spec["gf_kw"])
+        self._sc_dist_mat = load_distmat(local_path)
+        return self._sc_dist_mat, spec["space"]
+
+    def get_cx_dist_mat(self):
+        """Lazy-load and return ``(dist_mat, space)`` for cx parcels; ``(None, None)`` otherwise.
+
+        Used by the split-null path to avoid computing a full combined dist_mat.
+        """
+        if not self._is_combined or self._cx_dist_mat_spec is None:
+            return None, None
+        if self._cx_dist_mat is not None:
+            return self._cx_dist_mat, self._cx_dist_mat_spec["space"]
+        spec = self._cx_dist_mat_spec
+        from ..utils.utils_datasets import get_file
+        lgr.info(f"Lazy-loading cx dist mat for '{self._cx_name or self._name}' (space '{spec['space']}').")
+        if "hemi_specs" in spec:
+            # per-hemisphere surface geodesic dist_mat
+            paths = tuple(
+                get_file(hs["path_template"], **hs["spec"], **hs["gf_kw"])
+                for hs in spec["hemi_specs"]
+            )
+            self._cx_dist_mat = load_distmat(paths)
+        else:
+            # single-file MNI Euclidean
+            local_path = get_file(spec["path_template"], **spec["spec"], **spec["gf_kw"])
+            self._cx_dist_mat = load_distmat(local_path)
+        return self._cx_dist_mat, spec["space"]
 
     @property
     def default_null_method(self):
         """Recommended null method based on available spaces (see ``get_null_space``)."""
-        _, method = self.get_null_space()
-        return method
+        result = self.get_null_space()
+        if isinstance(result[0], tuple):
+            # combined: return (cx_method, sc_method)
+            return (result[0][1], result[1][1])
+        return result[1]
 
     # ------------------------------------------------------------------
     # Distance-matrix helper (kept for api._get_dist_mat compat)
@@ -1523,32 +1622,22 @@ class Parcellation:
             if idc and idc.get("L") is not None:
                 n_lh = len(idc["L"])
                 n_rh = len(idc["R"])
-                if spins_lh.shape[0] != n_lh:
+                # Cornblath T-matrix: (n_perm, n_hemi, n_hemi); parcel-index: (n_hemi, n_perm)
+                is_t_mat = hasattr(spins_lh, "ndim") and spins_lh.ndim == 3
+                lh_parc_dim = spins_lh.shape[1] if is_t_mat else spins_lh.shape[0]
+                rh_parc_dim = spins_rh.shape[1] if is_t_mat else spins_rh.shape[0]
+                if lh_parc_dim != n_lh:
                     lgr.warning(
-                        f"{prefix} space '{space}': spins_lh rows ({spins_lh.shape[0]}) "
+                        f"{prefix} space '{space}': spins_lh parcel dim ({lh_parc_dim}) "
                         f"!= n_lh ({n_lh})."
                     )
-                if spins_rh.shape[0] != n_rh:
+                if rh_parc_dim != n_rh:
                     lgr.warning(
-                        f"{prefix} space '{space}': spins_rh rows ({spins_rh.shape[0]}) "
+                        f"{prefix} space '{space}': spins_rh parcel dim ({rh_parc_dim}) "
                         f"!= n_rh ({n_rh})."
                     )
 
-        # 6. l2rmap shape
-        if self._l2rmap is not None and isinstance(self._l2rmap, pd.DataFrame):
-            for space, idc in self._idc_byhemi_dict.items():
-                idc_l = idc.get("L")
-                idc_r = idc.get("R")
-                if idc_l is None or idc_r is None:
-                    continue
-                exp_shape = (len(idc_l), len(idc_r))
-                if self._l2rmap.shape != exp_shape:
-                    lgr.warning(
-                        f"{prefix}: l2rmap shape {self._l2rmap.shape} does not match "
-                        f"expected ({exp_shape}) for space '{space}'."
-                    )
-
-        # 7. combined: cx indices
+        # 6. combined: cx indices
         if self._is_combined and not pre_activation:
             if self._cx_idc_lh is None or self._cx_idc_rh is None:
                 lgr.warning(f"{prefix}: cx_idc not yet computed (call set_active_space first).")
