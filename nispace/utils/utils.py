@@ -808,3 +808,43 @@ def apply_transform(img, mni_from=None, mni_to=None, transform=None, order=3, re
             )
 
         return _nt_apply(chain, img, reference=reference, order=order)
+
+
+def apply_mni_mask(img, mask_desc, space, resampling_target="data"):
+    """Apply a named MNI mask template to a NIfTI image, setting masked-out voxels to NaN.
+
+    Parameters
+    ----------
+    img : nib.Nifti1Image
+        Stat map to mask.
+    mask_desc : str
+        Template descriptor, e.g. ``"cortexmask"``, ``"subcortexmask"``, ``"brainmask"``.
+    space : str
+        MNI space key, e.g. ``"MNI152NLin2009cAsym"``.
+    resampling_target : {"data", "mask"}
+        ``"data"`` (default): resample mask to *img* grid (preserves img resolution).
+        ``"mask"``: resample *img* to mask grid.
+
+    Returns
+    -------
+    nib.Nifti1Image
+        Image with voxels outside the mask set to NaN.
+    """
+    from nilearn.image import resample_to_img
+    # Deferred import avoids circular dependency (datasets.py imports utils.py)
+    from nispace.datasets import fetch_template
+    mask_path = fetch_template(space, desc=mask_desc, verbose=False)
+    mask_img = nib.load(str(mask_path))
+    if resampling_target == "data":
+        mask_r = resample_to_img(mask_img, img, interpolation="nearest",
+                                  force_resample=True, copy_header=True)
+        mask_arr = mask_r.get_fdata() > 0
+        arr = img.get_fdata().copy()
+        arr[~mask_arr] = np.nan
+        return image.new_img_like(img, arr, copy_header=True)
+    else:
+        img_r = resample_to_img(img, mask_img, interpolation="continuous",
+                                 force_resample=True, copy_header=True)
+        arr = img_r.get_fdata().copy()
+        arr[mask_img.get_fdata() == 0] = np.nan
+        return image.new_img_like(img_r, arr, copy_header=True)

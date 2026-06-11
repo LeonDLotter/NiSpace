@@ -2440,6 +2440,12 @@
             }
         }
     },
+    "Yan1000Parcels17Networks": {
+        "alias": "Yan1000"
+    },
+    "Yan100Parcels17Networks": {
+        "alias": "Yan100"
+    },
     "Yan200": {
         "label": "Yan 200 (17 Kong networks)",
         "level": "cortex",
@@ -2562,6 +2568,9 @@
             }
         }
     },
+    "Yan200Parcels17Networks": {
+        "alias": "Yan200"
+    },
     "Yan400": {
         "label": "Yan 400 (17 Kong networks)",
         "level": "cortex",
@@ -2683,5 +2692,8 @@
                 }
             }
         }
+    },
+    "Yan400Parcels17Networks": {
+        "alias": "Yan400"
     }
 }

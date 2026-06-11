@@ -29,6 +29,10 @@
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin2009cAsym/map/subcortexmask/tpl-MNI152NLin2009cAsym_desc-subcortexmask_res-1mm.nii.gz"
             },
+            "cerebellummask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/cerebellummask/tpl-MNI152NLin2009cAsym_desc-cerebellummask_res-1mm.nii.gz"
+            },
             "gmmask": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin2009cAsym/map/gmmask/tpl-MNI152NLin2009cAsym_desc-gmmask_res-1mm.nii.gz"
@@ -67,6 +71,10 @@
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin2009cAsym/map/subcortexmask/tpl-MNI152NLin2009cAsym_desc-subcortexmask_res-2mm.nii.gz"
             },
+            "cerebellummask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/cerebellummask/tpl-MNI152NLin2009cAsym_desc-cerebellummask_res-2mm.nii.gz"
+            },
             "gmmask": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin2009cAsym/map/gmmask/tpl-MNI152NLin2009cAsym_desc-gmmask_res-2mm.nii.gz"
@@ -104,6 +112,10 @@
             "subcortexmask": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin2009cAsym/map/subcortexmask/tpl-MNI152NLin2009cAsym_desc-subcortexmask_res-3mm.nii.gz"
+            },
+            "cerebellummask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin2009cAsym/map/cerebellummask/tpl-MNI152NLin2009cAsym_desc-cerebellummask_res-3mm.nii.gz"
             },
             "gmmask": {
                 "host": "github-nispace",
@@ -145,6 +157,10 @@
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin6Asym/map/subcortexmask/tpl-MNI152NLin6Asym_desc-subcortexmask_res-1mm.nii.gz"
             },
+            "cerebellummask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/cerebellummask/tpl-MNI152NLin6Asym_desc-cerebellummask_res-1mm.nii.gz"
+            },
             "gmmask": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin6Asym/map/gmmask/tpl-MNI152NLin6Asym_desc-gmmask_res-1mm.nii.gz"
@@ -183,6 +199,10 @@
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin6Asym/map/subcortexmask/tpl-MNI152NLin6Asym_desc-subcortexmask_res-2mm.nii.gz"
             },
+            "cerebellummask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/cerebellummask/tpl-MNI152NLin6Asym_desc-cerebellummask_res-2mm.nii.gz"
+            },
             "gmmask": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin6Asym/map/gmmask/tpl-MNI152NLin6Asym_desc-gmmask_res-2mm.nii.gz"
@@ -220,6 +240,10 @@
             "subcortexmask": {
                 "host": "github-nispace",
                 "remote": "template/MNI152NLin6Asym/map/subcortexmask/tpl-MNI152NLin6Asym_desc-subcortexmask_res-3mm.nii.gz"
+            },
+            "cerebellummask": {
+                "host": "github-nispace",
+                "remote": "template/MNI152NLin6Asym/map/cerebellummask/tpl-MNI152NLin6Asym_desc-cerebellummask_res-3mm.nii.gz"
             },
             "gmmask": {
                 "host": "github-nispace",
