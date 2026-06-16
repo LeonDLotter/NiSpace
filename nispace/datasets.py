@@ -1442,16 +1442,110 @@ def fetch_example(example: str,
                            f"Available parcellations: {list(example_lib[example]['tab'].keys())}",
                            ValueError)
     
-    # Check for info data 
+    # Check for info data
     if return_associated_data and "info" in example_lib[example]:
         lgr.info("Returning parcellated and associated subject data.")
         example_info = pd.read_csv(
             get_file(
                 base_dir / f"example-{example}_info.csv", **example_lib[example]["info"],
                 **get_file_kwargs,
-            ), 
+            ),
             index_col=0
         )
         return example_data, example_info
     else:
         return example_data
+
+
+def fetch_plot(
+    name: str,
+    kind: str = None,
+    display: bool = False,
+    nispace_data_dir: Union[str, Path] = None,
+    overwrite: bool = False,
+    check_file_hash: bool = True,
+    verbose: bool = True,
+) -> Path:
+    """Fetch the overview plot PNG for a parcellation or reference dataset.
+
+    Parameters
+    ----------
+    name : str
+        Parcellation name (e.g. ``"Yan200"``) or reference dataset name
+        (e.g. ``"pet"``).
+    kind : {"parcellation", "reference"}, optional
+        Whether to look up *name* in the parcellation or reference library.
+        If ``None`` (default), both libraries are searched automatically.
+    display : bool
+        If ``True``, display the image inline (Jupyter / IPython).
+    nispace_data_dir : str or Path, optional
+        Override the NiSpace data directory (deprecated; use NISPACE_DATA_DIR).
+    overwrite : bool
+        Re-download even if the local file already exists.
+    check_file_hash : bool
+        Verify SHA-256 against the known hash after download.
+    verbose : bool
+        Enable verbose logging.
+
+    Returns
+    -------
+    Path
+        Local path to the downloaded PNG file.
+    """
+    verbose = set_log(lgr, verbose)
+    nispace_data_dir = _resolve_nispace_data_dir(nispace_data_dir)
+
+    def _resolve(lib, name, is_parc):
+        entry = lib.get(name, {})
+        if is_parc and "alias" in entry:
+            entry = lib.get(entry["alias"], {})
+        return entry
+
+    if kind is not None:
+        kind = kind.lower()
+        if kind not in ("parcellation", "reference"):
+            raise ValueError(f"'kind' must be 'parcellation' or 'reference', not '{kind}'.")
+        libs = [(kind, parcellation_lib if kind == "parcellation" else reference_lib)]
+    else:
+        libs = [("parcellation", parcellation_lib), ("reference", reference_lib)]
+
+    entry = {}
+    resolved_kind = None
+    for k, lib in libs:
+        e = _resolve(lib, name, k == "parcellation")
+        if e:
+            entry = e
+            resolved_kind = k
+            break
+
+    if not entry:
+        parc_with_plots = sorted(
+            k for k, v in parcellation_lib.items()
+            if isinstance(v, dict) and "plot" in v
+        )
+        ref_with_plots = sorted(
+            k for k, v in reference_lib.items()
+            if isinstance(v, dict) and "plot" in v
+        )
+        raise ValueError(
+            f"No plot found for '{name}'. "
+            f"Parcellations with plots: {parc_with_plots}. "
+            f"Reference datasets with plots: {ref_with_plots}."
+        )
+
+    plot_info = entry.get("plot")
+    if plot_info is None:
+        raise ValueError(f"No plot registered for {resolved_kind} '{name}'.")
+
+    local_path = Path(nispace_data_dir) / plot_info["remote"]
+    get_file_kwargs = dict(overwrite=overwrite, hash_check=check_file_hash)
+    path = Path(get_file(local_path, **plot_info, **get_file_kwargs))
+
+    if display:
+        try:
+            from IPython.display import display as _ipy_display, Image
+            _ipy_display(Image(str(path)))
+        except ImportError:
+            lgr.warning("IPython not available; cannot display image inline.")
+
+    return path

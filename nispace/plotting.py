@@ -1621,6 +1621,12 @@ def brainplot(
     _is_nifti_like = isinstance(data, _nib.Nifti1Image) or (
         isinstance(data, (str, _pl.Path)) and str(data).endswith((".nii", ".nii.gz"))
     )
+    _is_nifti_list = (
+        isinstance(data, list) and len(data) > 0
+        and (isinstance(data[0], _nib.Nifti1Image)
+             or (isinstance(data[0], (str, _pl.Path))
+                 and str(data[0]).endswith((".nii", ".nii.gz"))))
+    )
     _is_gifti_pair = isinstance(data, tuple) and len(data) == 2
     _is_gifti_list = (
         isinstance(data, list) and len(data) > 0
@@ -1633,7 +1639,7 @@ def brainplot(
             and str(parcellation).endswith((".gii", ".gii.gz")))
     )
 
-    if _is_nifti_like:
+    if _is_nifti_like or _is_nifti_list:
         _img_mode = "nifti"
     elif _is_gifti_pair or _is_gifti_list:
         _img_mode = "gifti"
@@ -1857,27 +1863,31 @@ def brainplot(
     _img_all_vals = None  # flat finite array for vmin/vmax  (image paths)
 
     if _img_mode == "nifti":
-        _nii_in = _nib.load(str(data)) if not isinstance(data, _nib.Nifti1Image) else data
-        if len(_nii_in.shape) == 4:
-            raise ValueError("4D NIfTI is not supported; pass a single 3D volume.")
-        # Apply cortex/subcortex mask if level is specified
-        if level in ("cx", "sc"):
-            _mask_space = space if (space is not None and not isinstance(space, tuple)) else "MNI152NLin2009cAsym"
-            _mask_desc = "cortexmask" if level == "cx" else "subcortexmask"
-            try:
-                _nii_in = apply_mni_mask(_nii_in, _mask_desc, _mask_space)
-                lgr.info(f"brainplot: applied {_mask_desc} from space '{_mask_space}'")
-            except Exception as _me:
-                lgr.warning(f"brainplot: could not apply {_mask_desc}: {_me}")
-        _arr    = _nii_in.get_fdata()
-        _finite_nz  = _arr[np.isfinite(_arr) & (_arr != 0)]
-        _min_abs    = float(np.min(np.abs(_finite_nz))) if len(_finite_nz) else 0.0
+        _niis_raw = [data] if _is_nifti_like else data
+        _mask_space = space if (space is not None and not isinstance(space, tuple)) else "MNI152NLin2009cAsym"
+        _mask_desc = "cortexmask" if level == "cx" else ("subcortexmask" if level == "sc" else None)
+        _stat_niis = []
+        _all_arrs  = []
+        for _nii_raw in _niis_raw:
+            _nii_in = _nib.load(str(_nii_raw)) if not isinstance(_nii_raw, _nib.Nifti1Image) else _nii_raw
+            if len(_nii_in.shape) == 4:
+                raise ValueError("4D NIfTI is not supported; pass a single 3D volume.")
+            if _mask_desc is not None:
+                try:
+                    _nii_in = apply_mni_mask(_nii_in, _mask_desc, _mask_space)
+                    lgr.info(f"brainplot: applied {_mask_desc} from space '{_mask_space}'")
+                except Exception as _me:
+                    lgr.warning(f"brainplot: could not apply {_mask_desc}: {_me}")
+            _arr = _nii_in.get_fdata()
+            _all_arrs.append(_arr[np.isfinite(_arr)].flatten())
+            _stat_niis.append(new_img_like(_nii_in, np.nan_to_num(_arr, nan=0.0), copy_header=True))
+        _img_all_vals = np.concatenate(_all_arrs)
+        _finite_nz    = _img_all_vals[_img_all_vals != 0]
+        _min_abs      = float(np.min(np.abs(_finite_nz))) if len(_finite_nz) else 0.0
         if threshold == "auto":
             threshold = float(np.float32(_min_abs / 2)) if _min_abs > 0 else None
             lgr.info(f"brainplot: threshold='auto' → {threshold}")
-        _stat_niis    = [new_img_like(_nii_in, np.nan_to_num(_arr, nan=0.0), copy_header=True)]
-        _img_all_vals = _arr[np.isfinite(_arr)].flatten()
-        n_maps        = 1
+        n_maps = len(_stat_niis)
 
     elif _img_mode == "gifti":
         _pairs_raw = [data] if _is_gifti_pair else data
@@ -2263,7 +2273,14 @@ def brainplot(
                 v_min, v_max = _vminmax(row_vals)
         else:
             row_vals = None
-            v_min, v_max = _vminmax(_img_all_vals)
+            if use_shared:
+                v_min, v_max = _global_vmin, _global_vmax
+            elif _img_mode == "gifti":
+                _map_flat = np.concatenate(_gifti_pairs[i])
+                v_min, v_max = _auto_vmin_vmax(_map_flat[np.isfinite(_map_flat)], symmetric_cmap, vmin, vmax)
+            else:  # nifti
+                _map_arr = _stat_niis[i].get_fdata()
+                v_min, v_max = _auto_vmin_vmax(_map_arr[np.isfinite(_map_arr)], symmetric_cmap, vmin, vmax)
 
         if is_combined:
             # Container axes — invisible; cx and sc rendered as insets within it.

@@ -1650,7 +1650,7 @@ class Parcellation:
     # Visualization
     # ------------------------------------------------------------------
 
-    def plot(self, space=None, cmap="gist_rainbow", colorbar=False, **kwargs):
+    def plot(self, space=None, cmap="nipy_spectral", shuffle_cmap=False, colorbar=False, **kwargs):
         """Visualize the parcellation with each parcel in a distinct color.
 
         Wraps :func:`nispace.plotting.brainplot` with ROI-style defaults
@@ -1665,7 +1665,12 @@ class Parcellation:
             Parcellation space to render.  Defaults to the active space.
         cmap : str
             Colormap for distinct parcel colors.
-            Default ``"gist_rainbow"`` matches ``nilearn.plotting.plot_roi``.
+            Default ``"nipy_spectral"`` gives broad spectral coverage with
+            good contrast across many parcels.
+        shuffle_cmap : bool or int, optional
+            If ``True`` or an integer, shuffle the colormap colors randomly
+            so adjacent parcels get distinct hues.  An integer value is used
+            as the numpy random seed for reproducibility.  Default ``False``.
         colorbar : bool
             Show colorbar.  Default ``False`` — parcel indices carry no
             meaningful scale.
@@ -1677,6 +1682,9 @@ class Parcellation:
         fig : matplotlib.Figure
         axes_out : list of matplotlib.Axes
         """
+        import matplotlib as mpl
+        import matplotlib.colors as _mcolors
+        import numpy as np
         from ..plotting import brainplot
 
         space = space or self._space
@@ -1686,6 +1694,18 @@ class Parcellation:
             )
         self._ensure_image_loaded(space)
         img = self._images[space]
+
+        if shuffle_cmap is not False:
+            seed = shuffle_cmap if isinstance(shuffle_cmap, int) else None
+            rng = np.random.default_rng(seed)
+            try:
+                cmap_obj = mpl.colormaps[cmap]
+            except KeyError:
+                import seaborn as sns
+                cmap_obj = sns.color_palette(cmap, as_cmap=True)
+            colors = cmap_obj(np.linspace(0, 1, 256))
+            rng.shuffle(colors)
+            cmap = _mcolors.ListedColormap(colors)
 
         kwargs.setdefault("symmetric_cmap", False)
         kwargs.setdefault("title", self._name or False)

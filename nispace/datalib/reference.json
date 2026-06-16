@@ -537,6 +537,10 @@
                     }
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "reference/bigbrain/plot/dset-bigbrain_plot-overview.png"
         }
     },
     "cortexfeatures": {
@@ -1630,6 +1634,10 @@
                     }
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "reference/cortexfeatures/plot/dset-cortexfeatures_plot-overview.png"
         }
     },
     "enigmaarea": {
@@ -1677,6 +1685,10 @@
                 "host": "github-nispace",
                 "remote": "reference/enigmaarea/tab/dset-enigmaarea_parc-Aseg.csv.gz"
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "reference/enigmaarea/plot/dset-enigmaarea_plot-overview.png"
         }
     },
     "enigmathick": {
@@ -1724,6 +1736,10 @@
                 "host": "github-nispace",
                 "remote": "reference/enigmathick/tab/dset-enigmathick_parc-Aseg.csv.gz"
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "reference/enigmathick/plot/dset-enigmathick_plot-overview.png"
         }
     },
     "grf": {
@@ -1872,6 +1888,10 @@
                 "host": "github-nispace",
                 "remote": "reference/grf/tab/dset-grf_parc-Yan400.csv.gz"
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "reference/grf/plot/dset-grf_plot-overview.png"
         }
     },
     "magicc": {
@@ -2172,6 +2192,10 @@
                 "host": "github-nispace",
                 "remote": "reference/magicc/tab/dset-magicc_parc-Yan400.csv.gz"
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "reference/magicc/plot/dset-magicc_plot-overview.png"
         }
     },
     "mitobrain": {
@@ -2313,210 +2337,214 @@
             }
         },
         "map": {
-            "mito-complexi_pub-mosharov2025": {
+            "feature-complexi_pub-mosharov2025": {
                 "MNIOriginal": {
                     "host": "url",
                     "remote": "https://neurovault.org/media/images/16418/CI.nii.gz"
                 },
                 "MNI152NLin6Asym": {
                     "host": "github-nispace",
-                    "remote": "reference/mitobrain/map/mito-complexi_pub-mosharov2025/mito-complexi_pub-mosharov2025_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                    "remote": "reference/mitobrain/map/feature-complexi_pub-mosharov2025/feature-complexi_pub-mosharov2025_space-MNI152NLin6Asym_desc-proc.nii.gz"
                 },
                 "MNI152NLin2009cAsym": {
                     "host": "github-nispace",
-                    "remote": "reference/mitobrain/map/mito-complexi_pub-mosharov2025/mito-complexi_pub-mosharov2025_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                    "remote": "reference/mitobrain/map/feature-complexi_pub-mosharov2025/feature-complexi_pub-mosharov2025_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
                 },
                 "fsLR": {
                     "L": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-complexi_pub-mosharov2025/mito-complexi_pub-mosharov2025_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-complexi_pub-mosharov2025/feature-complexi_pub-mosharov2025_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
                     },
                     "R": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-complexi_pub-mosharov2025/mito-complexi_pub-mosharov2025_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-complexi_pub-mosharov2025/feature-complexi_pub-mosharov2025_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
                     }
                 },
                 "fsaverage": {
                     "L": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-complexi_pub-mosharov2025/mito-complexi_pub-mosharov2025_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-complexi_pub-mosharov2025/feature-complexi_pub-mosharov2025_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
                     },
                     "R": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-complexi_pub-mosharov2025/mito-complexi_pub-mosharov2025_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-complexi_pub-mosharov2025/feature-complexi_pub-mosharov2025_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
                     }
                 }
             },
-            "mito-complexii_pub-mosharov2025": {
+            "feature-complexii_pub-mosharov2025": {
                 "MNIOriginal": {
                     "host": "url",
                     "remote": "https://neurovault.org/media/images/16418/CII.nii.gz"
                 },
                 "MNI152NLin6Asym": {
                     "host": "github-nispace",
-                    "remote": "reference/mitobrain/map/mito-complexii_pub-mosharov2025/mito-complexii_pub-mosharov2025_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                    "remote": "reference/mitobrain/map/feature-complexii_pub-mosharov2025/feature-complexii_pub-mosharov2025_space-MNI152NLin6Asym_desc-proc.nii.gz"
                 },
                 "MNI152NLin2009cAsym": {
                     "host": "github-nispace",
-                    "remote": "reference/mitobrain/map/mito-complexii_pub-mosharov2025/mito-complexii_pub-mosharov2025_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                    "remote": "reference/mitobrain/map/feature-complexii_pub-mosharov2025/feature-complexii_pub-mosharov2025_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
                 },
                 "fsLR": {
                     "L": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-complexii_pub-mosharov2025/mito-complexii_pub-mosharov2025_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-complexii_pub-mosharov2025/feature-complexii_pub-mosharov2025_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
                     },
                     "R": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-complexii_pub-mosharov2025/mito-complexii_pub-mosharov2025_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-complexii_pub-mosharov2025/feature-complexii_pub-mosharov2025_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
                     }
                 },
                 "fsaverage": {
                     "L": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-complexii_pub-mosharov2025/mito-complexii_pub-mosharov2025_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-complexii_pub-mosharov2025/feature-complexii_pub-mosharov2025_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
                     },
                     "R": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-complexii_pub-mosharov2025/mito-complexii_pub-mosharov2025_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-complexii_pub-mosharov2025/feature-complexii_pub-mosharov2025_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
                     }
                 }
             },
-            "mito-complexiv_pub-mosharov2025": {
+            "feature-complexiv_pub-mosharov2025": {
                 "MNIOriginal": {
                     "host": "url",
                     "remote": "https://neurovault.org/media/images/16418/CIV.nii.gz"
                 },
                 "MNI152NLin6Asym": {
                     "host": "github-nispace",
-                    "remote": "reference/mitobrain/map/mito-complexiv_pub-mosharov2025/mito-complexiv_pub-mosharov2025_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                    "remote": "reference/mitobrain/map/feature-complexiv_pub-mosharov2025/feature-complexiv_pub-mosharov2025_space-MNI152NLin6Asym_desc-proc.nii.gz"
                 },
                 "MNI152NLin2009cAsym": {
                     "host": "github-nispace",
-                    "remote": "reference/mitobrain/map/mito-complexiv_pub-mosharov2025/mito-complexiv_pub-mosharov2025_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                    "remote": "reference/mitobrain/map/feature-complexiv_pub-mosharov2025/feature-complexiv_pub-mosharov2025_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
                 },
                 "fsLR": {
                     "L": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-complexiv_pub-mosharov2025/mito-complexiv_pub-mosharov2025_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-complexiv_pub-mosharov2025/feature-complexiv_pub-mosharov2025_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
                     },
                     "R": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-complexiv_pub-mosharov2025/mito-complexiv_pub-mosharov2025_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-complexiv_pub-mosharov2025/feature-complexiv_pub-mosharov2025_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
                     }
                 },
                 "fsaverage": {
                     "L": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-complexiv_pub-mosharov2025/mito-complexiv_pub-mosharov2025_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-complexiv_pub-mosharov2025/feature-complexiv_pub-mosharov2025_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
                     },
                     "R": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-complexiv_pub-mosharov2025/mito-complexiv_pub-mosharov2025_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-complexiv_pub-mosharov2025/feature-complexiv_pub-mosharov2025_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
                     }
                 }
             },
-            "mito-mitodensity_pub-mosharov2025": {
+            "feature-mitodensity_pub-mosharov2025": {
                 "MNIOriginal": {
                     "host": "url",
                     "remote": "https://neurovault.org/media/images/16418/MitoD.nii.gz"
                 },
                 "MNI152NLin6Asym": {
                     "host": "github-nispace",
-                    "remote": "reference/mitobrain/map/mito-mitodensity_pub-mosharov2025/mito-mitodensity_pub-mosharov2025_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                    "remote": "reference/mitobrain/map/feature-mitodensity_pub-mosharov2025/feature-mitodensity_pub-mosharov2025_space-MNI152NLin6Asym_desc-proc.nii.gz"
                 },
                 "MNI152NLin2009cAsym": {
                     "host": "github-nispace",
-                    "remote": "reference/mitobrain/map/mito-mitodensity_pub-mosharov2025/mito-mitodensity_pub-mosharov2025_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                    "remote": "reference/mitobrain/map/feature-mitodensity_pub-mosharov2025/feature-mitodensity_pub-mosharov2025_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
                 },
                 "fsLR": {
                     "L": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-mitodensity_pub-mosharov2025/mito-mitodensity_pub-mosharov2025_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-mitodensity_pub-mosharov2025/feature-mitodensity_pub-mosharov2025_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
                     },
                     "R": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-mitodensity_pub-mosharov2025/mito-mitodensity_pub-mosharov2025_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-mitodensity_pub-mosharov2025/feature-mitodensity_pub-mosharov2025_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
                     }
                 },
                 "fsaverage": {
                     "L": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-mitodensity_pub-mosharov2025/mito-mitodensity_pub-mosharov2025_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-mitodensity_pub-mosharov2025/feature-mitodensity_pub-mosharov2025_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
                     },
                     "R": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-mitodensity_pub-mosharov2025/mito-mitodensity_pub-mosharov2025_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-mitodensity_pub-mosharov2025/feature-mitodensity_pub-mosharov2025_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
                     }
                 }
             },
-            "mito-tissueresp_pub-mosharov2025": {
+            "feature-tissueresp_pub-mosharov2025": {
                 "MNIOriginal": {
                     "host": "url",
                     "remote": "https://neurovault.org/media/images/16418/TRC.nii.gz"
                 },
                 "MNI152NLin6Asym": {
                     "host": "github-nispace",
-                    "remote": "reference/mitobrain/map/mito-tissueresp_pub-mosharov2025/mito-tissueresp_pub-mosharov2025_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                    "remote": "reference/mitobrain/map/feature-tissueresp_pub-mosharov2025/feature-tissueresp_pub-mosharov2025_space-MNI152NLin6Asym_desc-proc.nii.gz"
                 },
                 "MNI152NLin2009cAsym": {
                     "host": "github-nispace",
-                    "remote": "reference/mitobrain/map/mito-tissueresp_pub-mosharov2025/mito-tissueresp_pub-mosharov2025_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                    "remote": "reference/mitobrain/map/feature-tissueresp_pub-mosharov2025/feature-tissueresp_pub-mosharov2025_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
                 },
                 "fsLR": {
                     "L": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-tissueresp_pub-mosharov2025/mito-tissueresp_pub-mosharov2025_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-tissueresp_pub-mosharov2025/feature-tissueresp_pub-mosharov2025_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
                     },
                     "R": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-tissueresp_pub-mosharov2025/mito-tissueresp_pub-mosharov2025_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-tissueresp_pub-mosharov2025/feature-tissueresp_pub-mosharov2025_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
                     }
                 },
                 "fsaverage": {
                     "L": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-tissueresp_pub-mosharov2025/mito-tissueresp_pub-mosharov2025_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-tissueresp_pub-mosharov2025/feature-tissueresp_pub-mosharov2025_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
                     },
                     "R": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-tissueresp_pub-mosharov2025/mito-tissueresp_pub-mosharov2025_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-tissueresp_pub-mosharov2025/feature-tissueresp_pub-mosharov2025_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
                     }
                 }
             },
-            "mito-mitoresp_pub-mosharov2025": {
+            "feature-mitoresp_pub-mosharov2025": {
                 "MNIOriginal": {
                     "host": "url",
                     "remote": "https://neurovault.org/media/images/16418/MRC.nii.gz"
                 },
                 "MNI152NLin6Asym": {
                     "host": "github-nispace",
-                    "remote": "reference/mitobrain/map/mito-mitoresp_pub-mosharov2025/mito-mitoresp_pub-mosharov2025_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                    "remote": "reference/mitobrain/map/feature-mitoresp_pub-mosharov2025/feature-mitoresp_pub-mosharov2025_space-MNI152NLin6Asym_desc-proc.nii.gz"
                 },
                 "MNI152NLin2009cAsym": {
                     "host": "github-nispace",
-                    "remote": "reference/mitobrain/map/mito-mitoresp_pub-mosharov2025/mito-mitoresp_pub-mosharov2025_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                    "remote": "reference/mitobrain/map/feature-mitoresp_pub-mosharov2025/feature-mitoresp_pub-mosharov2025_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
                 },
                 "fsLR": {
                     "L": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-mitoresp_pub-mosharov2025/mito-mitoresp_pub-mosharov2025_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-mitoresp_pub-mosharov2025/feature-mitoresp_pub-mosharov2025_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
                     },
                     "R": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-mitoresp_pub-mosharov2025/mito-mitoresp_pub-mosharov2025_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-mitoresp_pub-mosharov2025/feature-mitoresp_pub-mosharov2025_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
                     }
                 },
                 "fsaverage": {
                     "L": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-mitoresp_pub-mosharov2025/mito-mitoresp_pub-mosharov2025_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-mitoresp_pub-mosharov2025/feature-mitoresp_pub-mosharov2025_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
                     },
                     "R": {
                         "host": "github-nispace",
-                        "remote": "reference/mitobrain/map/mito-mitoresp_pub-mosharov2025/mito-mitoresp_pub-mosharov2025_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                        "remote": "reference/mitobrain/map/feature-mitoresp_pub-mosharov2025/feature-mitoresp_pub-mosharov2025_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
                     }
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "reference/mitobrain/plot/dset-mitobrain_plot-overview.png"
         }
     },
     "mrna": {
@@ -2849,6 +2877,10 @@
                 "host": "github-nispace",
                 "remote": "reference/mrna/tab/dset-mrna_parc-Yan400.csv.gz"
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "reference/mrna/plot/dset-mrna_plot-overview.png"
         }
     },
     "neurosynth": {
@@ -2991,6 +3023,10 @@
                 "host": "github-nispace",
                 "remote": "reference/neurosynth/tab/dset-neurosynth_parc-Yan400.csv.gz"
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "reference/neurosynth/plot/dset-neurosynth_plot-overview.png"
         }
     },
     "pet": {
@@ -5222,6 +5258,10 @@
                     }
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "reference/pet/plot/dset-pet_plot-overview.png"
         }
     },
     "rsn": {
@@ -5796,6 +5836,10 @@
                     }
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "reference/rsn/plot/dset-rsn_plot-overview.png"
         }
     },
     "rsn17": {
@@ -6268,6 +6312,10 @@
                     }
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "reference/rsn17/plot/dset-rsn17_plot-overview.png"
         }
     },
     "tpm": {
@@ -6580,6 +6628,10 @@
                     "remote": "reference/tpm/map/tissue-arteries_pub-mouches2019/tissue-arteries_pub-mouches2019_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "reference/tpm/plot/dset-tpm_plot-overview.png"
         }
     }
 }

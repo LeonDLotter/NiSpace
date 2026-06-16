@@ -16,9 +16,17 @@
 
 *Spatial (alteration) patterns observed in MRI images may often reflect function and dysfunction of underlying biological systems. This applies equally to function and structure, on the surface or in the volumetric space, and to typical as well as disordered brain-anatomical and functional patterns.*
 
-In recent years, several methods have been developed to compare spatial patterns between brain maps. In the simplest case, two brain maps are correlated with each other at the voxel- or parcel-level. The resulting correlation coefficient reflects the degree to which the two maps share a spatial pattern. We refer to this spatial correlation as "*colocalization*". The ``NiSpace`` (NeuroImaging Spatial Colocalization Environment) toolbox aims to provide the most comprehensive, yet easy-to-use and flexible framework for colocalization estimation, significance testing, and visualization to date.
+In recent years, several methods have been developed to compare spatial patterns between brain maps. In the simplest case, two brain maps are correlated with each other at the voxel- or parcel-level. The resulting correlation coefficient reflects the degree to which the two maps share a spatial pattern. We refer to this spatial correlation as "*colocalization*". 
 
-``NiSpace`` is under development and its `documentation <https://nispace.readthedocs.io/>`_ currently is (very) incomplete. We welcome anyone who would like to give it a try – your feedback is highly appreciated! 
+The ``NiSpace`` (NeuroImaging Spatial Colocalization Environment) toolbox aims to provide the most comprehensive, yet easy-to-use and flexible framework to date for:
+
+* neuroimaging data retrieval in standard imaging spaces, 
+* transformations between imaging spaces, 
+* estimation of spatial colocalizations using uni- and multivariate methods, 
+* multi-method non-parametric significance testing, 
+* and publication-ready visualization.
+
+``NiSpace`` is under development and its `documentation <https://nispace.readthedocs.io/>`_ currently is incomplete. We welcome anyone who would like to give it a try – your feedback is highly appreciated! 
 
 
 Installation
@@ -42,6 +50,28 @@ Install optional dependencies directly with:
 .. code-block:: bash
 
    pip install "git+https://github.com/LeonDLotter/NiSpace.git@dev#egg=nispace[opt]"
+
+
+Use & Attribution of third-party data
+-------------------------------------
+
+``NiSpace`` relies on third-party data for its key functionalities. These third-party data include a growing number of brain parcellations and reference datasets.
+
+Reference datasets may be individual brain maps accessible in their original state (then often downloaded directly from the source) and in processed format to optimize them for use in ``NiSpace``. They may also be tabulated data with parcel-wise values for up to thousands of maps. 
+
+Processed maps and table data are hosted in a separate public GitHub repository, licensed under a CC BY-NC-SA 4.0 license. However, individual datasets may be subject to other licenses, which are listed in the metadata of each individual dataset or even map.
+
+.. important::
+
+   When fetching a dataset via the API, ``NiSpace`` will print a detailed description of the dataset to the terminal, including the source DOIs and an explicit request to cite these sources.
+   If the dataset is a collection of maps from different sources, e.g. the ``"pet"`` dataset, it will print the license and DOIs associated with each individual map in a table format.
+
+   Most licenses are attribution licenses. That means it is **mandatory** to cite the original source if the data are used in any publication or software.
+   If you use 30 PET maps in your work and these PET maps have, in sum, 40 DOIs associated with them, **you have to cite all of these**.
+
+.. important::
+
+   We are very keen on re-publishing data strictly within the use cases permitted through their licenses. Should you feel that we did not do so correctly in an individual case, please `contact me <mailto:leondlotter@gmail.com>`_ and I will remove or adapt the dataset swiftly.
 
 
 Support & Updates

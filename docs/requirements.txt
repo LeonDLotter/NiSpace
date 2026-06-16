@@ -4,3 +4,4 @@ sphinx-gallery
 sphinx_copybutton
 nbsphinx
 IPython
+Pillow

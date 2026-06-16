@@ -122,6 +122,10 @@
                     "remote": "parcellation/AALCortical/fsaverage/parc-AALCortical_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/AALCortical/plot/parc-AALCortical_plot-overview.png"
         }
     },
     "AALSubcortical": {
@@ -160,6 +164,10 @@
                 "host": "github-nispace",
                 "remote": "parcellation/AALSubcortical/MNI152NLin6Asym/parc-AALSubcortical_space-MNI152NLin6Asym.dist.csv.gz"
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/AALSubcortical/plot/parc-AALSubcortical_plot-overview.png"
         }
     },
     "Aseg": {
@@ -198,6 +206,10 @@
                 "host": "github-nispace",
                 "remote": "parcellation/Aseg/MNI152NLin6Asym/parc-Aseg_space-MNI152NLin6Asym.dist.csv.gz"
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/Aseg/plot/parc-Aseg_plot-overview.png"
         }
     },
     "BN": {
@@ -332,6 +344,10 @@
                     "remote": "parcellation/BrainnetomeCortical/fsaverage/parc-BrainnetomeCortical_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/BrainnetomeCortical/plot/parc-BrainnetomeCortical_plot-overview.png"
         }
     },
     "BrainnetomeSubcortical": {
@@ -370,6 +386,10 @@
                 "host": "github-nispace",
                 "remote": "parcellation/BrainnetomeSubcortical/MNI152NLin6Asym/parc-BrainnetomeSubcortical_space-MNI152NLin6Asym.dist.csv.gz"
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/BrainnetomeSubcortical/plot/parc-BrainnetomeSubcortical_plot-overview.png"
         }
     },
     "DKT": {
@@ -498,6 +518,10 @@
                     "remote": "parcellation/DesikanKilliany/fsaverage/parc-DesikanKilliany_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/DesikanKilliany/plot/parc-DesikanKilliany_plot-overview.png"
         }
     },
     "DesikanKillianyTourville": {
@@ -620,6 +644,10 @@
                     "remote": "parcellation/DesikanKillianyTourville/fsaverage/parc-DesikanKillianyTourville_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/DesikanKillianyTourville/plot/parc-DesikanKillianyTourville_plot-overview.png"
         }
     },
     "Destrieux": {
@@ -742,6 +770,10 @@
                     "remote": "parcellation/Destrieux/fsaverage/parc-Destrieux_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/Destrieux/plot/parc-Destrieux_plot-overview.png"
         }
     },
     "Glasser": {
@@ -864,6 +896,10 @@
                     "remote": "parcellation/Glasser/fsaverage/parc-Glasser_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/Glasser/plot/parc-Glasser_plot-overview.png"
         }
     },
     "HCP": {
@@ -1001,6 +1037,10 @@
                     "remote": "parcellation/HarvardOxfordCortical/fsaverage/parc-HarvardOxfordCortical_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/HarvardOxfordCortical/plot/parc-HarvardOxfordCortical_plot-overview.png"
         }
     },
     "HarvardOxfordSubcortical": {
@@ -1039,6 +1079,10 @@
                 "host": "github-nispace",
                 "remote": "parcellation/HarvardOxfordSubcortical/MNI152NLin6Asym/parc-HarvardOxfordSubcortical_space-MNI152NLin6Asym.dist.csv.gz"
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/HarvardOxfordSubcortical/plot/parc-HarvardOxfordSubcortical_plot-overview.png"
         }
     },
     "MMP": {
@@ -1182,6 +1226,10 @@
                     "remote": "parcellation/Schaefer1000Parcels17Networks/fsaverage/parc-Schaefer1000Parcels17Networks_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/Schaefer1000Parcels17Networks/plot/parc-Schaefer1000Parcels17Networks_plot-overview.png"
         }
     },
     "Schaefer1000Parcels7Networks": {
@@ -1304,6 +1352,10 @@
                     "remote": "parcellation/Schaefer1000Parcels7Networks/fsaverage/parc-Schaefer1000Parcels7Networks_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/Schaefer1000Parcels7Networks/plot/parc-Schaefer1000Parcels7Networks_plot-overview.png"
         }
     },
     "Schaefer100Parcels17Networks": {
@@ -1426,6 +1478,10 @@
                     "remote": "parcellation/Schaefer100Parcels17Networks/fsaverage/parc-Schaefer100Parcels17Networks_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/Schaefer100Parcels17Networks/plot/parc-Schaefer100Parcels17Networks_plot-overview.png"
         }
     },
     "Schaefer100Parcels7Networks": {
@@ -1548,6 +1604,10 @@
                     "remote": "parcellation/Schaefer100Parcels7Networks/fsaverage/parc-Schaefer100Parcels7Networks_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/Schaefer100Parcels7Networks/plot/parc-Schaefer100Parcels7Networks_plot-overview.png"
         }
     },
     "Schaefer200": {
@@ -1673,6 +1733,10 @@
                     "remote": "parcellation/Schaefer200Parcels17Networks/fsaverage/parc-Schaefer200Parcels17Networks_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/Schaefer200Parcels17Networks/plot/parc-Schaefer200Parcels17Networks_plot-overview.png"
         }
     },
     "Schaefer200Parcels7Networks": {
@@ -1795,6 +1859,10 @@
                     "remote": "parcellation/Schaefer200Parcels7Networks/fsaverage/parc-Schaefer200Parcels7Networks_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/Schaefer200Parcels7Networks/plot/parc-Schaefer200Parcels7Networks_plot-overview.png"
         }
     },
     "Schaefer400": {
@@ -1920,6 +1988,10 @@
                     "remote": "parcellation/Schaefer400Parcels17Networks/fsaverage/parc-Schaefer400Parcels17Networks_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/Schaefer400Parcels17Networks/plot/parc-Schaefer400Parcels17Networks_plot-overview.png"
         }
     },
     "Schaefer400Parcels7Networks": {
@@ -2042,6 +2114,10 @@
                     "remote": "parcellation/Schaefer400Parcels7Networks/fsaverage/parc-Schaefer400Parcels7Networks_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/Schaefer400Parcels7Networks/plot/parc-Schaefer400Parcels7Networks_plot-overview.png"
         }
     },
     "TianS1": {
@@ -2080,6 +2156,10 @@
                 "host": "github-nispace",
                 "remote": "parcellation/TianS1/MNI152NLin6Asym/parc-TianS1_space-MNI152NLin6Asym.dist.csv.gz"
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/TianS1/plot/parc-TianS1_plot-overview.png"
         }
     },
     "TianS2": {
@@ -2118,6 +2198,10 @@
                 "host": "github-nispace",
                 "remote": "parcellation/TianS2/MNI152NLin6Asym/parc-TianS2_space-MNI152NLin6Asym.dist.csv.gz"
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/TianS2/plot/parc-TianS2_plot-overview.png"
         }
     },
     "TianS3": {
@@ -2156,6 +2240,10 @@
                 "host": "github-nispace",
                 "remote": "parcellation/TianS3/MNI152NLin6Asym/parc-TianS3_space-MNI152NLin6Asym.dist.csv.gz"
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/TianS3/plot/parc-TianS3_plot-overview.png"
         }
     },
     "TianS4": {
@@ -2194,6 +2282,10 @@
                 "host": "github-nispace",
                 "remote": "parcellation/TianS4/MNI152NLin6Asym/parc-TianS4_space-MNI152NLin6Asym.dist.csv.gz"
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/TianS4/plot/parc-TianS4_plot-overview.png"
         }
     },
     "Yan100": {
@@ -2316,6 +2408,10 @@
                     "remote": "parcellation/Yan100/fsaverage/parc-Yan100_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/Yan100/plot/parc-Yan100_plot-overview.png"
         }
     },
     "Yan1000": {
@@ -2438,6 +2534,10 @@
                     "remote": "parcellation/Yan1000/fsaverage/parc-Yan1000_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/Yan1000/plot/parc-Yan1000_plot-overview.png"
         }
     },
     "Yan1000Parcels17Networks": {
@@ -2566,6 +2666,10 @@
                     "remote": "parcellation/Yan200/fsaverage/parc-Yan200_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/Yan200/plot/parc-Yan200_plot-overview.png"
         }
     },
     "Yan200Parcels17Networks": {
@@ -2691,6 +2795,10 @@
                     "remote": "parcellation/Yan400/fsaverage/parc-Yan400_space-fsaverage_hemi-R.spin.npz"
                 }
             }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "parcellation/Yan400/plot/parc-Yan400_plot-overview.png"
         }
     },
     "Yan400Parcels17Networks": {

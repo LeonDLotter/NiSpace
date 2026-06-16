@@ -152,7 +152,6 @@ Reference API
    load_labels
    load_distmat
    load_spinmat
-   load_l2rmap
    to_pickle
    from_pickle
 

@@ -40,3 +40,18 @@ table.nispace-table thead tr {
 table.nispace-table tbody tr {
     border-bottom: 1px solid rgba(128,128,128,0.3);
 }
+
+/* Overview plot thumbnails in table cells (parcellations page) */
+img.nispace-thumb {
+    max-height: 60px;
+    max-width: 160px;
+    display: block;
+}
+
+/* Full-width overview plots (dataset/parcellation detail sections) */
+img.nispace-plot {
+    max-width: 100%;
+    height: auto;
+    margin: 0.5em 0 1em 0;
+    border: 1px solid rgba(128,128,128,0.3);
+}
