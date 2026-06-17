@@ -268,6 +268,14 @@ def _gen_parcellations(parc_lib):
             aliases_rev.setdefault(data["alias"], []).append(alias)
 
     lines = []
+    lines.append(".. important::")
+    lines.append("")
+    lines.append(
+        "   All parcellations are made available through their original publications. "
+        "When using any of them in your work, you **must** cite the original source "
+        "listed under each entry below."
+    )
+    lines.append("")
     lines.append(
         "``NiSpace`` ships with the following built-in parcellations. "
         "Fetch them via :func:`nispace.datasets.fetch_parcellation`:"
@@ -443,6 +451,16 @@ def _info_block(data, n_maps):
 
 def _gen_datasets(ref_lib):
     lines = []
+
+    lines.append(".. important::")
+    lines.append("")
+    lines.append(
+        "   Many of the datasets below are subject to attribution licenses. "
+        "When fetching data via the API, ``NiSpace`` prints all required citations "
+        "to the terminal. If you use multiple maps, **all** associated DOIs must be "
+        "cited — use :func:`nispace.datasets.fetch_metadata` for per-map details."
+    )
+    lines.append("")
 
     # Overview table
     lines.append(

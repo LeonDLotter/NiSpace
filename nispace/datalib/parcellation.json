@@ -6,7 +6,7 @@
         "label": "AAL2 cortical parcels",
         "level": "cortex",
         "symmetric": true,
-        "license": "free",
+        "license": "GNU GPL",
         "citation": {
             "ref": "Rolls et al., 2015, NeuroImage",
             "doi": "10.1016/j.neuroimage.2015.07.075"
@@ -129,10 +129,10 @@
         }
     },
     "AALSubcortical": {
-        "label": "AAL2 subcortical parcels",
+        "label": "AAL2 subcortical parcels, excluding cerebellum",
         "level": "subcortex",
         "symmetric": true,
-        "license": "free",
+        "license": "GNU GPL",
         "citation": {
             "ref": "Rolls et al., 2015, NeuroImage",
             "doi": "10.1016/j.neuroimage.2015.07.075"
@@ -174,7 +174,7 @@
         "label": "FreeSurfer 'Aseg' subcortical parcels",
         "level": "subcortex",
         "symmetric": true,
-        "license": "free",
+        "license": "Freesurfer custom: attribution",
         "citation": {
             "ref": "Fischl et al., 2002, Neuron",
             "doi": "10.1016/s0896-6273(02)00569-x"
@@ -228,7 +228,7 @@
         "label": "Brainnetome Cortical",
         "level": "cortex",
         "symmetric": true,
-        "license": "non-commercial, attribution, share alike",
+        "license": "Brainnetome custom: non-commercial, attribution, share alike",
         "citation": {
             "ref": "Fan et al., 2016, Cereb Cortex",
             "doi": "10.1093/cercor/bhw157"
@@ -354,7 +354,7 @@
         "label": "Brainnetome Subcortical",
         "level": "subcortex",
         "symmetric": true,
-        "license": "non-commercial, attribution, share alike",
+        "license": "Brainnetome custom: non-commercial, attribution, share alike",
         "citation": {
             "ref": "Fan et al., 2016, Cereb Cortex",
             "doi": "10.1093/cercor/bhw157"
@@ -402,7 +402,7 @@
         "label": "Desikan-Killiany (DK40)",
         "level": "cortex",
         "symmetric": true,
-        "license": "free",
+        "license": "Freesurfer license: attribution",
         "citation": {
             "ref": "Desikan et al., 2006, NeuroImage",
             "doi": "10.1016/j.neuroimage.2006.01.021"
@@ -528,7 +528,7 @@
         "label": "Desikan-Killiany-Tourville (DKT)",
         "level": "cortex",
         "symmetric": true,
-        "license": "free",
+        "license": "Freesurfer license: attribution",
         "citation": {
             "ref": "Klein & Tourville, 2012, Front Neurosci",
             "doi": "10.3389/fnins.2012.00171"
@@ -654,7 +654,7 @@
         "label": "Destrieux (a2009s)",
         "level": "cortex",
         "symmetric": true,
-        "license": "free",
+        "license": "Freesurfer custom: attribution",
         "citation": {
             "ref": "Destrieux et al., 2010, NeuroImage",
             "doi": "10.1016/j.neuroimage.2010.06.010"
@@ -780,7 +780,7 @@
         "label": "HCP multimodal parcellation (Glasser atlas)",
         "level": "cortex",
         "symmetric": true,
-        "license": "free",
+        "license": "CC BY 4.0",
         "citation": {
             "ref": "Glasser et al., 2016, Nature",
             "doi": "10.1038/nature18933"
@@ -921,7 +921,7 @@
         "label": "Harvard-Oxford Cortical",
         "level": "cortex",
         "symmetric": true,
-        "license": "free",
+        "license": "FSL custom: attribution",
         "citation": {
             "ref": "Makris et al., 2006, Schizophr Res",
             "doi": "10.1016/j.schres.2005.11.020"
@@ -1047,7 +1047,7 @@
         "label": "Harvard-Oxford Subcortical",
         "level": "subcortex",
         "symmetric": true,
-        "license": "free",
+        "license": "FSL custom: attribution",
         "citation": {
             "ref": "Frazier et al., 2005, Biol Psychiatry",
             "doi": "10.1176/appi.ajp.162.7.1256"
@@ -2292,7 +2292,7 @@
         "label": "Yan 100 (17 Kong networks)",
         "level": "cortex",
         "symmetric": true,
-        "license": "free",
+        "license": "MIT",
         "citation": {
             "ref": "Yan et al., 2023, NeuroImage",
             "doi": "10.1016/j.neuroimage.2023.120010"
@@ -2418,7 +2418,7 @@
         "label": "Yan 1000 (17 Kong networks)",
         "level": "cortex",
         "symmetric": true,
-        "license": "free",
+        "license": "MIT",
         "citation": {
             "ref": "Yan et al., 2023, NeuroImage",
             "doi": "10.1016/j.neuroimage.2023.120010"
@@ -2550,7 +2550,7 @@
         "label": "Yan 200 (17 Kong networks)",
         "level": "cortex",
         "symmetric": true,
-        "license": "free",
+        "license": "MIT",
         "citation": {
             "ref": "Yan et al., 2023, NeuroImage",
             "doi": "10.1016/j.neuroimage.2023.120010"
@@ -2679,7 +2679,7 @@
         "label": "Yan 400 (17 Kong networks)",
         "level": "cortex",
         "symmetric": true,
-        "license": "free",
+        "license": "MIT",
         "citation": {
             "ref": "Yan et al., 2023, NeuroImage",
             "doi": "10.1016/j.neuroimage.2023.120010"
