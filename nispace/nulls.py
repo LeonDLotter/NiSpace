@@ -321,14 +321,15 @@ def nulls_moran(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
     np.fill_diagonal(dist_mat, 1)
     dist_mat **= -1
     # null maps
-    # n_components=7: GRF benchmark across 14 parcellations (100–454 parcels, cx-only and
-    # combined cx+sc) showed K=7 is the only value that keeps type-I error within the 95% CI
-    # [0.02, 0.08] in every condition. Default (all positive eigenvalues) gives 0.095–0.145;
-    # K=5 breaks combined parcellations (0.160–0.175); K=10 is too conservative for small ones.
+    # n_components=15: singleton procedure has only 2^K distinct null maps; K=7 gives just
+    # 128 unique surrogates, which is insufficient for n_perm>128. K=15 (2^15=32768) covers
+    # typical n_perm values (500–5000) while keeping type-I error in range at alpha>=2.0.
+    # GRF benchmark showed K=7 optimal for FPR at alpha=3.0; K=15 trades slight FPR loosening
+    # for adequate null-space size. Override with maps_n_components=K.
     null_data[:, mask] = MoranRandomization(
         procedure=kwargs.pop("procedure", "singleton"),
         joint=kwargs.pop("joint", True),
-        n_components=kwargs.pop("n_components", 7),
+        n_components=kwargs.pop("n_components", 15),
         seed=seed,
         n_nulls=n_nulls,
         **kwargs
