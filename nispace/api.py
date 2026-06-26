@@ -20,7 +20,7 @@ from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_
                                _EMPIRICAL_MC_METHODS)
 from .core.nullmaps import NullMaps
 from .core.plot import _plot_categorical
-from .core.constants import _COLOC_METHODS
+from .core.constants import _COLOC_METHODS, _SPACE_DEFAULT_VOL
 from .datasets import fetch_parcellation, fetch_reference, _check_parcellation
 from .nulls import get_distance_matrix, _SPIN_METHODS, _DISTMAT_FREE_METHODS, _parse_null_method
 from .stats.coloc import beta, elasticnet, lasso, mlr, partialpearson, pearson, ridge
@@ -116,12 +116,12 @@ class NiSpace:
                  x_labels: Sequence[str] = None, 
                  y_labels: Sequence[str] = None, 
                  z_labels: Sequence[str] = None, 
-                 data_space: Literal["MNI152NLin6Asym", "MNI152NLin2009cAsym", "fsaverage", "fsLR"] = "MNI152NLin6Asym", 
+                 data_space: Literal["MNI152NLin6Asym", "MNI152NLin2009cAsym", "fsaverage", "fsLR"] = _SPACE_DEFAULT_VOL,
                  standardize: Union[Literal["x", "y", "z", "xy", "xz", "yz", "xyz"], bool] = "xz", 
                  drop_nan: bool = False,    
                  parcellation: Union[str, Path, nib.Nifti1Image, nib.GiftiImage] = None, 
                  parcellation_labels: Sequence[str] = None, 
-                 parcellation_space: Literal["MNI152NLin6Asym", "MNI152NLin2009cAsym", "fsaverage", "fsLR"] = "MNI152NLin6Asym", 
+                 parcellation_space: Literal["MNI152NLin6Asym", "MNI152NLin2009cAsym", "fsaverage", "fsLR"] = _SPACE_DEFAULT_VOL,
                  parcellation_hemi: Union[Literal["R", "L"], Sequence[Literal["L", "R"]]] = ["L", "R"], 
                  parcellation_symmetric: bool = False,
                  parcellation_l2rmap: pd.DataFrame = None,

@@ -7,7 +7,7 @@ import logging
 lgr = logging.getLogger(__name__)
 from . import NiSpace
 from .utils.utils import set_log
-from .core.constants import _PARC_DEFAULT, _COLOC_METHODS
+from .core.constants import _PARC_DEFAULT, _COLOC_METHODS, _SPACE_DEFAULT_VOL
 from .datasets import fetch_reference, reference_lib, _check_parcellation
 
 _DEPR_POOLED_P = (
@@ -144,7 +144,7 @@ def colocalization(y,
                    z=None,
                    x_collection=None,
                    standardize="xz",
-                   space="MNI152NLin2009cAsym",
+                   space=_SPACE_DEFAULT_VOL,
                    data_space=None,
                    parcellation_space=None,
                    parcellation=_PARC_DEFAULT,
@@ -379,7 +379,7 @@ def group_colocalization(y, design,
                          z=None,
                          x_collection=None,
                          standardize="xz",
-                         space="MNI152NLin2009cAsym",
+                         space=_SPACE_DEFAULT_VOL,
                          data_space=None,
                          parcellation_space=None,
                          parcellation=_PARC_DEFAULT,
@@ -628,7 +628,7 @@ def xsea(y,
          x_collection=None,
          x_background=None,
          standardize="xz",
-         space="MNI152NLin2009cAsym",
+         space=_SPACE_DEFAULT_VOL,
          data_space=None,
          parcellation_space=None,
          parcellation=_PARC_DEFAULT,
@@ -733,7 +733,7 @@ def group_xsea(y, design,
                z=None,
                x_collection=None,
                standardize="xz",
-               space="MNI152NLin2009cAsym",
+               space=_SPACE_DEFAULT_VOL,
                data_space=None,
                parcellation_space=None,
                parcellation=_PARC_DEFAULT,
@@ -829,6 +829,11 @@ def simple_colocalization(y, x="PET", z=None, x_collection=None, standardize="xz
                           fit_kwargs=None, clean_y_kwargs=None, colocalize_kwargs=None,
                           permute_kwargs=None, correct_p_kwargs=None, plot_kwargs=None,
                           return_nispace_only=False):
+    """Deprecated wrapper for :func:`colocalization`.
+
+    .. deprecated:: dev
+       Use :func:`colocalization` instead. Will be removed in the first non-dev release.
+    """
     lgr.warning(_DEPR_FUNC_NAME.format(old="simple_colocalization", new="colocalization"))
     return colocalization(
         y=y, x=x, z=z, x_collection=x_collection, standardize=standardize,
@@ -860,6 +865,11 @@ def group_comparison(y, design, x="PET", z=None, x_collection=None, standardize=
                      colocalize_kwargs=None, permute_kwargs=None,
                      correct_p_kwargs=None, plot_kwargs=None,
                      return_nispace_only=False):
+    """Deprecated wrapper for :func:`group_colocalization`.
+
+    .. deprecated:: dev
+       Use :func:`group_colocalization` instead. Will be removed in the first non-dev release.
+    """
     lgr.warning(_DEPR_FUNC_NAME.format(old="group_comparison", new="group_colocalization"))
     return group_colocalization(
         y=y, design=design, x=x, z=z, x_collection=x_collection, standardize=standardize,
@@ -891,6 +901,11 @@ def simple_xsea(y, x="mRNA", z=None, x_collection=None, x_background=None,
                 fit_kwargs=None, clean_y_kwargs=None, colocalize_kwargs=None,
                 permute_kwargs=None, correct_p_kwargs=None, plot_kwargs=None,
                 return_nispace_only=False):
+    """Deprecated wrapper for :func:`xsea`.
+
+    .. deprecated:: dev
+       Use :func:`xsea` instead. Will be removed in the first non-dev release.
+    """
     lgr.warning(_DEPR_FUNC_NAME.format(old="simple_xsea", new="xsea"))
     return xsea(
         y=y, x=x, z=z, x_collection=x_collection, x_background=x_background,

@@ -175,7 +175,7 @@ def _rand_orthogonal(m, rng):
 
 def moran_randomization(x, mem, mev,
                         n_nulls=1000,
-                        procedure='singleton',   # + 'rotate'
+                        procedure='singleton',
                         joint=False,
                         tol_block=1e-3,
                         seed=None):
@@ -191,17 +191,35 @@ def moran_randomization(x, mem, mev,
         arranged in columns.
     n_nulls : int, optional
         Number of random samples. Default is 1000.
-    procedure : {'singleton, 'pair', 'rotate'}, optional
+    procedure : {'singleton', 'ortho', 'pair', 'rotate'}, optional
         Procedure to generate the random samples. Default is 'singleton'.
+
+        - ``'singleton'``: randomly flip the sign (±1) of each MEM coefficient
+          independently. Exactly preserves Moran's I per surrogate. Produces
+          2^K distinct null maps; adequate when K ≥ 15.
+        - ``'ortho'``: eigenvalue-weighted spherical rotation. Whitens the
+          K coefficients by sqrt(eigenvalue), applies a Haar-random K×K
+          orthogonal matrix, unwhitens, then renormalizes to preserve the
+          coefficient norm. Produces a continuous (infinite) null
+          distribution. The rotation is biased toward the dominant spatial
+          modes by the eigenvalue weighting; Moran's I varies slightly
+          across surrogates (not exactly preserved). Recommended when
+          n_perm > 2^K and a continuous null distribution is desired.
+        - ``'pair'``: sign flip followed by random 2D rotations on pairs of
+          coefficients. Continuous but does not preserve Moran's I; included
+          for reference only.
+        - ``'rotate'``: Haar-random rotation within degenerate eigenvalue
+          blocks; falls back to sign flip for non-degenerate eigenvalues (the
+          common case for brain parcellations). Included for reference only.
     joint : boolean, optional
         If True variables are randomized jointly. Otherwise, each variable is
         randomized separately. Default is False.
     tol_block : float, optional
-        Minimum value for an eigenvalue to be considered non-zero.
-        Default is 1e-3.
+        Eigenvalue difference threshold for degenerate block detection
+        (used by 'rotate' only). Default is 1e-3.
     seed : int or None, optional
         Random state. Default is None.
-    
+
     Returns
     -------
     output : ndarray, shape = (n_rep, n_vertices, n_feat)
@@ -219,13 +237,13 @@ def moran_randomization(x, mem, mev,
       randomization methods. Methods in Ecology and Evolution, 6(10):1169-78.
 
     """
-    
+
     x = np.asarray(x)
     if x.ndim == 1:
         x = x[:, None] # (N, 1)
 
     procedure = procedure.lower()
-    if procedure not in ['singleton', 'pair', 'rotate']:
+    if procedure not in ['singleton', 'ortho', 'pair', 'rotate']:
         raise ValueError(f"Unknown procedure '{procedure}'")
 
     rng = np.random.default_rng(seed)
@@ -238,55 +256,82 @@ def moran_randomization(x, mem, mev,
 
     out = np.empty((n_nulls, n_v, n_f), dtype=np.float32)
 
-    # ---- pre-compute degeneration blocks ---------------------------------------------------------
-    blocks, start = [], 0
-    for i in range(1, n_comp):
-        if abs(mev[i] - mev[i-1]) > tol_block:
-            blocks.append(np.arange(start, i))
-            start = i
-    blocks.append(np.arange(start, n_comp))
+    # ---- pre-compute: degenerate blocks (rotate) and whitened coefficients (ortho) ---------------
+    if procedure == 'rotate':
+        blocks, start = [], 0
+        for i in range(1, n_comp):
+            if abs(mev[i] - mev[i-1]) > tol_block:
+                blocks.append(np.arange(start, i))
+                start = i
+        blocks.append(np.arange(start, n_comp))
+
+    if procedure == 'ortho':
+        # whiten once: C_w_k = C_k * sqrt(mev_k)  →  ||C_w||² = Σ mev_k·C_k²  (SA energy)
+        mev_sqrt = np.sqrt(np.abs(mev)).astype(np.float32)[:, None]  # (n_comp, 1)
+        C_w = coeff * mev_sqrt  # (n_comp, n_f)
 
     # ---- null loop -------------------------------------------------------------------------------
     for r in range(n_nulls):
-        C = coeff.copy()
 
-        # ---- random ±1 with optional broadcasting ------------------------------------------------
-        if procedure in ('singleton', 'pair'):
-            signs = rng.choice([-1., 1.], size=(n_comp, n_cols))
-            if joint:
-                signs = np.broadcast_to(signs, (n_comp, n_f))
-            C *= signs
+        # ---- 'ortho': eigenvalue-weighted spherical rotation ------------------------------------
+        if procedure == 'ortho':
+            # Whiten → Haar-random O(K) rotation → unwhiten → renormalize.
+            # Whitening maps C to SA-energy space so the rotation treats all modes uniformly
+            # with respect to their spatial contribution. Unwhitening returns to coefficient
+            # space; renormalization restores ||C|| = ||coeff|| so the back-projection
+            # produces surrogates with the same scale as the input (prevents amplification
+            # when the eigenvalue spread is large). SA energy is approximately preserved;
+            # Moran's I varies slightly across surrogates (not exact).
+            if joint or n_f == 1:
+                Q = _rand_orthogonal(n_comp, rng)       # (n_comp, n_comp)
+                C = (Q @ C_w) / mev_sqrt                # rotate → unwhiten
+                # renormalize column-wise to ||coeff|| norm
+                c_norm  = np.linalg.norm(coeff, axis=0, keepdims=True)   # (1, n_f)
+                cn_norm = np.linalg.norm(C,     axis=0, keepdims=True)   # (1, n_f)
+                C = C * (c_norm / np.maximum(cn_norm, 1e-10))
+            else:
+                C = np.empty_like(C_w)
+                for f in range(n_f):
+                    Q = _rand_orthogonal(n_comp, rng)
+                    c_f = (Q @ C_w[:, f]) / mev_sqrt[:, 0]
+                    c_f *= np.linalg.norm(coeff[:, f]) / max(np.linalg.norm(c_f), 1e-10)
+                    C[:, f] = c_f
 
-            # ---- optional 'pair' mixing ----------------------------------------------------------
-            if procedure == 'pair':
-                pairs  = rng.permutation(n_comp)[: (n_comp // 2) * 2].reshape(-1, 2)
-                phi    = rng.uniform(0, 2 * np.pi, size=(pairs.shape[0], n_cols))
+        else:
+            C = coeff.copy()
+
+            # ---- 'singleton' / 'pair': random ±1 sign flips ------------------------------------
+            if procedure in ('singleton', 'pair'):
+                signs = rng.choice([-1., 1.], size=(n_comp, n_cols))
                 if joint:
-                    phi = phi + np.arctan2(C[pairs[:, 0]], C[pairs[:, 1]])
-                    phi = np.broadcast_to(phi, (pairs.shape[0], n_f))
+                    signs = np.broadcast_to(signs, (n_comp, n_f))
+                C *= signs
 
-                for (a, b), ang in zip(pairs, phi):
-                    A, B = C[[a, b]]
-                    C[a] =  np.cos(ang) * A + np.sin(ang) * B
-                    C[b] = -np.sin(ang) * A + np.cos(ang) * B
-
-        # ---- 'rotate' ----------------------------------------------------------------------------
-        else:  
-            #n_blk, n_flip = 0, 0
-            for blk in blocks:
-                m = len(blk)
-                if m == 1: # singleton -> fallback to sign flip
-                    s = rng.choice([-1, 1], size=(1, n_cols))
+                # ---- optional 'pair' 2-D mixing ------------------------------------------------
+                if procedure == 'pair':
+                    pairs = rng.permutation(n_comp)[: (n_comp // 2) * 2].reshape(-1, 2)
+                    phi   = rng.uniform(0, 2 * np.pi, size=(pairs.shape[0], n_cols))
                     if joint:
-                        s = np.broadcast_to(s, (1, n_f))
-                    C[blk] *= s
-                    #n_flip += 1
-                else: # rotate block
-                    R = _rand_orthogonal(m, rng) # (m, m)
-                    C[blk] = R @ C[blk]   
-                    #n_blk += 1
-            #print(f"rotations: {n_blk}/{len(blocks)}, sign flips: {n_flip}/{len(blocks)}")
-            
+                        phi = phi + np.arctan2(C[pairs[:, 0]], C[pairs[:, 1]])
+                        phi = np.broadcast_to(phi, (pairs.shape[0], n_f))
+                    for (a, b), ang in zip(pairs, phi):
+                        A, B = C[[a, b]]
+                        C[a] =  np.cos(ang) * A + np.sin(ang) * B
+                        C[b] = -np.sin(ang) * A + np.cos(ang) * B
+
+            # ---- 'rotate': O(m) within degenerate eigenvalue blocks ----------------------------
+            else:
+                for blk in blocks:
+                    m = len(blk)
+                    if m == 1:
+                        s = rng.choice([-1, 1], size=(1, n_cols))
+                        if joint:
+                            s = np.broadcast_to(s, (1, n_f))
+                        C[blk] *= s
+                    else:
+                        R = _rand_orthogonal(m, rng)
+                        C[blk] = R @ C[blk]
+
         # ---- back-projection ---------------------------------------------------------------------
         sim = mem @ C * x.std(0, ddof=1) + x.mean(0)
         out[r] = sim
@@ -300,8 +345,9 @@ class MoranRandomization(BaseEstimator):
 
     Parameters
     ----------
-    procedure : {'singleton, 'pair'}, optional
+    procedure : {'singleton', 'ortho', 'pair', 'rotate'}, optional
         Procedure to generate the random samples. Default is 'singleton'.
+        See :func:`.moran_randomization` for full description of each option.
     spectrum : {'all', 'nonzero'}, optional
         Eigenvalues/vectors to select. If 'all', recover all eigenvectors
         except one. Otherwise, select all except non-zero eigenvectors.

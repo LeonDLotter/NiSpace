@@ -38,6 +38,8 @@ Reference API
    fetch_collection
    apply_collection
    fetch_metadata
+   fetch_map_info
+   fetch_plot
    fetch_example
 
 
@@ -51,6 +53,10 @@ Reference API
    :template: function.rst
    :toctree: generated/
 
+   colocalization
+   group_colocalization
+   xsea
+   group_xsea
    simple_colocalization
    group_comparison
    simple_xsea
