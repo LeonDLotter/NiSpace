@@ -91,7 +91,7 @@ def _file_desc(fname, feature_position):
     
 # BRAIN TEMPLATES ==================================================================================
 
-def fetch_template(template: str = "MNI152NLin2009cAsym",
+def fetch_template(template: str = _SPACE_DEFAULT_VOL,
                    res: str = None,
                    desc: str = None,
                    #parcellation: str = None,
@@ -106,7 +106,7 @@ def fetch_template(template: str = "MNI152NLin2009cAsym",
     Parameters
     ----------
     template : str, optional
-        The template to fetch. Default is "MNI152NLin2009cAsym".
+        The template to fetch. Default is "MNI152NLin6Asym".
         
     res : str, optional
         The resolution of the template to fetch. Defaults: "1mm" for MNI152, "41k" for

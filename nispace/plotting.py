@@ -17,6 +17,7 @@ import logging
 lgr = logging.getLogger(__name__)
 from .utils.utils import vect_to_vol_arr, set_log, apply_mni_mask
 from .datasets import fetch_parcellation, fetch_template, parcellation_lib, template_lib
+from .core.constants import _SPACE_DEFAULT_VOL
 from ._patches import apply_surface_plot_patches
 apply_surface_plot_patches()
 
@@ -1494,7 +1495,7 @@ def brainplot(
         as a plain MNI volume.
     space : str, optional
         Parcellation space to use for rendering. Defaults to fsLR for
-        surface plots and MNI152NLin2009cAsym for volume plots. For GIfTI
+        surface plots and MNI152NLin6Asym for volume plots. For GIfTI
         image input, the resolution is auto-detected from vertex count and
         ``space`` determines fsLR vs fsaverage (default: fsLR).
     surf_mesh : {"inflated", "pial", "midthickness", "veryinflated"}
@@ -1864,7 +1865,7 @@ def brainplot(
 
     if _img_mode == "nifti":
         _niis_raw = [data] if _is_nifti_like else data
-        _mask_space = space if (space is not None and not isinstance(space, tuple)) else "MNI152NLin2009cAsym"
+        _mask_space = space if (space is not None and not isinstance(space, tuple)) else _SPACE_DEFAULT_VOL
         _mask_desc = "cortexmask" if level == "cx" else ("subcortexmask" if level == "sc" else None)
         _stat_niis = []
         _all_arrs  = []
@@ -2055,7 +2056,7 @@ def brainplot(
                     )
 
     elif _img_mode == "nifti" and kind == "slice" and bg_img is None:
-        _bg_space = space if space is not None else "MNI152NLin2009cAsym"
+        _bg_space = space if space is not None else _SPACE_DEFAULT_VOL
         for _desc in ("brain", "T1w"):
             try:
                 bg_img_nii = fetch_template(_bg_space, desc=_desc, verbose=False)
@@ -2399,7 +2400,7 @@ def brainplot(
         # ---- NIfTI + combined: apply cx/sc masks, render into respective insets ----
         elif is_combined and _img_mode == "nifti":
             _mask_space_nii = (space if (space is not None and not isinstance(space, tuple))
-                               else "MNI152NLin2009cAsym")
+                               else _SPACE_DEFAULT_VOL)
             try:
                 _cx_stat = apply_mni_mask(_stat_niis[0], "cortexmask", _mask_space_nii)
             except Exception as _me:

@@ -345,7 +345,6 @@ def colocalization(y,
             plot_kwargs_curr = dict(
                 method=method,
                 permute_what=permuted,
-                sort_by="abs_z",
             ) | plot_kwargs
             nsp.plot(**plot_kwargs_curr)
 
@@ -592,7 +591,6 @@ def group_colocalization(y, design,
                 permute_what=permute_what,
                 Y_transform=comparison_method,
                 verbose=verbose,
-                sort_by="abs_z",
             ) | plot_kwargs
             nsp.plot(**plot_kwargs_curr)
 

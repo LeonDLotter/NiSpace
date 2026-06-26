@@ -1387,19 +1387,18 @@ class Parcellation:
     def get_null_space(self):
         """Return optimal null strategy for null map generation.
 
-        For non-combined parcellations returns ``(space_name, null_method)``.
-
-        For combined (cx+sc) parcellations returns a nested tuple
-        ``((cx_space, cx_method), (sc_space, sc_method))`` when cx and sc
-        strategies differ, or a plain ``(space, "moran")`` when no surface
-        space is available for the cx component.
+        Returns ``(space_name, null_method)`` in all cases.
 
         Priority
         --------
-        Spin (alexander_bloch) — cortex-only or cx component with surface space:
+        Spin (cornblath) — cortex-only parcellation with a surface space:
             fsLR  >  fsaverage  >  any surface space name
-        Moran — combined (cx+sc) sc component, or no surface available:
-            MNI152NLin2009cAsym  >  MNI152NLin6Asym  >  any MNI  >  first available
+        Moran — volumetric, bilateral, or combined (cx+sc) parcellations:
+            MNI152NLin6Asym  >  MNI152NLin2009cAsym  >  any MNI  >  first available
+
+        For combined parcellations moran runs on the full combined distance matrix
+        (cx+sc together), which is more robust than the split cornblath+moran
+        approach at moderate spatial autocorrelation (GRF alpha < 3).
         """
         def _is_surf(s):
             return any(k in s.lower() for k in ("fsa", "fsaverage", "fslr", "fs_lr"))
@@ -1413,28 +1412,11 @@ class Parcellation:
                     return s
             return self.spaces[0]
 
+        # combined (cx+sc): always moran on combined dist_mat
         if self._is_combined:
-            # cx: prefer surface space for spin — combined parcs store surface in _cx_surface
-            cx_surface_spaces = list(self._cx_surface.keys()) if self._cx_surface else []
-            cx_space = None
-            for preferred in ["fsLR", "fsaverage"]:
-                if preferred in cx_surface_spaces:
-                    cx_space = preferred
-                    break
-            if cx_space is None:
-                for s in cx_surface_spaces:
-                    if _is_surf(s):
-                        cx_space = s
-                        break
-            sc_space = _best_mni()
-            cx_method = "cornblath" if cx_space is not None else "moran"
-            if cx_space is None:
-                cx_space = sc_space
-            # if both strategies are identical, return single pair
-            if cx_method == "moran" and cx_space == sc_space:
-                return sc_space, "moran"
-            return ((cx_space, cx_method), (sc_space, "moran"))
+            return _best_mni(), "moran"
 
+        # cortex-only with surface space: cornblath spin
         if not self._bilateral:
             for preferred in ["fsLR", "fsaverage"]:
                 if preferred in self.spaces:

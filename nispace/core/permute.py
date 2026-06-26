@@ -196,14 +196,14 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing=True, s
     else:
         new_spin_mat = None
 
-    # memmap (before standardize — memmap holds raw maps; standardize always returns plain array)
-    if memmap_path is not None:
-        null_maps.to_memmap(memmap_path)
-
     # standardize (spatial null maps only; group null maps are not z-scored)
     if standardize:
         lgr.info("Z-standardizing null maps.")
         null_maps = null_maps.standardize()
+
+    # memmap after standardize so the cached NullMaps (standardized) lives on disk
+    if memmap_path is not None:
+        null_maps.to_memmap(memmap_path)
 
     return null_maps, new_spin_mat
 
