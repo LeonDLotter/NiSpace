@@ -151,13 +151,14 @@ def colocalization(y,
                    parcellation_labels=None,
                    parcellation_hemi=["L", "R"],
                    y_covariates=None,
-                   colocalization_method="spearman",
+                   colocalization_method=None,
                    mc_method="meff",
                    normalize_colocalizations=True,
                    pooled_p=False,
                    p_from_average_y=None,  # TODO (first non-dev release): remove
                    plot=True,
                    combat=False,
+                   binary_y=False,
                    n_perm=10000,
                    seed=None,
                    n_proc=1,
@@ -194,8 +195,9 @@ def colocalization(y,
         Optional labels for the parcellation regions.
     y_covariates : array-like or None, default=None
         Optional covariates to regress from Y data.
-    colocalization_method : str or list, default="spearman"
-        Method(s) to use for colocalization. Can be "spearman", "pearson", etc.
+    colocalization_method : str or list, default=None
+        Method(s) to use for colocalization. When ``None``, defaults to
+        ``"pearson"`` if ``binary_y=True``, otherwise ``"spearman"``.
     pooled_p : str or bool, default=False
         How to aggregate across Y maps before computing p-values. ``False`` (default)
         computes one p-value per Y×X pair. ``"mean"`` or ``"median"`` averages
@@ -250,7 +252,11 @@ def colocalization(y,
         pooled_p = p_from_average_y
     # kwarg dicts
     fetch_x_kwargs = {} if fetch_x_kwargs is None else fetch_x_kwargs
-    init_kwargs = {} if init_kwargs is None else init_kwargs
+    init_kwargs = {} if init_kwargs is None else dict(init_kwargs)
+    if binary_y:
+        init_kwargs.setdefault("binary_y", True)
+    if colocalization_method is None:
+        colocalization_method = "pearson" if binary_y else "spearman"
     fit_kwargs = {} if fit_kwargs is None else fit_kwargs
     clean_y_kwargs = {} if clean_y_kwargs is None else clean_y_kwargs
     colocalize_kwargs = {} if colocalize_kwargs is None else colocalize_kwargs
@@ -633,7 +639,7 @@ def xsea(y,
          parcellation_labels=None,
          parcellation_hemi=["L", "R"],
          y_covariates=None,
-         colocalization_method="spearman",
+         colocalization_method=None,
          mc_method="meff",
          normalize_colocalizations=True,
          xsea_aggregation_method="mean",
@@ -642,6 +648,7 @@ def xsea(y,
          p_from_average_y=None,  # TODO (first non-dev release): remove
          plot=True,
          combat=False,
+         binary_y=False,
          n_perm=10000,
          seed=None,
          n_proc=1,
@@ -663,7 +670,11 @@ def xsea(y,
         pooled_p = p_from_average_y
     # kwarg dicts
     fetch_x_kwargs = {} if fetch_x_kwargs is None else fetch_x_kwargs
-    init_kwargs = {} if init_kwargs is None else init_kwargs
+    init_kwargs = {} if init_kwargs is None else dict(init_kwargs)
+    if binary_y:
+        init_kwargs.setdefault("binary_y", True)
+    if colocalization_method is None:
+        colocalization_method = "pearson" if binary_y else "spearman"
     fit_kwargs = {} if fit_kwargs is None else fit_kwargs
     clean_y_kwargs = {} if clean_y_kwargs is None else clean_y_kwargs
     colocalize_kwargs = {} if colocalize_kwargs is None else colocalize_kwargs
@@ -803,6 +814,245 @@ def group_xsea(y, design,
         transform_y_kwargs=transform_y_kwargs,
         colocalize_kwargs={"xsea": True, "xsea_aggregation_method": xsea_aggregation_method}
                           | (colocalize_kwargs or {}),
+        permute_kwargs=permute_kwargs,
+        correct_p_kwargs=correct_p_kwargs,
+        plot_kwargs=plot_kwargs,
+        return_nispace_only=return_nispace_only,
+    )
+
+
+def nimare_colocalization(y,
+                          x="PET",
+                          z=None,
+                          x_collection=None,
+                          standardize="xz",
+                          space=_SPACE_DEFAULT_VOL,
+                          data_space=None,
+                          parcellation_space=None,
+                          parcellation=_PARC_DEFAULT,
+                          parcellation_labels=None,
+                          parcellation_hemi=["L", "R"],
+                          y_covariates=None,
+                          colocalization_method=None,
+                          mc_method="meff",
+                          normalize_colocalizations=True,
+                          pooled_p=False,
+                          plot=True,
+                          binary_y=False,
+                          nimare_nulls=None,
+                          n_perm=10000,
+                          seed=None,
+                          n_proc=1,
+                          verbose=True,
+                          nispace_object=None,
+                          fetch_x_kwargs=None,
+                          init_kwargs=None,
+                          fit_kwargs=None,
+                          clean_y_kwargs=None,
+                          colocalize_kwargs=None,
+                          permute_kwargs=None,
+                          correct_p_kwargs=None,
+                          plot_kwargs=None,
+                          return_nispace_only=False):
+    """NiMARE colocalization workflow.
+
+    Convenience wrapper around :func:`colocalization` for Y maps derived from
+    NiMARE meta-analyses (continuous ALE stat maps or binary cluster-coverage
+    maps from :func:`~nispace.helpers.get_binary_cluster_map`).
+
+    Sets the following defaults relative to :func:`colocalization`:
+
+    * ``ignore_background_data=False`` in ``fit_kwargs`` — zero-valued voxels
+      in ALE maps are meaningful (no activation there), not missing data
+    * ``maps_which="Y"`` in ``permute_kwargs`` when ``nimare_nulls`` is provided,
+      so Y is permuted with coordinate-sampling null maps; otherwise ``"X"``
+
+    For binary cluster maps also pass ``binary_y=True`` and
+    ``colocalization_method="pearson"``.
+
+    Parameters
+    ----------
+    y : NIfTI image, array-like, or list
+        ALE stat map (``result.get_map("stat")``) or binary cluster-coverage map
+        (from :func:`~nispace.helpers.get_binary_cluster_map`).
+    x : str or array-like, default="PET"
+        Reference X maps. Same as :func:`colocalization`.
+    colocalization_method : str or list, default=None
+        Colocalization method. When ``None``, defaults to ``"pearson"`` if
+        ``binary_y=True`` (approximate point-biserial), otherwise ``"spearman"``.
+    binary_y : bool, default=False
+        Set ``True`` when Y is a binary or fractional cluster-coverage map.
+        Prevents z-scoring of Y and raises warnings for ranked methods or group
+        permutation. See :class:`~nispace.NiSpace` for details.
+    nimare_nulls : dict or None, default=None
+        Coordinate-sampling null maps from
+        :func:`~nispace.helpers.null_maps_from_nimare`. When provided, sets
+        ``maps_nulls=nimare_nulls`` and ``maps_which="Y"`` in ``permute_kwargs``
+        so Y is permuted with the NiMARE null distribution. Explicit entries in
+        ``permute_kwargs`` take precedence.
+    (all other parameters identical to :func:`colocalization`)
+
+    Returns
+    -------
+    nsp : NiSpace
+        (when ``return_nispace_only=True``)
+    colocs, p_values, pc_values, nsp : tuple
+        Deprecated. Returned when ``return_nispace_only=False``.
+    """
+    init_kwargs = {} if init_kwargs is None else dict(init_kwargs)
+    if binary_y:
+        init_kwargs.setdefault("binary_y", True)
+    if colocalization_method is None:
+        colocalization_method = "pearson" if binary_y else "spearman"
+
+    fit_kwargs = {} if fit_kwargs is None else dict(fit_kwargs)
+    fit_kwargs.setdefault("ignore_background_data", False)
+
+    permute_kwargs = {} if permute_kwargs is None else dict(permute_kwargs)
+    if nimare_nulls is not None:
+        permute_kwargs.setdefault("maps_nulls", nimare_nulls)
+        permute_kwargs.setdefault("maps_which", "Y")
+    else:
+        permute_kwargs.setdefault("maps_which", "X")
+
+    return colocalization(
+        y=y, x=x, z=z, x_collection=x_collection,
+        standardize=standardize,
+        space=space,
+        data_space=data_space,
+        parcellation_space=parcellation_space,
+        parcellation=parcellation,
+        parcellation_labels=parcellation_labels,
+        parcellation_hemi=parcellation_hemi,
+        y_covariates=y_covariates,
+        colocalization_method=colocalization_method,
+        mc_method=mc_method,
+        normalize_colocalizations=normalize_colocalizations,
+        pooled_p=pooled_p,
+        plot=plot,
+        n_perm=n_perm,
+        seed=seed,
+        n_proc=n_proc,
+        verbose=verbose,
+        nispace_object=nispace_object,
+        fetch_x_kwargs=fetch_x_kwargs,
+        init_kwargs=init_kwargs,
+        fit_kwargs=fit_kwargs,
+        clean_y_kwargs=clean_y_kwargs,
+        colocalize_kwargs=colocalize_kwargs,
+        permute_kwargs=permute_kwargs,
+        correct_p_kwargs=correct_p_kwargs,
+        plot_kwargs=plot_kwargs,
+        return_nispace_only=return_nispace_only,
+    )
+
+
+def nimare_xsea(y,
+                x="mRNA",
+                z=None,
+                x_collection=None,
+                x_background=None,
+                standardize="xz",
+                space=_SPACE_DEFAULT_VOL,
+                data_space=None,
+                parcellation_space=None,
+                parcellation=_PARC_DEFAULT,
+                parcellation_labels=None,
+                parcellation_hemi=["L", "R"],
+                y_covariates=None,
+                colocalization_method=None,
+                mc_method="meff",
+                normalize_colocalizations=True,
+                xsea_aggregation_method="mean",
+                permute_sets=False,
+                pooled_p=False,
+                plot=True,
+                binary_y=False,
+                nimare_nulls=None,
+                n_perm=10000,
+                seed=None,
+                n_proc=1,
+                verbose=True,
+                nispace_object=None,
+                fetch_x_kwargs=None,
+                init_kwargs=None,
+                fit_kwargs=None,
+                clean_y_kwargs=None,
+                colocalize_kwargs=None,
+                permute_kwargs=None,
+                correct_p_kwargs=None,
+                plot_kwargs=None,
+                return_nispace_only=False):
+    """NiMARE X-set enrichment analysis (XSEA) workflow.
+
+    Convenience wrapper around :func:`xsea` for Y maps derived from NiMARE
+    meta-analyses. Equivalent to :func:`nimare_colocalization` with XSEA enabled.
+
+    Sets ``ignore_background_data=False`` in ``fit_kwargs`` and routes
+    ``nimare_nulls`` into ``permute_kwargs``. See :func:`nimare_colocalization`
+    for full details on NiMARE-specific parameters.
+
+    Parameters
+    ----------
+    y : NIfTI image, array-like, or list
+        ALE stat map or binary cluster-coverage map.
+    x : str or array-like, default="mRNA"
+        Reference X maps (gene-set collections for XSEA).
+    binary_y : bool, default=False
+        Set ``True`` for binary or fractional cluster-coverage Y maps.
+    nimare_nulls : dict or None, default=None
+        Coordinate-sampling null maps from
+        :func:`~nispace.helpers.null_maps_from_nimare`.
+    (all other parameters identical to :func:`xsea`)
+
+    Returns
+    -------
+    nsp : NiSpace
+        (when ``return_nispace_only=True``)
+    colocs, p_values, pc_values, nsp : tuple
+        Deprecated. Returned when ``return_nispace_only=False``.
+    """
+    init_kwargs = {} if init_kwargs is None else dict(init_kwargs)
+    if binary_y:
+        init_kwargs.setdefault("binary_y", True)
+    if colocalization_method is None:
+        colocalization_method = "pearson" if binary_y else "spearman"
+
+    fit_kwargs = {} if fit_kwargs is None else dict(fit_kwargs)
+    fit_kwargs.setdefault("ignore_background_data", False)
+
+    permute_kwargs = {} if permute_kwargs is None else dict(permute_kwargs)
+    if nimare_nulls is not None:
+        permute_kwargs.setdefault("maps_nulls", nimare_nulls)
+
+    return xsea(
+        y=y, x=x, z=z, x_collection=x_collection,
+        x_background=x_background,
+        standardize=standardize,
+        space=space,
+        data_space=data_space,
+        parcellation_space=parcellation_space,
+        parcellation=parcellation,
+        parcellation_labels=parcellation_labels,
+        parcellation_hemi=parcellation_hemi,
+        y_covariates=y_covariates,
+        colocalization_method=colocalization_method,
+        mc_method=mc_method,
+        normalize_colocalizations=normalize_colocalizations,
+        xsea_aggregation_method=xsea_aggregation_method,
+        permute_sets=permute_sets,
+        pooled_p=pooled_p,
+        plot=plot,
+        n_perm=n_perm,
+        seed=seed,
+        n_proc=n_proc,
+        verbose=verbose,
+        nispace_object=nispace_object,
+        fetch_x_kwargs=fetch_x_kwargs,
+        init_kwargs=init_kwargs,
+        fit_kwargs=fit_kwargs,
+        clean_y_kwargs=clean_y_kwargs,
+        colocalize_kwargs=colocalize_kwargs,
         permute_kwargs=permute_kwargs,
         correct_p_kwargs=correct_p_kwargs,
         plot_kwargs=plot_kwargs,

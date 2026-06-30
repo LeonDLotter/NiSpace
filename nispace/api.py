@@ -137,6 +137,7 @@ class NiSpace:
                  verbose: bool = True,
                  dtype: Union[type, str] = np.float32,
                  return_self: bool = True,
+                 binary_y: bool = False,
                  **kwargs):
         """
         Initialize the NiSpace object. 
@@ -316,7 +317,21 @@ class NiSpace:
         
         # deprecation adjustment
         self._return_self = return_self
-        
+
+        # binary Y mode
+        self._binary_y = binary_y
+        if binary_y:
+            lgr.info("binary_y=True: Expecting Y input derived from binary maps "
+                     "(e.g., cluster or network maps); ignore_background_data=False "
+                     "for Y parcellation.")
+        if binary_y and "y" in self._zscore:
+            self._zscore = self._zscore.replace("y", "")
+            lgr.warning(
+                "binary_y=True: Y data will not be z-standardized regardless of the "
+                "'standardize' setting. Z-scoring would destroy the [0,1] range of "
+                "parcellated binary maps."
+            )
+
     # FIT ==========================================================================================
     
     def fit(self, **kwargs):
@@ -436,11 +451,14 @@ class NiSpace:
                     self._zscore += "y"
         else:
             lgr.info("Checking input data for 'y' (should be, e.g., subject data):")
+            _input_kwargs_y = _input_kwargs.copy()
+            if self._binary_y:
+                _input_kwargs_y.setdefault("ignore_background_data", False)
             self._Y = parcellate_data(
-                self._y, 
+                self._y,
                 data_labels=self._y_lab,
-                data_space=self._data_space[1], 
-                **_input_kwargs
+                data_space=self._data_space[1],
+                **_input_kwargs_y
             )
         lgr.info(f"Got 'y' data for {self._Y.shape[0]} x {self._Y.shape[1]} parcels.")
         
@@ -746,7 +764,14 @@ class NiSpace:
         
         ## check if fit was run
         self._check_fit()
-        
+
+        if self._binary_y and Y is None:
+            lgr.warning(
+                "binary_y=True: transform_y() is not meaningful for binary Y maps. "
+                "Binary maps represent a fixed observed contrast and should not be "
+                "transformed. Proceeding, but consider whether this is intended."
+            )
+
         ## Y data
         if Y is None:
             _Y = self._Y
@@ -942,7 +967,15 @@ class NiSpace:
                      (f" with '{Y_transform}' transform" if Y_transform else "") + ".")
         if "spearman" in method:
             rank = True
-        
+
+        if self._binary_y and method in {"spearman", "partialspearman"}:
+            lgr.warning(
+                f"binary_y=True: Ranked colocalization method '{method}' is not recommended "
+                "for binary Y data. Parcellated binary maps have many tied zeros; rank "
+                "transforms degrade sensitivity. Use 'pearson' for an approximate "
+                "point-biserial correlation."
+            )
+
         ## get X and Y data (so this function can be run on direct X & Y input data)
         # X
         if not X:
@@ -1321,6 +1354,15 @@ class NiSpace:
             lgr.critical_raise(f"'what' must be list, tuple, or string, not {type(what)}",
                                ValueError)
         what = sorted(what)
+        if self._binary_y and "groups" in what:
+            lgr.critical_raise(
+                "binary_y=True: Group label permutation (permute='groups') cannot be used "
+                "with binary Y data. Binary maps are a fixed observed result (e.g., a "
+                "meta-analytic cluster); scrambling group labels is not a valid null model. "
+                "Use permute='maps' with maps_which='X', or supply NiMARE coordinate-sampling "
+                "null maps via maps_nulls= and maps_which='Y'.",
+                ValueError,
+            )
         # check maps_which variable
         if maps_which:
             if isinstance(maps_which, str):

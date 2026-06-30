@@ -20,8 +20,11 @@ if not os.environ.get("NISPACE_SHOW_FUTURE_WARNINGS"):
     
 # Public API
 from .api import NiSpace
-from .workflows import (colocalization, group_colocalization, xsea, group_xsea,
+from .workflows import (colocalization, group_colocalization,
+                        xsea, group_xsea,
+                        nimare_colocalization, nimare_xsea,
                         simple_colocalization, simple_xsea, group_comparison)
 from .transforms import mni_to_mni, compute_transform_displacement
 from .core.nullmaps import NullMaps
+from .helpers import get_binary_cluster_map, nimare_fwe_thresholds, null_maps_from_nimare
 
