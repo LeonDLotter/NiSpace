@@ -434,34 +434,39 @@ def _get_surface_atlas(parc_space, density):
     return atlas, surf_key
 
 
-def _gen_spinsamples_parallel(coords, hemiid, n_perm, seed=None, n_proc=1, out=None):
-    """Wrapper for ``gen_spinsamples`` with optional thread-based parallelism.
+def _gen_spinsamples_parallel(coords, hemiid, n_perm, seed=None, n_proc=1, out=None,
+                               batch_size=None):
+    """Wrapper for ``gen_spinsamples`` with optional process-based parallelism.
 
-    Designed for vertex-level (65k coord) calls where the bottleneck is
-    ``cKDTree.query`` (C-level, GIL-releasing).  Splits ``n_perm`` across
-    ``n_proc`` threads, each with an independent child seed from ``seed`` via
-    ``np.random.SeedSequence``.  Results are statistically equivalent (i.i.d.
-    rotations) but not byte-identical to a single seeded call when n_proc > 1.
+    Splits ``n_perm`` across ``n_proc`` processes, each with an independent
+    child seed from ``seed`` via ``np.random.SeedSequence``.  Results are
+    statistically equivalent (i.i.d. rotations) but not byte-identical to a
+    single seeded call when n_proc > 1.
 
-    If *out* is provided (pre-allocated ``(n_vert, n_perm)`` array, ideally
-    F-contiguous so column reads are fast), workers write directly into it
-    instead of returning slices to be concatenated.  This avoids a transient
-    copy and is required when *out* is a memmap-backed array.
+    *batch_size* controls how many permutations each batch contains.
+    Smaller batches → more batches → finer-grained tqdm progress.  Defaults to
+    ``ceil(n_perm / n_workers)`` (one batch per worker) when not set.
+
+    If *out* is provided (pre-allocated ``(n_vert, n_perm)`` F-contiguous
+    array or memmap), workers write directly to non-overlapping column slices.
     """
     from joblib import effective_n_jobs
     n_workers = effective_n_jobs(n_proc)  # resolves -1/-2/etc. to actual core count
     if n_workers == 1:
         result = gen_spinsamples(
             coords, hemiid, n_rotate=n_perm, method="original",
-            check_duplicates=False, seed=seed,
+            check_duplicates=False, seed=seed, verbose=True,
         )
         if out is not None:
             out[:] = result
             return out
         return result
+
+    n_batches = (-(-n_perm // batch_size) if batch_size  # ceil division
+                 else n_workers)
     seq = np.random.SeedSequence(seed)
-    child_seeds = [int(s.generate_state(1)[0]) for s in seq.spawn(n_workers)]
-    batches = np.array_split(np.arange(n_perm), n_workers)
+    child_seeds = [int(s.generate_state(1)[0]) for s in seq.spawn(n_batches)]
+    batches = [b for b in np.array_split(np.arange(n_perm), n_batches) if len(b) > 0]
 
     def _run_batch(b, s):
         res = gen_spinsamples(
@@ -470,16 +475,24 @@ def _gen_spinsamples_parallel(coords, hemiid, n_perm, seed=None, n_proc=1, out=N
         )
         if out is not None:
             out[:, b[0]: b[-1] + 1] = res  # write to non-overlapping column slice
-            return None
+            return len(b)
         return res
 
-    results = Parallel(n_jobs=n_workers, prefer="threads")(
-        delayed(_run_batch)(b, s)
-        for b, s in zip(batches, child_seeds) if len(b) > 0
-    )
+    collected = []
+    with tqdm(total=n_perm, desc="Generating spins") as pbar:
+        for r in Parallel(n_jobs=n_workers, prefer="processes",
+                          return_as="generator_unordered")(
+            delayed(_run_batch)(b, s) for b, s in zip(batches, child_seeds)
+        ):
+            if isinstance(r, int):   # out is not None: worker returned batch size
+                pbar.update(r)
+            else:                    # out is None: worker returned result array
+                collected.append(r)
+                pbar.update(r.shape[1])
+
     if out is not None:
         return out
-    return np.concatenate(results, axis=1)
+    return np.concatenate(collected, axis=1)
 
 
 def _spin_parcels_parallel(surfaces, parcellation, n_perm, seed=None, n_proc=1):
@@ -598,8 +611,32 @@ def generate_baum_spins(parc, parc_space, n_perm=1000, seed=None, n_proc=1):
     return spins_lh, spins_rh
 
 
+
+def _build_cornblath_T_batch(spins_path, spins_shape, n_vert_lh,
+                             labels_lh, labels_rh, src_counts_lh, src_counts_rh,
+                             n_lh, n_rh, T_lh_path, T_rh_path, dtype,
+                             k_start, k_end):
+    """Worker: build T matrices for permutations [k_start, k_end) from memmaps."""
+    n_perm = spins_shape[1]
+    spins = np.memmap(spins_path, dtype=np.int32, mode="r", shape=spins_shape, order="F")
+    T_lh = np.memmap(T_lh_path, dtype=dtype, mode="r+", shape=(n_perm, n_lh, n_lh))
+    T_rh = np.memmap(T_rh_path, dtype=dtype, mode="r+", shape=(n_perm, n_rh, n_rh))
+    for k in range(k_start, k_end):
+        spun_lh = labels_lh[spins[:n_vert_lh, k]]
+        valid = (spun_lh > 0) & (labels_lh > 0)
+        s, d = spun_lh[valid] - 1, labels_lh[valid] - 1
+        np.add.at(T_lh[k], (d, s), 1.0 / src_counts_lh[s])
+        spun_rh = labels_rh[spins[n_vert_lh:, k] - n_vert_lh]
+        valid = (spun_rh > 0) & (labels_rh > 0)
+        s, d = spun_rh[valid] - 1, labels_rh[valid] - 1
+        np.add.at(T_rh[k], (d, s), 1.0 / src_counts_rh[s])
+    T_lh.flush()
+    T_rh.flush()
+    return k_end - k_start
+
+
 def generate_cornblath_mat(parc, parc_space, n_perm=1000, seed=None, n_proc=1,
-                           dtype=np.float32, memmap_dir=None):
+                           dtype=np.float32, memmap_dir=None, batch_size=100):
     """Generate Cornblath fractional transition matrices.
 
     For each rotation k, ``T[k, j, i]`` = fraction of parcel i's vertices that land in
@@ -618,6 +655,7 @@ def generate_cornblath_mat(parc, parc_space, n_perm=1000, seed=None, n_proc=1,
         after the T-matrix loop; the T-matrix files persist until the caller deletes them
         (or the directory is cleaned up, e.g. via ``tempfile.TemporaryDirectory``).
         Recommended for large parcellations (n_lh > 200) or high n_perm (> 5000).
+        Required for multi-process parallelism (``n_proc > 1``).
     """
     import os
     import tempfile
@@ -627,6 +665,7 @@ def generate_cornblath_mat(parc, parc_space, n_perm=1000, seed=None, n_proc=1,
             "generate_cornblath_mat requires a bilateral surface parcellation tuple (lh_img, rh_img).",
             ValueError)
     parc_lh, parc_rh = parc
+
     density = _img_density_for_neuromaps(parc_lh)
     atlas, _ = _get_surface_atlas(parc_space, density)
     spheres = atlas["sphere"]
@@ -648,18 +687,17 @@ def generate_cornblath_mat(parc, parc_space, n_perm=1000, seed=None, n_proc=1,
 
     all_spins = _gen_spinsamples_parallel(
         coords=coords, hemiid=hemiid, n_perm=n_perm, seed=seed, n_proc=n_proc,
-        out=all_spins,
+        out=all_spins, batch_size=batch_size,
     )  # (n_vert_total, n_perm)
 
-    vert_spins_lh = all_spins[:n_vert_lh, :]                # (n_vert_lh, n_perm) — global lh indices
-    vert_spins_rh = all_spins[n_vert_lh:, :] - n_vert_lh    # (n_vert_rh, n_perm) — local rh indices
+    vert_spins_lh = all_spins[:n_vert_lh, :]  # view — no copy
 
     # vertex → parcel label arrays (0 = medial wall, 1..n_parc = parcel, 1-based global)
-    labels_lh = parc_lh.agg_data().astype(int)   # (n_vert_lh,)
-    labels_rh_global = parc_rh.agg_data().astype(int)  # (n_vert_rh,), global: n_lh+1..n_lh+n_rh
+    labels_lh = parc_lh.agg_data().astype(int)
+    labels_rh_global = parc_rh.agg_data().astype(int)
     n_lh = len(np.unique(labels_lh)) - 1
     n_rh = len(np.unique(labels_rh_global)) - 1
-    labels_rh = np.where(labels_rh_global > 0, labels_rh_global - n_lh, 0)  # localize: 1..n_rh
+    labels_rh = np.where(labels_rh_global > 0, labels_rh_global - n_lh, 0)
 
     # source parcel vertex counts (denominator)
     src_counts_lh = np.bincount(labels_lh[labels_lh > 0], minlength=n_lh + 1)[1:].astype(dtype)
@@ -678,22 +716,38 @@ def generate_cornblath_mat(parc, parc_space, n_perm=1000, seed=None, n_proc=1,
         T_lh = np.zeros((n_perm, n_lh, n_lh), dtype=dtype)
         T_rh = np.zeros((n_perm, n_rh, n_rh), dtype=dtype)
 
-    for k in range(n_perm):
-        src_lh = labels_lh[vert_spins_lh[:, k]]
-        dst_lh = labels_lh
-        valid = (src_lh > 0) & (dst_lh > 0)
-        s, d = src_lh[valid] - 1, dst_lh[valid] - 1
-        np.add.at(T_lh[k], (d, s), 1.0 / src_counts_lh[s])
+    from joblib import effective_n_jobs
+    n_workers = effective_n_jobs(n_proc)
 
-        src_rh = labels_rh[vert_spins_rh[:, k]]
-        dst_rh = labels_rh
-        valid = (src_rh > 0) & (dst_rh > 0)
-        s, d = src_rh[valid] - 1, dst_rh[valid] - 1
-        np.add.at(T_rh[k], (d, s), 1.0 / src_counts_rh[s])
+    if n_workers > 1 and memmap_dir is not None:
+        n_batches = (-(-n_perm // batch_size) if batch_size else n_workers)
+        batches = [b for b in np.array_split(np.arange(n_perm), n_batches) if len(b) > 0]
+        with tqdm(total=n_perm, desc="T-matrix") as pbar:
+            for r in Parallel(n_jobs=n_workers, prefer="processes",
+                              return_as="generator_unordered")(
+                delayed(_build_cornblath_T_batch)(
+                    _spins_path, (n_vert, n_perm), n_vert_lh,
+                    labels_lh, labels_rh, src_counts_lh, src_counts_rh,
+                    n_lh, n_rh, _T_lh_path, _T_rh_path, dtype,
+                    int(b[0]), int(b[-1]) + 1,
+                )
+                for b in batches
+            ):
+                pbar.update(r)
+    else:
+        for k in tqdm(range(n_perm), desc="T-matrix"):
+            src_lh = labels_lh[vert_spins_lh[:, k]]
+            valid = (src_lh > 0) & (labels_lh > 0)
+            s, d = src_lh[valid] - 1, labels_lh[valid] - 1
+            np.add.at(T_lh[k], (d, s), 1.0 / src_counts_lh[s])
+            src_rh = labels_rh[all_spins[n_vert_lh:, k] - n_vert_lh]
+            valid = (src_rh > 0) & (labels_rh > 0)
+            s, d = src_rh[valid] - 1, labels_rh[valid] - 1
+            np.add.at(T_rh[k], (d, s), 1.0 / src_counts_rh[s])
 
     # release vertex spin array and delete its backing file (no longer needed)
     if memmap_dir is not None:
-        del vert_spins_lh, vert_spins_rh, all_spins
+        del vert_spins_lh, all_spins
         os.unlink(_spins_path)
         T_lh.flush()
         T_rh.flush()
