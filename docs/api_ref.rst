@@ -57,6 +57,8 @@ Reference API
    group_colocalization
    xsea
    group_xsea
+   nimare_colocalization
+   nimare_xsea
    simple_colocalization
    group_comparison
    simple_xsea
@@ -234,6 +236,26 @@ Reference API
 
    mni_to_mni
    compute_transform_displacement
+
+
+.. _api_helpers:
+
+:mod:`nispace.helpers` – Third-party integration helpers
+----------------------------------------------------------
+.. currentmodule:: nispace.helpers
+
+.. note::
+   Functions in this module require optional dependencies not installed with
+   NiSpace by default. Install them separately as needed (e.g.
+   ``pip install nimare`` for the NiMARE helpers).
+
+.. autosummary::
+   :template: function.rst
+   :toctree: generated/
+
+   null_maps_from_nimare
+   nimare_fwe_thresholds
+   get_binary_cluster_map
 
 
 .. _api_utils_utils:
