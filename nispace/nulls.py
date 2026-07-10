@@ -615,7 +615,7 @@ def generate_baum_spins(parc, parc_space, n_perm=1000, seed=None, n_proc=1):
 def _build_cornblath_T_batch(spins_path, spins_shape, n_vert_lh,
                              labels_lh, labels_rh, src_counts_lh, src_counts_rh,
                              n_lh, n_rh, T_lh_path, T_rh_path, dtype,
-                             k_start, k_end):
+                             k_start, k_end, normalize=False):
     """Worker: build T matrices for permutations [k_start, k_end) from memmaps."""
     n_perm = spins_shape[1]
     spins = np.memmap(spins_path, dtype=np.int32, mode="r", shape=spins_shape, order="F")
@@ -626,17 +626,26 @@ def _build_cornblath_T_batch(spins_path, spins_shape, n_vert_lh,
         valid = (spun_lh > 0) & (labels_lh > 0)
         s, d = spun_lh[valid] - 1, labels_lh[valid] - 1
         np.add.at(T_lh[k], (d, s), 1.0 / src_counts_lh[s])
+        if normalize:
+            t = T_lh[k].astype(np.float32)
+            cs = t.sum(axis=0, keepdims=True)
+            T_lh[k] = np.where(cs > 0, t / cs, 0.0).astype(dtype)
         spun_rh = labels_rh[spins[n_vert_lh:, k] - n_vert_lh]
         valid = (spun_rh > 0) & (labels_rh > 0)
         s, d = spun_rh[valid] - 1, labels_rh[valid] - 1
         np.add.at(T_rh[k], (d, s), 1.0 / src_counts_rh[s])
+        if normalize:
+            t = T_rh[k].astype(np.float32)
+            cs = t.sum(axis=0, keepdims=True)
+            T_rh[k] = np.where(cs > 0, t / cs, 0.0).astype(dtype)
     T_lh.flush()
     T_rh.flush()
     return k_end - k_start
 
 
 def generate_cornblath_mat(parc, parc_space, n_perm=1000, seed=None, n_proc=1,
-                           dtype=np.float32, memmap_dir=None, batch_size=100):
+                           dtype=np.float32, memmap_dir=None, batch_size=100,
+                           normalize=False):
     """Generate Cornblath fractional transition matrices.
 
     For each rotation k, ``T[k, j, i]`` = fraction of parcel i's vertices that land in
@@ -729,7 +738,7 @@ def generate_cornblath_mat(parc, parc_space, n_perm=1000, seed=None, n_proc=1,
                     _spins_path, (n_vert, n_perm), n_vert_lh,
                     labels_lh, labels_rh, src_counts_lh, src_counts_rh,
                     n_lh, n_rh, _T_lh_path, _T_rh_path, dtype,
-                    int(b[0]), int(b[-1]) + 1,
+                    int(b[0]), int(b[-1]) + 1, normalize,
                 )
                 for b in batches
             ):
@@ -740,10 +749,18 @@ def generate_cornblath_mat(parc, parc_space, n_perm=1000, seed=None, n_proc=1,
             valid = (src_lh > 0) & (labels_lh > 0)
             s, d = src_lh[valid] - 1, labels_lh[valid] - 1
             np.add.at(T_lh[k], (d, s), 1.0 / src_counts_lh[s])
+            if normalize:
+                t = T_lh[k].astype(np.float32)
+                cs = t.sum(axis=0, keepdims=True)
+                T_lh[k] = np.where(cs > 0, t / cs, 0.0).astype(dtype)
             src_rh = labels_rh[all_spins[n_vert_lh:, k] - n_vert_lh]
             valid = (src_rh > 0) & (labels_rh > 0)
             s, d = src_rh[valid] - 1, labels_rh[valid] - 1
             np.add.at(T_rh[k], (d, s), 1.0 / src_counts_rh[s])
+            if normalize:
+                t = T_rh[k].astype(np.float32)
+                cs = t.sum(axis=0, keepdims=True)
+                T_rh[k] = np.where(cs > 0, t / cs, 0.0).astype(dtype)
 
     # release vertex spin array and delete its backing file (no longer needed)
     if memmap_dir is not None:
