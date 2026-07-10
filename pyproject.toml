@@ -44,7 +44,7 @@ dependencies = [
     "scikit-learn>=1.5.0",
     "neurocombat>=0.2.12",
     "neuroHarmonize>=2.4.5",
-    "matplotlib>=3.6.0",
+    "matplotlib>=3.6.0,<=3.10.0",
     "seaborn>=0.13.0",
 ]
 

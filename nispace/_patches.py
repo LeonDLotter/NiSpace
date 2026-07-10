@@ -34,6 +34,10 @@ def _make_fast_do_3d_projection(original_fn):
     }
 
     def _fast_do_3d_projection(self):
+        # _vec was renamed/restructured in matplotlib 3.11; fall back gracefully.
+        if not hasattr(self, '_vec'):
+            return original_fn(self)
+
         # Scalar-mappable colour update — identical to original.
         if self._A is not None:
             self.update_scalarmappable()
