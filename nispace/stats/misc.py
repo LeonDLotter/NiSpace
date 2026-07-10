@@ -411,12 +411,15 @@ def compute_meff(X, method="galwey"):
     -------
     float
     """
-    X = np.array(X, dtype=float)
+    X = np.atleast_2d(np.array(X, dtype=float))
     # drop parcel columns that contain any NaN (NaN propagates through corrcoef → eigvalsh fails)
     X = X[:, ~np.isnan(X).any(axis=0)]
     if X.shape[1] < 2:
         raise ValueError(f"compute_meff: fewer than 2 non-NaN parcels after dropping NaNs "
                          f"(got {X.shape[1]}).")
+    # single map: nothing to decorrelate, no effective reduction
+    if X.shape[0] < 2:
+        return 1.0
     corr = np.corrcoef(X)
     eigenvalues = np.linalg.eigvalsh(corr)
     eigenvalues = eigenvalues[eigenvalues > 0]
