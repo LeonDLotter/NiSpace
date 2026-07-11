@@ -17,7 +17,8 @@ from .core.reduce_x import _reduce_dimensions
 from .core.transform_y import _dummy_code_groups, _num_code_subjects, _get_transform_fun
 from .core.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats, _rank_regress
 from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_method,
-                               _EMPIRICAL_MC_METHODS)
+                               _EMPIRICAL_MC_METHODS, _resolve_permute_combo,
+                               _resolve_permute_mode_settings)
 from .core.nullmaps import NullMaps
 from .core.plot import _plot_categorical
 from .core.constants import _COLOC_METHODS, _SPACE_DEFAULT_VOL
@@ -26,7 +27,8 @@ from .nulls import get_distance_matrix, _SPIN_METHODS, _DISTMAT_FREE_METHODS, _p
 from .stats.coloc import beta, elasticnet, lasso, mlr, partialpearson, pearson, ridge
 from .stats.misc import (mc_correction, residuals_nan, zscore_df, permute_groups,
                           compute_meff, meff_sidak_correction,
-                          maxT_correction, step_maxT_correction, _null_stats_to_array)
+                          maxT_correction, step_maxT_correction, _null_stats_to_array,
+                          null_to_p)
 from .stats.effectsize import rzscore_nan, zscore_nan
 from .cv import _get_dist_dep_splits, _get_rand_splits
 from .plotting import nice_stats_labels, brainplot
@@ -1228,11 +1230,16 @@ class NiSpace:
         what : str or list of str
             What to permute. One or more of:
             ``"maps"`` — spatially constrained null maps for X and/or Y brain maps;
-            ``"groups"`` — Y group labels (requires ``Y_transform``);
-            ``"sets"`` — X set membership labels (requires XSEA).
-            Allowed combinations: ``["maps", "groups"]``, ``["maps", "sets"]``,
-            ``["groups", "sets"]``. Three-way simultaneous permutation is not
-            supported and falls back to ``["groups", "sets"]``.
+            ``"groups"`` — Y group labels (requires ``Y_transform``); [1]_
+            ``"sets"`` — X set membership labels (requires XSEA);
+            ``"pairs"`` — within-pair colocalization against a between-pair null
+            (SPICE test; requires N matched maps in both X and Y). [2]_ Pairs can
+            be subjects, studies, tracer targets, or any unit for which one map
+            exists in each modality.
+            Allowed combinations for multi-element lists: ``["maps", "groups"]``,
+            ``["maps", "sets"]``, ``["groups", "sets"]``. Three-way simultaneous
+            permutation is not supported and falls back to ``["groups", "sets"]``.
+            ``"pairs"`` cannot be combined with other modes.
         method : str, optional
             Colocalization method. Defaults to the method used in the last
             :meth:`colocalize` call.
@@ -1270,6 +1277,14 @@ class NiSpace:
             ``"mean"`` or ``"median"`` (average first, one p-value per X map),
             ``False`` (one p-value per Y×X pair),
             ``"auto"`` (default) — ``False`` for single-Y, ``"mean"`` otherwise.
+            For ``what="groups"``, ``pooled_p`` is not a free choice — it always
+            answers a group-level question and is forced to ``"mean"``
+            regardless of what is passed (with a warning if the requested value
+            conflicts), including when ``"auto"`` would otherwise resolve to
+            ``False``.
+            For ``what="pairs"``, within-pair coupling is always aggregated
+            across pairs; ``"mean"`` and ``"median"`` are both valid and control
+            the aggregation function; ``False`` falls back to ``"mean"``.
         p_from_average_y_coloc : str or bool, optional
             Deprecated. Use ``pooled_p`` instead.
         n_proc : int, optional
@@ -1323,6 +1338,16 @@ class NiSpace:
             P-values indexed by Y labels × X labels.  A dict is returned when
             the colocalization method produces multiple statistics or when
             ``force_dict=True``.
+
+        References
+        ----------
+        .. [1] Dukart et al. (2021). JuSpace: A tool for spatial correlation
+               analyses of magnetic resonance imaging data with nuclear imaging
+               derived neurotransmitter maps. *Human Brain Mapping*.
+               https://doi.org/10.1002/hbm.25244
+        .. [2] Weinstein et al. (2021). A simple permutation-based test of
+               intermodal correspondence. *Human Brain Mapping*.
+               https://doi.org/10.1002/hbm.25577
         """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.permute() - Estimate exact non-parametric p values. ***")
@@ -1371,41 +1396,14 @@ class NiSpace:
             if maps_which not in [["X"], ["Y"], ["X", "Y"]]:
                 lgr.critical_raise(f"'maps_which' has to be 'X', 'Y', or ['X', 'Y'] not '{maps_which}'",
                                    ValueError)
-        # case X/Y maps
-        if what == ["maps"]:
-            perm_info = f"{' & '.join(maps_which)} maps"
-        # case Y groups
-        elif what == ["groups"]:
-            perm_info = "Y groups"
-        # case X sets
-        elif what == ["sets"]:
-            perm_info = "X sets"
-        # case X/Y maps and Y groups
-        elif what == ["groups", "maps"]:
-            if maps_which != ["X"]:
-                lgr.warning("Y map permutation not allowed in combination with Y group permutation. "
-                            "Will set 'maps_which' = 'X' and permute X maps instead.")
-                maps_which = ["X"]
-            perm_info = "X maps and Y groups"
-        # case X/Y maps and X sets
-        elif what == ["maps", "sets"]:
-            if maps_which != ["Y"]:
-                lgr.warning("X set permutation not allowed in combination with X map permutation. "
-                            "Will set 'maps_which' = 'Y' and permute Y maps instead.")
-                maps_which = ["Y"]
-            perm_info = "X sets and Y maps"
-        # case X sets and Y groups
-        elif what == ["groups", "sets"]:
-            perm_info = "X sets and Y groups"
-        # case X/Y maps, X sets, and Y groups
-        elif what == ["groups", "maps", "sets"]:
-            lgr.warning("Cannot perform simultaneous permutation of sets, maps, and groups. "
-                        "Will run permutation of X sets and Y groups instead.")
-            what = ["groups", "sets"]
-        # case other
-        else:
-            lgr.critical_raise(f"'what' = '{what}' not defined!",
-                               ValueError)
+        # validate/resolve the requested combination of permutation targets against
+        # the central registry (raises for anything not defined there)
+        try:
+            what, perm_info, maps_which, combo_warnings = _resolve_permute_combo(what, maps_which)
+        except ValueError as e:
+            lgr.critical_raise(str(e), ValueError)
+        for w in combo_warnings:
+            lgr.warning(w)
         lgr.info(f"Permutation of: {perm_info}.")
             
         ## settings
@@ -1553,22 +1551,6 @@ class NiSpace:
             lgr.warning(_DEPR_P_FROM_AVERAGE_Y_COLOC)
             pooled_p = p_from_average_y_coloc
 
-        ## resolve pooled_p: "auto" -> decide based on number of Y maps,
-        # "median"/"mean" -> calculate p based on mean/median colocalization across Y maps,
-        # False -> calculate p for every Y map, anything else -> defaults to mean
-        if pooled_p:
-            if pooled_p == "auto":
-                if _Y_obs.shape[0] == 1 or self._x_with_self:
-                    pooled_p = False
-                elif _Y_obs.shape[0] > 1:
-                    pooled_p = "mean"
-            elif pooled_p not in ["mean", "median"]:
-                pooled_p = "mean"
-            if pooled_p:
-                lgr.info("Will calculate p values for mean colocalization across Y maps. Set "
-                         "'pooled_p=False' to compute p values for each Y map individually.")
-            self._nulls["pooled_p"] = pooled_p
-                    
         ## get observed colocalizations as numpy arrays
         lgr.info(f"Loading observed colocalizations (method = '{method}').")
         with _quiet():
@@ -1580,9 +1562,160 @@ class NiSpace:
                 force_dict=True,
             )
         _colocs_obs = {stat: np.array(df, dtype=dtype) for stat, df in _colocs_obs.items()}
-                    
-        # get average prediction values of all y if requested
+
+        ## pairs permutation (SPICE) — early return, bypasses null-map generation
+        if what == ["pairs"]:
+            # validation
+            if self._X.shape[0] != self._Y.shape[0]:
+                lgr.critical_raise(
+                    f"what='pairs' requires X and Y to have the same number of maps "
+                    f"(got X: {self._X.shape[0]}, Y: {self._Y.shape[0]}). "
+                    "Fit NiSpace with matched per-pair X and Y data.",
+                    ValueError,
+                )
+            if self._X.shape[0] < 3:
+                lgr.critical_raise(
+                    f"what='pairs' requires at least 3 pairs (got {self._X.shape[0]}).",
+                    ValueError,
+                )
+            if Y_transform:
+                lgr.critical_raise(
+                    "what='pairs' cannot be combined with Y_transform. "
+                    "Fit NiSpace with raw per-pair Y maps, or use what='groups' instead.",
+                    ValueError,
+                )
+            if self._X.index.tolist() != self._Y.index.tolist():
+                lgr.warning(
+                    "X and Y index labels do not match. Pair matching is done positionally "
+                    "(same row order assumed for X and Y)."
+                )
+            # pooled_p resolution
+            if pooled_p == "auto" or pooled_p is True:
+                pooled_p = "mean"
+            elif pooled_p is False:
+                lgr.warning(
+                    "pooled_p=False is not supported for what='pairs' (within-pair "
+                    "coupling is always aggregated across pairs). Falling back to 'mean'."
+                )
+                pooled_p = "mean"
+            elif pooled_p not in ("mean", "median"):
+                pooled_p = "mean"
+            self._nulls["pooled_p"] = pooled_p
+            # get the N×N coloc matrix (first stat key)
+            _stat = next(iter(_colocs_obs))
+            _mat = _colocs_obs[_stat]   # (N, N) float32 array
+            _N = _mat.shape[0]
+            _agg = np.median if pooled_p == "median" else np.mean
+            _observed = float(_agg(np.diag(_mat)))
+            lgr.info(
+                f"Pairs permutation: N={_N}, observed within-pair {_stat} "
+                f"({pooled_p}) = {_observed:.4f}."
+            )
+            # build null key for cache lookup
+            _perm = "pairs"
+            _null_key = _get_df_string(
+                "null",
+                xdimred=X_reduction,
+                ytrans=Y_transform,
+                method=method,
+                xsea=xsea,
+                perm=_perm,
+                pooled_p=pooled_p,
+            )
+            # cache check
+            _pairs_null_entry = self._nulls.get("pairs_null", {}).get(_null_key)
+            if (_pairs_null_entry is not None
+                    and _pairs_null_entry.get("n_perm", 0) >= n_perm
+                    and _pairs_null_entry.get("null_method") == "pairs"):
+                lgr.info("Using cached pairs permutation null distribution.")
+                _null_dist = _pairs_null_entry["null_dist"]
+            else:
+                # vectorized null: shuffle row indices for each permutation
+                rng = np.random.default_rng(seed)
+                _sigmas = np.argsort(rng.random((_N, n_perm)), axis=0).T   # (n_perm, N)
+                _null_dist = _agg(_mat[_sigmas, np.arange(_N)], axis=1).astype(dtype)  # (n_perm,)
+            # p-value
+            _p_val = float(null_to_p(_observed, _null_dist, tail="upper"))
+            lgr.info(f"Pairs permutation p-value ({pooled_p}): {_p_val:.4f}.")
+            # build output DataFrame
+            _p_df = pd.DataFrame(
+                [[_p_val]], index=["within_pair"], columns=["all"], dtype=dtype
+            )
+            _p_data = {_stat: _p_df}
+            # store
+            if store:
+                self._nulls.setdefault("pairs_null", {})[_null_key] = {
+                    "null_dist":   _null_dist,
+                    "observed":    _observed,
+                    "n_perm":      n_perm,
+                    "null_method": "pairs",
+                    "stat":        _stat,
+                }
+                _p_key = _get_df_string(
+                    "p",
+                    xdimred=X_reduction,
+                    ytrans=Y_transform,
+                    method=method,
+                    stat=_stat,
+                    xsea=xsea,
+                    perm=_perm,
+                    pooled_p=pooled_p,
+                )
+                self._p_colocs[_p_key] = _p_df
+                self._set_last(
+                    method=method,
+                    X_reduction=X_reduction,
+                    Y_transform=Y_transform,
+                    xsea=xsea,
+                    rank=rank,
+                    zy_matched=zy_matched,
+                    regress_z=regress_z,
+                    perm=_perm,
+                    pooled_p=pooled_p,
+                )
+                if self._return_self:
+                    return self
+                if force_dict or len(_p_data) > 1:
+                    return _p_data
+                return _p_df
+            else:
+                if force_dict or len(_p_data) > 1:
+                    return _p_data, _null_dist
+                return _p_df, _null_dist
+
+        ## resolve pooled_p: "auto" -> decide based on the number of rows that are actually
+        # being colocalized (i.e. the Y_transform output, not the raw per-subject Y -- for a
+        # group comparison this is usually a single group-difference map even though the raw
+        # Y has one row per subject), "median"/"mean" -> calculate p based on mean/median
+        # colocalization across Y rows, False -> calculate p for every Y row individually,
+        # anything else -> defaults to mean
+        _n_y_rows = next(iter(_colocs_obs.values())).shape[0]
+
+        # what="groups" always answers a group-level question, so pooled_p isn't a
+        # free choice for it -- it's forced by the mode. Returns pooled_p unchanged
+        # (still possibly "auto") for any other what (maps/sets/pairs), where
+        # pooled_p remains a free, meaningful choice resolved by the generic
+        # auto-resolution block below.
+        pooled_p, mode_warning = _resolve_permute_mode_settings(what, pooled_p)
+        if mode_warning:
+            lgr.warning(mode_warning)
+
         if pooled_p:
+            if pooled_p == "auto":
+                if _n_y_rows == 1 or self._x_with_self:
+                    pooled_p = False
+                elif _n_y_rows > 1:
+                    pooled_p = "mean"
+            elif pooled_p not in ["mean", "median"]:
+                pooled_p = "mean"
+            if pooled_p:
+                lgr.info("Will calculate p values for mean colocalization across Y maps. Set "
+                         "'pooled_p=False' to compute p values for each Y map individually.")
+            self._nulls["pooled_p"] = pooled_p
+
+        # get average prediction values of all y if requested (no-op when there is only one
+        # row to begin with, e.g. a single group-difference map from Y_transform)
+        if pooled_p and _n_y_rows > 1:
             for stat in _colocs_obs.keys():
                 if pooled_p == "median":
                     _colocs_obs[stat] = np.nanmedian(_colocs_obs[stat], axis=0)[np.newaxis, :]
@@ -1678,7 +1811,7 @@ class NiSpace:
 
             # check for cached group permutation null maps
             _groups_null_cached = self._nulls.get("groups_null")
-            if (_groups_null_cached is not None and use_existing
+            if (_groups_null_cached is not None and maps_kwargs.get("use_existing", True)
                     and _groups_null_cached.null_method == Y_transform
                     and _groups_null_cached.n_perm >= n_perm):
                 lgr.info("Using cached group permutation null maps.")
@@ -1746,11 +1879,11 @@ class NiSpace:
                     null_type="group",
                 )
         
-        # case permute Y groups but no comparison is provided 
+        # case permute Y groups but no comparison is provided
         elif ("groups" in what) & (not Y_transform):
             lgr.critical_raise("Provide a comparison ('Y_transform') to perform group permutation!",
                                ValueError)
-        
+
         # case X Set Enrichment Analysis: permute X sets
         if "sets" in what:
             lgr.info("Generating permuted X sets.")
@@ -1895,8 +2028,8 @@ class NiSpace:
                 return_df=False,
                 dtype=dtype
             )
-            # average colocalization if requested
-            if pooled_p:
+            # average colocalization if requested (no-op when there is only one row)
+            if pooled_p and _n_y_rows > 1:
                 for stat in null_colocs:
                     if pooled_p == "median":
                         null_colocs[stat] = np.nanmedian(null_colocs[stat], axis=0)[np.newaxis, :]
@@ -1947,7 +2080,7 @@ class NiSpace:
                 lgr.critical_raise(f"p value array of wrong shape ({p_data[stat].shape})!",
                                    ValueError)
             # index names
-            if (pooled_p in ["mean", "median"]) & (_Y_obs.shape[0]>1):
+            if (pooled_p in ["mean", "median"]) and (_n_y_rows > 1):
                 rows = [pooled_p]
             elif "_Y_trans_obs" in locals():
                 rows = _Y_trans_obs.index
@@ -2381,6 +2514,18 @@ class NiSpace:
                               "get_colocalizations(force_dict=True, get_nulls=True)!")
                     nulls_dict = None
         
+        # pairs mode: replace N×N coloc dict with (N, 1) diagonal view for plotting
+        if permute_what == "pairs" and colocalizations_dict is not None:
+            for stat, coloc_mat in colocalizations_dict.items():
+                _diag_vals = np.diag(np.array(coloc_mat))
+                colocalizations_dict[stat] = pd.DataFrame(
+                    _diag_vals,
+                    index=coloc_mat.index,
+                    columns=["within_pair"],
+                )
+            # nulls_dict already has {"within_pair": (1, n_perm)} from get_colocalizations
+            # if user passed custom nulls_dict, leave it as-is
+
         # Y_labels / X_labels are legacy aliases for Y_maps / X_maps
         if Y_labels is not None and Y_maps is None:
             Y_maps = Y_labels
@@ -2902,54 +3047,80 @@ class NiSpace:
         if get_nulls and nulls_permute_what is None:
             lgr.error("If 'get_nulls' is True, 'nulls_permute_what' must not be None!")
             get_nulls = False
-            
+
         if get_nulls:
             if nulls_permute_what not in ["groups", "groupsxmaps", "groupssets",
                                           "xmaps", "ymaps", "xymaps", "ymapssets",
-                                          "sets"]:
+                                          "sets", "pairs"]:
                 lgr.critical_raise("If 'get_nulls' is True, 'nulls_permute_what' must be one of "
-                                   "{'groups', '{x|y|xy}maps', 'sets'}!",
+                                   "{'groups', '{x|y|xy}maps', 'sets', 'pairs'}!",
                                    ValueError)
             pooled_p = self._get_last(pooled_p=pooled_p)
             out_null = None
-            null_str = _get_df_string(
-                "null",
-                xdimred=X_reduction,
-                ytrans=Y_transform,
-                method=method,
-                xsea=xsea,
-                perm=nulls_permute_what,
-                pooled_p=pooled_p,
-            )
-            if null_str not in self._nulls["_colocs"].keys():
-                available = "\n".join(list(self._nulls["_colocs"].keys()))
-                lgr.error(f"Null colocalizations for '{null_str}' not found! Available: {available}")
-            else:
-                nulls = self._nulls["_colocs"][null_str].copy()
 
-                out_null = dict()
-                n_nulls = len(nulls)
-                with _quiet():
-                    idx = self.get_p_values(method, nulls_permute_what, _COLOC_METHODS[method][0],
-                                            xsea,
-                                            pooled_p=pooled_p,
-                                            X_reduction=X_reduction,
-                                            Y_transform=Y_transform).index
-                for stat in stats:
-                   
-                    if out[stat].shape[1] == 1:
-                        out_null[stat] = pd.DataFrame(
-                            {i: nulls[i][stat][:, 0] for i in range(n_nulls)},
-                            index=idx
-                        )
-                        
-                    else:
-                        out_null[stat] = dict()
-                        for i_x, x in enumerate(out[stat].columns):
-                            out_null[stat][x] = pd.DataFrame(
-                                {i: nulls[i][stat][:, i_x] for i in range(n_nulls)},
+            # pairs permutation: null stored as flat array in self._nulls["pairs_null"]
+            if nulls_permute_what == "pairs":
+                null_str = _get_df_string(
+                    "null",
+                    xdimred=X_reduction,
+                    ytrans=Y_transform,
+                    method=method,
+                    xsea=xsea,
+                    perm="pairs",
+                    pooled_p=pooled_p,
+                )
+                _pairs_cache = self._nulls.get("pairs_null", {}).get(null_str)
+                if _pairs_cache is None:
+                    lgr.error(
+                        f"Pairs null distribution for '{null_str}' not found. "
+                        "Run permute(what='pairs') first."
+                    )
+                else:
+                    _null_dist = _pairs_cache["null_dist"]   # (n_perm,)
+                    out_null = {
+                        stat: {"within_pair": _null_dist[np.newaxis, :]}
+                        for stat in stats
+                    }
+
+            else:
+                null_str = _get_df_string(
+                    "null",
+                    xdimred=X_reduction,
+                    ytrans=Y_transform,
+                    method=method,
+                    xsea=xsea,
+                    perm=nulls_permute_what,
+                    pooled_p=pooled_p,
+                )
+                if null_str not in self._nulls["_colocs"].keys():
+                    available = "\n".join(list(self._nulls["_colocs"].keys()))
+                    lgr.error(f"Null colocalizations for '{null_str}' not found! Available: {available}")
+                else:
+                    nulls = self._nulls["_colocs"][null_str].copy()
+
+                    out_null = dict()
+                    n_nulls = len(nulls)
+                    with _quiet():
+                        idx = self.get_p_values(method, nulls_permute_what, _COLOC_METHODS[method][0],
+                                                xsea,
+                                                pooled_p=pooled_p,
+                                                X_reduction=X_reduction,
+                                                Y_transform=Y_transform).index
+                    for stat in stats:
+
+                        if out[stat].shape[1] == 1:
+                            out_null[stat] = pd.DataFrame(
+                                {i: nulls[i][stat][:, 0] for i in range(n_nulls)},
                                 index=idx
                             )
+
+                        else:
+                            out_null[stat] = dict()
+                            for i_x, x in enumerate(out[stat].columns):
+                                out_null[stat][x] = pd.DataFrame(
+                                    {i: nulls[i][stat][:, i_x] for i in range(n_nulls)},
+                                    index=idx
+                                )
                 
         # force return as dict if requested
         if not force_dict:

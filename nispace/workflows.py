@@ -626,6 +626,166 @@ def group_colocalization(y, design,
     return nsp
 
 
+def paired_colocalization(y,
+                           x,
+                           standardize="xz",
+                           space=_SPACE_DEFAULT_VOL,
+                           data_space=None,
+                           parcellation_space=None,
+                           parcellation=_PARC_DEFAULT,
+                           parcellation_labels=None,
+                           parcellation_hemi=["L", "R"],
+                           colocalization_method="spearman",
+                           pooled_p="mean",
+                           plot=True,
+                           n_perm=10000,
+                           seed=None,
+                           n_proc=1,
+                           verbose=True,
+                           nispace_object=None,
+                           init_kwargs=None,
+                           fit_kwargs=None,
+                           colocalize_kwargs=None,
+                           permute_kwargs=None,
+                           plot_kwargs=None):
+    """Within-pair colocalization workflow (SPICE test).
+
+    Tests whether within-pair correspondence between two brain map modalities
+    (correlation across parcels per pair, averaged over pairs) is significantly
+    greater than between-pair correspondence. The null distribution is built by
+    permuting pair labels on the precomputed N×N colocalization matrix.
+
+    "Pairs" can be subjects (structure vs. function per person), studies (one
+    map per study in a meta-analytic context), neurochemical targets (tracers
+    grouped by target), or any other unit for which matched maps exist in both
+    modalities.
+
+    Reference: Weinstein et al. (2021). A simple permutation-based test of
+    intermodal correspondence. *Human Brain Mapping*.
+    https://doi.org/10.1002/hbm.25577
+
+    Parameters
+    ----------
+    y : array-like, DataFrame, or list
+        Modality A — N brain maps, one per pair. Same ordering as ``x``
+        is required; matching is done positionally.
+    x : array-like, DataFrame, or list
+        Modality B — N brain maps in the same pair order as ``y``.
+        Unlike other workflow functions, ``x`` must be individual-level data
+        and cannot be a reference dataset string.
+    standardize : str, default="xz"
+        Which data to z-standardize (parcels). Can contain "x", "y", "z".
+    space : str
+        Image space for parcellation and data loading.
+    data_space : str or None
+        Override for the data image space.
+    parcellation_space : str or None
+        Override for the parcellation space.
+    parcellation : str or int, default=_PARC_DEFAULT
+        Brain parcellation to use.
+    parcellation_labels : array-like or None
+        Optional subset of parcellation region labels.
+    parcellation_hemi : list, default=["L", "R"]
+        Hemispheres to include.
+    colocalization_method : str, default="spearman"
+        Colocalization method. Produces an N×N correlation matrix.
+    pooled_p : str, default="mean"
+        Aggregation used for the within-pair statistic: ``"mean"`` or
+        ``"median"`` of the N diagonal entries. ``"auto"`` resolves to
+        ``"mean"``. ``False`` is not supported and falls back to ``"mean"``.
+    plot : bool, default=True
+        Whether to generate a scatter + null violin plot after permutation.
+    n_perm : int, default=10000
+        Number of subject-label permutations for the null distribution.
+    seed : int or None
+        Random seed for reproducibility.
+    n_proc : int, default=1
+        Parallel workers (passed to NiSpace init; not used by the fast
+        vectorised pair permutation itself).
+    verbose : bool, default=True
+        Whether to print progress messages.
+    nispace_object : NiSpace or None
+        Pre-fitted NiSpace object to reuse; skips init/fit when provided.
+    init_kwargs : dict, optional
+        Extra keyword arguments for :class:`NiSpace` initialisation.
+    fit_kwargs : dict, optional
+        Extra keyword arguments for :meth:`NiSpace.fit`.
+    colocalize_kwargs : dict, optional
+        Extra keyword arguments for :meth:`NiSpace.colocalize`.
+    permute_kwargs : dict, optional
+        Extra keyword arguments for :meth:`NiSpace.permute`.
+    plot_kwargs : dict, optional
+        Extra keyword arguments for :meth:`NiSpace.plot`.
+
+    Returns
+    -------
+    nsp : NiSpace
+        Fitted NiSpace object. Use :meth:`~NiSpace.get_colocalizations` to
+        retrieve the N×N pairwise matrix, :meth:`~NiSpace.get_p_values` for
+        the within-pair vs. between-pair p-value (shape 1×1), and
+        :meth:`~NiSpace.plot` to re-draw the visualization.
+    """
+    verbose = set_log(lgr, verbose)
+    init_kwargs = {} if init_kwargs is None else dict(init_kwargs)
+    fit_kwargs = {} if fit_kwargs is None else fit_kwargs
+    colocalize_kwargs = {} if colocalize_kwargs is None else colocalize_kwargs
+    permute_kwargs = {} if permute_kwargs is None else permute_kwargs
+    plot_kwargs = {} if plot_kwargs is None else plot_kwargs
+
+    if isinstance(colocalization_method, str):
+        colocalization_method = [colocalization_method]
+
+    status, nsp, _ = _workflow_base(
+        x=x, y=y, z=None,
+        x_collection=None,
+        space=space,
+        data_space=data_space,
+        parcellation_space=parcellation_space,
+        standardize=standardize,
+        parcellation=parcellation,
+        parcellation_labels=parcellation_labels,
+        parcellation_hemi=parcellation_hemi,
+        colocalization_method=colocalization_method,
+        n_proc=n_proc,
+        verbose=verbose,
+        nispace_object=nispace_object,
+        fetch_x_kwargs={},
+        init_kwargs=init_kwargs,
+        fit_kwargs=fit_kwargs,
+    )
+    status = status | {fun: False for fun in ["colocalize", "permute"]}
+
+    ## COLOCALIZE
+    if not status["colocalize"]:
+        for method in colocalization_method:
+            nsp.colocalize(**dict(method=method) | colocalize_kwargs)
+        status["colocalize"] = True
+
+    ## PERMUTE (SPICE — operates on the precomputed N×N matrix, no re-colocalization)
+    if not status["permute"]:
+        for method in colocalization_method:
+            permute_kwargs_curr = dict(
+                what="pairs",
+                method=method,
+                pooled_p=pooled_p,
+                n_perm=n_perm,
+                seed=seed,
+            ) | permute_kwargs
+            nsp.permute(**permute_kwargs_curr)
+        status["permute"] = True
+
+    ## VIZ
+    if plot:
+        for method in colocalization_method:
+            plot_kwargs_curr = dict(
+                method=method,
+                permute_what="pairs",
+            ) | plot_kwargs
+            nsp.plot(**plot_kwargs_curr)
+
+    return nsp
+
+
 def xsea(y,
          x="mRNA",
          z=None,

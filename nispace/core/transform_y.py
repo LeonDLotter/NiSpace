@@ -70,7 +70,6 @@ def center0(a, b=None):
     else:
         return a - mean0(b)
 
-
 def _normalize_formula(formula):
     
     formula = formula.lower().replace(" ", "")
@@ -109,52 +108,52 @@ def _args_to_tuple(expression):
     return ("unrecognized", None)
 
 
-def _get_transform_fun(formula, return_df=True, return_paired=False, 
-                       dtype=np.float32, ignore_nan_warnings=False):
-    # normalize the formula
+# Mapping of formula strings to function calls
+_FUN_MAP = {
+    "*": return_arr,
+    "mean(*)": mean0,
+    "median(*)": median0,
+    "std(*)": std0,
+    "var(*)": var0,
+    "elemdiff(*,*)": elem_diff,
+    "meandiff(*,*)": mean0_diff,
+    "center(*,*)": center0,
+    "cohen(*,*)": cohen_nan_fast,
+    "pairedcohen(*,*)": cohen_paired_nan_fast,
+    "hedges(*,*)": hedges_nan_fast,
+    "zscore(*)": zscore_nan_fast,
+    "zscore(*,*)": zscore_nan_fast,
+    "rzscore(*)": rzscore_nan_fast,
+    "rzscore(*,*)": rzscore_nan_fast,
+    "prc(*,*)": prc_fast,
+    "logfc(*,*)": logfc_fast,
+    "centile(*)": centile_fast,
+    "centile(*,*)": centile_fast,
+}
+
+_PAIRED_FORMULAS = {"elemdiff(*,*)", "pairedcohen(*,*)", "pairedhedges(*,*)", "prc(*,*)"}
+
+
+def _parse_transform_formula(formula):
+    """formula -> (formula, formula_wildcard, trans_fun, args, paired). Single source
+    of parsing/validation shared by _get_transform_fun and other callers that need
+    the parsed formula without the full apply_transform closure."""
     formula, formula_wildcard = _normalize_formula(formula)
-    
-    # Mapping of formula strings to function calls
-    fun_map = {
-        "*": return_arr,
-        "mean(*)": mean0,
-        "median(*)": median0,
-        "std(*)": std0,
-        "var(*)": var0,
-        "elemdiff(*,*)": elem_diff,
-        "meandiff(*,*)": mean0_diff,
-        "center(*,*)": center0,
-        "cohen(*,*)": cohen_nan_fast,
-        "pairedcohen(*,*)": cohen_paired_nan_fast,
-        "hedges(*,*)": hedges_nan_fast,
-        "zscore(*)": zscore_nan_fast,
-        "zscore(*,*)": zscore_nan_fast,
-        "rzscore(*)": rzscore_nan_fast,
-        "rzscore(*,*)": rzscore_nan_fast,
-        "prc(*,*)": prc_fast,
-        "logfc(*,*)": logfc_fast,
-        "centile(*)": centile_fast,
-        "centile(*,*)": centile_fast,
-    }
-    
-    # validate the formula
-    if formula_wildcard not in fun_map.keys():
-         raise ValueError(f"Provided formula ('{formula_wildcard}'; * = a|b|y) not allowed! "
-                          f"Must be one of: {list(fun_map.keys())}.")
-         
-    # paired
-    if formula_wildcard in ["elemdiff(*,*)", "pairedcohen(*,*)", "pairedhedges(*,*)", "prc(*,*)"]:
-        paired = True
-    else:
-        paired = False
-    
-    # transform function
-    trans_fun = fun_map[formula_wildcard]
-    
-    # arguments
+    if formula_wildcard not in _FUN_MAP:
+        raise ValueError(f"Provided formula ('{formula_wildcard}'; * = a|b|y) not allowed! "
+                         f"Must be one of: {list(_FUN_MAP.keys())}.")
+    paired = formula_wildcard in _PAIRED_FORMULAS
+    trans_fun = _FUN_MAP[formula_wildcard]
     args = _args_to_tuple(formula)
     args = [arg for arg in args if arg is not None]
-    
+    return formula, formula_wildcard, trans_fun, args, paired
+
+
+def _get_transform_fun(formula, return_df=True, return_paired=False,
+                       dtype=np.float32, ignore_nan_warnings=False):
+    # parse and validate the formula
+    formula, formula_wildcard, trans_fun, args, paired = _parse_transform_formula(formula)
+
     # create transform function
     def apply_transform(y=None, groups=None, subjects=None):
         if y is None:

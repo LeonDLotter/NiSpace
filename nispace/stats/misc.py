@@ -317,7 +317,7 @@ def permute_groups(groups, strategy="proportional", paired=False, subjects=None,
     # return permuted group vector(s), as 1d array or list thereof, if n_perm > 1
     if len(groups_perm) == 1:
         groups_perm = groups_perm[0]
-    return groups_perm  
+    return groups_perm
 
 
 def null_to_p(test_value, null_array, tail="two", fit_norm=False):

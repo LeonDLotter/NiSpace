@@ -302,3 +302,93 @@ _EMPIRICAL_MC_METHODS = {"meff_galwey", "meff_li_ji", "maxT", "step_maxT"}
 
 def _get_correct_mc_method(mc_method):
     return _MC_METHOD_ALIASES.get(mc_method, mc_method)
+
+
+# ── permutation mode settings: pooled_p is forced by mode, not a free choice ──────
+# "groups" answers one fixed research question (group-level difference), so
+# pooled_p can't meaningfully vary within it -- per-row nulls under group-label
+# permutation are either degenerate (paired transforms -- each row's null is just
+# ±the observed value) or, for unpaired multi-row transforms, don't carry
+# subject-specific information the way a per-subject label suggests (an attempt to
+# build a genuine per-subject mode via reference-pool resampling was tried and
+# abandoned -- see memory "reference_permutation_abandoned").
+_PERMUTE_MODE_SPECS = {
+    "groups": {"pooled_p_forced": "mean"},
+}
+
+def _resolve_permute_mode_settings(what, pooled_p_requested):
+    """
+    Resolve pooled_p for what="groups" against the fixed research question it
+    answers (group-level difference -- always pooled). Returns (pooled_p_resolved,
+    warning_or_None). Returns (pooled_p_requested, None) unchanged if "groups" is
+    not active (e.g. "maps"/"sets"/"pairs", where pooled_p remains a free,
+    meaningful choice).
+    """
+    if "groups" in what:
+        forced = _PERMUTE_MODE_SPECS["groups"]["pooled_p_forced"]
+        if pooled_p_requested not in ("auto", forced):
+            warning = (
+                f"pooled_p={pooled_p_requested!r} is not valid for what='groups' "
+                f"(always pooled -- an aggregate question). Falling back to "
+                f"pooled_p={forced!r}."
+            )
+            return forced, warning
+        return forced, None
+    return pooled_p_requested, None
+
+
+# ── permutation combination validity ──────────────────────────────────────────────
+_PERMUTE_ALLOWED_COMBOS = {
+    frozenset({"maps"}):           {},
+    frozenset({"groups"}):         {"perm_info": "Y groups"},
+    frozenset({"sets"}):           {"perm_info": "X sets"},
+    frozenset({"pairs"}):          {"perm_info": "Y–X matched pairs (SPICE)"},
+    frozenset({"groups", "maps"}): {"perm_info": "X maps and Y groups", "maps_which": ["X"]},
+    frozenset({"maps", "sets"}):   {"perm_info": "X sets and Y maps", "maps_which": ["Y"]},
+    frozenset({"groups", "sets"}): {"perm_info": "X sets and Y groups"},
+}
+# known 3-way overflow combinations that fall back to a 2-way combo, with a warning,
+# rather than being rejected outright
+_PERMUTE_COMBO_FALLBACKS = {
+    frozenset({"groups", "maps", "sets"}): frozenset({"groups", "sets"}),
+}
+
+def _resolve_permute_combo(what, maps_which):
+    """
+    Validate and resolve a `what` combination against _PERMUTE_ALLOWED_COMBOS,
+    applying _PERMUTE_COMBO_FALLBACKS (with a warning) for the known 3-way overflow
+    cases, and forcing maps_which where a combo requires it (with a warning if the
+    caller asked for something else).
+
+    Returns (what, perm_info, maps_which, warnings), where `warnings` is a list of
+    zero or more message strings the caller should log via lgr.warning().
+    Raises ValueError (listing the valid combinations) if `what` matches neither an
+    allowed combo nor a fallback.
+    """
+    warnings = []
+    key = frozenset(what)
+    if key not in _PERMUTE_ALLOWED_COMBOS:
+        if key in _PERMUTE_COMBO_FALLBACKS:
+            fallback = _PERMUTE_COMBO_FALLBACKS[key]
+            warnings.append(
+                f"Cannot perform simultaneous permutation of {sorted(key)}. "
+                f"Will run permutation of {sorted(fallback)} instead."
+            )
+            what, key = sorted(fallback), fallback
+        else:
+            valid = [sorted(k) for k in _PERMUTE_ALLOWED_COMBOS]
+            raise ValueError(f"'what' = {sorted(key)} not defined! Valid combinations: {valid}")
+
+    spec = _PERMUTE_ALLOWED_COMBOS[key]
+    if "maps_which" in spec:
+        forced = spec["maps_which"]
+        if maps_which != forced:
+            other = sorted(key - {"maps"})[0]
+            warnings.append(
+                f"'maps_which'={maps_which} not allowed in combination with {other} "
+                f"permutation. Setting 'maps_which'={forced}."
+            )
+        maps_which = forced
+
+    perm_info = spec.get("perm_info") or f"{'&'.join(maps_which)} maps"
+    return what, perm_info, maps_which, warnings

@@ -55,6 +55,7 @@ Reference API
 
    colocalization
    group_colocalization
+   paired_colocalization
    xsea
    group_xsea
    nimare_colocalization
