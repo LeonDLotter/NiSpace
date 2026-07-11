@@ -23,10 +23,7 @@ The notebooks are available as downloadable Jupyter notebooks (links at the top 
    nb_introduction/intro10_xsea.ipynb
    nb_introduction/intro11_advanced.ipynb
    nb_introduction/intro12_nimare_integration.ipynb
-
-
-.. note::
-   A dedicated notebook on **binary spatial colocalization** (using ``binary_y=True``
-   with fractional cluster-coverage maps, including the :func:`~nispace.workflows.nimare_colocalization`
-   and :func:`~nispace.workflows.nimare_xsea` workflow shortcuts) is planned.
+   nb_introduction/intro13_paired_colocalization.ipynb
+   nb_introduction/intro14_binary_colocalization.ipynb
+   nb_introduction/intro15_regional_influence.ipynb
 
