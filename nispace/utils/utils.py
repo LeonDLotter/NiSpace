@@ -124,7 +124,7 @@ def _parse_bool(s):
 
 
 def _get_df_string(kind, xdimred=None, ytrans=None, method=None, stat=None, xsea=False,
-                   perm=None, pooled_p=False, mc=None):
+                   perm=None, pooled_p=False, mc=None, engine=None, pooled=False):
 
     if kind=="ytrans":
         df_str = f"ytrans-{ytrans}"
@@ -137,6 +137,15 @@ def _get_df_string(kind, xdimred=None, ytrans=None, method=None, stat=None, xsea
             df_str = f"xdimred-{xdimred}_ytrans-{ytrans}_coloc-{method}_stat-{stat}_xsea-{xsea}"
         else:
             raise ValueError("Provide both method and stat!")
+
+    elif kind=="influence":
+        if (method is not None) & (stat is not None) & (engine is not None):
+            df_str = (f"xdimred-{xdimred}_ytrans-{ytrans}_infl-{method}_stat-{stat}_"
+                      f"xsea-{xsea}_engine-{engine}")
+            if pooled:
+                df_str += f"_pooled-{pooled}"
+        else:
+            raise ValueError("Provide method, stat, and engine!")
 
     elif kind=="null":
         if (method is not None) & (perm is not None):
