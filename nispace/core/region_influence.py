@@ -3,7 +3,23 @@ colocalization result, computed via two interchangeable engines.
 
 Definition (see NiSpace.regional_influence() docstring for the short
 rationale): ``influence[y, i] = stat_full[y] - stat_loo_excluding_i[y]`` for
-the method's primary stat.
+the method's primary stat, unless ``signed=False`` (the default), in which
+case it's ``|stat_full[y]| - |stat_loo_excluding_i[y]|``.
+
+Why default to the absolute-value version: mlr/dominance/pls/pcr/mi/slr use
+an inherently unsigned stat (R^2, MI -- never negative), so their delta is
+already "does this region help or hurt the fit/dependency strength," with
+no notion of direction. pearson/spearman/partialpearson/partialspearman use
+a signed stat (rho), so their *raw* (signed=True) delta additionally encodes
+direction -- positive delta means the region pulls the correlation toward
++1, negative means it pulls toward -1, regardless of the sign of rho itself
+(a point can be "discordant" and pull toward -1 even when the overall
+relationship is positive). Taking the absolute value before differencing
+(the default) makes all methods report the same kind of quantity --
+"does this region strengthen or weaken the association" -- homogeneously;
+``signed=True`` recovers the original directional version for the 4
+correlation methods (a no-op for the unsigned-stat methods, since
+|x| == x when x >= 0 already).
 
 Two engines:
 - "analytic": closed-form case-deletion identities (stats/loo.py) -- exact,
@@ -41,6 +57,14 @@ _ANALYTIC_METHODS = {"pearson", "spearman", "partialpearson", "partialspearman",
 _BRUTEFORCE_UNSUPPORTED = {"lasso", "ridge", "elasticnet"}
 _BRUTEFORCE_N_WARN_THRESHOLD = 1000
 
+# Methods whose primary stat is genuinely bidirectional (rho: -1..+1) -- these are
+# the only methods `signed=False` (the default) changes anything for. NOTE: R^2-based
+# stats (mlr/dominance/pls/pcr/slr) are NOT reliably >= 0 -- *adjusted* R^2 can go
+# negative (worse fit than the intercept-only baseline, more likely with fewer
+# observations after one is excluded) -- so `abs()` must be gated explicitly on
+# method identity here, not relied on as a coincidental no-op for "unsigned" stats.
+_SIGNED_METHODS = {"pearson", "spearman", "partialpearson", "partialspearman"}
+
 
 def _get_aggr_fun_axis0(xsea_method):
     """Aggregation functions for XSEA, along axis 0 of a 2D (n_genes, n_parcels)
@@ -73,10 +97,22 @@ def _get_aggr_fun_axis0(xsea_method):
 
 
 def _get_region_influence_fun_analytic(method, adj_r2=True, r_to_z=True, dtype=np.float32,
-                                       xsea=False, xsea_method=None):
-    """Build the per-Y-row analytic regional-influence closure for one method."""
+                                       xsea=False, xsea_method=None, signed=False):
+    """Build the per-Y-row analytic regional-influence closure for one method.
 
-    is_corr = method in {"pearson", "spearman", "partialpearson", "partialspearman"}
+    ``signed=False`` (default) takes the absolute value of the full-data and
+    LOO stat before differencing -- a no-op for mlr (R^2 is already >= 0),
+    but for the correlation methods it converts the raw signed delta (which
+    also encodes direction, see module docstring) into the same
+    "strengthens vs. weakens" quantity mlr already reports by construction.
+    """
+
+    is_corr = method in _SIGNED_METHODS
+
+    def _maybe_abs(arr):
+        # gate on is_corr, not just `signed`: R^2 (mlr) is not reliably >= 0 under
+        # adj_r2=True, so abs() must never be applied to it regardless of `signed`
+        return arr if (signed or not is_corr) else np.abs(arr)
 
     if is_corr and not xsea:
         def _y_region_influence(X, y, weights=None):
@@ -90,7 +126,7 @@ def _get_region_influence_fun_analytic(method, adj_r2=True, r_to_z=True, dtype=n
                 if r_to_z:
                     rho_full = rho_to_z(np.array([rho_full], dtype=np.float64))[0]
                     loo = rho_to_z(loo)
-                out[i_x] = (rho_full - loo).astype(dtype)
+                out[i_x] = (_maybe_abs(rho_full) - _maybe_abs(loo)).astype(dtype)
             return out
 
     elif is_corr and xsea:
@@ -120,7 +156,7 @@ def _get_region_influence_fun_analytic(method, adj_r2=True, r_to_z=True, dtype=n
                 else:
                     full_aggr = aggr_fn(rho_full_per_gene[:, np.newaxis])[0]
                     loo_aggr = aggr_fn(loo_per_gene)
-                out[i_s] = (full_aggr - loo_aggr).astype(dtype)
+                out[i_s] = (_maybe_abs(full_aggr) - _maybe_abs(loo_aggr)).astype(dtype)
             return out
 
     elif method == "mlr" and not xsea:
@@ -129,7 +165,7 @@ def _get_region_influence_fun_analytic(method, adj_r2=True, r_to_z=True, dtype=n
             mask = ~nan_detector(X_T, y)
             r2_full, _ = mlr(X_T[mask], y[mask], adj_r2=adj_r2, intercept=True)
             loo = mlr_loo(X_T, y, adj_r2=adj_r2)
-            return (r2_full - loo).astype(dtype)
+            return (_maybe_abs(r2_full) - _maybe_abs(loo)).astype(dtype)
 
     elif method == "mlr" and xsea:
         def _y_region_influence(X_dict, y, weights=None):
@@ -141,7 +177,7 @@ def _get_region_influence_fun_analytic(method, adj_r2=True, r_to_z=True, dtype=n
                 mask = ~nan_detector(X_T, y)
                 r2_full, _ = mlr(X_T[mask], y[mask], adj_r2=adj_r2, intercept=True)
                 loo = mlr_loo(X_T, y, adj_r2=adj_r2)
-                out[i_s] = (r2_full - loo).astype(dtype)
+                out[i_s] = (_maybe_abs(r2_full) - _maybe_abs(loo)).astype(dtype)
             return out
 
     else:
@@ -152,7 +188,8 @@ def _get_region_influence_fun_analytic(method, adj_r2=True, r_to_z=True, dtype=n
     return _y_region_influence
 
 
-def _get_region_influence_fun_bruteforce(y_colocalize_fun, stat, dtype=np.float32, xsea=False):
+def _get_region_influence_fun_bruteforce(y_colocalize_fun, stat, dtype=np.float32, xsea=False,
+                                         signed=False):
     """Build the per-Y-row brute-force regional-influence closure.
 
     Reuses the already-built colocalization closure (self._colocs_fun[method]
@@ -160,28 +197,40 @@ def _get_region_influence_fun_bruteforce(y_colocalize_fun, stat, dtype=np.float3
     Output shape is inferred generically from the shape of `stat` in the
     full-data result: scalar (joint-model methods: mlr/dominance/pls/pcr)
     -> (n_parcels,); vector (per-X/per-set methods) -> (n_x_or_sets, n_parcels).
+
+    ``signed=False`` (default) takes the absolute value of the full-data and
+    per-exclusion stat before differencing, but only when `stat == "rho"` --
+    the only stat name any of the 4 bidirectional (pearson/spearman/
+    partialpearson/partialspearman) methods produce (see _COLOC_METHODS).
+    Every other stat (r2/mi/sum/individual/...) is left untouched regardless
+    of `signed`: R^2-based stats are not reliably >= 0 under adj_r2=True
+    (adjusted R^2 can go negative), so abs() must be gated on the stat being
+    genuinely bidirectional, not relied on as a coincidental no-op.
     """
+
+    def _maybe_abs(arr):
+        return arr if (signed or stat != "rho") else np.abs(arr)
 
     if not xsea:
         def _y_region_influence(X, y, weights=None):
             n_parcels = X.shape[1]
-            full = np.asarray(y_colocalize_fun(X, y, weights)[stat], dtype=np.float64)
+            full = _maybe_abs(np.asarray(y_colocalize_fun(X, y, weights)[stat], dtype=np.float64))
             out = np.empty((n_parcels,) + full.shape, dtype=np.float64)
             for i in range(n_parcels):
                 X_i = np.delete(X, i, axis=1)
                 y_i = np.delete(y, i)
-                res_i = np.asarray(y_colocalize_fun(X_i, y_i, weights)[stat], dtype=np.float64)
+                res_i = _maybe_abs(np.asarray(y_colocalize_fun(X_i, y_i, weights)[stat], dtype=np.float64))
                 out[i] = full - res_i
             return np.moveaxis(out, 0, -1).astype(dtype)
     else:
         def _y_region_influence(X_dict, y, weights=None):
             n_parcels = y.shape[0]
-            full = np.asarray(y_colocalize_fun(X_dict, y, weights)[stat], dtype=np.float64)
+            full = _maybe_abs(np.asarray(y_colocalize_fun(X_dict, y, weights)[stat], dtype=np.float64))
             out = np.empty((n_parcels,) + full.shape, dtype=np.float64)
             for i in range(n_parcels):
                 X_dict_i = {k: np.delete(v, i, axis=1) for k, v in X_dict.items()}
                 y_i = np.delete(y, i)
-                res_i = np.asarray(y_colocalize_fun(X_dict_i, y_i, weights)[stat], dtype=np.float64)
+                res_i = _maybe_abs(np.asarray(y_colocalize_fun(X_dict_i, y_i, weights)[stat], dtype=np.float64))
                 out[i] = full - res_i
             return np.moveaxis(out, 0, -1).astype(dtype)
 
@@ -190,7 +239,7 @@ def _get_region_influence_fun_bruteforce(y_colocalize_fun, stat, dtype=np.float3
 
 def _get_region_influence_fun(method, engine, n_parcels, y_colocalize_fun=None, stat=None,
                               adj_r2=True, r_to_z=True, dtype=np.float32,
-                              xsea=False, xsea_method=None):
+                              xsea=False, xsea_method=None, signed=False):
     """Top-level dispatcher. Returns (closure, engine_used)."""
 
     if method in _BRUTEFORCE_UNSUPPORTED:
@@ -222,10 +271,12 @@ def _get_region_influence_fun(method, engine, n_parcels, y_colocalize_fun=None, 
                 f"engine='analytic' if '{method}' supports it (pearson/spearman/"
                 "partialpearson/partialspearman/mlr)."
             )
-        fun = _get_region_influence_fun_bruteforce(y_colocalize_fun, stat, dtype=dtype, xsea=xsea)
+        fun = _get_region_influence_fun_bruteforce(y_colocalize_fun, stat, dtype=dtype, xsea=xsea,
+                                                   signed=signed)
     else:
         fun = _get_region_influence_fun_analytic(
-            method, adj_r2=adj_r2, r_to_z=r_to_z, dtype=dtype, xsea=xsea, xsea_method=xsea_method
+            method, adj_r2=adj_r2, r_to_z=r_to_z, dtype=dtype, xsea=xsea, xsea_method=xsea_method,
+            signed=signed,
         )
 
     return fun, engine

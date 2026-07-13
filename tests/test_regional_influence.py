@@ -286,3 +286,100 @@ def test_full_workflow_xsea(synthetic_nispace_xsea):
     assert set(res.keys()) == {"setA", "setB"}
     for k in res:
         np.testing.assert_allclose(res[k].to_numpy(), res_bf[k].to_numpy(), atol=ATOL)
+
+
+# ---------------------------------------------------------------------------
+# signed parameter: default (False) is the sign-independent |delta|; True
+# recovers the original directional delta -- and must be a no-op for
+# methods whose stat is already non-negative (mlr/dominance/pls/pcr/mi/slr).
+# ---------------------------------------------------------------------------
+
+def test_signed_default_is_abs_of_directional_pearson(rng):
+    """For a clearly positive correlation, default (|full|-|loo|) and signed
+    (full-loo) are algebraically identical (both full and loo stay positive
+    throughout) -- not a bug, a direct consequence of |a|-|b| == a-b when
+    a,b >= 0. The two only differ when the stat is consistently negative
+    (exact sign flip: |a|-|b| == -(a-b) when a,b <= 0), which is the
+    meaningful case to test."""
+    n_x, n_parcels = 1, 40
+    X = rng.normal(size=(n_x, n_parcels))
+    y = -0.6 * X[0] + rng.normal(scale=0.4, size=n_parcels)  # clearly negative correlation
+
+    y_coloc = _get_colocalize_fun("pearson", r_to_z=True, dtype=np.float32)
+    stat = _get_coloc_stats("pearson", drop_optional=True)[0]
+
+    fun_default, _ = _get_region_influence_fun(
+        "pearson", "analytic", n_parcels, y_colocalize_fun=y_coloc, stat=stat, r_to_z=True,
+    )
+    fun_signed, _ = _get_region_influence_fun(
+        "pearson", "analytic", n_parcels, y_colocalize_fun=y_coloc, stat=stat, r_to_z=True,
+        signed=True,
+    )
+    res_default = np.asarray(fun_default(X, y))
+    res_signed = np.asarray(fun_signed(X, y))
+
+    assert not np.allclose(res_default, res_signed)
+    # sign-flip identity holds throughout only if r stayed negative for every
+    # single LOO exclusion too -- true here given the strong effect size.
+    np.testing.assert_allclose(res_default, -res_signed, atol=ATOL)
+
+
+@pytest.mark.parametrize("method,n_x", [("mlr", 4), ("dominance", 3), ("pls", 3), ("slr", 3), ("mi", 3)])
+def test_signed_is_noop_for_unsigned_stat_methods(rng, method, n_x):
+    n_parcels = 30
+    X = rng.normal(size=(n_x, n_parcels))
+    w = rng.normal(size=n_x)
+    y = w @ X + rng.normal(scale=0.3, size=n_parcels)
+
+    y_coloc = _get_colocalize_fun(method, adj_r2=True, dtype=np.float32)
+    stat = _get_coloc_stats(method, drop_optional=True)[0]
+
+    fun_default, engine = _get_region_influence_fun(
+        method, "auto", n_parcels, y_colocalize_fun=y_coloc, stat=stat, adj_r2=True,
+    )
+    fun_signed, _ = _get_region_influence_fun(
+        method, "auto", n_parcels, y_colocalize_fun=y_coloc, stat=stat, adj_r2=True, signed=True,
+    )
+    res_default = np.asarray(fun_default(X, y))
+    res_signed = np.asarray(fun_signed(X, y))
+    np.testing.assert_allclose(res_default, res_signed)
+
+
+def test_full_workflow_signed_vs_default_pearson(rng):
+    """Uses its own clearly-negative-correlation NiSpace object rather than the
+    shared synthetic_nispace fixture, whose per-predictor sign isn't guaranteed
+    -- the divergence between signed/default is only guaranteed for a stat
+    that doesn't cross zero across LOO exclusions."""
+    from nispace import NiSpace
+
+    n_parcels = 30
+    x = rng.normal(size=n_parcels)
+    y = -0.6 * x + rng.normal(scale=0.4, size=n_parcels)
+    parcel_labels = [f"parcel{i}" for i in range(n_parcels)]
+    x_df = pd.DataFrame(x[np.newaxis, :], index=["x0"], columns=parcel_labels)
+    y_df = pd.DataFrame(y[np.newaxis, :], index=["y0"], columns=parcel_labels)
+
+    nsp = NiSpace(x=x_df, y=y_df, z=None, parcellation=None, standardize=False,
+                 n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    nsp.colocalize(method="pearson", verbose=False)
+    nsp.regional_influence(method="pearson", verbose=False)
+    nsp.regional_influence(method="pearson", signed=True, verbose=False)
+
+    default = nsp.get_regional_influence(method="pearson", signed=False)
+    signed = nsp.get_regional_influence(method="pearson", signed=True)
+
+    for k in default:
+        assert not np.allclose(default[k].to_numpy(), signed[k].to_numpy())
+        np.testing.assert_allclose(default[k].to_numpy(), -signed[k].to_numpy(), atol=ATOL)
+
+
+def test_full_workflow_signed_is_noop_for_mlr(synthetic_nispace):
+    nsp = synthetic_nispace
+    nsp.colocalize(method="mlr", verbose=False)
+    nsp.regional_influence(method="mlr", verbose=False)
+    nsp.regional_influence(method="mlr", signed=True, verbose=False)
+
+    default = nsp.get_regional_influence(method="mlr", signed=False)
+    signed = nsp.get_regional_influence(method="mlr", signed=True)
+    np.testing.assert_allclose(default.to_numpy(), signed.to_numpy(), atol=1e-6)
