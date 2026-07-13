@@ -27,10 +27,15 @@ def _rank_regress(arr, rank, regress, z=None, zy_matched=False, n_proc=1, verbos
     
     # case 1: arr is array, e.g. X or Y arrays
     if isinstance(arr, np.ndarray):
+        arr_out = arr
         if rank:
-            arr_out = rank2d(arr.T).T
+            arr_out = rank2d(arr_out.T).T
         if regress:
-            arr_out = regress_z_fun(arr, z, zy_matched)
+            # NOTE: must residualize arr_out (possibly already ranked above), not the
+            # original arr -- using `arr` here silently discarded the rank2d() result
+            # whenever both rank and regress applied (e.g. partialspearman with Z),
+            # making it compute exactly what partialpearson computes instead.
+            arr_out = regress_z_fun(arr_out, z, zy_matched)
             
     # case 2: arr is list, e.g., X or Y null arrays
     elif isinstance(arr, list):
@@ -66,10 +71,12 @@ def _rank_regress(arr, rank, regress, z=None, zy_matched=False, n_proc=1, verbos
     
     # case 3: arr is dict, e.g., X or Y null arrays
     elif isinstance(arr, dict):
+        arr_out = arr
         if rank:
-            arr_out = {set_name: rank2d(set_arr.T).T for set_name, set_arr in arr.items()}
+            arr_out = {set_name: rank2d(set_arr.T).T for set_name, set_arr in arr_out.items()}
         if regress:
-            arr_out = {set_name: regress_z_fun(set_arr, z, zy_matched) for set_name, set_arr in arr.items()}
+            # see case 1 note above -- must chain off arr_out, not the original arr
+            arr_out = {set_name: regress_z_fun(set_arr, z, zy_matched) for set_name, set_arr in arr_out.items()}
             
     # rest
     else:
