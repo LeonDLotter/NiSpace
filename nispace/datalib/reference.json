@@ -2113,6 +2113,17 @@
                         "doi": "10.1093/bioinformatics/btw392"
                     }
                 ]
+            },
+            "ASDModulesGandal2022": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-ASDModulesGandal2022.collect",
+                "description": "Gene co-expression modules significantly dysregulated in ASD cortex (WGCNA module eigengene ~ ASD status, linear mixed model across all cortical regions, FDR < 0.05). Set names encode direction (_up/_down) and, where given in the source publication, a short descriptive label.",
+                "citations": [
+                    {
+                        "ref": "Gandal et al., 2022",
+                        "doi": "10.1038/s41586-022-05377-7"
+                    }
+                ]
             }
         },
         "tab": {
@@ -2764,6 +2775,17 @@
                     {
                         "ref": "Grote et al., 2016",
                         "doi": "10.1093/bioinformatics/btw392"
+                    }
+                ]
+            },
+            "ASDModulesGandal2022": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/collection-ASDModulesGandal2022.collect",
+                "description": "Gene co-expression modules significantly dysregulated in ASD cortex (WGCNA module eigengene ~ ASD status, linear mixed model across all cortical regions, FDR < 0.05). Set names encode direction (_up/_down) and, where given in the source publication, a short descriptive label.",
+                "citations": [
+                    {
+                        "ref": "Gandal et al., 2022",
+                        "doi": "10.1038/s41586-022-05377-7"
                     }
                 ]
             }
