@@ -2124,6 +2124,17 @@
                         "doi": "10.1038/s41586-022-05377-7"
                     }
                 ]
+            },
+            "ASDModulesGandal2022Weights": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-ASDModulesGandal2022Weights.collect",
+                "description": "Same gene sets as ASDModulesGandal2022, weighted by each gene's kME (module eigengene correlation / intramodular connectivity) to its own assigned module, so membership strength can be used as a continuous weight instead of binary in/out.",
+                "citations": [
+                    {
+                        "ref": "Gandal et al., 2022",
+                        "doi": "10.1038/s41586-022-05377-7"
+                    }
+                ]
             }
         },
         "tab": {
@@ -2782,6 +2793,17 @@
                 "host": "github-nispace",
                 "remote": "reference/mrna/collection-ASDModulesGandal2022.collect",
                 "description": "Gene co-expression modules significantly dysregulated in ASD cortex. Naming - GeneM3_up_cortex = gene module 3, significantly upregulated on cortex-level; GeneM4_down_region = gene module 4, significantly downregulated in at least one region. Some modules additionally have labels assigned in the source publication.",
+                "citations": [
+                    {
+                        "ref": "Gandal et al., 2022",
+                        "doi": "10.1038/s41586-022-05377-7"
+                    }
+                ]
+            },
+            "ASDModulesGandal2022Weights": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/collection-ASDModulesGandal2022Weights.collect",
+                "description": "Same gene sets as ASDModulesGandal2022, weighted by each gene's kME (module eigengene correlation / intramodular connectivity) to its own assigned module, so membership strength can be used as a continuous weight instead of binary in/out.",
                 "citations": [
                     {
                         "ref": "Gandal et al., 2022",

@@ -594,6 +594,7 @@ def fetch_collection(collection: Union[str,Path, np.ndarray, pd.DataFrame, pd.Se
                      set_size_range: Union[None, Tuple[int, int]] = None,
                      weight_range: Union[None, Tuple[float, float]] = None,
                      weight_quantile: float = None,
+                     set_top_n: int = None,
                      set_specificity: float = None,
                      return_maps: bool = False,
                      nispace_data_dir: Union[str,Path] = None,
@@ -634,6 +635,9 @@ def fetch_collection(collection: Union[str,Path, np.ndarray, pd.DataFrame, pd.Se
     weight_quantile : float, optional
         Within each set, keep only entries with weight ≥ this quantile. Ignored when
         the collection has no weights.
+    set_top_n : int, optional
+        Within each set, keep only the ``set_top_n`` entries with the highest weight.
+        Ignored when the collection has no weights.
     set_specificity : float in (0, 1], optional
         Keep only maps that appear in ≤ ``set_specificity`` fraction of all sets,
         i.e. discard ubiquitous maps.
@@ -715,6 +719,7 @@ def fetch_collection(collection: Union[str,Path, np.ndarray, pd.DataFrame, pd.Se
         set_size_range=set_size_range,
         weight_range=weight_range,
         weight_quantile=weight_quantile,
+        set_top_n=set_top_n,
         set_specificity=set_specificity
     )
     
@@ -841,6 +846,7 @@ def _apply_collection_filter(#dataset: str,
                              set_size_range: Union[None, Tuple[int, int]] = None,
                              weight_range: Union[None, Tuple[float, float]] = None,
                              weight_quantile: Union[None, float] = None,
+                             set_top_n: Union[None, int] = None,
                              set_specificity: Union[None, float] = None,
                              #overwrite: bool = False,
                              #check_file_hash: bool = True
@@ -883,10 +889,23 @@ def _apply_collection_filter(#dataset: str,
             collection_df = (
                 collection_df
                 .groupby("set", sort=False)
-                .apply(lambda x: x[x.weight >= x.weight.quantile(0.9)])   
+                .apply(lambda x: x[x.weight >= x.weight.quantile(weight_quantile)])
                 .reset_index(drop=True)
             )
             lgr.info(f"Filtered to maps with weights >= quantile {weight_quantile} within each set.")
+
+    # Apply top-n filter
+    if set_top_n is not None:
+        if "weight" not in collection_df.columns:
+            lgr.warning("Collection does not seem to contain weights, will not apply set_top_n filter.")
+        else:
+            collection_df = (
+                collection_df
+                .groupby("set", sort=False, group_keys=False)
+                .apply(lambda x: x.nlargest(set_top_n, "weight"))
+                .reset_index(drop=True)
+            )
+            lgr.info(f"Filtered to the top {set_top_n} maps by weight within each set.")
             
     # Apply absolute weight filter
     if weight_range is not None:
@@ -1082,6 +1101,7 @@ def fetch_reference(dataset: str,
                     set_size_range: Union[None, Tuple[int, int]] = None,
                     weight_range: Union[None, Tuple[float, float]] = None,
                     weight_quantile: Union[None, float] = None,
+                    set_top_n: Union[None, int] = None,
                     set_specificity: Union[None, float] = None,
                     parcellation: str = None,
                     bilateral: bool = False,
@@ -1216,6 +1236,7 @@ def fetch_reference(dataset: str,
             set_size_range=set_size_range,
             weight_range=weight_range,
             weight_quantile=weight_quantile,
+            set_top_n=set_top_n,
             set_specificity=set_specificity,
             overwrite=overwrite, 
             check_file_hash=check_file_hash,
