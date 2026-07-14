@@ -58,8 +58,11 @@ def _zscore_nan_pair(x, y):
     if mask.sum() < 2:
         return zx, zy
 
-    mx, sx = x[mask].mean(), x[mask].std()
-    my, sy = y[mask].mean(), y[mask].std()
+    # ddof=0: mean(zx*zy) below must algebraically equal Pearson r (see docstring
+    # above); ddof=1 would reintroduce the exact "contribution drifts from true
+    # rho" bug this function was written to avoid.
+    mx, sx = x[mask].mean(), x[mask].std(ddof=0)
+    my, sy = y[mask].mean(), y[mask].std(ddof=0)
     if sx == 0 or sy == 0:
         return zx, zy
 

@@ -139,7 +139,10 @@ def zscore_df(df, along="cols", force_df=True):
     else:
         raise ValueError(f"Option along=={along} not defined!")
         
-    arr_stand = zscore(df, axis=axis, nan_policy="omit")
+    # ddof=0: standardizes the given map/vector to itself, not estimating a
+    # population parameter from a reference sample -- matches scipy/sklearn
+    # convention, used throughout for X/Y/Z standardization
+    arr_stand = zscore(df, axis=axis, ddof=0, nan_policy="omit")
     
     # DataFrame
     if isinstance(df, pd.DataFrame):

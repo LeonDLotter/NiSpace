@@ -244,8 +244,10 @@ class NullMaps:
 
         Returns a new NullMaps backed by a plain (non-memmap) array.
         """
+        # ddof=0: must match zscore_df's convention (this function replaces the
+        # old per-map zscore_df loop, see docstring above)
         std_data = scipy_zscore(
-            self._data, axis=2, nan_policy="omit"
+            self._data, axis=2, ddof=0, nan_policy="omit"
         ).astype(self._data.dtype)
         return NullMaps(
             std_data,

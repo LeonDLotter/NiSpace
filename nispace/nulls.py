@@ -203,7 +203,9 @@ def correlate_hemis_parc(data, parc_idc_lh=None, parc_idc_rh=None, rank=False):
         lh, rh = data_lh[i,:], data_rh[i,:]
         notnan = ~(np.isnan(lh) | np.isnan(rh))
         lh_sel, rh_sel = lh[notnan], rh[notnan]
-        if len(lh_sel) < 2 or np.std(lh_sel) == 0 or np.std(rh_sel) == 0:
+        # ddof=0: zero-variance guard only, choice doesn't affect the degenerate-
+        # case detection, pinned for consistency
+        if len(lh_sel) < 2 or np.std(lh_sel, ddof=0) == 0 or np.std(rh_sel, ddof=0) == 0:
             r.append(np.nan)
         else:
             r.append(corr(lh_sel, rh_sel, rank=rank))

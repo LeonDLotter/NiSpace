@@ -59,7 +59,9 @@ def morans_i(data, distmat, normalize=False, local=False, invert_dist=True, nan_
     z = data - data.mean()
     if local:
         with np.errstate(all='ignore'):
-            z /= data.std()
+            # ddof=0: local Moran's I / LISA is defined with population std,
+            # not a sample-estimate choice
+            z /= data.std(ddof=0)
 
     zl = np.squeeze(distmat @ z[:, None])
     den = (z * z).sum()

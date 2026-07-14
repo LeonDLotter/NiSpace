@@ -27,7 +27,9 @@ def _reduce_dimensions(data, method="pca", n_components=None, min_ev=None,
     if method=="pca":
         # run pca with all components
         pcs = PCA(n_components=n_components).fit_transform(data)
-        ev = np.var(pcs, axis=0) / np.sum(np.var(data, axis=0))
+        # ddof=0 on both sides: ratio is invariant to ddof choice as long as it
+        # matches; pinned to population convention for consistency/clarity
+        ev = np.var(pcs, axis=0, ddof=0) / np.sum(np.var(data, axis=0, ddof=0))
         # find number of components that sum up to total EV of >= min_ev
         if min_ev is not None:
             total_ev = 0
