@@ -408,7 +408,7 @@ def compute_meff(X, method="galwey"):
     ----------
     X : array-like, shape (n_maps, n_features)
     method : "galwey" (default) or "li_ji"
-        Galwey (2009) Genet Epidemiol 33:559; Li & Ji (2005) Ann Hum Genet 69:519.
+        Galwey (2009) Genet Epidemiol 33:559; Li & Ji (2005) Heredity 95:221.
 
     Returns
     -------

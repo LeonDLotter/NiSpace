@@ -274,6 +274,16 @@ def _avg_dist_mats(D1, D2):
 
 
 def nulls_burt2020(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
+    """Variogram-matched surrogate maps (Burt et al. 2020, brainsmash).
+
+    Generates surrogates by permuting ``data_1d`` and smoothing to match its empirical
+    variogram, via the ``brainsmash`` package's ``Base`` class. ``dist_mat`` is the
+    parcel-by-parcel distance matrix; ``**kwargs`` (e.g. ``resample``, ``batch_size``) are
+    forwarded to ``Base``. See :doc:`/citation` for the citation.
+
+    Intended to be called through :func:`generate_null_maps`, which handles NaN masking,
+    hemisphere splitting, and parallelization across maps — not meant to be called directly.
+    """
     data_1d = np.array(data_1d).flatten()
     # results array with shape (n_nulls, n_parcels)
     null_data = np.full((n_nulls, len(data_1d)), np.nan)
@@ -296,6 +306,16 @@ def nulls_burt2020(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
     return null_data.astype(data_1d.dtype)
 
 def nulls_burt2018(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
+    """Spatial autoregressive surrogate maps (Burt et al. 2018).
+
+    Generates surrogates via ``brainsmash.utils.batch_surrogates``, which fits a spatial
+    autoregressive model relating ``data_1d`` to ``dist_mat`` and samples from it (values are
+    Box-Cox-shifted internally to satisfy positivity, then shifted back). See :doc:`/citation`
+    for the citation.
+
+    Intended to be called through :func:`generate_null_maps`, which handles NaN masking,
+    hemisphere splitting, and parallelization across maps — not meant to be called directly.
+    """
     data_1d = np.array(data_1d).flatten()
     # results array with shape (n_nulls, n_parcels)
     null_data = np.full((n_nulls, len(data_1d)), np.nan)
@@ -311,7 +331,106 @@ def nulls_burt2018(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
     # return
     return null_data.astype(data_1d.dtype)
 
+def _build_variogram_w(data_1d, dist_mat, n_bins=20, kernel="exponential", nugget=False):
+    """Fit parametric variogram to data_1d; return covariance kernel matrix W.
+
+    Fits γ(h) to the empirical semi-variogram, converts to C(h), and returns
+    the full covariance matrix W[i,j] = C(d[i,j]). Positive-definite by
+    Bochner's theorem for the exponential and Gaussian kernels; the spherical
+    kernel has compact support (W is naturally sparse beyond its range).
+
+    Parameters
+    ----------
+    n_bins : int
+        Number of quantile-based variogram bins. Default 20.
+    kernel : {'exponential', 'gaussian', 'spherical'}
+        Variogram model. 'exponential' matches BrainSMASH default and is the
+        most robust for parcellated brain maps. Short aliases 'exp', 'gau',
+        'sph' are accepted.
+    nugget : bool
+        If True, fit a nugget term (variance at h→0⁺), accounting for
+        measurement noise or fine-scale variance not captured by the model.
+        Adds one free parameter to the fit.
+    """
+    from scipy.optimize import curve_fit
+
+    _ALIASES = {"exp": "exponential", "gau": "gaussian", "sph": "spherical"}
+    kernel = _ALIASES.get(kernel.lower(), kernel.lower())
+    if kernel not in ("exponential", "gaussian", "spherical"):
+        raise ValueError(
+            f"kernel must be 'exponential', 'gaussian', or 'spherical'; got '{kernel}'"
+        )
+
+    x = data_1d - data_1d.mean()
+    triu_i, triu_j = np.triu_indices(len(x), k=1)
+    h = dist_mat[triu_i, triu_j]
+    sv = (x[triu_i] - x[triu_j]) ** 2 / 2.0
+
+    # quantile-based bins → approximately equal pair count per bin
+    edges = np.percentile(h, np.linspace(0, 100, n_bins + 1))
+    bh, bg = [], []
+    for lo, hi in zip(edges[:-1], edges[1:]):
+        mask = (h >= lo) & (h < hi)
+        if mask.sum() >= 3:
+            bh.append(h[mask].mean())
+            bg.append(sv[mask].mean())
+    bh = np.asarray(bh, dtype=float)
+    bg = np.asarray(bg, dtype=float)
+
+    sill0 = float(np.var(x))
+    gt63 = bg > 0.63 * sill0
+    rng0 = float(bh[gt63][0]) if gt63.any() else float(bh.mean())
+
+    def _norm_cov(h, rng):
+        if kernel == "exponential":
+            return np.exp(-h / rng)
+        elif kernel == "gaussian":
+            return np.exp(-(h / rng) ** 2)
+        else:  # spherical — compact support at rng
+            r = np.minimum(h / rng, 1.0)
+            return np.where(h <= rng, 1.0 - 1.5 * r + 0.5 * r ** 3, 0.0)
+
+    if nugget:
+        def _var_model(h, nug, sill, rng):
+            return nug + (sill - nug) * (1.0 - _norm_cov(h, rng))
+        p0 = [0.0, sill0, rng0]
+        bounds = ([0.0, 0.0, 1e-3], [sill0, 10.0 * sill0 + 1e-9, 1e9])
+    else:
+        def _var_model(h, sill, rng):
+            return sill * (1.0 - _norm_cov(h, rng))
+        p0 = [sill0, rng0]
+        bounds = ([0.0, 1e-3], [10.0 * sill0 + 1e-9, 1e9])
+
+    try:
+        popt, _ = curve_fit(_var_model, bh, bg, p0=p0, bounds=bounds, maxfev=2000)
+    except Exception:
+        popt = p0
+
+    if nugget:
+        nug_fit, sill_fit, rng_fit = popt
+    else:
+        nug_fit, sill_fit, rng_fit = 0.0, popt[0], popt[1]
+
+    W = (sill_fit - nug_fit) * _norm_cov(dist_mat, rng_fit)
+    np.fill_diagonal(W, sill_fit)
+    return np.maximum(W, 0.0)
+
+
 def nulls_moran(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
+    """Moran Spectral Randomization (MSR) surrogate maps (Wagner & Dray 2015).
+
+    Generates surrogates via BrainSpace's ``MoranRandomization``, using a spatial weight
+    matrix ``W`` built from ``dist_mat`` (standard 1/d weights by default, or a
+    variogram-fitted covariance kernel if ``fit_variogram=True``, falling back to 1/d if the
+    map's own Moran's I is below ``variogram_threshold``). Notable ``**kwargs``:
+    ``procedure`` (default ``"singleton"``), ``joint``, ``n_components`` (default 15),
+    ``fit_variogram``, ``variogram_n_bins``/``variogram_kernel``/``variogram_nugget``/``variogram_threshold``.
+    See :doc:`/citation` for the citation (original method: Wagner & Dray 2015; implementation:
+    Vos de Wael et al. 2020, BrainSpace).
+
+    Intended to be called through :func:`generate_null_maps`, which handles NaN masking,
+    hemisphere splitting, and parallelization across maps — not meant to be called directly.
+    """
     data_1d = np.array(data_1d).flatten()
     # results array with shape (n_nulls, n_parcels)
     null_data = np.full((n_nulls, len(data_1d)), np.nan)
@@ -365,7 +484,32 @@ def nulls_moran(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
     # return
     return null_data.astype(data_1d.dtype)
 
+def nulls_variomoran(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
+    """Variogram-adapted Moran Spectral Randomization (varioMSR).
+
+    Wrapper around :func:`nulls_moran` with ``fit_variogram=True`` as default.
+    Fits an empirical variogram to ``data_1d``, builds a covariance kernel W tuned
+    to the map's own SA scale, and uses the resulting MEMs as the randomization basis.
+    Falls back to standard 1/d W when Moran's I ≤ ``variogram_threshold`` (default 0).
+
+    All :func:`nulls_moran` kwargs are forwarded; ``fit_variogram`` and
+    ``variogram_*`` kwargs can be overridden in the usual way via ``maps_*`` prefixes.
+    """
+    kwargs.setdefault("fit_variogram", True)
+    return nulls_moran(data_1d, dist_mat, n_nulls=n_nulls, seed=seed, **kwargs)
+
+
 def nulls_random(data_1d, dist_mat=None, n_nulls=1000, seed=None):
+    """Fully random (spatially unconstrained) null maps.
+
+    Generates each null as an independent full permutation of the non-NaN values of
+    ``data_1d`` (no resampling with replacement). ``dist_mat`` is accepted but never used —
+    it exists only so this function shares a call signature with the other ``nulls_*``
+    functions for uniform dispatch inside :func:`generate_null_maps`.
+
+    Intended to be called through :func:`generate_null_maps` (``method="random"``), which
+    handles parallelization across maps — not meant to be called directly.
+    """
     # results array with shape (n_nulls, n_parcels)
     null_data = np.full((n_nulls, len(data_1d)), np.nan)
     # mask
@@ -418,7 +562,9 @@ _NULL_METHODS = {
 # Canonical names for aliases — normalised at parse time so cache keys are stable
 _NULL_METHOD_ALIASES = {
     "spin": "cornblath",
+    "msr": "moran",
     "brainspace": "moran",
+    "variomsr": "variomoran",
     "brainsmash": "burt2020",
     "variogram": "burt2020",
 }
@@ -553,10 +699,36 @@ def generate_spins(parc, parc_space, n_perm=1000, method="original", seed=None,
     Supports bilateral (tuple of two GiftiImages) and single-hemisphere
     (single GiftiImage) parcellations.
 
-    Returns a tuple (spins_lh, spins_rh) of int32 arrays.  For bilateral
-    parcellations both have shape (n_parcels_hemi, n_perm).  For a
-    single-hemisphere parcellation the unused hemisphere gets shape (0, n_perm).
-    RH indices are local to [0, n_rh).
+    Parameters
+    ----------
+    parc : tuple of two GiftiImage, or a single GiftiImage
+        Bilateral (lh_img, rh_img) or single-hemisphere surface parcellation.
+    parc_space : str
+        Surface space of ``parc`` (e.g. ``"fsaverage"``, ``"fsLR"``).
+    n_perm : int, default=1000
+        Number of spin permutations to generate.
+    method : str, default="original"
+        Rotation-generation method forwarded to ``neuromaps``' ``gen_spinsamples``. One of
+        ``"original"`` (Alexander-Bloch method), ``"vasa"``, ``"hungarian"``, or
+        ``"cornblath"``. See :doc:`/citation` for the citation of each.
+    seed : int, optional
+        Random seed for reproducibility.
+    parc_hemi : list of str, optional
+        Which hemisphere a single (unilateral) ``parc`` belongs to (``["L"]`` or ``["R"]``);
+        defaults to ``"L"`` with a warning if not given. Not needed for a bilateral ``parc``.
+
+    Returns
+    -------
+    spins_lh, spins_rh : ndarray of int32
+        Spin indices. For bilateral parcellations both have shape ``(n_parcels_hemi, n_perm)``.
+        For a single-hemisphere parcellation the unused hemisphere gets shape ``(0, n_perm)``.
+        RH indices are local to ``[0, n_rh)``.
+
+    Notes
+    -----
+    Typically invoked through :func:`generate_null_maps` for spin-based null methods, but also
+    called directly (e.g. by ``NiSpace``/``Parcellation``) when precomputing or caching a spin
+    matrix ahead of repeated use.
     """
     is_bilateral = isinstance(parc, tuple)
     is_unilateral = isinstance(parc, nib.GiftiImage)
@@ -853,8 +1025,31 @@ def apply_cornblath_mat(data_1d, T_lh, T_rh, idc_lh, idc_rh, n_perm=None):
 def apply_spins(data_1d, spins_lh, spins_rh, idc_lh, idc_rh, n_perm=None):
     """Apply precomputed spin indices to a 1D data array.
 
-    Handles -1 entries (Baum dropped parcels) by setting those positions to NaN.
-    Returns null_data of shape (n_perm, n_parcels).
+    Parameters
+    ----------
+    data_1d : array-like
+        1D array of parcel values, length ``n_parcels``.
+    spins_lh, spins_rh : ndarray of int
+        Spin indices as returned by :func:`generate_spins`/``generate_baum_spins``, shape
+        ``(n_lh_parcels, n_perm)`` / ``(n_rh_parcels, n_perm)``. ``-1`` entries (Baum-method
+        parcels absorbed by the medial wall after rotation) are handled by setting those
+        output positions to NaN.
+    idc_lh, idc_rh : array-like of int
+        Positions in ``data_1d`` corresponding to each hemisphere's parcels, in the same order
+        ``spins_lh``/``spins_rh`` index into.
+    n_perm : int, optional
+        Number of permutations to apply; defaults to ``spins_lh.shape[1]`` (use all).
+
+    Returns
+    -------
+    null_data : ndarray
+        Shape ``(n_perm, n_parcels)``. Positions not covered by ``idc_lh``/``idc_rh`` (e.g.
+        subcortex) remain NaN.
+
+    Notes
+    -----
+    Intended to be called through :func:`generate_null_maps`, which calls this once per data
+    row as part of its spin-test code path — not meant to be called directly in most cases.
     """
     if n_perm is None:
         n_perm = spins_lh.shape[1]
@@ -1132,6 +1327,153 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
                        n_proc=1, seed=None, verbose=True,
                        return_dict=False,
                        **kwargs):
+    """Generate spatially-constrained (or fully random) null maps for one or more parcellated inputs.
+
+    This is the low-level engine behind :meth:`~nispace.api.NiSpace.permute`'s spatial null
+    models (called internally via ``core.permute._get_null_maps``) — most users will not call
+    it directly. It dispatches to a distance-based surrogate method (:func:`nulls_moran`,
+    :func:`nulls_burt2018`, :func:`nulls_burt2020`, or plain permutation via :func:`nulls_random`)
+    or, for cortex-only surface methods, a spin-test method (via :func:`generate_spins`,
+    ``generate_baum_spins``, or ``generate_cornblath_mat`` + :func:`apply_spins`/``apply_cornblath_mat``),
+    based on ``method``.
+
+    Parameters
+    ----------
+    method : str or tuple of str
+        Null method to use. One of the distance-based methods ``"random"``, ``"moran"``
+        (aliases ``"msr"``, ``"brainspace"``), ``"variomoran"`` (alias ``"variomsr"``),
+        ``"burt2020"`` (aliases ``"brainsmash"``, ``"variogram"``), ``"burt2018"``; or one of
+        the spin-test methods (cortex/surface only) ``"alexander_bloch"``, ``"spin"``
+        (alias of ``"cornblath"``), ``"vasa"``, ``"hungarian"``, ``"baum"``, ``"cornblath"``.
+        See :doc:`/citation` for the citation of each method. Aliases are canonicalized
+        internally for stable cache keys. For combined cortex+subcortex parcellations, pass a
+        ``(cx_method, sc_method)`` tuple or a ``"cx_method+sc_method"`` shorthand string (e.g.
+        ``"spin+moran"``) to use a spin test for cortex and a distance-based method for
+        subcortex (subcortex cannot itself be spun — ``sc_method`` must not be a spin method).
+        There is no implicit default here: this function always requires ``method`` to be
+        given explicitly; the "moran" default seen elsewhere in NiSpace is resolved one level
+        up, in ``Parcellation.get_null_space()`` / ``core.permute._get_null_maps``.
+    data : array-like, pandas Series, or pandas DataFrame
+        One or more parcellated maps to generate nulls for, shape ``(n_parcels,)`` or
+        ``(n_maps, n_parcels)``. A DataFrame's index (or a Series' name) becomes the label(s)
+        attached to the returned :class:`~nispace.core.nullmaps.NullMaps`.
+    parcellation : Parcellation, NIfTI image, GIfTI image, tuple of two GIfTI images, str, or None
+        The parcellation the data is defined on. Passing a :class:`~nispace.core.parcellation.Parcellation`
+        object is preferred — it lets this function reuse already-cached distance/spin matrices
+        and metadata instead of recomputing them. Can be ``None`` if a usable ``dist_mat`` is
+        already supplied, or for ``method="random"``, which needs no spatial information at all.
+    dist_mat : array-like or tuple of two array-likes, optional
+        Precomputed parcel-by-parcel distance matrix — a single 2D array (e.g. volumetric/MNI)
+        or a ``(dist_lh, dist_rh)`` tuple (surface, one matrix per hemisphere). If given,
+        distance computation is skipped. Ignored for spin methods and for ``"random"``. If
+        omitted for a distance-based method, it is computed from ``parcellation`` via
+        :func:`get_distance_matrix`.
+    spin_mat : tuple, optional
+        Precomputed spin/rotation data for a spin-test ``method``. Expected shape depends on
+        the method: a ``(spins_lh, spins_rh)`` pair of 2D int arrays (as returned by
+        :func:`generate_spins`/``generate_baum_spins``) for ``"alexander_bloch"``/``"baum"``,
+        or a ``(T_lh, T_rh)`` pair of 3D arrays (as returned by ``generate_cornblath_mat``) for
+        ``"cornblath"``/``"spin"``. Regenerated (with a warning) if shape/type don't match; for
+        ``"vasa"``/``"hungarian"`` any provided ``spin_mat`` is always discarded and regenerated,
+        since these methods can't reuse a precomputed rotation set.
+    parc_space : str, optional
+        Reference space of the parcellation (e.g. ``"mni152"``, ``"fsaverage"``, ``"fsLR"``).
+        Required unless it can be inferred from ``dist_mat``'s type (array → assumed
+        ``"mni152"``, tuple → assumed ``"fsaverage"``, both with a warning) or a
+        ``Parcellation`` object.
+    parc_hemi : list of str, optional
+        Hemispheres present, e.g. ``["L", "R"]`` or ``["L"]``. Required for spin methods.
+    parc_symmetric : bool, default=False
+        Whether the parcellation is left-right symmetric. Only relevant to
+        ``lr_mirror_dist_mat`` (forced off with a warning if this is ``False``).
+    n_nulls : int, default=1000
+        Number of null maps/permutations to generate per input map.
+    parc_resample : int or str, default=2
+        Forwarded to :func:`get_distance_matrix` when a distance matrix must be computed:
+        target voxel size (mm) for volumetric resampling, or a target density string for
+        surface resampling.
+    centroids : bool, default=False
+        Forwarded to :func:`get_distance_matrix`: use parcel centroid-to-centroid distances
+        (faster) instead of mean voxel/vertex-to-voxel/vertex distances (more precise).
+    parc_idc_lh, parc_idc_rh : array-like of int, optional
+        Column positions in ``data`` belonging to the left/right hemisphere. Required for spin
+        methods. For distance-based methods, used to determine per-hemisphere null generation
+        and ``lr_mirror_dist_mat``. If only one is given, the other is inferred as its
+        complement (with a warning).
+    parc_idc_sc : array-like of int, optional
+        Column positions in ``data`` belonging to subcortex. Required when ``method`` is a
+        ``(cx_method, sc_method)`` tuple (raises ``ValueError`` if missing); the complement
+        becomes the cortex index set.
+    lr_mirror_dist_mat : bool, default=False
+        If True, average the LH and RH (or cortex/subcortex) distance-matrix blocks together
+        before generating nulls, so the same spatial null structure is imposed symmetrically on
+        both, and symmetrize NaNs in ``data`` across hemispheres accordingly. Requires
+        ``parc_symmetric=True`` (else disabled with a warning); raises ``ValueError`` if the
+        averaged blocks aren't numerically close afterward (a sanity check on
+        ``parc_idc_lh``/``parc_idc_rh``).
+    split_hemi : bool, optional
+        Whether to generate nulls separately per hemisphere block. Defaults to whether
+        ``dist_mat`` is a tuple (surface) or not (volumetric).
+    parc_name : str, optional
+        Informational label, forwarded through recursive split-path calls; not otherwise used.
+    dist_mat_sc, parc_space_sc : optional
+        Precomputed subcortex-only distance matrix and its space, used in the split
+        (``sc_method is not None``) path to avoid ever computing a full combined distance
+        matrix. Preferred over slicing a full ``dist_mat``.
+    dist_mat_cx, parc_space_cx : optional
+        Same as above, for the cortex-only sub-call in the split path (only relevant when
+        ``cx_method`` is not itself a spin method).
+    dtype : data-type, default=float
+        Output dtype for the returned null maps (and for internal distance-matrix arrays).
+    n_proc : int, default=1
+        Parallel workers: used both inside :func:`get_distance_matrix` and to parallelize null
+        generation across the rows (maps) of ``data`` via ``joblib.Parallel``.
+    seed : int, optional
+        Base random seed. If given, row ``i`` of ``data`` is seeded with ``seed + i`` — this
+        keeps results reproducible under parallelism, but means rows are not independently
+        drawn in the strict i.i.d. sense. If omitted, a random base seed is drawn once.
+    verbose : bool, default=True
+        Whether to print progress messages and progress bars.
+    return_dict : bool, default=False
+        Deprecated. If True, returns a plain ``{label: null_array}`` dict instead of a
+        :class:`~nispace.core.nullmaps.NullMaps` object. The returned ``NullMaps`` already
+        supports dict-like access, so there is no remaining reason to use this.
+    **kwargs
+        Forwarded to the underlying null-generating function for distance-based methods —
+        e.g. ``fit_variogram``, ``procedure``, ``joint``, ``n_components`` for
+        :func:`nulls_moran`; ``resample``, ``batch_size`` for :func:`nulls_burt2020`. NiSpace's
+        higher-level API (:meth:`~nispace.api.NiSpace.permute`) exposes these via ``maps_*``-prefixed
+        keyword arguments that get stripped and forwarded here.
+
+    Returns
+    -------
+    null_maps : NullMaps
+        The generated null maps, shape ``(n_maps, n_nulls, n_parcels)``, labeled by
+        ``data``'s index/name (or a positional range if unlabeled). A plain dict instead if
+        ``return_dict=True`` (deprecated).
+    result_mat : array-like or tuple
+        The distance matrix or spin matrix actually used — identical to what was passed in via
+        ``dist_mat``/``spin_mat`` if provided, or the freshly computed/generated one otherwise.
+        Returned so callers can cache and reuse it across repeated calls.
+
+    Raises
+    ------
+    ValueError
+        For an unrecognized ``method``; a missing ``parc_idc_sc`` when a split method is
+        requested; a spin method requested for ``sc_method``; a non-surface or incomplete
+        parcellation for spin methods; inconsistent/empty/duplicate hemisphere or subcortex
+        index sets; a non-square or missing distance-matrix block; a failed
+        ``lr_mirror_dist_mat`` symmetry check; or non-array-like ``data``.
+    TypeError
+        For an unrecognized ``parcellation`` object type.
+    ImportError
+        If ``method`` resolves to :func:`nulls_burt2020` and the optional ``brainsmash``
+        package is not installed.
+
+    Notes
+    -----
+    See :doc:`/citation` for the citation of each null method.
+    """
     verbose = set_log(lgr, verbose)
 
     # parse method: supports tuple (cx_method, sc_method) and "cx+sc" shorthand

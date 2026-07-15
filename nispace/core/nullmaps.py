@@ -33,16 +33,25 @@ class NullMaps:
         If given, data is cast to this dtype on construction.
     null_method : str, optional
         The method that generated these nulls.
-        Spatial: ``"moran"``, ``"random"``, ``"burt2018"``, ``"burt2020"``,
-        ``"cornblath"`` / ``"spin"`` (default), ``"alexander_bloch"``, ``"vasa"``, ``"hungarian"``
+        Spatial: ``"moran"`` / ``"msr"`` (default), ``"variomoran"`` / ``"variomsr"``,
+        ``"random"``, ``"burt2018"``, ``"burt2020"``,
+        ``"cornblath"`` / ``"spin"``, ``"alexander_bloch"``, ``"vasa"``, ``"hungarian"``
         (and their aliases ``"brainspace"``, ``"brainsmash"``, ``"variogram"``).
         Group: the transform name, e.g. ``"cohend"``, ``"mean"``, ``"centile"``.
         Future spatial: ``"spin+moran"`` (Stage 2 / issue #44).
     null_type : {"spatial", "group"}, default "spatial"
         ``"spatial"`` for autocorrelation-preserving null maps;
         ``"group"`` for group-permutation contrast maps.
+    null_which : {"X", "Y"}, optional
+        Identifies which set of input maps (X or Y) these nulls belong to; ``None``
+        if not applicable (e.g. group nulls).
     memmap_path : str, Path, or True, optional
         Memory-map the backing array.  ``True`` creates a temp file automatically.
+
+    Attributes
+    ----------
+    Shape/identity accessors (all read-only properties): ``n_maps``, ``n_perm``,
+    ``n_parcels``, ``shape``, ``dtype``, ``nbytes``, ``is_memmap``, ``labels``.
     """
 
     def __init__(
@@ -55,6 +64,42 @@ class NullMaps:
         null_which=None,
         memmap_path=None,
     ):
+        """
+        Construct a NullMaps directly from a 3-D array.
+
+        Prefer :meth:`from_dict` when starting from a legacy
+        ``{label: (n_perm, n_parcels) array}`` mapping.
+
+        Parameters
+        ----------
+        data : np.ndarray, shape (n_maps, n_perm, n_parcels)
+            Must be exactly 3-D.
+        labels : list of str
+            Map labels; ``len(labels)`` must equal ``data.shape[0]``.
+        dtype : dtype-like, optional
+            If given, data is cast to this dtype on construction.
+        null_method : str, optional
+            The method that generated these nulls (see class docstring).
+        null_type : {"spatial", "group"}, default "spatial"
+            Null category; see class docstring.
+        null_which : {"X", "Y"}, optional
+            Which set of input maps these nulls belong to.
+        memmap_path : str, Path, or True, optional
+            If given, immediately memory-map the array to this path via
+            :meth:`to_memmap` (``True`` uses an auto-created temp file).
+
+        Raises
+        ------
+        TypeError
+            If `data` is not an ``np.ndarray``.
+        ValueError
+            If `data` is not 3-D, or ``len(labels) != data.shape[0]``.
+
+        Notes
+        -----
+        Logs a warning if the resulting in-memory (non-memmap) array exceeds 1 GB,
+        suggesting `memmap_path` as a mitigation.
+        """
         if not isinstance(data, np.ndarray):
             raise TypeError(f"data must be np.ndarray, got {type(data)}")
         if data.ndim != 3:
@@ -109,11 +154,21 @@ class NullMaps:
         Parameters
         ----------
         d : dict
+            Mapping of map label to a (n_perm, n_parcels) array.
         dtype : dtype-like, optional
+            If given, data is cast to this dtype on construction.
         memmap_path : str, Path, or True, optional
+            Memory-map the backing array; ``True`` creates a temp file automatically.
         null_method : str, optional
-        null_type : str, optional
-        null_which : str, optional
+            The method that generated these nulls (see class docstring).
+        null_type : {"spatial", "group"}, default "spatial"
+            Null category; see class docstring.
+        null_which : {"X", "Y"}, optional
+            Which set of input maps these nulls belong to.
+
+        Returns
+        -------
+        NullMaps
         """
         labels = list(d.keys())
         # np.stack produces (n_maps, n_perm, n_parcels); works for len(d) == 1
@@ -139,34 +194,42 @@ class NullMaps:
 
     @property
     def labels(self) -> list:
+        """List of map labels, in storage order."""
         return self._labels
 
     @property
     def n_maps(self) -> int:
+        """Number of stored maps (``data.shape[0]``)."""
         return self._data.shape[0]
 
     @property
     def n_perm(self) -> int:
+        """Number of permutations per map (``data.shape[1]``)."""
         return self._data.shape[1]
 
     @property
     def n_parcels(self) -> int:
+        """Number of parcels per map (``data.shape[2]``)."""
         return self._data.shape[2]
 
     @property
     def shape(self) -> tuple:
+        """The (n_maps, n_perm, n_parcels) shape of the backing array."""
         return self._data.shape
 
     @property
     def dtype(self):
+        """The dtype of the backing array."""
         return self._data.dtype
 
     @property
     def nbytes(self) -> int:
+        """Size of the backing array in bytes."""
         return self._data.nbytes
 
     @property
     def is_memmap(self) -> bool:
+        """Whether the backing array is currently a ``np.memmap``."""
         return isinstance(self._data, np.memmap)
 
     # ------------------------------------------------------------------
@@ -174,9 +237,11 @@ class NullMaps:
     # ------------------------------------------------------------------
 
     def __len__(self) -> int:
+        """Number of stored maps (same as ``n_maps``)."""
         return self.n_maps
 
     def __contains__(self, label) -> bool:
+        """Whether *label* is a stored map label."""
         return label in self._label_to_idx
 
     def __getitem__(self, label) -> np.ndarray:
@@ -190,6 +255,7 @@ class NullMaps:
             )
 
     def keys(self):
+        """Iterate over map labels."""
         return iter(self._labels)
 
     def values(self):
@@ -197,6 +263,7 @@ class NullMaps:
         return iter(self._data)
 
     def items(self):
+        """Iterate over ``(label, 2-D (n_perm, n_parcels) view)`` pairs."""
         return zip(self._labels, self._data)
 
     @property
@@ -389,6 +456,7 @@ class NullMaps:
         }
 
     def __setstate__(self, state):
+        """Restore from a plain-array pickle state; back-fills defaults for old pickles missing null_type/null_which."""
         self._data = state["data"]
         self._labels = state["labels"]
         self._label_to_idx = {lbl: i for i, lbl in enumerate(self._labels)}

@@ -167,7 +167,6 @@ def moran_randomization(x, mem, mev,
                         n_nulls=1000,
                         procedure='singleton',
                         joint=False,
-                        tol_block=1e-3,
                         seed=None):
     """ Generate random samples from `x` based on Moran spectral randomization.
 
@@ -181,32 +180,18 @@ def moran_randomization(x, mem, mev,
         arranged in columns.
     n_nulls : int, optional
         Number of random samples. Default is 1000.
-    procedure : {'singleton', 'ortho', 'pair', 'rotate'}, optional
+    procedure : {'singleton', 'pair'}, optional
         Procedure to generate the random samples. Default is 'singleton'.
 
         - ``'singleton'``: randomly flip the sign (±1) of each MEM coefficient
           independently. Exactly preserves Moran's I per surrogate. Produces
-          2^K distinct null maps; adequate when K ≥ 15.
-        - ``'ortho'``: eigenvalue-weighted spherical rotation. Whitens the
-          K coefficients by sqrt(eigenvalue), applies a Haar-random K×K
-          orthogonal matrix, unwhitens, then renormalizes to preserve the
-          coefficient norm. Produces a continuous (infinite) null
-          distribution. The rotation is biased toward the dominant spatial
-          modes by the eigenvalue weighting; Moran's I varies slightly
-          across surrogates (not exactly preserved). Recommended when
-          n_perm > 2^K and a continuous null distribution is desired.
+          2^K distinct null maps.
         - ``'pair'``: sign flip followed by random 2D rotations on pairs of
           coefficients. Continuous but does not preserve Moran's I; included
           for reference only.
-        - ``'rotate'``: Haar-random rotation within degenerate eigenvalue
-          blocks; falls back to sign flip for non-degenerate eigenvalues (the
-          common case for brain parcellations). Included for reference only.
     joint : boolean, optional
         If True variables are randomized jointly. Otherwise, each variable is
         randomized separately. Default is False.
-    tol_block : float, optional
-        Eigenvalue difference threshold for degenerate block detection
-        (used by 'rotate' only). Default is 1e-3.
     seed : int or None, optional
         Random state. Default is None.
 
@@ -280,7 +265,7 @@ class MoranRandomization(BaseEstimator):
 
     Parameters
     ----------
-    procedure : {'singleton', 'ortho', 'pair', 'rotate'}, optional
+    procedure : {'singleton', 'pair'}, optional
         Procedure to generate the random samples. Default is 'singleton'.
         See :func:`.moran_randomization` for full description of each option.
     spectrum : {'all', 'nonzero'}, optional
@@ -295,9 +280,6 @@ class MoranRandomization(BaseEstimator):
     tol : float, optional
         Minimum value for an eigenvalue to be considered non-zero.
         Default is 1e-6.
-    tol_block : float, optional
-        Minimum value for an eigenvalue to be considered non-zero.
-        Default is 1e-3.
     seed : int or None, optional
         Random state. Default is None.
 

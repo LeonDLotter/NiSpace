@@ -123,6 +123,42 @@ class Parcellation:
     - Custom parcellations  → `Parcellation.from_path(...)`
     - Integrated library    → `Parcellation.from_nispace_library(...)`
     - Legacy (deprecated)   → `Parcellation(...).fit()`
+
+    Attributes
+    ----------
+    spaces : list of str
+        Names of all spaces this parcellation has data for.
+    has_surface : bool
+        Whether any registered space (or, for combined parcellations, the
+        cortex component) is a surface space.
+    default_null_method : str or tuple
+        Recommended null method for this parcellation, per :meth:`get_null_space`.
+
+    All other state (images, distance/spin matrices, per-hemisphere indices,
+    label arrays, etc.) is stored on private, underscore-prefixed attributes
+    and is not meant to be accessed directly — use the ``get_*`` methods
+    instead, which resolve lazily-loaded data and default to the active space.
+
+    Notes
+    -----
+    **Label convention**: ``_labels[i]`` corresponds to the 1-based
+    parcellation image value ``i + 1``. After :meth:`select_hemi`, labels
+    are filtered to the kept subset but image values are left unchanged
+    (voxels for dropped parcels are zeroed out in NIfTI images instead of
+    relabeled). The number of columns in parcellated data must always equal
+    ``len(_labels)``.
+
+    **Construction**: prefer the classmethod constructors
+    (:meth:`from_path` for a custom user image, :meth:`from_nispace_library`
+    for a parcellation shipped with NiSpace) over calling ``__init__``
+    directly — see :meth:`__init__` for why.
+
+    **Single active space**: even though a `Parcellation` can hold data for
+    several spaces at once, only one is "active" at a time (`_space`, set by
+    :meth:`set_active_space`). Backward-compatible single-value properties
+    like ``_image_obj``/``_dist_mat``/``_idc_byhemi`` always resolve against
+    the active space; multi-space-aware access goes through the ``get_*``
+    methods with an explicit ``space`` argument.
     """
 
     # ------------------------------------------------------------------
@@ -141,6 +177,50 @@ class Parcellation:
         # hemisphere prefix strings used by make_bilateral / _bilateral_labels_match
         lh_prefix="hemi-L_", rh_prefix="hemi-R_",
     ):
+        """Low-level constructor — prefer :meth:`from_path` or :meth:`from_nispace_library`.
+
+        Most callers should not call ``Parcellation(...)`` directly. The
+        classmethod constructors populate a fully-fitted, multi-space
+        instance in one step (loading images, inferring space/level/hemi,
+        validating); this bare constructor only sets up empty per-space
+        stores plus, optionally, legacy single-space state that requires a
+        follow-up call to :meth:`fit` to actually populate. It exists for
+        backward compatibility with pre-multi-space code that constructed a
+        `Parcellation` directly from arrays.
+
+        Parameters
+        ----------
+        parcellation : str, Path, nib.Nifti1Image, nib.GiftiImage, or tuple, optional
+            Legacy single-space image source. Only consumed by :meth:`fit`;
+            ignored by the classmethod constructors.
+        space : str, optional
+            Space name for the legacy single-space path.
+        labels : sequence of str, optional
+            Parcel label strings, ``labels[i]`` ↔ 1-based image value ``i + 1``.
+        resolution : str, optional
+            Legacy resolution/density override for the legacy single-space path.
+        hemi : str or sequence of str, optional
+            Legacy hemisphere override for the legacy single-space path.
+        symmetric : bool, default False
+            Whether LH/RH parcels are geometrically symmetric (label-matchable
+            via `lh_prefix`/`rh_prefix`). Required for :meth:`make_bilateral`.
+        labels_lh, labels_rh, labels_img_lh, labels_img_rh, idc_lh, idc_rh : optional
+            Legacy per-hemisphere label/index overrides, applied verbatim by
+            :meth:`fit` instead of being computed from the image.
+        dist_mat, spin_mat : optional
+            Legacy single-space distance/spin matrix, consumed by :meth:`fit`.
+        name : str, optional
+            Identifier used in log messages.
+        level : {"cortex", "subcortex", "combined"}, optional
+            Anatomical level. Inferred from the image if not given.
+        is_combined : bool, default False
+            Whether this is a merged cortex+subcortex parcellation.
+        cx_name, sc_name : str, optional
+            Component names for a combined parcellation.
+        lh_prefix, rh_prefix : str, default "hemi-L_", "hemi-R_"
+            Label prefixes used by :meth:`make_bilateral` and the module-level
+            `_bilateral_labels_match` helper to pair LH/RH parcels by name.
+        """
         # --- shared (space-independent) ---
         self._name = name
         self._level = level          # "cortex" | "subcortex" | "combined"
@@ -624,7 +704,22 @@ class Parcellation:
     # ------------------------------------------------------------------
 
     def fit(self):
-        """Single-space fit from legacy __init__ arguments (backward compat)."""
+        """Single-space fit from legacy __init__ arguments (backward compat).
+
+        Loads the image passed as ``parcellation=`` at construction time,
+        applies any legacy per-hemisphere overrides (`idc_lh`/`idc_rh`,
+        `labels_lh`/`labels_rh`, etc.), and activates that one space.
+
+        Notes
+        -----
+        Legacy method, predating the multi-space `from_path`/
+        `from_nispace_library` classmethod constructors. New code should use
+        those instead of ``Parcellation(...).fit()``.
+
+        Returns
+        -------
+        self
+        """
         if self._legacy_source is None:
             lgr.warning("Parcellation.fit() called but no source image was provided.")
             return self
@@ -674,6 +769,26 @@ class Parcellation:
 
         `image` may be a loaded nib object, a path string, or a tuple thereof.
         Image loading is deferred until the space is activated or accessed.
+
+        Parameters
+        ----------
+        space : str
+            Space name (e.g. ``"MNI152NLin6Asym"``, ``"fsLR"``).
+        image : nib.Nifti1Image, nib.GiftiImage, tuple, str, or Path, optional
+            Parcellation image for *space*. A loaded object, or a path/tuple
+            of paths to be lazy-loaded on first access.
+        dist_mat : np.ndarray, tuple, dict, or tuple of dict, optional
+            Distance matrix for *space*. A loaded array/tuple, or a lazy-load
+            spec dict (``{"path_template", "spec", "gf_kw"}``) resolved by
+            `_ensure_dist_mat_loaded` on first access.
+        spin_mat : tuple, optional
+            Spin matrix for *space*, either a loaded ``(spins_lh, spins_rh)``
+            tuple or a lazy spec tuple resolved by `_ensure_spin_mat_loaded`.
+
+        Returns
+        -------
+        None
+            Mutates the instance in place.
         """
         if image is not None:
             self._images[space] = image
@@ -814,6 +929,23 @@ class Parcellation:
 
         Loads the image if necessary, computes derived attributes, and sets
         `_space`.  Must be called by NiSpace.fit() before using the Parcellation.
+
+        Parameters
+        ----------
+        space : str
+            Space name to activate; must already have been registered via
+            :meth:`add_space` or one of the classmethod constructors.
+
+        Raises
+        ------
+        ValueError
+            If *space* was never registered for this parcellation.
+
+        Returns
+        -------
+        None
+            Mutates `_space` (and, for combined parcellations, `_cx_idc_lh`/
+            `_cx_idc_rh`) in place.
         """
         if space not in self._images:
             lgr.critical_raise(
@@ -878,6 +1010,17 @@ class Parcellation:
 
         Requires a symmetric parcellation (``_symmetric=True``).
         Label matching is done by stripping ``_lh_prefix`` / ``_rh_prefix``.
+
+        Raises
+        ------
+        ValueError
+            If `_symmetric` is False, if `_labels` is missing/empty, or if
+            LH/RH label matching fails (some labels lack a matching
+            counterpart after stripping the hemisphere prefixes).
+
+        Returns
+        -------
+        self
         """
         if self._bilateral:
             return self
@@ -1161,7 +1304,22 @@ class Parcellation:
     def get_image_for_dataspace(self, data_space):
         """Return the space name that best matches *data_space*.
 
-        Raises ValueError if no compatible space is found.
+        Parameters
+        ----------
+        data_space : str or None
+            Space name of the input data to match against this parcellation's
+            registered spaces. If ``None``, the first registered space is
+            returned without any matching logic.
+
+        Returns
+        -------
+        str
+            Name of the matching registered space.
+
+        Raises
+        ------
+        ValueError
+            If no registered space is compatible with *data_space*.
         """
         if data_space is None:
             return self.spaces[0]
@@ -1180,6 +1338,31 @@ class Parcellation:
 
         If not preloaded and *compute_if_missing* is True, computes it on the
         fly and caches the result.
+
+        Parameters
+        ----------
+        space : str, optional
+            Space to fetch the distance matrix for. Defaults to `_space`.
+        compute_if_missing : bool, default True
+            If no distance matrix is registered/cached for *space*, compute
+            one via :func:`nispace.nulls.get_distance_matrix`. If False,
+            return ``None`` instead.
+        resample : int, default 2
+            Volume-image resampling factor forwarded to
+            :func:`nispace.nulls.get_distance_matrix` (only used when computing).
+        centroids : bool, default False
+            Whether to compute centroid-to-centroid distances instead of
+            full voxel/vertex-averaged distances (only used when computing).
+        n_proc : int, default 1
+            Number of parallel processes for the computation (only used when
+            computing).
+
+        Returns
+        -------
+        np.ndarray, tuple of np.ndarray, or None
+            The distance matrix (or ``(dist_lh, dist_rh)`` for surface
+            spaces), or ``None`` if unavailable and *compute_if_missing* is
+            False.
         """
         space = space or self._space
         self._ensure_dist_mat_loaded(space)
@@ -1205,7 +1388,21 @@ class Parcellation:
         return dm
 
     def get_spin_mat(self, space=None):
-        """Return spin matrix for *space* (defaults to active space)."""
+        """Return spin matrix for *space* (defaults to active space).
+
+        Parameters
+        ----------
+        space : str, optional
+            Space to fetch the spin matrix for. Defaults to `_space`.
+
+        Returns
+        -------
+        tuple of np.ndarray, or None
+            ``(spins_lh, spins_rh)`` — format depends on the spin method
+            that generated it (2D parcel-index arrays for the original/baum
+            methods, 3D rotation-matrix arrays for cornblath). ``None`` if no
+            spin matrix is registered for *space*.
+        """
         space = space or self._space
         self._ensure_spin_mat_loaded(space)
         return self._spin_mats.get(space)
@@ -1215,6 +1412,23 @@ class Parcellation:
 
         Returns a ``nib.Nifti1Image`` for MNI spaces and a
         ``(lh_GiftiImage, rh_GiftiImage)`` tuple for surface spaces.
+
+        Parameters
+        ----------
+        space : str, optional
+            Space to fetch the image for. Defaults to `_space`.
+
+        Returns
+        -------
+        nib.Nifti1Image or tuple of nib.GiftiImage
+            The parcellation image, lazy-loaded from its stored path if
+            necessary.
+
+        Raises
+        ------
+        ValueError
+            If *space* is ``None`` and no active space has been set, or if
+            *space* was never registered for this parcellation.
         """
         space = space or self._space
         if space is None:
@@ -1231,43 +1445,119 @@ class Parcellation:
         return self._images[space]
 
     def get_labels(self):
-        """Return parcel labels (space-independent)."""
+        """Return parcel labels (space-independent).
+
+        Returns
+        -------
+        np.ndarray of str
+            ``_labels[i]`` corresponds to 1-based image value ``i + 1``.
+        """
         return self._labels
 
     def get_hemi(self, space=None):
-        """Return hemisphere tuple, e.g. ``('L', 'R')``, for *space* (default: active space)."""
+        """Return hemisphere tuple, e.g. ``('L', 'R')``, for *space* (default: active space).
+
+        Parameters
+        ----------
+        space : str, optional
+
+        Returns
+        -------
+        tuple of str, or None
+            ``("L", "R")`` for bilateral surface, ``("L",)``/``("R",)`` for
+            unilateral surface, ``None`` for volume spaces.
+        """
         space = space or self._space
         return self._hemi_dict.get(space)
 
     def get_idc_byhemi(self, space=None):
-        """Return ``{'L': array, 'R': array}`` of parcel indices for *space* (default: active space)."""
+        """Return ``{'L': array, 'R': array}`` of parcel indices for *space* (default: active space).
+
+        Parameters
+        ----------
+        space : str, optional
+
+        Returns
+        -------
+        dict
+            0-based indices into `_labels`, keyed by hemisphere.
+        """
         space = space or self._space
         return self._idc_byhemi_dict.get(space, {"L": None, "R": None})
 
     def get_labels_byhemi(self, space=None):
-        """Return ``{'L': array, 'R': array}`` of parcel labels for *space* (default: active space)."""
+        """Return ``{'L': array, 'R': array}`` of parcel labels for *space* (default: active space).
+
+        Parameters
+        ----------
+        space : str, optional
+
+        Returns
+        -------
+        dict
+            Label strings, keyed by hemisphere.
+        """
         space = space or self._space
         return self._labels_byhemi_dict.get(space, {"L": None, "R": None})
 
     def get_resolution(self, space=None):
-        """Return resolution / density string for *space* (default: active space)."""
+        """Return resolution / density string for *space* (default: active space).
+
+        Parameters
+        ----------
+        space : str, optional
+
+        Returns
+        -------
+        str or None
+        """
         space = space or self._space
         return self._resolution_dict.get(space)
 
     def is_surface_space(self, space=None):
-        """Return ``True`` if *space* (default: active) is a surface space."""
+        """Return ``True`` if *space* (default: active) is a surface space.
+
+        Parameters
+        ----------
+        space : str, optional
+
+        Returns
+        -------
+        bool
+        """
         space = space or self._space
         return self._is_surface_dict.get(space, False)
 
     def get_surface_for_spins(self, preferred="fsLR"):
         """Return *(surface_image, spin_mat, space_name)* for spin tests.
 
-        For surface-primary parcellations returns the primary image.
-        For MNI-primary cortex parcellations with available surface spaces,
-        lazy-loads the surface image and returns it.
-        For combined cx+sc parcellations, returns the cortex-only surface
-        stored in `_cx_surface`.
-        Returns *(None, None, None)* when no surface data is available.
+        Parameters
+        ----------
+        preferred : str, default "fsLR"
+            Preferred surface space name, tried first in each lookup tier
+            before falling back to ``"fsaverage"``/``"fsLR"``.
+
+        Returns
+        -------
+        image : tuple of nib.GiftiImage, or None
+            ``(lh, rh)`` surface image, lazy-loaded if necessary.
+        spin_mat : tuple of np.ndarray, or None
+            Spin matrix for the returned surface, lazy-loaded if necessary.
+        space : str or None
+            Name of the surface space the image/spin_mat belong to.
+
+            All three are ``None`` if no surface parcellation data is
+            available (spin tests require a surface space).
+
+        Notes
+        -----
+        Resolution proceeds through three tiers, in order: (1) if this
+        parcellation is itself surface-primary, its primary image/spin_mat
+        are returned directly; (2) for combined cortex+subcortex
+        parcellations, the cortex-only surface stored in `_cx_surface` is
+        used (subcortex parcels don't participate in spin tests); (3) for an
+        MNI-primary parcellation that also has a surface space registered as
+        a secondary space, that surface image is lazy-loaded and returned.
         """
         # 1. already surface-primary
         if self._is_surface:
@@ -1392,14 +1682,15 @@ class Parcellation:
 
         Priority
         --------
-        Spin (cornblath) — cortex-only parcellation with a surface space:
+        Combined (cx+sc): if ``_NULL_DEFAULT_COMBINED`` is a tuple ``(cx_method, sc_method)``,
+            returns ``((mni_space, cx_method), (mni_space, sc_method))`` — a split strategy.
+            If it is a plain string, returns ``(mni_space, method)`` — unified strategy.
+        Cortex-only with surface space: ``_NULL_DEFAULT_CX_SURF``
             fsLR  >  fsaverage  >  any surface space name
-        Moran — volumetric, bilateral, or combined (cx+sc) parcellations:
+        Cortex-only or bilateral, MNI-only: ``_NULL_DEFAULT_CX_VOL``
             MNI152NLin6Asym  >  MNI152NLin2009cAsym  >  any MNI  >  first available
 
-        For combined parcellations moran runs on the full combined distance matrix
-        (cx+sc together), which is more robust than the split cornblath+moran
-        approach at moderate spatial autocorrelation (GRF alpha < 3).
+        Defaults are set in ``core/constants.py`` and apply to all three cases.
         """
         def _is_surf(s):
             return any(k in s.lower() for k in ("fsa", "fsaverage", "fslr", "fs_lr"))
@@ -1513,7 +1804,25 @@ class Parcellation:
     # ------------------------------------------------------------------
 
     def get_dist_mat_legacy(self, resample=2, centroids=False, n_proc=1, recalculate=False):
-        """Backward-compat wrapper used by api._get_dist_mat."""
+        """Backward-compat wrapper used by api._get_dist_mat.
+
+        Parameters
+        ----------
+        resample, centroids, n_proc : see :meth:`get_dist_mat`
+        recalculate : bool, default False
+            If True, ignore any cached distance matrix for the active space
+            and recompute it.
+
+        Returns
+        -------
+        np.ndarray or tuple of np.ndarray
+            The distance matrix for the active space.
+
+        Notes
+        -----
+        Kept only for `api.py`'s internal `_get_dist_mat` compatibility
+        helper. New code should call :meth:`get_dist_mat` directly.
+        """
         if self._dist_mat is not None and not recalculate:
             return self._dist_mat
         return self.get_dist_mat(

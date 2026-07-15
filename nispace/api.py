@@ -580,8 +580,67 @@ class NiSpace:
                  n_components=None, min_ev=None, fa_method="minres", fa_rotation="promax",
                  seed=None, store=True, verbose=None):
         """
-        Performs dimensionality reduction on X data.
-        Under construction.
+        Reduce the X data to a smaller number of maps/components before
+        colocalization -- either by aggregating (mean/median, optionally per
+        ``"set"``) or by a proper dimensionality reduction (PCA/ICA/FA). The
+        result is stored under ``reduction`` and picked up by
+        :meth:`get_x`/:meth:`colocalize`/etc. via their ``X_reduction`` argument.
+
+        Parameters
+        ----------
+        reduction : str
+            One of:
+
+            * ``"mean"`` / ``"median"`` -- parcel-wise mean/median across X maps
+              (optionally per ``"set"``, see ``mean_by_set``).
+            * ``"pca"`` -- principal component analysis (``sklearn.PCA``).
+            * ``"ica"`` -- independent component analysis (``sklearn.FastICA``);
+              has no explained-variance concept, so ``min_ev`` has no effect.
+            * ``"fa"`` -- factor analysis (requires the optional
+              ``factor_analyzer`` package).
+
+            Any other value logs an error and returns ``None`` rather than
+            raising.
+        mean_by_set : bool, default False
+            For ``"mean"``/``"median"``, group X maps by their ``"set"``
+            MultiIndex level before aggregating (silently disabled if X has no
+            ``"set"`` level).
+        weighted_mean : bool, default False
+            For ``"mean"``/``"median"``, weight maps by a ``"weight"``
+            MultiIndex level on X (silently disabled if absent).
+        n_components : int, optional
+            Number of components to keep for ``"pca"``/``"ica"``/``"fa"``.
+            Ignored if not applicable. Defaults to the maximum possible 
+            (one component per parcel) if neither this nor ``min_ev`` is given.
+        min_ev : float, optional
+            Minimum cumulative explained-variance (EV) fraction; if given, overrides
+            ``n_components`` for ``"pca"``/``"fa"`` by picking the smallest
+            sufficient number of components/factors, which's cumulative EV exceeds 
+            ``min_ev``. Ignored if not applicable.
+        fa_method : str, default "minres"
+            Factor-extraction method, forwarded to ``factor_analyzer.FactorAnalyzer``. 
+            Only used for ``"fa"``.
+        fa_rotation : str, default "promax"
+            Rotation method, forwarded to ``factor_analyzer.FactorAnalyzer``.
+            Only used for ``"fa"``.
+        seed : int, optional
+            Random seed. Only used by ``"ica"``.
+        store : bool, default True
+            Store the reduced X (accessible via ``get_x(X_reduction=reduction)``)
+            and, for ``"pca"``/``"ica"``/``"fa"``, its per-component metadata
+            (explained variance, loadings), and remember ``reduction`` as the
+            "last used" X reduction for subsequent calls.
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+
+        Returns
+        -------
+        pandas.DataFrame or tuple
+            For ``"mean"``/``"median"``: the reduced X DataFrame. For
+            ``"pca"``/``"ica"``/``"fa"``: a tuple ``(X_reduced, ev, loadings)``,
+            where ``ev`` is the per-component explained variance (``None`` for
+            ``"ica"``) and ``loadings`` is a DataFrame of each original
+            parcel/map's association with each retained component.
         """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.reduce_x() - X dimensionality reduction. ***")
@@ -691,6 +750,84 @@ class NiSpace:
                 combat_train=None, combat_model=None, combat_kwargs=None,
                 plot_design_between=False,
                 n_proc=None, replace=True, verbose=None):
+        """
+        Regress covariates out of Y, "within" (across parcels, per map) and/or
+        "between" (across maps/subjects, per parcel), with optional ComBat site
+        harmonization for the between-subject case.
+
+        "Within" regression removes a per-parcel confound from each Y map
+        individually -- e.g. regressing a grey-matter probability map out of an
+        MRI map so that the result reflects tissue-corrected signal rather than 
+        partial-volume effects. "Between" regression removes subject/map-level 
+        confounds shared across parcels -- e.g. age, sex, or scan site -- fit 
+        and applied jointly across all parcels via one design matrix. 
+        The two are independent and can be combined in one call.
+
+        Parameters
+        ----------
+        how : str or list of str
+            Which regression(s) to perform: ``"within"``, ``"between"``, or both.
+        covariates_within : array-like or "z", optional
+            Per-parcel covariate map(s) to regress out of each Y map. Only used if
+            ``"within" in how``; ignored (with no regression performed) if
+            ``None``. The literal string ``"z"``/``"Z"`` regresses the Z data
+            provided at :meth:`fit` instead of an explicit array (raises if no Z
+            was provided). A single covariate map is broadcast to every Y map
+            unless ``within_y_specific=True``, in which case one covariate map per
+            Y row is expected.
+        covariates_between : array-like, Series, or DataFrame, optional
+            Subject/map-level covariate(s) to regress out across parcels. Only
+            used if ``"between" in how``; ignored if ``None``. Categorical columns
+            (object/string/categorical dtype, or a column literally named
+            ``"site"``) are one-hot encoded; continuous columns are used as-is.
+        protect : array-like, Series, or DataFrame, optional
+            Covariates to hold constant (partial out) while regressing
+            ``covariates_between``, without themselves being removed from Y --
+            typically group/subject design columns that should not be regressed
+            away. Only relevant with ``"between"``.
+        within_y_specific : bool, default False
+            If True, ``covariates_within`` supplies one covariate map per Y row
+            instead of a single map broadcast to all rows.
+        combat : bool, default False
+            Apply ComBat harmonization during the between-subject step. Requires
+            a ``"site"`` column in ``covariates_between``; otherwise silently
+            disabled with a warning. Requires the optional ``neuroHarmonize``
+            package.
+        combat_protect : array-like, Series, or DataFrame, optional
+            Additional covariates ComBat should protect (preserve biological
+            variance for) without using them as regression covariates.
+        combat_keep : optional
+            Deprecated and ignored; all regression covariates are now
+            automatically protected during ComBat harmonization.
+        combat_train : array-like of bool, optional
+            Boolean vector marking a training subset: if valid, ComBat is fit only
+            on this subset and applied to the rest. Ignored (full-sample fit) if
+            the length doesn't match or values aren't boolean-like.
+        combat_model : optional
+            A previously fitted ComBat model to apply (rather than refit). If
+            ``None``, a fresh model is fit and stored (together with the
+            covariates used) on the object for later reuse.
+        combat_kwargs : dict, optional
+            Additional keyword arguments forwarded to neuroHarmonize's
+            ``harmonizationLearn``.
+        plot_design_between : bool, default False
+            Plot the between-subject design matrix (diagnostic only, no effect on
+            the result).
+        n_proc : int, optional
+            Number of parallel processes for the per-parcel/per-subject
+            regression loops. Defaults to the value set at init.
+        replace : bool, default True
+            Overwrite ``self`` 's stored Y with the cleaned result. If False, the
+            cleaned data is computed and returned but the object's Y is left
+            untouched.
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+
+        Returns
+        -------
+        pandas.DataFrame
+            The cleaned Y data (same shape, columns, and index as the input Y).
+        """
         from .core.clean_y import _clean_y_within, _clean_y_between
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.clean_y() - Y covariate regression. ***")
@@ -768,6 +905,79 @@ class NiSpace:
         
     def transform_y(self, transform, groups=None, subjects=None, Y=None,
                     Y_name="Y", store=True, verbose=None):
+        """
+        Apply a group-comparison or aggregation formula to Y, turning per-subject
+        or per-group raw maps into a single comparison/summary map (e.g. an effect
+        size, a z-score, or a group mean) that colocalize() can then use in place
+        of the raw Y data.
+
+        Parameters
+        ----------
+        transform : str
+            Formula string, e.g. ``"hedges(a,b)"``, ``"zscore(a,b)"``,
+            ``"mean(y)"``. Supported formulas (``y`` = the whole input; ``a``/
+            ``b`` = the two groups defined by ``groups``, smaller/
+            alphabetically-first value -> ``a``):
+
+            * ``y`` -- identity (no-op passthrough)
+            * ``mean(y)``, ``median(y)``, ``std(y)``, ``var(y)`` -- summary
+              statistic across rows, per parcel
+            * ``elemdiff(a,b)`` / ``a-b`` -- elementwise ``a - b`` (paired,
+              requires ``subjects``)
+            * ``meandiff(a,b)`` / ``mean(a)-mean(b)`` -- difference of means
+            * ``center(a,b)`` / ``a-mean(b)`` -- ``a`` centered on ``b``'s mean
+            * ``cohen(a,b)`` -- Cohen's d, independent groups
+            * ``pairedcohen(a,b)`` -- Cohen's d, paired/dependent groups
+              (requires ``subjects``)
+            * ``hedges(a,b)`` -- Hedges' g (bias-corrected Cohen's d)
+            * ``zscore(a)`` / ``zscore(a,b)`` -- z-score of ``a`` against itself
+              or against reference group ``b``
+            * ``rzscore(a)`` / ``rzscore(a,b)`` -- robust (median/MAD) z-score;
+              warns if the reference group has few observations (n<20/n<30)
+            * ``prc(a,b)`` -- percent change ``(a-b)/a*100`` (paired, requires
+              ``subjects``)
+            * ``logfc(a,b)`` -- log fold-change (auto-shifted to stay defined for
+              data that can be negative, e.g. already z-scored/residualized)
+            * ``centile(a)`` / ``centile(a,b)`` -- percentile rank of ``a``
+              within the reference distribution
+
+            Note: ``"pairedhedges(a,b)"`` (paired/bias-corrected analogue of
+            ``"hedges(a,b)"``) is not implemented -- calling it raises
+            ``ValueError``.
+        groups : array-like, optional
+            2-level grouping vector, one entry per Y row. Required by any formula
+            referencing ``a``/``b``; not needed for ``y``-only formulas (e.g.
+            ``"mean(y)"``). Rows with NaN group labels are dropped with a
+            warning.
+        subjects : array-like, optional
+            Subject/pair identifiers, one per Y row, used to match rows across
+            groups ``a``/``b`` for paired formulas (``elemdiff``, ``pairedcohen``,
+            ``prc``). Each ID must appear exactly once per group. If omitted for a
+            paired formula, matched row order within each group is assumed
+            (with a warning).
+        Y : DataFrame, optional
+            Data to transform. Defaults to the object's own Y data (``self._Y``);
+            passing an explicit DataFrame lets this method operate on other data
+            (this is how :meth:`transform_z` reuses it for Z).
+        Y_name : str, default "Y"
+            Cosmetic label used in log messages only (e.g. ``"Z"`` when called
+            from :meth:`transform_z`); has no effect on the computation.
+        store : bool, default True
+            Store the transformed data and the resolved ``groups``/``subjects``
+            on the object (so that :meth:`colocalize`, :meth:`get_y`, and
+            :meth:`permute` can later default to this transform), and remember it
+            as the "last" Y transform for future ``Y_transform=None`` calls.
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+
+        Returns
+        -------
+        pandas.DataFrame
+            The transformed data: one row per aggregate statistic for
+            aggregate formulas (e.g. ``hedges``, ``cohen``), or one row per
+            subject/map for row-preserving formulas (e.g. ``zscore``,
+            ``centile``).
+        """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info(f"*** NiSpace.transform_{Y_name.lower()}() - {Y_name} transformation and comparison. ***")
         
@@ -901,8 +1111,48 @@ class NiSpace:
     
     def transform_z(self, transform="Y", groups="Y", subjects="Y",
                     replace=True, verbose=None):
+        """
+        Apply a :meth:`transform_y`-style formula to the object's Z data instead
+        of Y. A thin wrapper: internally calls ``transform_y(transform,
+        Y=self._Z, Y_name="Z", store=False)``, so the transform is never
+        remembered as the "last" Y transform and no per-transform history is
+        kept for Z -- ``replace=True`` (the default) simply overwrites ``self``'s
+        Z with the result.
+
+        Parameters
+        ----------
+        transform : str, default "Y"
+            Formula string, see :meth:`transform_y` for the full list. Unlike
+            ``groups``/``subjects`` below, ``"Y"`` here is **not** a sentinel for
+            "reuse the last Y transform" -- it is parsed as a literal formula,
+            which normalizes (case-insensitively) to the identity formula, i.e.
+            the default is "no transformation", not "whatever transform_y() last
+            used".
+        groups : array-like or "Y", default "Y"
+            Grouping vector for the formula (see :meth:`transform_y`). The
+            literal string ``"Y"`` (case-insensitive) is a real sentinel here:
+            it reuses whichever ``groups`` vector was set by the last
+            :meth:`transform_y` call (or ``None`` if none was set). Any other
+            value is passed through unchanged.
+        subjects : array-like or "Y", default "Y"
+            Subject/pair identifiers for the formula (see :meth:`transform_y`).
+            Same ``"Y"``-sentinel mechanism as ``groups``, reusing the last
+            :meth:`transform_y` call's ``subjects``.
+        replace : bool, default True
+            Overwrite ``self`` 's stored Z with the transformed result. If False,
+            the transformed data is computed and returned but the object's Z is
+            left untouched.
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+
+        Returns
+        -------
+        pandas.DataFrame
+            The transformed Z data -- see :meth:`transform_y`'s Returns for the
+            row-shape convention (aggregate vs. row-preserving formulas).
+        """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
-        
+
         # take groups from Y
         if isinstance(groups, str):
             if groups.lower() == "y":
@@ -935,14 +1185,132 @@ class NiSpace:
     
     # COLOCALIZE ===================================================================================
 
-    def colocalize(self, method=None, X_reduction=None, Y_transform=None, xsea=None, 
+    def colocalize(self, method=None, X_reduction=None, Y_transform=None, xsea=None,
                    xsea_aggregation_method="mean",
                    regress_z=True, zy_matched=False,
-                   X=None, Y=None, Z=None, 
+                   X=None, Y=None, Z=None,
                    store=True, n_proc=None, seed=None, verbose=None,
                    dist_mat_kwargs=None,
                    force_dict=False,
                    **kwargs):
+        """
+        Compute colocalization statistics between each X map (or set, if XSEA is
+        active) and each Y map, optionally regressing Z out of X and/or Y first.
+        This is the core computation step of the NiSpace pipeline, feeding
+        :meth:`permute`, :meth:`correct_p`, :meth:`regional_influence`, and
+        :meth:`regional_contribution`.
+
+        Parameters
+        ----------
+        method : str, optional
+            Colocalization method. Defaults to the last method used in
+            :meth:`colocalize` (raises if none has ever been set). One of:
+
+            * ``"pearson"`` -- Pearson correlation
+            * ``"spearman"`` -- Pearson correlation on ranks
+            * ``"partialpearson"`` -- Pearson with Z regressed out
+            * ``"partialspearman"`` -- Spearman with Z regressed out (Z is also
+              ranked, a "standard" partial-Spearman)
+            * ``"mi"`` -- mutual information
+            * ``"slr"`` -- simple linear regression (one X predictor at a time)
+            * ``"mlr"`` -- multiple linear regression (all X maps as joint
+              predictors)
+            * ``"dominance"`` -- dominance analysis (partitions R² across
+              predictors)
+            * ``"pls"`` -- partial least squares regression
+            * ``"pcr"`` -- principal component regression
+            * ``"lasso"``, ``"ridge"``, ``"elasticnet"`` -- regularized
+              regression with spatial (parcel-fold) cross-validation
+
+        X_reduction : str, optional
+            Label of a previously computed X dimensionality reduction (see
+            :meth:`reduce_x`) to use instead of the raw X data. Defaults to the
+            last one used (or the raw X data if none has been used).
+        Y_transform : str, optional
+            Label of a previously computed Y transform (see :meth:`transform_y`)
+            to use instead of the raw Y data. Defaults to the last one used (or
+            the raw Y data if none has been used). If this transform has not
+            been computed yet, it is run automatically (using ``groups``/
+            ``subjects`` from ``**kwargs`` if given) with a warning.
+        xsea : bool, optional
+            Aggregate X maps into sets before colocalizing (X-Set Enrichment
+            Analysis) -- requires X to have a ``"set"`` MultiIndex level.
+            Defaults to the last value used. Combined with a correlation
+            ``method`` (``"pearson"``/``"spearman"``), this requires Fisher-z
+            transformed correlations -- ``r_to_z=False`` in ``**kwargs`` is
+            overridden to ``True`` with a warning.
+        xsea_aggregation_method : str, default "mean"
+            How to aggregate per-set colocalization statistics across a set's
+            members when ``xsea`` is active: ``"mean"``, ``"median"``,
+            ``"absmean"``, ``"absmedian"``, ``"weightedmean"``, or
+            ``"weightedabsmean"`` (the weighted variants require a ``"weight"``
+            MultiIndex level on X; fall back to unweighted with a warning if
+            missing).
+        regress_z : bool, default True
+            Regress Z out of X and/or Y before colocalizing (requires Z to have
+            been provided at :meth:`fit`; a no-op otherwise). Forced on for
+            ``partial*`` methods. Defaults to the last value used.
+        zy_matched : bool, default False
+            Treat Z as having one map per Y row (rather than a single/shared Z
+            used for every Y row) -- e.g. per-subject nuisance maps matched to
+            per-subject Y maps. Incompatible with ``partial*`` methods (falls
+            back to the corresponding non-partial method with a warning).
+            Defaults to the last value used.
+        X, Y, Z : array-like or DataFrame, optional
+            Explicit data overriding the object's own fitted X/Y/Z (or the
+            resolved ``X_reduction``/``Y_transform``). Rarely needed.
+        store : bool, default True
+            Store the result on the object (accessible via
+            :meth:`get_colocalizations`), and remember ``method``,
+            ``X_reduction``, ``Y_transform``, ``xsea``, ``regress_z``, and
+            ``zy_matched`` as the "last used" settings for subsequent calls with
+            unset (``None``) arguments.
+        n_proc : int, optional
+            Number of parallel processes (one per Y row). Defaults to the value
+            set at init.
+        seed : int, optional
+            Random seed forwarded to the regularized-regression methods'
+            cross-validation splitting. Not persisted across calls.
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+        dist_mat_kwargs : dict, optional
+            Only used for ``method in {"lasso", "ridge", "elasticnet"}``.
+            Recognized keys: ``parcel_tr_te_splits`` (pre-computed spatial CV
+            splits), ``euclidean_dist_mat`` (pre-computed distance matrix),
+            ``parcel_train_pct`` (default 0.75). Remaining keys are forwarded to
+            the internal distance-matrix computation.
+        force_dict : bool, default False
+            Always return a dict even when the method produces a single
+            statistic (e.g. ``"pearson"``'s ``rho``).
+        **kwargs
+            ``groups``, ``subjects`` : optional
+                Forwarded to :meth:`transform_y` if ``Y_transform`` needs to be
+                auto-run (see above); unused otherwise.
+            ``rank`` : bool, optional
+                Rank-transform X (and Y) before colocalizing. Forced True for
+                ``"spearman"``/``"partialspearman"``; otherwise defaults to
+                False. Deliberately *not* resolved from a prior call's setting
+                (unlike the parameters above), since inheriting it across a
+                ``method`` change would silently mislabel results.
+
+            Other recognized keys are forwarded to the underlying
+            colocalization function: ``r_to_z`` (bool, default True -- Fisher-z
+            transform correlation coefficients), ``r_equal_one`` (default
+            ``"raise"`` -- behavior when a correlation is exactly 1),
+            ``adj_r2`` (bool, default True -- adjusted vs. raw R² for
+            slr/mlr/dominance/pcr), ``mlr_individual`` (bool, default False --
+            compute per-predictor unique-R² contributions for ``"mlr"``),
+            ``n_components`` (int, default 1 -- for ``"pls"``/``"pcr"``),
+            ``n_neighbors`` (for ``"mi"``), and sklearn ``Lasso``/``Ridge``/
+            ``ElasticNet`` keyword arguments for the regularized methods.
+
+        Returns
+        -------
+        pandas.DataFrame or dict of pandas.DataFrame
+            X labels (or set names, if ``xsea``) as columns, Y labels as rows.
+            A dict of ``{stat: DataFrame}`` is returned when the method produces
+            more than one statistic (e.g. ``"mlr"``) or when ``force_dict=True``.
+        """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.colocalize() - Estimating X & Y colocalizations. ***")
         
@@ -1029,7 +1397,7 @@ class NiSpace:
                      f"{X.index.get_level_values('set').value_counts().max()} samples. "
                      f"Aggregating within-set colocalizations with: {xsea_aggregation_method}.")
             if ("spearman" in method or "pearson" in method):
-                if hasattr(kwargs, "r_to_z"):
+                if "r_to_z" in kwargs:
                     if kwargs["r_to_z"] is False:
                         lgr.warning("XSEA with correlation colocalization requires Fisher's Z "
                                     "transform! Will set 'r_to_z' = True.")
@@ -1044,12 +1412,11 @@ class NiSpace:
             if not Y_transform:
                 Y = self._Y
             else:
-                if not self._check_transform(ytrans=Y_transform, raise_error=True):
+                if not self._check_transform(ytrans=Y_transform, raise_error=False):
                     lgr.warning(f"Y transform '{Y_transform}' was not run before. Running now.")
                     self.transform_y(Y_transform, groups, subjects)
-                else:
-                    with _quiet():
-                        Y = self.get_y(Y_transform=Y_transform)
+                with _quiet():
+                    Y = self.get_y(Y_transform=Y_transform)
         Y_arr = np.array(Y, dtype=dtype)
         
         # Z
@@ -1460,21 +1827,57 @@ class NiSpace:
 
     def get_regional_influence(self, method=None, stat=None, engine=None, signed=False,
                                X_reduction=None, Y_transform=None, xsea=None,
-                               pooled=None, force_dict=False, verbose=None):
+                               pooled=None, force_dict=False, verbose=None, copy=True):
         """
-        Retrieve a stored regional_influence() result.
+        Retrieve a stored :meth:`regional_influence` result.
 
         Parameters
         ----------
+        method : str, optional
+            Colocalization method whose stored result to retrieve; see
+            :meth:`regional_influence` for the list of supported methods.
+            Defaults to the last-used value.
+        stat : str, optional
+            Which colocalization stat's influence result to retrieve. Defaults
+            to the method's primary stat.
+        engine : {"analytic", "bruteforce"}, optional
+            Must match the engine actually used to compute the stored result.
+            Defaults to reproducing what ``regional_influence(engine="auto")``
+            would have picked for ``method`` (``"analytic"`` for
+            pearson/spearman/partialpearson/partialspearman/mlr, otherwise
+            ``"bruteforce"``).
         signed : bool, default False
             Must match the ``signed`` value passed to the regional_influence() call
             being retrieved.
+        X_reduction, Y_transform, xsea : optional
+            Must match the :meth:`colocalize` settings used for the stored
+            result; see :meth:`colocalize`. Default to the last-used values.
         pooled : {None, False, True, "mean", "median"}, default None
             Pool (reduce) the per-Y-row result across Y (subjects/maps). None defaults
             to whatever pooled_p was last set to elsewhere in the pipeline (e.g. by
             permute()); True is treated as "mean". Pools the per-subject delta directly
             (median of deltas, not delta of medians) -- the correct choice for this
             paired quantity.
+        force_dict : bool, default False
+            For methods that fit one joint model per Y-row (mlr/dominance/pls/
+            pcr), wrap the single-DataFrame result in a length-1 dict for a
+            uniform return type; see :meth:`regional_influence`.
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+        copy : bool, default True
+            Return independent copies rather than live references to the
+            object's internal data. Ignored (always independent) when
+            ``pooled`` is truthy, since pooling already builds new DataFrames.
+
+        Returns
+        -------
+        pandas.DataFrame or dict of pandas.DataFrame
+            See :meth:`regional_influence`'s Returns.
+
+        Raises
+        ------
+        KeyError
+            If no matching :meth:`regional_influence` result was ever computed.
         """
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
@@ -1504,6 +1907,8 @@ class NiSpace:
             pooled = self._last_settings.get("pooled_p", False)
         if pooled:
             out = _pool_region_influence(out, "mean" if pooled is True else pooled)
+        elif copy:
+            out = out.copy() if isinstance(out, pd.DataFrame) else {k: v.copy() for k, v in out.items()}
 
         if force_dict and not isinstance(out, dict):
             out = {stat: out}
@@ -1698,12 +2103,20 @@ class NiSpace:
 
 
     def get_regional_contribution(self, method=None, X_reduction=None, Y_transform=None, xsea=None,
-                                  quadrant=False, pooled=None, verbose=None):
+                                  quadrant=False, pooled=None, verbose=None, copy=True):
         """
-        Retrieve a stored regional_contribution() result.
+        Retrieve a stored :meth:`regional_contribution` result.
 
         Parameters
         ----------
+        method : str, optional
+            Colocalization method whose stored result to retrieve. Only
+            pearson/spearman/partialpearson/partialspearman are supported (the
+            methods with a bidirectional/signed primary stat); see
+            :meth:`regional_contribution`. Defaults to the last-used value.
+        X_reduction, Y_transform, xsea : optional
+            Must match the :meth:`colocalize` settings used for the stored
+            result; see :meth:`colocalize`. Default to the last-used values.
         quadrant : bool, default False
             If False (default), return the ``contribution`` values (the "whole map").
             If True, return the categorical ``quadrant`` labels ("high_high"/
@@ -1712,6 +2125,28 @@ class NiSpace:
             Pool (reduce) the per-Y-row result across Y (subjects/maps). None defaults
             to whatever pooled_p was last set to elsewhere in the pipeline. Only valid
             when ``quadrant=False`` -- pooling isn't meaningful for categorical labels.
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+        copy : bool, default True
+            Return independent copies rather than live references to the
+            object's internal data. Ignored (always independent) when
+            ``pooled`` is truthy, since pooling already builds new DataFrames.
+
+        Returns
+        -------
+        dict of pandas.DataFrame
+            Keyed by X map/set label -- all supported methods are per-X-pair,
+            so the result is always dict-shaped; see
+            :meth:`regional_contribution`'s Returns.
+
+        Raises
+        ------
+        KeyError
+            If no matching :meth:`regional_contribution` result was ever
+            computed.
+        ValueError
+            If ``quadrant=True`` and ``pooled`` is also truthy (pooling isn't
+            meaningful for categorical labels).
         """
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
@@ -1741,6 +2176,8 @@ class NiSpace:
             pooled = False if quadrant else self._last_settings.get("pooled_p", False)
         if pooled:
             out = _pool_region_influence(out, "mean" if pooled is True else pooled)
+        elif copy:
+            out = {k: v.copy() for k, v in out.items()}
 
         lgr.setLevel(loglevel)
         return out
@@ -1792,9 +2229,10 @@ class NiSpace:
             Bypasses null map generation entirely when provided and valid.
         maps_method : str, optional
             Null map generation method. Auto-selected from the parcellation when
-            not set. Options: ``"moran"`` (default for volumetric),
-            ``"alexander_bloch"`` / ``"spin"`` (surface), ``"burt2018"``,
-            ``"burt2020"``, ``"random"``.
+            not set (default: ``"moran"`` for all parcellation types). Options:
+            ``"moran"`` / ``"msr"``, ``"variomoran"`` / ``"variomsr"``,
+            ``"cornblath"`` / ``"spin"`` (surface only), ``"alexander_bloch"``,
+            ``"burt2018"``, ``"burt2020"``, ``"random"``.
         dist_mat : array-like of shape (n_parcels, n_parcels), optional
             Pre-computed geodesic distance matrix. Generated from the
             parcellation if not provided (and required by the null method).
@@ -2678,6 +3116,79 @@ class NiSpace:
 
     def correct_p(self, mc_method="meff",
                   mc_alpha=0.05, mc_dimension="array", coloc_method=None, store=True, verbose=None):
+        """
+        Apply a multiple-comparisons correction to the uncorrected p-values
+        previously computed by :meth:`permute`, storing the corrected result
+        under its own key (so several ``mc_method`` corrections of the same
+        permutation result can coexist and be retrieved separately via
+        :meth:`get_p_values`/:meth:`get_corrected_p_values`).
+
+        Parameters
+        ----------
+        mc_method : str, default "meff"
+            Correction method. One of:
+
+            * ``"meff"`` / ``"meff_galwey"`` (default) -- Šidák correction using
+              an effective number of independent tests estimated from the
+              eigenvalues of X's (and, for ``mc_dimension="array"`` with
+              multiple Y rows, also Y's) correlation matrix. [1]_
+            * ``"meff_li_ji"`` -- same Šidák-correction scheme, with an
+              alternative eigenvalue-based effective-N estimator. [2]_
+            * ``"maxT"`` -- single-step max-statistic FWER correction from the
+              permutation null computed by :meth:`permute`; requires the null
+              colocalization distributions to still be available (i.e. not
+              dropped via ``save_nulls=False``). [3]_
+            * ``"step_maxT"`` -- step-down variant of ``"maxT"``, more powerful
+              while preserving FWER control. [3]_
+            * ``"fdr_bh"`` -- Benjamini-Hochberg false discovery rate. [4]_
+            * ``"bonferroni"``, or any other method name accepted by
+              ``statsmodels.stats.multitest.multipletests`` (e.g. ``"holm"``,
+              ``"hommel"``, ``"sidak"``, ``"fdr_by"``) -- passed through as-is.
+
+        mc_alpha : float, default 0.05
+            Alpha threshold used by the correction.
+        mc_dimension : str, default "array"
+            Axis over which to correct: ``"array"`` (jointly across all X x Y
+            comparisons), ``"x"``/``"columns"`` (per X column), or
+            ``"y"``/``"rows"`` (per Y row). Not all combinations are supported by
+            every method -- e.g. ``"maxT"``/``"step_maxT"`` don't support
+            per-column correction, and for the ``meff`` methods with multiple Y
+            rows, ``"array"`` applies a joint X x Y correction that is only
+            meaningful when the Y rows are related entities examined together
+            (e.g. several disorders' effect-size maps); use ``mc_dimension="y"``
+            for independent per-Y-row correction (e.g. individual-subject maps).
+        coloc_method : str, optional
+            Restrict correction to p-values from one colocalization method
+            (useful when several methods' results are stored at once). Defaults
+            to correcting all stored uncorrected p-values.
+        store : bool, default True
+            Store the corrected p-values on the object, and remember
+            ``mc_method`` as the "last used" correction (read by
+            :meth:`get_corrected_p_values`, :meth:`plot`).
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+
+        Returns
+        -------
+        dict of pandas.DataFrame
+            Corrected p-values keyed by their internal storage key string.
+
+        References
+        ----------
+        .. [1] Galwey (2009). A new measure of the effective number of tests, a
+               practical tool for comparing families of non-independent
+               significance tests. *Genetic Epidemiology*.
+               https://doi.org/10.1002/gepi.20408
+        .. [2] Li & Ji (2005). Adjusting multiple testing in multilocus analyses
+               using the eigenvalues of a correlation matrix. *Heredity*.
+               https://doi.org/10.1038/sj.hdy.6800717
+        .. [3] Westfall & Young (1993). Resampling-Based Multiple Testing:
+               Examples and Methods for p-Value Adjustment. Wiley.
+        .. [4] Benjamini & Hochberg (1995). Controlling the False Discovery
+               Rate: A Practical and Powerful Approach to Multiple Testing.
+               *Journal of the Royal Statistical Society: Series B*.
+               https://doi.org/10.1111/j.2517-6161.1995.tb02031.x
+        """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.correct_p() - Correct p values for multiple comparisons. ***")
 
@@ -2836,6 +3347,36 @@ class NiSpace:
 
     def normalize_colocalizations(self, coloc_method=None, z_method="robust", store=True,
                                   verbose=None):
+        """
+        Z-score observed colocalization statistics against their null
+        permutation distribution (per X column), producing values that are more
+        comparable across colocalization methods/maps with different natural
+        scales. This is distinct from any z-scoring of the raw input data
+        (``standardize=`` at init) -- it normalizes colocalization *output*
+        against the null computed by :meth:`permute`, which must have been run
+        first.
+
+        Parameters
+        ----------
+        coloc_method : str, optional
+            Restrict normalization to one colocalization method's stored null
+            results. Defaults to normalizing all of them.
+        z_method : {"robust", "standard"}, default "robust"
+            ``"robust"`` uses a median/MAD-based z-score (columns with zero MAD
+            become NaN); anything else uses a standard mean/SD-based z-score.
+            Remembered as the "last used" ``z_method`` for later calls (e.g.
+            :meth:`plot`).
+        store : bool, default True
+            Store the normalized values on the object (accessible via
+            :meth:`get_normalized_colocalizations`).
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+
+        Returns
+        -------
+        NiSpace
+            Returns ``self`` (for chaining), regardless of ``store``.
+        """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.normalize_colocalizations() - Normalize colocalizations against null "
                  "distribution. ***")
@@ -2917,9 +3458,112 @@ class NiSpace:
              colocalizations_dict=None, nulls_dict=None, p_dict=None, pc_dict=None,
              fig=None, ax=None, figsize=None, show=True,
              plot_kwargs=None, nullplot_kwargs=None,
-             verbose=None): 
+             verbose=None):
+        """
+        Plot a stored colocalization result as a categorical (per-X-map) plot,
+        one figure per requested statistic, optionally overlaid with the null
+        permutation distribution and significance annotation.
+
+        Only ``kind="categorical"`` is currently implemented -- ``"correlation"``,
+        ``"brain"``, and ``"nullhist"`` are planned but not yet built (passing
+        them raises ``NotImplementedError``). For brain-map visualization, use
+        the separate :meth:`plot_brain` method instead.
+
+        Parameters
+        ----------
+        kind : str, default "categorical"
+            Only ``"categorical"`` is currently supported.
+        method, X_reduction, Y_transform, xsea : optional
+            Identify which stored :meth:`colocalize` result to plot; see
+            :meth:`colocalize`. Default to the last-used values. Ignored if
+            ``colocalizations_dict`` is given directly.
+        stats : str or list of str, optional
+            Which statistic(s) to plot, one figure each. Defaults to all stats
+            found for ``method``.
+        Y_maps, X_maps : str or list of str, optional
+            Restrict the plot to matching Y/X map labels (exact or substring
+            match). ``Y_labels``/``X_labels`` are accepted as legacy aliases
+            (used only if the corresponding ``_maps`` argument is not given).
+        values : {"coloc", "z", "p"}, default "coloc"
+            What to plot: the raw observed statistic (via
+            :meth:`get_colocalizations`), the null-normalized z-score (via
+            :meth:`get_normalized_colocalizations`, requires
+            :meth:`normalize_colocalizations` to have been run), or
+            ``-log10(p)`` (via :meth:`get_p_values`; disables ``plot_nulls``
+            unconditionally, since null distributions aren't meaningful in
+            p-value space).
+        mc_method : str, optional
+            Which p-value correction to use for annotation/``values="p"``.
+            Special values ``"uncorrected"``/``"none"``/``"false"`` force
+            uncorrected p-values. Defaults to the last correction used in
+            :meth:`correct_p`.
+        plot_nulls : bool, default True
+            Overlay the null permutation distribution. Requires
+            ``permute_what`` to be resolvable (i.e. :meth:`permute` to have
+            been run); otherwise disabled with a warning. Always disabled when
+            ``values="p"``.
+        annot_p : bool or str, default True
+            Annotate significance. Also accepts a mode string forwarded to
+            ``plotting.print_significance`` (e.g. ``"text"``). Disabled (with a
+            warning) under the same condition as ``plot_nulls``.
+        permute_what : str, optional
+            Which permutation ("what") to pull null distributions/p-values
+            from; see :meth:`permute`'s ``what`` argument. Defaults to the
+            last-used value. The special value ``"pairs"`` collapses an N x N
+            colocalization matrix to its diagonal (matched-pair SPICE-style
+            results) before plotting.
+        title : str, default "auto"
+            Plot title. ``"auto"`` builds one from the method/context (recomputed
+            for each statistic when multiple ``stats`` are plotted in one call).
+            A custom string is used verbatim for every statistic's plot.
+        sort_by : {None, "coloc", "abs_coloc", "z", "abs_z", "p"}, optional
+            Sort X categories by the mean (or abs mean) observed value,
+            z-score, or p-value across Y rows. Also enables truncation (see
+            ``n_categories``) when set.
+        sort_colocs : bool, default False
+            Deprecated; use ``sort_by="coloc"`` instead.
+        n_categories : int, optional, default 50
+            Maximum number of X categories to display. If exceeded and
+            ``sort_by`` is set, truncates to the top N; if exceeded and
+            ``sort_by`` is ``None``, that statistic's plot is skipped entirely
+            (with a warning) rather than truncating arbitrarily. ``None``
+            disables the limit.
+        colocalizations_dict : dict, optional
+            Pre-computed ``{stat: DataFrame}`` result (as from
+            ``get_colocalizations(force_dict=True)``) to plot directly, bypassing
+            all internal fetching.
+        nulls_dict, p_dict, pc_dict : optional
+            Pre-computed null-distribution / uncorrected-p / corrected-p data,
+            bypassing the corresponding internal fetch.
+        fig, ax : optional
+            Existing matplotlib Figure/Axes to draw into (for building custom
+            multi-panel figures). Pass both together.
+        figsize : tuple, optional
+            Figure size; auto-sized by number of X categories if not given.
+        show : bool, default True
+            Call ``plt.show()`` after each statistic's plot.
+        plot_kwargs, nullplot_kwargs : dict, optional
+            Extra keyword arguments forwarded to :func:`nispace.plotting.catplot`
+            and :func:`nispace.plotting.nullplot` respectively.
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+
+        Returns
+        -------
+        tuple or dict of tuple
+            ``(fig, ax, plot)`` per statistic; a single tuple if only one
+            statistic was plotted, otherwise a dict keyed by stat name.
+        """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.plot() - Plot colocalization results. ***")
+
+        if kind in {"correlation", "brain", "nullhist"}:
+            lgr.critical_raise(
+                f"plot(kind='{kind}') is planned but not yet implemented. "
+                "Only kind='categorical' is currently supported. For brain-map "
+                "visualization, use plot_brain() instead.",
+                NotImplementedError
+            )
 
         # kwargs
         plot_kwargs = {} if plot_kwargs is None else plot_kwargs
@@ -3144,25 +3788,27 @@ class NiSpace:
         stats = [s for s in colocalizations_dict if s not in ["intercept"]]
         out = {}
         for stat in stats:
-            
+
             lgr.info(f"Creating {kind} plot for method {method}, colocalization stat {stat}.")
             if title == "auto":
-                title = f"{nice_stats_labels(method)} colocalization"
+                _title = f"{nice_stats_labels(method)} colocalization"
                 if Y_transform:
-                    title += f" after {nice_stats_labels(Y_transform.replace('(a,b)', ''))} transform"
+                    _title += f" after {nice_stats_labels(Y_transform.replace('(a,b)', ''))} transform"
                 if permute_what:
                     _perm_str = nice_stats_labels(permute_what)
                     if values == "z":
-                        title += f"\n(permutation of {_perm_str} | normalized)"
+                        _title += f"\n(permutation of {_perm_str} | normalized)"
                     elif values == "p":
                         if mc_method:
                             _mc_sub = mc_method.replace("_", "-")
                             _p_suffix = rf"$p_{{\mathrm{{{_mc_sub}}}}}$"
                         else:
                             _p_suffix = r"$p_{\mathrm{uncorrected}}$"
-                        title += f"\n(permutation of {_perm_str} | {_p_suffix})"
+                        _title += f"\n(permutation of {_perm_str} | {_p_suffix})"
                     else:
-                        title += f"\n(permutation of {_perm_str})"
+                        _title += f"\n(permutation of {_perm_str})"
+            else:
+                _title = title
 
             # compute column sort order (positional indices) for sort_by
             _valid_sort_by = {"coloc", "z", "p", "abs_coloc", "abs_z"}
@@ -3248,21 +3894,12 @@ class NiSpace:
                     z_method=_z_method,
                     fig=fig,
                     ax=ax,
-                    title=title,
+                    title=_title,
                     figsize=figsize,
                     kwargs=plot_kwargs,
                     null_kwargs=nullplot_kwargs
                 )
-                    
-            elif kind == "correlation":
-                pass
-            
-            elif kind == "brain":
-                pass
-            
-            elif kind == "nullhist":
-                pass
-            
+
             if show:
                 plt.show()
             out[stat] = fig_ax
@@ -3426,6 +4063,32 @@ class NiSpace:
     # GET ==========================================================================================
     
     def get_x(self, X_reduction=None, maps=None, squeeze=False, verbose=None, copy=True):
+        """
+        Retrieve the object's X data: either the raw, fitted X, or a
+        previously computed dimensionality reduction (see :meth:`reduce_x`).
+
+        Parameters
+        ----------
+        X_reduction : str, optional
+            Label of the reduction to retrieve (as passed to
+            ``reduce_x(reduction=...)``). Defaults to the last one used, or the
+            raw X data if none has been used. Raises ``KeyError`` (listing
+            available labels) if the requested reduction was never computed.
+        maps : str or list of str, optional
+            Restrict to matching X map/set labels (exact or substring match).
+        squeeze : bool, default False
+            If exactly one map remains after any ``maps`` filtering, return it
+            as a ``pandas.Series`` instead of a single-row DataFrame.
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+        copy : bool, default True
+            Return an independent copy rather than a live reference to the
+            object's internal data.
+
+        Returns
+        -------
+        pandas.DataFrame or pandas.Series
+        """
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
 
@@ -3457,6 +4120,32 @@ class NiSpace:
     # ----------------------------------------------------------------------------------------------
     
     def get_y(self, Y_transform=None, maps=None, squeeze=False, verbose=None, copy=True):
+        """
+        Retrieve the object's Y data: either the raw, fitted Y, or a
+        previously computed transform (see :meth:`transform_y`).
+
+        Parameters
+        ----------
+        Y_transform : str, optional
+            Label of the transform to retrieve (the formula string passed to
+            ``transform_y(transform=...)``). Defaults to the last one used, or
+            the raw Y data if none has been used. Raises ``KeyError`` (listing
+            available labels) if the requested transform was never computed.
+        maps : str or list of str, optional
+            Restrict to matching Y map labels (exact or substring match).
+        squeeze : bool, default False
+            If exactly one map remains after any ``maps`` filtering, return it
+            as a ``pandas.Series`` instead of a single-row DataFrame.
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+        copy : bool, default True
+            Return an independent copy rather than a live reference to the
+            object's internal data.
+
+        Returns
+        -------
+        pandas.DataFrame or pandas.Series
+        """
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
 
@@ -3488,6 +4177,30 @@ class NiSpace:
     # ----------------------------------------------------------------------------------------------
          
     def get_z(self, verbose=None, copy=True):
+        """
+        Retrieve the object's Z (covariate) data, as originally provided at
+        :meth:`fit` (or as last overwritten in place by
+        :meth:`transform_z`, if used). Unlike :meth:`get_x`/:meth:`get_y`,
+        there is no per-transform lookup for Z -- only the current Z is
+        available.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+        copy : bool, default True
+            Return an independent copy rather than a live reference to the
+            object's internal data.
+
+        Returns
+        -------
+        pandas.DataFrame
+
+        Raises
+        ------
+        ValueError
+            If no Z data was ever provided.
+        """
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         
@@ -3506,7 +4219,60 @@ class NiSpace:
                             X_reduction=None, Y_transform=None, xsea=None,
                             normalized=False, perm=None,
                             get_nulls=False, nulls_permute_what=None, pooled_p=None,
-                            force_dict=False, verbose=None):
+                            force_dict=False, verbose=None, copy=True):
+        """
+        Retrieve a stored :meth:`colocalize` result (or, with
+        ``normalized=True``, a stored :meth:`normalize_colocalizations`
+        result -- this is what :meth:`get_normalized_colocalizations` calls
+        under the hood).
+
+        Parameters
+        ----------
+        method, X_reduction, Y_transform, xsea : optional
+            Identify which stored result to retrieve; see :meth:`colocalize`.
+            All default to the last-used values.
+        stats : str or list of str, optional
+            Which statistic(s) to retrieve (e.g. ``"rho"``, ``"beta"``).
+            Defaults to all stats produced by ``method`` (or, if
+            ``normalized=True``, only the subset for which a null distribution
+            exists).
+        normalized : bool, default False
+            Retrieve the null-normalized z-scores from
+            :meth:`normalize_colocalizations` instead of the raw observed
+            statistics. Raises ``KeyError`` if that hasn't been run.
+        perm : str, optional
+            Which permutation ("what") the retrieved normalized result was
+            computed against; see :meth:`permute`. Only relevant with
+            ``normalized=True``. Defaults to the last-used value.
+        get_nulls : bool, default False
+            Also return the null colocalization distributions alongside the
+            observed statistics, as a ``(colocalizations, nulls)`` tuple.
+            Requires ``nulls_permute_what`` to identify which permutation's
+            nulls to fetch.
+        nulls_permute_what : str, optional
+            Which permutation's null distributions to fetch when
+            ``get_nulls=True`` (e.g. ``"maps"``, ``"groups"``, ``"sets"``,
+            ``"pairs"``; see :meth:`permute`'s ``what`` argument).
+        pooled_p : bool or str, optional
+            Pooling mode used for the stored null distribution being
+            retrieved; see :meth:`permute`. Defaults to the last-used value.
+        force_dict : bool, default False
+            Always return a dict even when only one statistic is retrieved.
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+        copy : bool, default True
+            Return independent copies rather than live references to the
+            object's internal data. Only applies to the non-``normalized``
+            path; normalized results are always returned as copies.
+
+        Returns
+        -------
+        pandas.DataFrame or dict of pandas.DataFrame, or a tuple thereof
+            A dict of ``{stat: DataFrame}`` if more than one ``stats`` entry is
+            retrieved or ``force_dict=True``, otherwise a single DataFrame.
+            If ``get_nulls=True``, a ``(colocalizations, nulls)`` tuple is
+            returned instead.
+        """
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
 
@@ -3674,6 +4440,52 @@ class NiSpace:
     def get_p_values(self, method=None, permute_what=None, stats=None, xsea=None,
                      mc_method=None, pooled_p=None,
                      X_reduction=None, Y_transform=None, force_dict=False, verbose=None, copy=True):
+        """
+        Retrieve p-values computed by :meth:`permute`, uncorrected by default,
+        or a specific multiple-comparisons-corrected result previously produced
+        by :meth:`correct_p`.
+
+        Parameters
+        ----------
+        method, X_reduction, Y_transform, xsea : optional
+            Identify which stored colocalization result the p-values belong to;
+            see :meth:`colocalize`. All default to the last-used values.
+        permute_what : str, optional
+            Which permutation ("what") the p-values were computed against, see
+            :meth:`permute`'s ``what`` argument. Defaults to the last-used
+            value.
+        stats : str or list of str, optional
+            Which statistic(s)' p-values to retrieve. Defaults to all stats for
+            which a permutation null exists.
+        mc_method : str, optional
+            Which correction to retrieve, as passed to
+            ``correct_p(mc_method=...)``. Defaults to ``None``, which retrieves
+            the **uncorrected** p-values (the default, and the input
+            :meth:`correct_p` itself corrects) -- not the last-used correction;
+            for that, use :meth:`get_corrected_p_values`.
+        pooled_p : bool or str, optional
+            Pooling mode used for the stored result being retrieved; see
+            :meth:`permute`. Defaults to the last-used value.
+        force_dict : bool, default False
+            Always return a dict even when only one statistic is retrieved.
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+        copy : bool, default True
+            Return independent copies rather than live references to the
+            object's internal data.
+
+        Returns
+        -------
+        pandas.DataFrame or dict of pandas.DataFrame
+            A dict of ``{stat: DataFrame}`` if more than one statistic is
+            retrieved or ``force_dict=True``, otherwise a single DataFrame.
+
+        Raises
+        ------
+        KeyError
+            If the requested combination was never computed (e.g.
+            :meth:`permute` was never run).
+        """
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
 
@@ -3734,6 +4546,26 @@ class NiSpace:
     # ----------------------------------------------------------------------------------------------
 
     def get_corrected_p_values(self, mc_method=None, **kwargs):
+        """
+        Shortcut for :meth:`get_p_values` that defaults ``mc_method`` to
+        whichever correction was last used in :meth:`correct_p`, instead of
+        ``get_p_values``'s own default of retrieving the uncorrected p-values.
+
+        Parameters
+        ----------
+        mc_method : str, optional
+            Defaults to the last correction method used in :meth:`correct_p`.
+            Raises ``ValueError`` if :meth:`correct_p` was never run.
+        **kwargs
+            Forwarded to :meth:`get_p_values` (``method``, ``permute_what``,
+            ``stats``, ``xsea``, ``pooled_p``, ``X_reduction``, ``Y_transform``,
+            ``force_dict``, ``verbose``, ``copy``).
+
+        Returns
+        -------
+        pandas.DataFrame or dict of pandas.DataFrame
+            See :meth:`get_p_values`.
+        """
         mc_method = self._get_last(mc_method=mc_method)
         if mc_method is None:
             lgr.critical_raise(
@@ -3746,6 +4578,23 @@ class NiSpace:
     # ----------------------------------------------------------------------------------------------
 
     def get_normalized_colocalizations(self, **kwargs):
+        """
+        Shortcut for ``get_colocalizations(normalized=True, ...)`` -- retrieves
+        the null-normalized z-scores produced by
+        :meth:`normalize_colocalizations`.
+
+        Parameters
+        ----------
+        **kwargs
+            Forwarded to :meth:`get_colocalizations` (``method``, ``stats``,
+            ``X_reduction``, ``Y_transform``, ``xsea``, ``perm``, ``get_nulls``,
+            ``nulls_permute_what``, ``pooled_p``, ``force_dict``, ``verbose``).
+
+        Returns
+        -------
+        pandas.DataFrame or dict of pandas.DataFrame
+            See :meth:`get_colocalizations`.
+        """
         return self.get_colocalizations(normalized=True, **kwargs)
 
     # SAVE, LOAD, COPY =============================================================================
@@ -3783,12 +4632,36 @@ class NiSpace:
     # ----------------------------------------------------------------------------------------------
 
     def copy(self, deep=True, verbose=True):
-        set_log(lgr, verbose)
-        
-        if deep==True:
-            return copy.deepcopy(self)
-        else:
-            return copy.copy(self)        
+        """
+        Duplicate this NiSpace object, e.g. to try an alternative analysis
+        branch without mutating the original.
+
+        Parameters
+        ----------
+        deep : bool, default True
+            If True, recursively duplicate everything (all stored X/Y/Z data,
+            colocalizations, nulls, p-values, etc.) so the copy shares no
+            mutable state with the original. If False, only the top-level
+            object is duplicated -- its attributes still reference the same
+            underlying dicts/DataFrames as the original, so in-place mutation
+            of e.g. a shared dict would affect both.
+        verbose : bool, default True
+            Print progress messages.
+
+        Returns
+        -------
+        NiSpace
+            The duplicated object.
+        """
+        loglevel = lgr.getEffectiveLevel()
+        try:
+            set_log(lgr, verbose)
+            if deep==True:
+                return copy.deepcopy(self)
+            else:
+                return copy.copy(self)
+        finally:
+            lgr.setLevel(loglevel)
             
     # ----------------------------------------------------------------------------------------------
 

@@ -189,15 +189,35 @@ def colocalization(y,
         If x is a string reference dataset, specifies which collection to use.
     standardize : str, default="xz"
         Which data to standardize. Can contain "x", "y", and/or "z".
+    space : str, default=_SPACE_DEFAULT_VOL ("MNI152NLin6Asym")
+        Default template space for both the data images and the parcellation. Used
+        to resolve ``data_space``/``parcellation_space`` when those are not given.
+    data_space : str or None, default=None
+        Template space of the input data images. Falls back to ``space`` if falsy.
+    parcellation_space : str or None, default=None
+        Template space of the parcellation. Falls back to ``space`` if falsy.
     parcellation : str or int, default=_PARC_DEFAULT
         Brain parcellation to use. Can be a string name or integer ID.
     parcellation_labels : array-like or None, default=None
         Optional labels for the parcellation regions.
+    parcellation_hemi : list of str, default=["L", "R"]
+        Hemispheres to include. Forwarded to ``NiSpace`` initialization and, if
+        ``x`` is a reference dataset string, to :func:`~nispace.datasets.fetch_reference`.
     y_covariates : array-like or None, default=None
-        Optional covariates to regress from Y data.
+        Optional covariates to regress from Y data. If given, :meth:`NiSpace.clean_y`
+        is run with ``how="between"`` before colocalization.
     colocalization_method : str or list, default=None
         Method(s) to use for colocalization. When ``None``, defaults to
-        ``"pearson"`` if ``binary_y=True``, otherwise ``"spearman"``.
+        ``"pearson"`` if ``binary_y=True``, otherwise ``"spearman"``. See
+        :meth:`NiSpace.colocalize` for the full list of supported methods.
+    mc_method : str or list, default="meff"
+        Multiple-comparisons correction method(s), forwarded to :meth:`NiSpace.correct_p`.
+        If a list, each method is applied and stored separately. An explicit
+        ``"mc_method"`` key inside ``correct_p_kwargs`` overrides this entirely.
+    normalize_colocalizations : bool, default=True
+        Whether to call :meth:`NiSpace.normalize_colocalizations` after correction
+        (z-scores observed colocalizations against their null distribution). Failures
+        are caught and logged as a warning rather than raised.
     pooled_p : str or bool, default=False
         How to aggregate across Y maps before computing p-values. ``False`` (default)
         computes one p-value per Y×X pair. ``"mean"`` or ``"median"`` averages
@@ -208,7 +228,14 @@ def colocalization(y,
     plot : bool, default=True
         Whether to generate visualization plots.
     combat : bool, default=False
-        Whether to apply ComBat harmonization.
+        Whether to apply ComBat harmonization. Only relevant if ``y_covariates`` is given.
+    binary_y : bool, default=False
+        Set if Y is binary (e.g. binary lesion/cluster masks). Forces
+        ``NiSpace(binary_y=True)``, which prevents Y from being z-scored regardless
+        of ``standardize`` and drives the ``colocalization_method=None`` dynamic
+        default toward ``"pearson"``. Not relevant to permutation here, since this
+        function always permutes ``what="maps"`` (the ``binary_y`` restriction on
+        ``permute(what="groups")`` only applies to :func:`group_colocalization`).
     n_perm : int, default=10000
         Number of permutations for null distribution.
     seed : int or None, default=None
@@ -223,6 +250,8 @@ def colocalization(y,
         Additional arguments for fetching X data.
     init_kwargs : dict, optional
         Additional arguments for NiSpace initialization.
+    fit_kwargs : dict, optional
+        Additional arguments for ``NiSpace.fit()``.
     clean_y_kwargs : dict, optional
         Additional arguments for Y data cleaning.
     colocalize_kwargs : dict, optional
@@ -415,6 +444,139 @@ def group_colocalization(y, design,
                          correct_p_kwargs=None,
                          plot_kwargs=None,
                          return_nispace_only=False):
+    """Group-comparison colocalization workflow.
+
+    Compares Y maps between two groups of individual subjects/observations
+    (e.g. patients vs. controls), reduces the comparison to a single effect-size
+    map via :meth:`NiSpace.transform_y`, and colocalizes that map with X while
+    testing significance via group-label permutation.
+
+    Parameters
+    ----------
+    y : array-like or pandas DataFrame or list
+        Input Y data: one map per individual subject/observation (not group-level
+        summary maps). Passed straight through to ``NiSpace.fit``.
+    design : list, array-like, or pandas DataFrame
+        Group (and, if ``paired=True``, subject) labels, one row per row of ``y``
+        (row count must match ``len(y)``, else raises ``ValueError``). Accepted forms:
+
+        - 1-D list/array/Series: dummy-coded group labels. Raises ``ValueError`` if
+          ``paired=True`` (a 1-D input cannot carry subject IDs).
+        - 2-D ``ndarray``: columns ``["groups"(, "subjects"), V0, V1, ...]``
+          (subjects column only if ``paired=True``).
+        - ``DataFrame``: must have a ``"groups"`` column (and a ``"subjects"``
+          column if ``paired=True``).
+
+        Any columns beyond the mandatory group(+subject) column(s) are treated as
+        Y covariates and automatically regressed out via :meth:`NiSpace.clean_y`
+        (see ``clean_y_kwargs`` below).
+    x : str or array-like, default="PET"
+        Input X data. Can be a string indicating a reference dataset ("PET", "mRNA", ...),
+        or input types as listed for y.
+    z : array-like or None, default=None
+        Optional confound data to regress out. Can be "gm", or input types as listed for y.
+    x_collection : str or None, default=None
+        If x is a string reference dataset, specifies which collection to use.
+    standardize : str, default="xz"
+        Which data to standardize. Can contain "x", "y", and/or "z".
+    space : str, default=_SPACE_DEFAULT_VOL ("MNI152NLin6Asym")
+        Default template space for both the data images and the parcellation. Used
+        to resolve ``data_space``/``parcellation_space`` when those are not given.
+    data_space : str or None, default=None
+        Template space of the input data images. Falls back to ``space`` if falsy.
+    parcellation_space : str or None, default=None
+        Template space of the parcellation. Falls back to ``space`` if falsy.
+    parcellation : str or int, default=_PARC_DEFAULT
+        Brain parcellation to use. Can be a string name or integer ID.
+    parcellation_labels : array-like or None, default=None
+        Optional labels for the parcellation regions.
+    parcellation_hemi : list of str, default=["L", "R"]
+        Hemispheres to include. Forwarded to ``NiSpace`` initialization and, if
+        ``x`` is a reference dataset string, to :func:`~nispace.datasets.fetch_reference`.
+    colocalization_method : str or list, default="spearman"
+        Method(s) to use for colocalization. Unlike :func:`colocalization`, this is a
+        static default (no ``binary_y``-driven dynamic default) — this function does
+        not support binary Y, since :meth:`NiSpace.transform_y` (always run here) and
+        group-label permutation are both incompatible with ``binary_y=True``. See
+        :meth:`NiSpace.colocalize` for the full list of supported methods.
+    comparison_method : str or None, default=None
+        Formula passed to :meth:`NiSpace.transform_y` to reduce Y to a single
+        group-comparison effect-size map. When ``None``, defaults to ``"hedges(a,b)"``
+        if ``paired=False``, otherwise ``"pairedcohen(a,b)"``. This transform is then
+        reused as ``Y_transform`` for colocalization, permutation, plotting, and
+        result retrieval.
+    mc_method : str or list, default="meff"
+        Multiple-comparisons correction method(s), forwarded to :meth:`NiSpace.correct_p`.
+        If a list, each method is applied and stored separately. An explicit
+        ``"mc_method"`` key inside ``correct_p_kwargs`` overrides this entirely.
+    normalize_colocalizations : bool, default=True
+        Whether to call :meth:`NiSpace.normalize_colocalizations` after correction.
+        Failures are caught and logged as a warning rather than raised.
+    pooled_p : str or bool, default=False
+        Present for signature symmetry with :func:`colocalization`, but **not a free
+        choice here**: for group-label permutation (``what="groups"``),
+        :meth:`NiSpace.permute` always answers a group-level question and forces
+        ``pooled_p="mean"`` regardless of what is passed (with a warning on conflict).
+    p_from_average_y : str or bool, optional
+        Deprecated. Use ``pooled_p`` instead.
+    paired : bool, default=False
+        Whether groups are paired/matched by subject (e.g. pre/post, or matched
+        case-control pairs). Governs ``design`` parsing rules, the dynamic default of
+        ``comparison_method``, and is passed to :meth:`NiSpace.permute` as
+        ``groups_paired``.
+    plot_design_between : bool, default=True
+        Whether to plot the between-subject design matrix (diagnostic only). Only
+        takes effect when ``design`` has covariate columns that trigger
+        :meth:`NiSpace.clean_y`.
+    combat : bool, default=False
+        Whether to apply ComBat harmonization. Only relevant when ``design`` has
+        covariate columns that trigger :meth:`NiSpace.clean_y`.
+    plot : bool, default=True
+        Whether to generate visualization plots.
+    n_perm : int, default=10000
+        Number of permutations for null distribution.
+    seed : int or None, default=None
+        Random seed for reproducibility.
+    n_proc : int, default=1
+        Number of processes for parallel computation.
+    verbose : bool, default=True
+        Whether to print progress messages.
+    nispace_object : NiSpace or None, default=None
+        Optional pre-initialized NiSpace object to use.
+    fetch_x_kwargs : dict, optional
+        Additional arguments for fetching X data.
+    init_kwargs : dict, optional
+        Additional arguments for NiSpace initialization.
+    fit_kwargs : dict, optional
+        Additional arguments for ``NiSpace.fit()``.
+    clean_y_kwargs : dict, optional
+        Additional arguments for Y data cleaning. Auto-triggered based on ``design``
+        having covariate columns beyond ``"groups"``(+``"subjects"``) — unlike
+        :func:`colocalization`, there is no separate ``y_covariates`` flag here.
+    transform_y_kwargs : dict, optional
+        Additional arguments for :meth:`NiSpace.transform_y`. Always runs (no
+        conditional gate other than a pre-fitted ``nispace_object``).
+    colocalize_kwargs : dict, optional
+        Additional arguments for colocalization.
+    permute_kwargs : dict, optional
+        Additional arguments for permutation testing. Note ``what="groups"`` is
+        forced last in the internal merge and cannot be overridden here.
+    correct_p_kwargs : dict, optional
+        Additional arguments for p-value correction.
+    plot_kwargs : dict, optional
+        Additional arguments for plotting.
+    return_nispace_only : bool, default=False
+        If True, return only the NiSpace object. Use ``nsp.get_colocalizations()`` and
+        ``nsp.get_p_values()`` to access results. Setting False is deprecated and will
+        be removed in the first non-dev release.
+
+    Returns
+    -------
+    nsp : NiSpace
+        The NiSpace object containing all results (when ``return_nispace_only=True``).
+    colocs, p_values, pc_values, nsp : tuple
+        Deprecated. Returned when ``return_nispace_only=False`` (current default).
+    """
     verbose = set_log(lgr, verbose)
     # TODO (first non-dev release): remove p_from_average_y parameter
     if p_from_average_y is not None:
@@ -491,7 +653,7 @@ def group_colocalization(y, design,
     elif isinstance(design, pd.DataFrame):
         lgr.info("DataFrame provided for design. Expecting 'groups' and, if paired==True, 'subjects' columns.")
         if paired:
-            if "groups" not in design.columns and "subjects" not in design.columns:
+            if "groups" not in design.columns or "subjects" not in design.columns:
                 lgr.critical_raise("If a DataFrame is passed for design with paired==True, "
                                    "it must have a 'groups' and a 'subjects' column.",
                                    KeyError)
@@ -671,8 +833,10 @@ def paired_colocalization(y,
         is required; matching is done positionally.
     x : array-like, DataFrame, or list
         Modality B — N brain maps in the same pair order as ``y``.
-        Unlike other workflow functions, ``x`` must be individual-level data
-        and cannot be a reference dataset string.
+        Unlike other workflow functions, ``x`` is expected to be individual-level
+        data, not a reference dataset string — this is a usage contract (there is
+        no ``x_collection`` parameter here and no dedicated runtime check forbidding
+        a string), not an enforced validation.
     standardize : str, default="xz"
         Which data to z-standardize (parcels). Can contain "x", "y", "z".
     space : str
@@ -694,7 +858,9 @@ def paired_colocalization(y,
         ``"median"`` of the N diagonal entries. ``"auto"`` resolves to
         ``"mean"``. ``False`` is not supported and falls back to ``"mean"``.
     plot : bool, default=True
-        Whether to generate a scatter + null violin plot after permutation.
+        Whether to generate a plot after permutation, via ``nsp.plot(permute_what="pairs")``
+        (relies on :meth:`NiSpace.plot`'s own ``kind="categorical"`` default — not
+        passed explicitly here).
     n_perm : int, default=10000
         Number of subject-label permutations for the null distribution.
     seed : int or None
@@ -823,6 +989,123 @@ def xsea(y,
          correct_p_kwargs=None,
          plot_kwargs=None,
          return_nispace_only=False):
+    """Set enrichment analysis (XSEA) workflow for group-level map(s).
+
+    Equivalent to :func:`colocalization` with X treated as sets (e.g. gene sets)
+    rather than individual maps: colocalizations are computed per set (aggregated
+    via ``xsea_aggregation_method``) and Y is permuted to build the null
+    distribution, unless ``permute_sets=True`` (see below). All parameters not
+    listed below behave exactly as in :func:`colocalization`.
+
+    Parameters
+    ----------
+    y : array-like or pandas DataFrame or list
+        Input Y data to test for set enrichment. Can be a numpy array, pandas
+        DataFrame, (list of) path(s) to a file(s) or list of image objects.
+    x : str or array-like, default="mRNA"
+        Input X data, expected to carry set membership (e.g. a "set"/gene-set
+        MultiIndex level). Can be a string reference dataset name or input types
+        as listed for y.
+    z : array-like or None, default=None
+        Optional confound data to regress out. Can be "gm", or input types as listed for y.
+    x_collection : str or None, default=None
+        If x is a string reference dataset, specifies which collection to use.
+    x_background : array-like or None, default=None
+        Pool of "background" X maps used as the null when ``permute_sets=True``
+        (X-set-membership permutation). If ``None`` and ``x`` is a reference dataset
+        string, an attempt is made to auto-fetch the full reference collection as
+        the background (silently falls back to ``None`` with a warning on failure).
+        Ignored if ``permute_sets=False``.
+    standardize : str, default="xz"
+        Which data to standardize. Can contain "x", "y", and/or "z".
+    space : str, default=_SPACE_DEFAULT_VOL ("MNI152NLin6Asym")
+        Default template space for both the data images and the parcellation. Used
+        to resolve ``data_space``/``parcellation_space`` when those are not given.
+    data_space : str or None, default=None
+        Template space of the input data images. Falls back to ``space`` if falsy.
+    parcellation_space : str or None, default=None
+        Template space of the parcellation. Falls back to ``space`` if falsy.
+    parcellation : str or int, default=_PARC_DEFAULT
+        Brain parcellation to use. Can be a string name or integer ID.
+    parcellation_labels : array-like or None, default=None
+        Optional labels for the parcellation regions.
+    parcellation_hemi : list of str, default=["L", "R"]
+        Hemispheres to include. Forwarded to ``NiSpace`` initialization and, if
+        ``x`` is a reference dataset string, to :func:`~nispace.datasets.fetch_reference`.
+    y_covariates : array-like or None, default=None
+        Optional covariates to regress from Y data. If given, :meth:`NiSpace.clean_y`
+        is run with ``how="between"`` before colocalization.
+    colocalization_method : str or list, default=None
+        Method(s) to use for colocalization. When ``None``, defaults to
+        ``"pearson"`` if ``binary_y=True``, otherwise ``"spearman"``.
+    mc_method : str or list, default="meff"
+        Multiple-comparisons correction method(s), forwarded to :meth:`NiSpace.correct_p`.
+        An explicit ``"mc_method"`` key inside ``correct_p_kwargs`` overrides this entirely.
+    normalize_colocalizations : bool, default=True
+        Whether to call :meth:`NiSpace.normalize_colocalizations` after correction.
+        Failures are caught and logged as a warning rather than raised.
+    xsea_aggregation_method : str, default="mean"
+        How to aggregate individual X maps within each set before colocalization.
+        One of ``"mean"``, ``"median"``, ``"absmean"``, ``"absmedian"``,
+        ``"weightedmean"``, ``"weightedabsmean"`` (weighted variants require a
+        ``"weight"`` MultiIndex level on X). See :meth:`NiSpace.colocalize`.
+    permute_sets : bool, default=False
+        If ``True``, switches the permutation null from ``what="maps"`` (permuting
+        Y, the default) to ``what="sets"`` (X-set-membership permutation using
+        ``x_background`` as the pool of maps to reassign to sets).
+    pooled_p : str or bool, default=False
+        How to aggregate across Y maps before computing p-values. Same semantics
+        as in :func:`colocalization` (fully relevant here).
+    p_from_average_y : str or bool, optional
+        Deprecated. Use ``pooled_p`` instead.
+    plot : bool, default=True
+        Whether to generate visualization plots.
+    combat : bool, default=False
+        Whether to apply ComBat harmonization. Only relevant if ``y_covariates`` is given.
+    binary_y : bool, default=False
+        Set if Y is binary. Forces ``NiSpace(binary_y=True)`` and drives the
+        ``colocalization_method=None`` dynamic default toward ``"pearson"``. See
+        :func:`colocalization` for the full behavior.
+    n_perm : int, default=10000
+        Number of permutations for null distribution.
+    seed : int or None, default=None
+        Random seed for reproducibility.
+    n_proc : int, default=1
+        Number of processes for parallel computation.
+    verbose : bool, default=True
+        Whether to print progress messages.
+    nispace_object : NiSpace or None, default=None
+        Optional pre-initialized NiSpace object to use.
+    fetch_x_kwargs : dict, optional
+        Additional arguments for fetching X data.
+    init_kwargs : dict, optional
+        Additional arguments for NiSpace initialization.
+    fit_kwargs : dict, optional
+        Additional arguments for ``NiSpace.fit()``.
+    clean_y_kwargs : dict, optional
+        Additional arguments for Y data cleaning.
+    colocalize_kwargs : dict, optional
+        Additional arguments for colocalization. Pre-seeded with
+        ``xsea=True``/``xsea_aggregation_method``; explicit caller keys override.
+    permute_kwargs : dict, optional
+        Additional arguments for permutation testing. Pre-seeded with ``what``,
+        ``maps_which="Y"``, ``sets_X_background``; explicit caller keys override.
+    correct_p_kwargs : dict, optional
+        Additional arguments for p-value correction.
+    plot_kwargs : dict, optional
+        Additional arguments for plotting.
+    return_nispace_only : bool, default=False
+        If True, return only the NiSpace object. Use ``nsp.get_colocalizations()`` and
+        ``nsp.get_p_values()`` to access results. Setting False is deprecated and will
+        be removed in the first non-dev release.
+
+    Returns
+    -------
+    nsp : NiSpace
+        The NiSpace object containing all results (when ``return_nispace_only=True``).
+    colocs, p_values, pc_values, nsp : tuple
+        Deprecated. Returned when ``return_nispace_only=False`` (current default).
+    """
     verbose = set_log(lgr, verbose)
     # TODO (first non-dev release): remove p_from_average_y parameter
     if p_from_average_y is not None:
@@ -933,14 +1216,125 @@ def group_xsea(y, design,
                correct_p_kwargs=None,
                plot_kwargs=None,
                return_nispace_only=False):
-    """Group-comparison XSEA workflow.
+    """Group-comparison set enrichment analysis (XSEA) workflow.
 
-    Equivalent to :func:`group_colocalization` with XSEA activated: Y maps are
-    transformed to group-level effect sizes and then colocalized with gene sets,
-    with group-label permutation for p-values.
+    Equivalent to :func:`group_colocalization` with X treated as sets (e.g. gene
+    sets): Y is reduced to a single group-comparison effect-size map via
+    :meth:`NiSpace.transform_y`, then colocalized with X sets (aggregated via
+    ``xsea_aggregation_method``), with group-label permutation for p-values.
+    All parameters not listed below behave exactly as in :func:`group_colocalization`
+    (this function is a thin wrapper that injects ``xsea=True`` into
+    ``colocalize_kwargs`` and forwards everything else unchanged).
 
-    Parameters mirror :func:`group_colocalization` with the addition of
-    ``xsea_aggregation_method``.
+    Parameters
+    ----------
+    y : array-like or pandas DataFrame or list
+        Input Y data: one map per individual subject/observation.
+    design : list, array-like, or pandas DataFrame
+        Group (and, if ``paired=True``, subject) labels. See :func:`group_colocalization`
+        for the full accepted forms and validation rules.
+    x : str or array-like, default="mRNA"
+        Input X data, expected to carry set membership (e.g. a "set"/gene-set
+        MultiIndex level). Can be a string reference dataset name or input types
+        as listed for y.
+    z : array-like or None, default=None
+        Optional confound data to regress out. Can be "gm", or input types as listed for y.
+    x_collection : str or None, default=None
+        If x is a string reference dataset, specifies which collection to use.
+    standardize : str, default="xz"
+        Which data to standardize. Can contain "x", "y", and/or "z".
+    space : str, default=_SPACE_DEFAULT_VOL ("MNI152NLin6Asym")
+        Default template space for both the data images and the parcellation. Used
+        to resolve ``data_space``/``parcellation_space`` when those are not given.
+    data_space : str or None, default=None
+        Template space of the input data images. Falls back to ``space`` if falsy.
+    parcellation_space : str or None, default=None
+        Template space of the parcellation. Falls back to ``space`` if falsy.
+    parcellation : str or int, default=_PARC_DEFAULT
+        Brain parcellation to use. Can be a string name or integer ID.
+    parcellation_labels : array-like or None, default=None
+        Optional labels for the parcellation regions.
+    parcellation_hemi : list of str, default=["L", "R"]
+        Hemispheres to include.
+    colocalization_method : str or list, default="spearman"
+        Method(s) to use for colocalization. Static default — no ``binary_y`` support
+        here, same reasoning as :func:`group_colocalization`.
+    comparison_method : str or None, default=None
+        Formula passed to :meth:`NiSpace.transform_y` to reduce Y to a single
+        group-comparison effect-size map. Defaults to ``"hedges(a,b)"`` (unpaired) or
+        ``"pairedcohen(a,b)"`` (paired).
+    mc_method : str or list, default="meff"
+        Multiple-comparisons correction method(s), forwarded to :meth:`NiSpace.correct_p`.
+    normalize_colocalizations : bool, default=True
+        Whether to call :meth:`NiSpace.normalize_colocalizations` after correction.
+    xsea_aggregation_method : str, default="mean"
+        How to aggregate individual X maps within each set before colocalization.
+        One of ``"mean"``, ``"median"``, ``"absmean"``, ``"absmedian"``,
+        ``"weightedmean"``, ``"weightedabsmean"``. This is the only parameter this
+        function adds beyond :func:`group_colocalization`'s own signature, injected
+        into ``colocalize_kwargs`` together with ``xsea=True``.
+    pooled_p : str or bool, default=False
+        Present for signature symmetry, but not a free choice: group-label
+        permutation always forces ``pooled_p="mean"``, same as
+        :func:`group_colocalization`. Unlike :func:`xsea`, this function does not
+        inject anything into ``permute_kwargs`` — XSEA-ness is inherited
+        automatically inside :meth:`NiSpace.permute` from ``colocalize_kwargs["xsea"]``,
+        since there is no maps/sets axis to choose for group-label permutation.
+    paired : bool, default=False
+        Whether groups are paired/matched by subject.
+    plot_design_between : bool, default=True
+        Whether to plot the between-subject design matrix (diagnostic only).
+    combat : bool, default=False
+        Whether to apply ComBat harmonization.
+    plot : bool, default=True
+        Whether to generate visualization plots.
+    n_perm : int, default=10000
+        Number of permutations for null distribution.
+    seed : int or None, default=None
+        Random seed for reproducibility.
+    n_proc : int, default=1
+        Number of processes for parallel computation.
+    verbose : bool, default=True
+        Whether to print progress messages.
+    nispace_object : NiSpace or None, default=None
+        Optional pre-initialized NiSpace object to use.
+    fetch_x_kwargs : dict, optional
+        Additional arguments for fetching X data.
+    init_kwargs : dict, optional
+        Additional arguments for NiSpace initialization.
+    fit_kwargs : dict, optional
+        Additional arguments for ``NiSpace.fit()``.
+    clean_y_kwargs : dict, optional
+        Additional arguments for Y data cleaning. Auto-triggered based on ``design``
+        having covariate columns.
+    transform_y_kwargs : dict, optional
+        Additional arguments for :meth:`NiSpace.transform_y`.
+    colocalize_kwargs : dict, optional
+        Additional arguments for colocalization. Pre-seeded with
+        ``xsea=True``/``xsea_aggregation_method``; explicit caller keys override.
+    permute_kwargs : dict, optional
+        Additional arguments for permutation testing (unmodified by this function;
+        ``what="groups"`` is forced by :func:`group_colocalization`).
+    correct_p_kwargs : dict, optional
+        Additional arguments for p-value correction.
+    plot_kwargs : dict, optional
+        Additional arguments for plotting.
+    return_nispace_only : bool, default=False
+        If True, return only the NiSpace object. Setting False is deprecated and
+        will be removed in the first non-dev release.
+
+    Returns
+    -------
+    nsp : NiSpace
+        The NiSpace object containing all results (when ``return_nispace_only=True``).
+    colocs, p_values, pc_values, nsp : tuple
+        Deprecated. Returned when ``return_nispace_only=False`` (current default).
+
+    Notes
+    -----
+    There is no ``binary_y`` parameter here, consistent with :func:`group_colocalization`:
+    :meth:`NiSpace.transform_y` (always run internally) is incompatible with binary Y,
+    and group-label permutation raises for ``binary_y=True``.
     """
     return group_colocalization(
         y=y, design=design,
@@ -1050,6 +1444,7 @@ def nimare_colocalization(y,
         ``maps_nulls=nimare_nulls`` and ``maps_which="Y"`` in ``permute_kwargs``
         so Y is permuted with the NiMARE null distribution. Explicit entries in
         ``permute_kwargs`` take precedence.
+
     (all other parameters identical to :func:`colocalization`)
 
     Returns
@@ -1162,7 +1557,9 @@ def nimare_xsea(y,
         Set ``True`` for binary or fractional cluster-coverage Y maps.
     nimare_nulls : dict or None, default=None
         Coordinate-sampling null maps from
-        :func:`~nispace.helpers.null_maps_from_nimare`.
+        :func:`~nispace.helpers.null_maps_from_nimare`. When provided, sets
+        ``maps_nulls=nimare_nulls`` in ``permute_kwargs``.
+
     (all other parameters identical to :func:`xsea`)
 
     Returns
@@ -1171,6 +1568,17 @@ def nimare_xsea(y,
         (when ``return_nispace_only=True``)
     colocs, p_values, pc_values, nsp : tuple
         Deprecated. Returned when ``return_nispace_only=False``.
+
+    Notes
+    -----
+    Unlike :func:`nimare_colocalization`, this function never touches
+    ``maps_which`` — :func:`xsea` always permutes ``maps_which="Y"`` regardless of
+    ``nimare_nulls``, since X is a fixed reference gene-set collection in XSEA, not
+    something meaningfully permuted map-by-map. So ``nimare_nulls=None`` here does
+    **not** fall back to X-permutation the way :func:`nimare_colocalization` does —
+    Y is still permuted, just with freshly generated standard spatial nulls
+    (typically Moran) instead of NiMARE coordinate-sampling nulls, which is
+    functionally equivalent to a plain :func:`xsea` call.
     """
     init_kwargs = {} if init_kwargs is None else dict(init_kwargs)
     if binary_y:

@@ -131,7 +131,7 @@ _FUN_MAP = {
     "centile(*,*)": centile_fast,
 }
 
-_PAIRED_FORMULAS = {"elemdiff(*,*)", "pairedcohen(*,*)", "pairedhedges(*,*)", "prc(*,*)"}
+_PAIRED_FORMULAS = {"elemdiff(*,*)", "pairedcohen(*,*)", "prc(*,*)"}
 
 
 def _parse_transform_formula(formula):
