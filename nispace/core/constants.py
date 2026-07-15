@@ -3,6 +3,10 @@ _SPACE_DEFAULT_SURF = "fsLR"
 
 _PARC_DEFAULT = "Yan200"
 
+_NULL_DEFAULT_COMBINED = ("moran", "moran")  # combined (cx+sc): (cx_method, sc_method)
+_NULL_DEFAULT_CX_SURF  = "moran"             # cortex-only with a surface space (e.g. fsLR)
+_NULL_DEFAULT_CX_VOL   = "moran"             # cortex-only, MNI-only
+
 _COLOC_METHODS = {
     "pearson": ["rho"],
     "spearman": ["rho"],

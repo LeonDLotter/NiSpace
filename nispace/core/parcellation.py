@@ -13,6 +13,7 @@ from ..nulls import (
 )
 from ..io import load_distmat, load_spinmat, load_img, load_labels
 from ..utils.utils import set_log, relabel_nifti_parc, relabel_gifti_parc
+from .constants import _NULL_DEFAULT_COMBINED, _NULL_DEFAULT_CX_SURF, _NULL_DEFAULT_CX_VOL
 
 
 # ---------------------------------------------------------------------------
@@ -1412,20 +1413,25 @@ class Parcellation:
                     return s
             return self.spaces[0]
 
-        # combined (cx+sc): always moran on combined dist_mat
+        # combined (cx+sc) — split strategy when _NULL_DEFAULT_COMBINED is a tuple
         if self._is_combined:
-            return _best_mni(), "moran"
+            mni = _best_mni()
+            if isinstance(_NULL_DEFAULT_COMBINED, tuple):
+                cx_method, sc_method = _NULL_DEFAULT_COMBINED
+                return (mni, cx_method), (mni, sc_method)
+            return mni, _NULL_DEFAULT_COMBINED
 
-        # cortex-only with surface space: cornblath spin
+        # cortex-only with a surface space
         if not self._bilateral:
             for preferred in ["fsLR", "fsaverage"]:
                 if preferred in self.spaces:
-                    return preferred, "cornblath"
+                    return preferred, _NULL_DEFAULT_CX_SURF
             for s in self.spaces:
                 if _is_surf(s):
-                    return s, "cornblath"
+                    return s, _NULL_DEFAULT_CX_SURF
 
-        return _best_mni(), "moran"
+        # cortex-only, MNI-only (or bilateral volumetric)
+        return _best_mni(), _NULL_DEFAULT_CX_VOL
 
     def get_sc_idc(self):
         """Subcortex parcel indices in the combined data vector; ``None`` for non-combined.

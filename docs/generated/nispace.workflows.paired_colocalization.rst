@@ -1,5 +1,5 @@
-nispace.workflows.paired_colocalization
-========================================
+﻿nispace.workflows.paired_colocalization
+=======================================
 
 .. currentmodule:: nispace.workflows
 

@@ -22,6 +22,7 @@
 
    introduction
    examples
+   benchmarks
 
 .. toctree::
    :maxdepth: 1

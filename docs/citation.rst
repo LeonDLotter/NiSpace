@@ -11,13 +11,14 @@ There is currently no dedicated toolbox paper for ``NiSpace``. Please cite at le
 * Application papers in the context of which ``NiSpace``'s core methods were developed: `Lotter et al., Neurosci. & Biobehav. Rev. 2023 <https://doi.org/10.1016/j.neubiorev.2023.105042>`_; `Lotter et al., Nat. Commun. 2024 <https://doi.org/10.1038/s41467-024-52366-7>`_; `Lotter et al., bioRxiv 2026 <https://doi.org/10.64898/2026.04.28.721294>`_
 * If you use the implemented null map functions:
 
-  * "moran": `Vos de Wael et al., Comm. Biol. 2020 <https://doi.org/10.1038/s42003-020-0794-7>`_
-  * "burt2020": `Burt et al., NeuroImage 2020 <https://doi.org/10.1016/j.neuroimage.2020.117038>`_
+  * "moran": `Wagner & Dray, Methods Ecol. Evol. 2015 <https://doi.org/10.1111/2041-210X.12407>`_ (original method); implemented via BrainSpace: `Vos de Wael et al., Comm. Biol. 2020 <https://doi.org/10.1038/s42003-020-0794-7>`_
+  * "burt2020": `Burt et al., NeuroImage 2020 <https://doi.org/10.1016/j.neuroimage.2020.117038>`_; implemented via `brainsmash <https://github.com/murraylab/brainsmash>`_
   * "burt2018": `Burt et al., Nat. Neurosci. 2018 <https://doi.org/10.1038/s41593-018-0195-0>`_
   * "spin" / "cornblath": `Cornblath et al., Comm. Biol. 2020 <https://doi.org/10.1038/s42003-020-0961-x>`_
   * "baum": `Baum et al., PNAS 2020 <https://doi.org/10.1073/pnas.1912034117>`_
   * "alexander_bloch": `Alexander-Bloch et al., NeuroImage 2018 <https://doi.org/10.1016/j.neuroimage.2018.05.070>`_
-  * "vasa" / "hungarian": `Váša et al., Cereb. Cortex 2018 <https://doi.org/10.1093/cercor/bhx249>`_
+  * "vasa": `Váša et al., Cereb. Cortex 2018 <https://doi.org/10.1093/cercor/bhx249>`_
+  * "hungarian": `Kuhn, Naval Res. Logist. Q. 1955 <https://doi.org/10.1002/nav.3800020109>`_ (assignment algorithm); popularized for spin tests by `Váša et al., Cereb. Cortex 2018 <https://doi.org/10.1093/cercor/bhx249>`_
 * If you use MNI space transform functionality (``mni_to_mni``):
 
   * EasyReg: `Iglesias, Sci. Rep. 2023 <https://doi.org/10.1038/s41598-023-33781-0>`_

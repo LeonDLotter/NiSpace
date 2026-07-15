@@ -163,16 +163,6 @@ def compute_mem(w, spectrum='nonzero', tol=1e-6, n_components=None):
     return mem, ev
 
 
-def _rand_orthogonal(m, rng):
-    """Haar-random m x m orthogonal matrix."""
-    H = rng.standard_normal((m, m))
-    Q, _ = np.linalg.qr(H) # QR -> orthonormal columns
-    # make determinant +1  (optional)
-    if np.linalg.det(Q) < 0:
-        Q[:, 0] *= -1
-    return Q
-
-
 def moran_randomization(x, mem, mev,
                         n_nulls=1000,
                         procedure='singleton',
@@ -243,7 +233,7 @@ def moran_randomization(x, mem, mev,
         x = x[:, None] # (N, 1)
 
     procedure = procedure.lower()
-    if procedure not in ['singleton', 'ortho', 'pair', 'rotate']:
+    if procedure not in ['singleton', 'pair']:
         raise ValueError(f"Unknown procedure '{procedure}'")
 
     rng = np.random.default_rng(seed)
@@ -256,83 +246,28 @@ def moran_randomization(x, mem, mev,
 
     out = np.empty((n_nulls, n_v, n_f), dtype=np.float32)
 
-    # ---- pre-compute: degenerate blocks (rotate) and whitened coefficients (ortho) ---------------
-    if procedure == 'rotate':
-        blocks, start = [], 0
-        for i in range(1, n_comp):
-            if abs(mev[i] - mev[i-1]) > tol_block:
-                blocks.append(np.arange(start, i))
-                start = i
-        blocks.append(np.arange(start, n_comp))
-
-    if procedure == 'ortho':
-        # whiten once: C_w_k = C_k * sqrt(mev_k)  →  ||C_w||² = Σ mev_k·C_k²  (SA energy)
-        mev_sqrt = np.sqrt(np.abs(mev)).astype(np.float32)[:, None]  # (n_comp, 1)
-        C_w = coeff * mev_sqrt  # (n_comp, n_f)
-
     # ---- null loop -------------------------------------------------------------------------------
     for r in range(n_nulls):
 
-        # ---- 'ortho': eigenvalue-weighted spherical rotation ------------------------------------
-        if procedure == 'ortho':
-            # Whiten → Haar-random O(K) rotation → unwhiten → renormalize.
-            # Whitening maps C to SA-energy space so the rotation treats all modes uniformly
-            # with respect to their spatial contribution. Unwhitening returns to coefficient
-            # space; renormalization restores ||C|| = ||coeff|| so the back-projection
-            # produces surrogates with the same scale as the input (prevents amplification
-            # when the eigenvalue spread is large). SA energy is approximately preserved;
-            # Moran's I varies slightly across surrogates (not exact).
-            if joint or n_f == 1:
-                Q = _rand_orthogonal(n_comp, rng)       # (n_comp, n_comp)
-                C = (Q @ C_w) / mev_sqrt                # rotate → unwhiten
-                # renormalize column-wise to ||coeff|| norm
-                c_norm  = np.linalg.norm(coeff, axis=0, keepdims=True)   # (1, n_f)
-                cn_norm = np.linalg.norm(C,     axis=0, keepdims=True)   # (1, n_f)
-                C = C * (c_norm / np.maximum(cn_norm, 1e-10))
-            else:
-                C = np.empty_like(C_w)
-                for f in range(n_f):
-                    Q = _rand_orthogonal(n_comp, rng)
-                    c_f = (Q @ C_w[:, f]) / mev_sqrt[:, 0]
-                    c_f *= np.linalg.norm(coeff[:, f]) / max(np.linalg.norm(c_f), 1e-10)
-                    C[:, f] = c_f
+        C = coeff.copy()
 
-        else:
-            C = coeff.copy()
+        signs = rng.choice([-1., 1.], size=(n_comp, n_cols))
+        if joint:
+            signs = np.broadcast_to(signs, (n_comp, n_f))
+        C *= signs
 
-            # ---- 'singleton' / 'pair': random ±1 sign flips ------------------------------------
-            if procedure in ('singleton', 'pair'):
-                signs = rng.choice([-1., 1.], size=(n_comp, n_cols))
-                if joint:
-                    signs = np.broadcast_to(signs, (n_comp, n_f))
-                C *= signs
+        if procedure == 'pair':
+            pairs = rng.permutation(n_comp)[: (n_comp // 2) * 2].reshape(-1, 2)
+            phi   = rng.uniform(0, 2 * np.pi, size=(pairs.shape[0], n_cols))
+            if joint:
+                phi = phi + np.arctan2(C[pairs[:, 0]], C[pairs[:, 1]])
+                phi = np.broadcast_to(phi, (pairs.shape[0], n_f))
+            for (a, b), ang in zip(pairs, phi):
+                A, B = C[[a, b]]
+                C[a] =  np.cos(ang) * A + np.sin(ang) * B
+                C[b] = -np.sin(ang) * A + np.cos(ang) * B
 
-                # ---- optional 'pair' 2-D mixing ------------------------------------------------
-                if procedure == 'pair':
-                    pairs = rng.permutation(n_comp)[: (n_comp // 2) * 2].reshape(-1, 2)
-                    phi   = rng.uniform(0, 2 * np.pi, size=(pairs.shape[0], n_cols))
-                    if joint:
-                        phi = phi + np.arctan2(C[pairs[:, 0]], C[pairs[:, 1]])
-                        phi = np.broadcast_to(phi, (pairs.shape[0], n_f))
-                    for (a, b), ang in zip(pairs, phi):
-                        A, B = C[[a, b]]
-                        C[a] =  np.cos(ang) * A + np.sin(ang) * B
-                        C[b] = -np.sin(ang) * A + np.cos(ang) * B
-
-            # ---- 'rotate': O(m) within degenerate eigenvalue blocks ----------------------------
-            else:
-                for blk in blocks:
-                    m = len(blk)
-                    if m == 1:
-                        s = rng.choice([-1, 1], size=(1, n_cols))
-                        if joint:
-                            s = np.broadcast_to(s, (1, n_f))
-                        C[blk] *= s
-                    else:
-                        R = _rand_orthogonal(m, rng)
-                        C[blk] = R @ C[blk]
-
-        # ---- back-projection ---------------------------------------------------------------------
+        # ---- back-projection -----------------------------------------------------------------
         sim = mem @ C * x.std(0, ddof=1) + x.mean(0)
         out[r] = sim
 
@@ -380,15 +315,13 @@ class MoranRandomization(BaseEstimator):
     """
 
     def __init__(self, procedure='singleton', spectrum='nonzero', joint=False,
-                 n_nulls=1000, tol=1e-6, tol_block=1e-3, n_components=None,
-                 seed=None):
+                 n_nulls=1000, tol=1e-6, n_components=None, seed=None):
 
         self.procedure = procedure
         self.spectrum = spectrum
         self.joint = joint
         self.n_nulls = n_nulls
         self.tol = tol
-        self.tol_block = tol_block
         self.n_components = n_components
         self.seed = seed
 
@@ -434,6 +367,5 @@ class MoranRandomization(BaseEstimator):
 
         rand = moran_randomization(x, self.mem_, self.mev_, n_nulls=self.n_nulls,
                                    procedure=self.procedure, joint=self.joint,
-                                   tol_block=self.tol_block,
                                    seed=self.seed)
         return rand

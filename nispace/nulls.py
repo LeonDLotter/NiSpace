@@ -319,15 +319,41 @@ def nulls_moran(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
     mask = _get_null_data_mask(data_1d, dist_mat)
     data_1d = data_1d[mask]
     dist_mat = dist_mat[np.ix_(mask, mask)]
-    # distance matrix adjustment
-    np.fill_diagonal(dist_mat, 1)
-    dist_mat **= -1
+    # weight matrix W: either standard 1/d or variogram-fitted covariance kernel
+    fit_variogram = kwargs.pop("fit_variogram", False)
+    variogram_n_bins     = kwargs.pop("variogram_n_bins",     20)
+    variogram_kernel     = kwargs.pop("variogram_kernel",     "exponential")
+    variogram_nugget     = kwargs.pop("variogram_nugget",     False)
+    variogram_threshold  = kwargs.pop("variogram_threshold",  0)
+    if fit_variogram and variogram_threshold is not None:
+        # compute Moran's I with standard 1/d weights to decide whether the map
+        # has enough SA to make variogram fitting meaningful
+        dm_w = np.where(dist_mat == 0, np.inf, dist_mat)
+        dm_w = (1.0 / dm_w)
+        np.fill_diagonal(dm_w, 0.0)
+        xc = data_1d - data_1d.mean()
+        S0 = dm_w.sum()
+        morans_i = float(len(data_1d) / S0) * float(xc @ dm_w @ xc) / float(xc @ xc)
+        if morans_i < variogram_threshold:
+            lgr.debug("Moran's I=%.3f < threshold=%.3f; falling back to 1/d W",
+                      morans_i, variogram_threshold)
+            fit_variogram = False
+    if fit_variogram:
+        # W[i,j] = C(d[i,j]) fitted to the map's own SA scale.
+        # MEMs are the KL eigenbasis of the map → larger effective K for smooth maps
+        # → better-calibrated FPR at high alpha relative to fixed 1/d.
+        W = _build_variogram_w(data_1d, dist_mat,
+                               n_bins=variogram_n_bins,
+                               kernel=variogram_kernel,
+                               nugget=variogram_nugget)
+    else:
+        np.fill_diagonal(dist_mat, 1)
+        dist_mat **= -1
+        W = dist_mat
     # null maps
-    # n_components=15: singleton procedure has only 2^K distinct null maps; K=7 gives just
-    # 128 unique surrogates, which is insufficient for n_perm>128. K=15 (2^15=32768) covers
-    # typical n_perm values (500–5000) while keeping type-I error in range at alpha>=2.0.
-    # GRF benchmark showed K=7 optimal for FPR at alpha=3.0; K=15 trades slight FPR loosening
-    # for adequate null-space size. Override with maps_n_components=K.
+    # procedure='singleton', n_components=15: GRF benchmark shows no single K is optimal
+    # across all SA levels. K=15 is a reasonable default for singleton (calibrated at alpha=1–2,
+    # marginally anti-conservative at alpha=3). Override via maps_procedure / maps_n_components kwargs.
     null_data[:, mask] = MoranRandomization(
         procedure=kwargs.pop("procedure", "singleton"),
         joint=kwargs.pop("joint", True),
@@ -335,7 +361,7 @@ def nulls_moran(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
         seed=seed,
         n_nulls=n_nulls,
         **kwargs
-    ).fit(dist_mat).randomize(data_1d)
+    ).fit(W).randomize(data_1d)
     # return
     return null_data.astype(data_1d.dtype)
 
@@ -351,7 +377,7 @@ def nulls_random(data_1d, dist_mat=None, n_nulls=1000, seed=None):
     # return
     return null_data.astype(data_1d.dtype)
 
-_DISTMAT_METHODS = {"moran", "burt2018", "burt2020"}
+_DISTMAT_METHODS = {"moran", "msr", "variomoran", "variomsr", "burt2018", "burt2020"}
 _SPIN_METHODS = {"alexander_bloch", "spin", "vasa", "hungarian", "cornblath", "baum"}
 _DISTMAT_FREE_METHODS = {"random"}  # methods that never need a distance matrix
 
@@ -367,9 +393,13 @@ _SPIN_METHOD_MAP = {
 _NULL_METHODS = {
     # Random
     "random": nulls_random,
-    # Moran's I implemented via BrainSpace -> volumetric and surface
+    # Moran Spectral Randomization (MSR) via BrainSpace → volumetric and surface
     "moran": nulls_moran,
-    "brainspace": nulls_moran,
+    "msr": nulls_moran,           # alias: Moran Spectral Randomization
+    "brainspace": nulls_moran,    # legacy alias
+    # Variogram-adapted MSR (varioMSR): fits W to the map's own SA scale
+    "variomoran": nulls_variomoran,
+    "variomsr": nulls_variomoran,  # alias: variogram-adapted MSR
     # Variogram-method implemented via Brainsmash -> volumetric and surface
     "burt2020": nulls_burt2020,
     "brainsmash": nulls_burt2020,
