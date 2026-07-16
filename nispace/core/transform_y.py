@@ -9,10 +9,13 @@ from ..stats.effectsize import (cohen_nan_fast, cohen_paired_nan_fast, hedges_na
 
 
 def _dummy_code_groups(groups):
-    unique_elements = sorted(list(set(groups)))
-    
+    # must run before sorted(set(groups)) below -- a mix of None/nan with a
+    # non-numeric type (e.g. strings) makes sorted() raise an unrelated
+    # TypeError before this check would otherwise be reached
     if pd.Series(groups).isnull().any():
         raise ValueError("Input contains nan's!")
+
+    unique_elements = sorted(list(set(groups)))
 
     if len(unique_elements) > 2:
         raise ValueError("Input contains more than two unique elements.")
@@ -27,11 +30,14 @@ def _dummy_code_groups(groups):
 
 
 def _num_code_subjects(subjects):
-    unique_subjects, unique_counts = np.unique(subjects, return_counts=True)
-    
+    # must run before np.unique() below -- a mix of None with a non-numeric
+    # type (e.g. strings) makes np.unique's internal sort raise an unrelated
+    # TypeError before this check would otherwise be reached
     if pd.Series(subjects).isnull().any():
         raise ValueError("Input contains nan's!")
-    
+
+    unique_subjects, unique_counts = np.unique(subjects, return_counts=True)
+
     if (unique_counts > 2).any():
         raise ValueError(f"Input contains more than two unique elements at position(s) {np.where(unique_counts > 2)[0]}.")
     

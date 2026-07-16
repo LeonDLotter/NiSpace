@@ -599,7 +599,35 @@ def prc_fast(a, b):
 # -> null distribution is always exactly 0-centered.
 # ---------------------------------------------------
 def centile_fast(a, b=None):
-    """Percentile rank of each row of a within columns of b (or a if b is None). Output in [0, 100]."""
+    """NaN-aware percentile rank of `a` within a reference distribution `b`.
+
+    For each column, ranks every value of `a` against the sorted, NaN-excluded
+    values of the reference (`b`, or `a` itself if `b` is None) via
+    `np.searchsorted(..., side="right")`, i.e. the percentage of reference
+    values that are `<=` the query value.
+
+    Parameters
+    ----------
+    a : array_like, shape (n_obs_a, n_features)
+        Values to rank.
+    b : array_like, shape (n_obs_b, n_features), optional
+        Reference sample supplying the distribution to rank against
+        (e.g. a null distribution); `n_obs_b` need not match `n_obs_a`. If
+        None (default), `a` is ranked against its own values.
+
+    Returns
+    -------
+    p : np.ndarray, shape (n_obs_a, n_features)
+        Percentile ranks in `[0, 100]`. NaN wherever `a` is NaN, or where the
+        reference column has zero non-NaN values.
+
+    Notes
+    -----
+    Despite the `_fast` name, this is **not** numba-jitted (plain Python with
+    a per-column/per-row loop over `np.searchsorted`) -- unlike every other
+    `_fast` function in this module. No plain (non-`_fast`) sibling exists.
+    Backs `Y_transform="centile(a)"`/`"centile(a,b)"` (`core/transform_y.py`).
+    """
     a = np.array(a, dtype=float)
     ref = a if b is None else np.array(b, dtype=float)
     n_cols = ref.shape[1]

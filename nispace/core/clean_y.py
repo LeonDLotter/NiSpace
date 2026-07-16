@@ -71,6 +71,13 @@ def _clean_y_between(Y_arr, covariates_between, n_subjects,
     combat_covariates : pd.DataFrame or None
         Covariates passed to ComBat (None if not used).
     """
+    # defensive cast: reg_arr/protect_arr are always cast to `dtype` below, but
+    # Y_arr wasn't -- a caller passing e.g. float64 Y_arr with default
+    # dtype=float32 hit a numba dtype-mismatch TypingError in partial_residuals_nan.
+    # In practice NiSpace.fit() always casts self._Y to self._dtype first, so this
+    # never triggered through the public API, but the helper shouldn't rely on that.
+    Y_arr = np.asarray(Y_arr, dtype=dtype)
+
     # --- normalize input ---
     bcov_df = _normalize_cov_df(covariates_between, n_subjects, "covariates_between")
     cat_cols, cont_cols = _detect_categoricals(bcov_df)
@@ -221,6 +228,10 @@ def _clean_y_within(Y_arr, covariates_within, Z, n_maps, n_parcels,
     Y_arr : np.ndarray
     used_z : bool
     """
+    # see matching comment in _clean_y_between: defensive cast so this helper
+    # doesn't rely on the caller having pre-cast Y_arr to `dtype`.
+    Y_arr = np.asarray(Y_arr, dtype=dtype)
+
     used_z = False
     wcov_arr = None
 
@@ -228,7 +239,10 @@ def _clean_y_within(Y_arr, covariates_within, Z, n_maps, n_parcels,
         if covariates_within in ["z", "Z"]:
             lgr.info("Using Z data for 'within' covariate regression.")
             if Z is not None:
-                wcov_arr = np.array(Z)
+                # dtype cast: the array/Series/DataFrame branch below casts explicitly
+                # (np.array(covariates_within, dtype=dtype)) -- this branch didn't,
+                # which crashed residuals_nan (numba) on any dtype mismatch vs Y_arr.
+                wcov_arr = np.array(Z, dtype=dtype)
                 used_z = True
             else:
                 lgr.critical_raise("Provide Z data at initialization for Z regression!", ValueError)
