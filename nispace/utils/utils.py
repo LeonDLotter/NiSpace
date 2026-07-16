@@ -259,6 +259,35 @@ def nan_detector(*arrays):
     return nan_mask
 
 
+def dedupe_rows(X):
+    """Deduplicate rows of a 2D array, NaN-safe.
+
+    Uses pandas (``DataFrame.duplicated``/``groupby(dropna=False)``), not
+    ``np.unique(axis=0, return_inverse=True)`` -- the latter does not merge
+    NaN-containing duplicate rows (each NaN-containing row is kept as a
+    separate "unique" row even if otherwise identical), which matters here
+    since dropped/background parcels are commonly NaN throughout NiSpace.
+
+    Parameters
+    ----------
+    X : np.ndarray
+        2D array, shape ``(n_rows, n_cols)``.
+
+    Returns
+    -------
+    X_unique : np.ndarray
+        Deduplicated rows of `X`, in order of first appearance.
+    inverse_idx : np.ndarray of int
+        Shape ``(n_rows,)`` such that ``X_unique[inverse_idx]`` reconstructs `X`.
+    """
+    df = pd.DataFrame(X)
+    # with sort=False, group codes are assigned in order of first appearance, so
+    # group k IS the row index into X_unique below -- inverse_idx falls out directly
+    inverse_idx = df.groupby(list(df.columns), dropna=False, sort=False).ngroup().to_numpy()
+    X_unique = X[~df.duplicated(keep="first").to_numpy()]
+    return X_unique, inverse_idx
+
+
 def remove_nan(data, which="col"):
     """Drop rows or columns containing NaN from an array/DataFrame/Series.
 

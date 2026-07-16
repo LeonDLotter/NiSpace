@@ -61,6 +61,11 @@ _COLOC_METHODS_DROPOPT = {
     "ridge": ["r2", "beta", "alpha"],
     "elasticnet": ["r2", "beta", "alpha", "l1ratio"],
 }
+# methods that score each X row independently (single value per gene, no interaction
+# with other X rows) and can therefore be aggregated post-hoc (e.g. for XSEA) from
+# precomputed per-row values -- as opposed to mlr/dominance/pls/pcr/lasso/ridge/
+# elasticnet, which fit one joint model over all X rows together
+_COLOC_METHODS_UNIVARIATE = {"pearson", "spearman", "partialpearson", "partialspearman", "mi", "slr"}
 
 _P_TAILS = {
     "pearson": {"rho": "two"},

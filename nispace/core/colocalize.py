@@ -339,7 +339,36 @@ def _get_colocalize_fun(method,
         return _y_colocalize_xsea
 
 
-def _sort_colocs(method, y_colocs_list, n_X, n_Y, xsea=False, 
+def _xsea_aggregate(arr, xsea_method, weights=None, axis=-1):
+    """Reduce per-gene stat values to a per-set statistic along `axis`.
+
+    Same formulas as the aggregator closures built inside `_get_colocalize_fun`'s xsea
+    branch above, generalized to an arbitrary reduction axis so they can be applied to
+    batched lookups (e.g. shape ``(n_Y, n_perm, set_size)``) in one call instead of once
+    per set/permutation. Used by the XSEA null-precompute fast paths in
+    `NiSpace.permute()` (api.py), which replace the per-permutation `_y_colocalize_xsea`
+    loop with vectorized array lookups but must reduce with identical aggregation math.
+    """
+    if xsea_method == "mean":
+        return np.nanmean(arr, axis=axis)
+    elif xsea_method == "median":
+        return np.nanmedian(arr, axis=axis)
+    elif xsea_method == "absmean":
+        return np.nanmean(np.abs(arr), axis=axis)
+    elif xsea_method == "absmedian":
+        return np.nanmedian(np.abs(arr), axis=axis)
+    elif xsea_method == "weightedmean":
+        out = np.ma.average(np.ma.array(arr, mask=np.isnan(arr)), weights=weights, axis=axis)
+        return np.ma.filled(out, np.nan)
+    elif xsea_method == "weightedabsmean":
+        out = np.ma.average(np.ma.array(np.abs(arr), mask=np.isnan(arr)), weights=weights, axis=axis)
+        return np.ma.filled(out, np.nan)
+    else:
+        lgr.critical_raise(f"XSEA aggregation method '{xsea_method}' not defined!",
+                           ValueError)
+
+
+def _sort_colocs(method, y_colocs_list, n_X, n_Y, xsea=False,
                  return_df=True, labs_X=None, labs_Y=None, 
                  n_components=None,
                  dtype=np.float32):

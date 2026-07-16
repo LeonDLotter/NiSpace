@@ -15,7 +15,7 @@ from .io import parcellate_data, to_pickle, from_pickle
 from .core.parcellation import Parcellation
 from .core.reduce_x import _reduce_dimensions
 from .core.transform_y import _dummy_code_groups, _num_code_subjects, _get_transform_fun
-from .core.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats, _rank_regress
+from .core.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats, _rank_regress, _xsea_aggregate
 from .core.region_influence import (_get_region_influence_fun, _sort_region_influence,
                                      _pool_region_influence, _ANALYTIC_METHODS)
 from .core.region_contribution import (_get_region_contribution_fun, _sort_region_contribution,
@@ -25,7 +25,7 @@ from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_
                                _resolve_permute_mode_settings)
 from .core.nullmaps import NullMaps
 from .core.plot import _plot_categorical
-from .core.constants import _COLOC_METHODS, _SPACE_DEFAULT_VOL
+from .core.constants import _COLOC_METHODS, _SPACE_DEFAULT_VOL, _COLOC_METHODS_UNIVARIATE
 from .datasets import fetch_parcellation, fetch_reference, _check_parcellation
 from .nulls import get_distance_matrix, _SPIN_METHODS, _DISTMAT_FREE_METHODS, _parse_null_method
 from .stats.coloc import beta, elasticnet, lasso, mlr, partialpearson, pearson, rank2d, ridge
@@ -38,7 +38,7 @@ from .cv import _get_dist_dep_splits, _get_rand_splits
 from .plotting import nice_stats_labels, brainplot
 from .utils.utils import (set_log, _quiet, fill_nan, _get_df_string, _lower_strip_ws, mean_by_set_df,
                           get_column_names, lower, print_arg_pairs,
-                          _parse_df_string, _parse_bool)
+                          _parse_df_string, _parse_bool, dedupe_rows)
 
 
 def _match_maps(index, queries):
@@ -601,7 +601,19 @@ class NiSpace:
             if ("z" in self._zscore) & (self._Z is not None):
                 lgr.info("Z-standardizing 'Z' data.")
                 self._Z = zscore_df(self._Z, along="rows")
-                                    
+
+        ## warn on accidental duplicate rows (e.g. the same reference/subject map included
+        # twice) -- cheap diagnostic, not a dedup path; NaN-safe via pandas .duplicated()
+        for _name, _data in (("X", self._X), ("Y", self._Y), ("Z", self._Z)):
+            if _data is not None:
+                _n_dup = int(_data.duplicated().sum())
+                if _n_dup:
+                    if (_name == "X") and ("set" in _data.index.names):
+                        continue
+                    else:
+                        lgr.warning(f"{_n_dup} duplicate row(s) found in '{_name}' data -- if "
+                                    "unintended, check your input for accidentally repeated maps.")
+
         ## return complete object
         return self
 
@@ -2368,11 +2380,11 @@ class NiSpace:
 
         ## map permutation: raise early only when parc is genuinely needed
         if "maps" in ([what] if isinstance(what, str) else what) and self._parc is None:
-            from .nulls import _SPIN_METHODS as _sm
-            _has_nulls = maps_nulls is not None or (self._nulls.get("maps_null") is not None)
-            _has_dist  = dist_mat is not None
-            _is_spin   = maps_method in _sm if maps_method else False
-            if not (_has_nulls or (_has_dist and not _is_spin)):
+            _has_nulls    = maps_nulls is not None or (self._nulls.get("maps_null") is not None)
+            _has_dist     = dist_mat is not None
+            _is_spin      = maps_method in _SPIN_METHODS if maps_method else False
+            _is_dist_free = maps_method in _DISTMAT_FREE_METHODS if maps_method else False
+            if not (_has_nulls or (_has_dist and not _is_spin) or _is_dist_free):
                 lgr.critical_raise(
                     "Map null map generation requires a parcellation. Provide one via "
                     "NiSpace(parcellation=...), or supply pre-computed null maps (maps_nulls=) "
@@ -2765,10 +2777,21 @@ class NiSpace:
                 if maps_nulls is None and dist_mat is None and not _skip_distmat:
                     dist_mat = self._get_dist_mat(**dist_mat_kwargs)
                 
-                # get null maps, will not generate new maps if already existing and use of 
+                # get null maps, will not generate new maps if already existing and use of
                 # existing is requested
                 if XY=="X":
-                    data_obs = _X_obs
+                    # xsea: gene sets are frequently redundant (e.g. GO hierarchy) -- dedupe
+                    # by value before generation so a gene repeated across sets gets ONE null
+                    # surrogate per permutation (reused everywhere it appears), not one
+                    # independent draw per (set, gene) occurrence. `_inverse_idx_X` maps each
+                    # original _X_obs row back to its row in the deduplicated frame; used below
+                    # to re-expand the (smaller) null array back into per-set arrays.
+                    _inverse_idx_X = None
+                    if isinstance(_X_obs_arr, dict):
+                        data_obs = _X_obs.drop_duplicates()
+                        _, _inverse_idx_X = dedupe_rows(_X_obs.values)
+                    else:
+                        data_obs = _X_obs
                     standardize_nulls = True if "x" in self._zscore else False
                 elif XY=="Y":
                     if Y_transform:
@@ -2807,7 +2830,10 @@ class NiSpace:
                     # case: xsea requested: re-sort into a list of dicts of set-wise arrays
                     if isinstance(_X_obs_arr, dict):
                         idc_set = np.array(_X_obs.index.get_level_values("set"))
-                        _X_null = [{set_name: null[idc_set == set_name, :]
+                        # _inverse_idx_X maps original (set, gene) row positions to rows in
+                        # the deduplicated null array generated above -- genes shared across
+                        # sets are gathered from the same underlying null draw
+                        _X_null = [{set_name: null[_inverse_idx_X[idc_set == set_name], :]
                                     for set_name in _X_obs_arr.keys()}
                                    for null in _X_null]
                 elif XY=="Y":
@@ -3049,20 +3075,102 @@ class NiSpace:
             # return            
             return null_colocs
         
+        # xsea null aggregation fast path: for methods that score each gene independently
+        # (see _COLOC_METHODS_UNIVARIATE), the per-set statistic is a plain post-hoc
+        # reduction over per-gene values -- so those can be precomputed ONCE (per unique
+        # gene, not per set-occurrence-per-permutation) and reused via array lookup,
+        # instead of recomputing raw correlations inside `par_fun` for every permutation.
+        # Restricted to single-mode "sets"/"maps"(Y) xsea calls -- see plan for rationale;
+        # everything else (multivariate methods, what-combos, non-xsea) uses `par_fun` as
+        # before, unchanged.
+        _fast_xsea_sets = xsea and method in _COLOC_METHODS_UNIVARIATE and what == ["sets"]
+        _fast_xsea_mapsY = (xsea and method in _COLOC_METHODS_UNIVARIATE
+                             and what == ["maps"] and maps_which == ["Y"])
+
+        if _fast_xsea_sets or _fast_xsea_mapsY:
+            lgr.info("Using precomputed per-gene statistics for XSEA null aggregation.")
+            set_names_fast = list(_X_obs_arr.keys())
+            xsea_method = self._xsea_aggregation_method
+            weighted = "weighted" in xsea_method
+
+            # plain (non-xsea) per-row colocalization function, built with the exact same
+            # kwargs used to build self._colocs_fun[method] -- reuses the existing, tested
+            # pearson/mutualinfo/r2 numerics (incl. r_to_z handling) rather than
+            # reimplementing them here
+            _plain_kwargs = {k: v for k, v in self._coloc_kwargs_by_method[method].items()
+                              if k not in ("rank", "regress_z", "zy_matched")}
+            _plain_kwargs["xsea"] = False
+            _y_colocalize_plain = _get_colocalize_fun(
+                method=method, seed=seed, verbose=False, dtype=dtype, **_plain_kwargs
+            )
+
+            stat_key = None
+            if _fast_xsea_sets:
+                # Y is fixed (not permuted) in pure "sets" mode -- one background
+                # stat matrix serves every permutation; only the drawn indices vary
+                Y_fixed = _Y_null[0]  # (n_Y_rows, n_parcels), same for all i
+                bg_unique, bg_inverse_idx = dedupe_rows(sets_X_background)
+                stat_bg_unique = np.zeros((Y_fixed.shape[0], bg_unique.shape[0]), dtype=dtype)
+                for i_y in range(Y_fixed.shape[0]):
+                    res = _y_colocalize_plain(bg_unique, Y_fixed[i_y, :])
+                    if stat_key is None:
+                        stat_key = next(iter(res))
+                    stat_bg_unique[i_y] = res[stat_key]
+                stat_lookup = stat_bg_unique[:, bg_inverse_idx]  # (n_Y, bg_size)
+
+                set_stats = []
+                for set_name in set_names_fast:
+                    # (n_perm, set_size) drawn background indices for this set
+                    idx_matrix = np.stack([_X_null[i][set_name] for i in range(n_perm)])
+                    gathered = stat_lookup[:, idx_matrix]  # (n_Y, n_perm, set_size)
+                    w = X_weights[set_name] if weighted else None
+                    set_stats.append(_xsea_aggregate(gathered, xsea_method, weights=w, axis=-1))
+                full = np.stack(set_stats, axis=-1).astype(dtype)  # (n_Y, n_perm, n_sets)
+
+            else:  # _fast_xsea_mapsY: X sets fixed (observed), Y is nulled per permutation
+                idc_set = np.array(_X_obs.index.get_level_values("set"))
+                X_unique, inverse_idx = dedupe_rows(np.vstack(list(_X_obs_arr.values())))
+                set_member_idx = {name: inverse_idx[idc_set == name] for name in set_names_fast}
+
+                n_y_rows_null = _Y_null[0].shape[0]
+                stat_uniq = np.zeros((n_y_rows_null, n_perm, X_unique.shape[0]), dtype=dtype)
+                for i in tqdm(range(n_perm), desc=f"Null colocalizations ({method}, precomputed)",
+                              disable=not verbose):
+                    for i_y in range(n_y_rows_null):
+                        res = _y_colocalize_plain(X_unique, _Y_null[i][i_y, :])
+                        if stat_key is None:
+                            stat_key = next(iter(res))
+                        stat_uniq[i_y, i] = res[stat_key]
+
+                set_stats = []
+                for set_name in set_names_fast:
+                    gathered = stat_uniq[:, :, set_member_idx[set_name]]  # (n_Y, n_perm, set_size)
+                    w = X_weights[set_name] if weighted else None
+                    set_stats.append(_xsea_aggregate(gathered, xsea_method, weights=w, axis=-1))
+                full = np.stack(set_stats, axis=-1).astype(dtype)  # (n_Y, n_perm, n_sets)
+
+            # pooled_p reduction, matching par_fun's post-processing exactly (no-op if
+            # pooled_p is falsy or there's only one Y row to begin with)
+            if pooled_p and _n_y_rows > 1:
+                reducer = np.nanmedian if pooled_p == "median" else np.nanmean
+                full = reducer(full, axis=0, keepdims=True).astype(dtype)
+
+            _colocs_null = [{stat_key: full[:, i, :]} for i in range(n_perm)]
+
         # run in parallel
-        if not xsea:
+        elif not xsea:
             _colocs_null = Parallel(n_jobs=n_proc)(
-                delayed(par_fun)(_X_null[i], _Y_null[i]) 
+                delayed(par_fun)(_X_null[i], _Y_null[i])
                 for i in tqdm(
-                    range(n_perm), 
+                    range(n_perm),
                     desc=f"Null colocalizations ({method}, {n_proc} proc)", disable=not verbose
                 )
             )
         else:
             _colocs_null = Parallel(n_jobs=n_proc)(
-                delayed(par_fun)(_xsea_perm_data(i), _Y_null[i], X_weights) 
+                delayed(par_fun)(_xsea_perm_data(i), _Y_null[i], X_weights)
                 for i in tqdm(
-                    range(n_perm), 
+                    range(n_perm),
                     desc=f"Null colocalizations ({method}, {n_proc} proc)", disable=not verbose
                 )
             )
