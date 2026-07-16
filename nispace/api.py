@@ -1710,9 +1710,9 @@ class NiSpace:
 
         References
         ----------
-        .. [1] Lotter et al. (2024). Regional patterns of human cortex development
-               correlate with underlying neurobiology. *Nature Communications*.
-               https://doi.org/10.1038/s41467-024-52366-7
+        Lotter et al. (2024). Regional patterns of human cortex development
+        correlate with underlying neurobiology. *Nature Communications*.
+        https://doi.org/10.1038/s41467-024-52366-7
         """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.regional_influence() - Estimating regional influence. ***")
@@ -1971,7 +1971,7 @@ class NiSpace:
         explicit opt-in via ``get_regional_contribution(quadrant=True)``.
 
         This is a standard decomposition of the spatial correlation between two maps,
-        similar to what was presented in Faskowitz et al. (2026) [1]_ at OHBM 2026.
+        similar to what was presented in Faskowitz et al. (2026) [faskowitz2026]_ at OHBM 2026.
 
         Parameters
         ----------
@@ -1998,7 +1998,7 @@ class NiSpace:
 
         References
         ----------
-        .. [1] Faskowitz et al. (2026). Spatial maps of similarity across the cortex.
+        .. [faskowitz2026] Faskowitz et al. (2026). Spatial maps of similarity across the cortex.
                OHBM 2026 Annual Meeting, Abstract #0342.
                https://doi.org/10.5281/zenodo.20817055
         """
@@ -2226,10 +2226,10 @@ class NiSpace:
         what : str or list of str
             What to permute. One or more of:
             ``"maps"`` — spatially constrained null maps for X and/or Y brain maps;
-            ``"groups"`` — Y group labels (requires ``Y_transform``); [1]_
+            ``"groups"`` — Y group labels (requires ``Y_transform``); [dukart2021]_
             ``"sets"`` — X set membership labels (requires XSEA);
             ``"pairs"`` — within-pair colocalization against a between-pair null
-            (SPICE test; requires N matched maps in both X and Y). [2]_ Pairs can
+            (SPICE test; requires N matched maps in both X and Y). [weinstein2021]_ Pairs can
             be subjects, studies, tracer targets, or any unit for which one map
             exists in each modality.
             Allowed combinations for multi-element lists: ``["maps", "groups"]``,
@@ -2326,7 +2326,7 @@ class NiSpace:
             Paired permutation (requires subjects vector). ``"auto"`` infers
             pairing from the Y transform. Default ``"auto"``.
         groups_strategy : str
-            Permutation strategy: ``"proportional"`` (default) or ``"random"``.
+            Permutation strategy: ``"shuffle"`` (default), ``"proportional"``, or ``"draw"``.
             Remaining kwargs (no prefix) are forwarded to :meth:`colocalize`.
 
         Returns
@@ -2338,11 +2338,11 @@ class NiSpace:
 
         References
         ----------
-        .. [1] Dukart et al. (2021). JuSpace: A tool for spatial correlation
+        .. [dukart2021] Dukart et al. (2021). JuSpace: A tool for spatial correlation
                analyses of magnetic resonance imaging data with nuclear imaging
                derived neurotransmitter maps. *Human Brain Mapping*.
                https://doi.org/10.1002/hbm.25244
-        .. [2] Weinstein et al. (2021). A simple permutation-based test of
+        .. [weinstein2021] Weinstein et al. (2021). A simple permutation-based test of
                intermodal correspondence. *Human Brain Mapping*.
                https://doi.org/10.1002/hbm.25577
         """
@@ -3157,16 +3157,16 @@ class NiSpace:
             * ``"meff"`` / ``"meff_galwey"`` (default) -- Šidák correction using
               an effective number of independent tests estimated from the
               eigenvalues of X's (and, for ``mc_dimension="array"`` with
-              multiple Y rows, also Y's) correlation matrix. [1]_
+              multiple Y rows, also Y's) correlation matrix. [galwey2009]_
             * ``"meff_li_ji"`` -- same Šidák-correction scheme, with an
-              alternative eigenvalue-based effective-N estimator. [2]_
+              alternative eigenvalue-based effective-N estimator. [liji2005]_
             * ``"maxT"`` -- single-step max-statistic FWER correction from the
               permutation null computed by :meth:`permute`; requires the null
               colocalization distributions to still be available (i.e. not
-              dropped via ``save_nulls=False``). [3]_
+              dropped via ``save_nulls=False``). [westfall1993]_
             * ``"step_maxT"`` -- step-down variant of ``"maxT"``, more powerful
-              while preserving FWER control. [3]_
-            * ``"fdr_bh"`` -- Benjamini-Hochberg false discovery rate. [4]_
+              while preserving FWER control. [westfall1993]_
+            * ``"fdr_bh"`` -- Benjamini-Hochberg false discovery rate. [benjamini1995]_
             * ``"bonferroni"``, or any other method name accepted by
               ``statsmodels.stats.multitest.multipletests`` (e.g. ``"holm"``,
               ``"hommel"``, ``"sidak"``, ``"fdr_by"``) -- passed through as-is.
@@ -3201,16 +3201,16 @@ class NiSpace:
 
         References
         ----------
-        .. [1] Galwey (2009). A new measure of the effective number of tests, a
+        .. [galwey2009] Galwey (2009). A new measure of the effective number of tests, a
                practical tool for comparing families of non-independent
                significance tests. *Genetic Epidemiology*.
                https://doi.org/10.1002/gepi.20408
-        .. [2] Li & Ji (2005). Adjusting multiple testing in multilocus analyses
+        .. [liji2005] Li & Ji (2005). Adjusting multiple testing in multilocus analyses
                using the eigenvalues of a correlation matrix. *Heredity*.
                https://doi.org/10.1038/sj.hdy.6800717
-        .. [3] Westfall & Young (1993). Resampling-Based Multiple Testing:
+        .. [westfall1993] Westfall & Young (1993). Resampling-Based Multiple Testing:
                Examples and Methods for p-Value Adjustment. Wiley.
-        .. [4] Benjamini & Hochberg (1995). Controlling the False Discovery
+        .. [benjamini1995] Benjamini & Hochberg (1995). Controlling the False Discovery
                Rate: A Practical and Powerful Approach to Multiple Testing.
                *Journal of the Royal Statistical Society: Series B*.
                https://doi.org/10.1111/j.2517-6161.1995.tb02031.x

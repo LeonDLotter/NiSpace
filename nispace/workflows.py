@@ -1445,14 +1445,16 @@ def nimare_colocalization(y,
         so Y is permuted with the NiMARE null distribution. Explicit entries in
         ``permute_kwargs`` take precedence.
 
-    (all other parameters identical to :func:`colocalization`)
-
     Returns
     -------
     nsp : NiSpace
         (when ``return_nispace_only=True``)
     colocs, p_values, pc_values, nsp : tuple
         Deprecated. Returned when ``return_nispace_only=False``.
+
+    Notes
+    -----
+    All other parameters are identical to :func:`colocalization`.
     """
     init_kwargs = {} if init_kwargs is None else dict(init_kwargs)
     if binary_y:
@@ -1571,6 +1573,8 @@ def nimare_xsea(y,
 
     Notes
     -----
+    All other parameters are identical to :func:`xsea`.
+
     Unlike :func:`nimare_colocalization`, this function never touches
     ``maps_which`` — :func:`xsea` always permutes ``maps_which="Y"`` regardless of
     ``nimare_nulls``, since X is a fixed reference gene-set collection in XSEA, not
