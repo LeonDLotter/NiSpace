@@ -21,7 +21,7 @@ def _get_dist_dep_splits(dist_mat, train_pct=0.75):
 def _get_rand_splits(n_obs, train_pct=0.75, seed=None):
     """
     """
-    idx = np.arange(0, n_obs + 1, 1)
+    idx = np.arange(0, n_obs, 1)
     
     train_test_idc = []
     for i in range(n_obs):

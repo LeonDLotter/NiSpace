@@ -1542,23 +1542,24 @@ class NiSpace:
                     
                 if any([s in (self._parc._space or "").lower() for s in ["mni", "fsa"]]):
                     lgr.info("Calculating distance-dependent parcel splits.")
-                    self.parcel_tr_te_splits_works = _get_dist_dep_splits(
-                        dist_mat=euclidean_dist_mat[np.ix_(self._no_nan, self._no_nan)], 
+                    parcel_tr_te_splits = _get_dist_dep_splits(
+                        dist_mat=euclidean_dist_mat[np.ix_(self._no_nan, self._no_nan)],
                         train_pct=parcel_train_pct
-                    ) 
+                    )
                 else:
                     lgr.warning("Calculating random parcel splits as parcellation space not supported.")
                     parcel_tr_te_splits = _get_rand_splits(
-                        train_pct=parcel_train_pct, 
+                        n_obs=int(self._no_nan.sum()),
+                        train_pct=parcel_train_pct,
                         seed=seed
-                    ) 
-                    
+                    )
+
         # save colocalization settings
         self._coloc_kwargs = dict(
             xsea=xsea,
             xsea_method=xsea_aggregation_method,
-            parcel_train_pct=None,
-            parcel_tr_te_splits=None,
+            parcel_train_pct=parcel_train_pct,
+            parcel_tr_te_splits=parcel_tr_te_splits,
             parcel_mask_regularized=self._no_nan.copy(),
             **kwargs
         )
