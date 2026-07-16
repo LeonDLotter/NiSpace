@@ -236,7 +236,7 @@ def zscore_df(df, along="cols", force_df=True):
     return df_stand
 
 
-def permute_groups(groups, strategy="proportional", paired=False, subjects=None, n_perm=1, 
+def permute_groups(groups, strategy="shuffle", paired=False, subjects=None, n_perm=1,
                    n_proc=1, seed=None, verbose=False):
     """Permute group-membership labels for group-comparison null distributions.
 
@@ -250,10 +250,57 @@ def permute_groups(groups, strategy="proportional", paired=False, subjects=None,
     groups : array-like
         Group/session labels, length n_samples.
     strategy : str, default="shuffle"
-        Must contain one of ``"shuff"`` (random full permutation), ``"draw"``
-        (unpaired only; random draw with replacement), or ``"prop"``
-        (proportional: permuted groups keep the same size/composition as the
-        originals).
+        Must contain one of ``"shuff"``, ``"draw"`` (unpaired only), or
+        ``"prop"``. What each does depends on `paired`:
+
+        * ``"shuff"`` -- **unpaired**: one free random permutation of the
+          whole `groups` vector (``rng.permutation``) -- the classic
+          permutation-test null, exchanging labels with no constraint beyond
+          the overall label counts staying fixed. **paired**: an independent
+          random permutation of each subject's own labels across their
+          sessions (a free per-subject sign-flip) -- every one of the
+          ``n_labels!`` orderings is equally likely for every subject,
+          independently of every other subject.
+        * ``"prop"`` (proportional) -- **unpaired**: iteratively assigns each
+          new group the same *proportion* of samples from every original
+          group as that original group's overall share of the sample, so the
+          permuted groups reproduce the original composition as closely as
+          floor-rounding allows. **paired**: splits subjects into exactly
+          ``floor(n_subjects / n_labels!)`` blocks, one per possible session-label
+          ordering (for 2 sessions: exactly half the subjects keep the
+          original order, half get the fully swapped order) -- a *fixed*,
+          balanced split, not a free per-subject choice. This mirrors
+          JuSpace's own exact-permutation scheme [1]_ (``compute_exact_pvalue.m``):
+          the unpaired "es between" case (``options(1)==1``) draws a fixed,
+          ``round()``-determined count from each original group's pool into
+          each new group (not a free permutation), and the paired "es
+          within" case (``options(1)==2``) uses a fixed vector
+          ``v = [ones(floor(N/2),1); 2*ones(floor(N/2)+1,1)]`` to force an
+          exact half-swap/half-keep split, randomized only in *which*
+          subjects land in which half -- the same restriction as NiSpace's
+          paired ``"prop"`` above.
+        * ``"draw"`` -- **unpaired only**: draws `groups` with replacement
+          (``rng.choice(..., replace=True)``), a bootstrap-style resample
+          rather than a strict relabeling (label counts are not preserved
+          exactly, and repeats are possible).
+
+        **Default is ``"shuffle"``, not ``"prop"``, because ``"prop"``'s fixed
+        (unpaired) / exactly-balanced (paired) restriction shrinks the space
+        of achievable permutations relative to the free ``"shuffle"`` scheme,
+        which narrows the resulting null distribution and inflates the false
+        positive rate.** This was empirically confirmed via
+        ``docs/nb_benchmarks/bench03_group_permutation_fpr.ipynb`` (GRF-based
+        FPR benchmark for :meth:`~nispace.api.NiSpace.permute`'s
+        ``what="groups"`` mode): with ``strategy="proportional"``, FPR was
+        inflated for both paired and unpaired designs, worst for **paired**
+        at small `n_subjects` (e.g. FPR ~0.09 at n_subjects=10 vs. nominal
+        0.05, shrinking towards ~0.06 by n_subjects=30 but never fully
+        resolving) -- consistent with the paired case's exact 50/50 split
+        being the more restrictive of the two ``"prop"`` variants. Switching
+        both paired and unpaired to ``"shuffle"`` resolved this completely
+        (FPR ~0.05 across all tested `n_subjects`, with no residual trend).
+        ``"prop"``/``"draw"`` remain available for cases that specifically
+        need a fixed-composition or bootstrap-style null.
     paired : bool, default=False
         If True, permute within each subject (across that subject's own
         group/session labels) instead of across the whole sample; requires
@@ -283,6 +330,13 @@ def permute_groups(groups, strategy="proportional", paired=False, subjects=None,
         If `paired=True` without `subjects`, if group sizes are unequal
         across sessions in the paired case, or if `strategy` doesn't match
         a known mode.
+
+    References
+    ----------
+    .. [1] Dukart et al. (2021). JuSpace: A tool for spatial correlation
+           analyses of magnetic resonance imaging data with nuclear imaging
+           derived neurotransmitter maps. *Human Brain Mapping*.
+           https://doi.org/10.1002/hbm.25244
     """
     groups = np.array(groups)
     n = len(groups)

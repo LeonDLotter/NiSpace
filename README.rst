@@ -11,6 +11,9 @@
 .. image:: https://img.shields.io/readthedocs/nispace
   :target: https://nispace.readthedocs.io/
   :alt: Documentation
+.. image:: https://github.com/LeonDLotter/NiSpace/actions/workflows/tests.yml/badge.svg
+  :target: https://github.com/LeonDLotter/NiSpace/actions/workflows/tests.yml
+  :alt: Tests
 
 
 

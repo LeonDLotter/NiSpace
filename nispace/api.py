@@ -2483,7 +2483,7 @@ class NiSpace:
         # groups permutation
         groups_kwargs = {
             "paired": "auto",
-            "strategy": "proportional",
+            "strategy": "shuffle",
         }
         for k in [k for k in kwargs.keys() if k.startswith("groups_")]:
             groups_kwargs[k.removeprefix("groups_")] = kwargs.pop(k)

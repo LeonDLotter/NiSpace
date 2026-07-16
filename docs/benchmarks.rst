@@ -12,3 +12,4 @@ that can be re-run after code changes.
    :maxdepth: 1
 
    nb_benchmarks/bench01_null_methods_fpr
+   nb_benchmarks/bench03_group_permutation_fpr

@@ -725,7 +725,7 @@ def group_colocalization(y, design,
                 method=method,
                 Y_transform=comparison_method,
                 groups_paired=paired,
-                groups_strategy="proportional",
+                groups_strategy="shuffle",
                 pooled_p=pooled_p,
                 n_perm=n_perm,
                 seed=seed,
@@ -1561,8 +1561,6 @@ def nimare_xsea(y,
         Coordinate-sampling null maps from
         :func:`~nispace.helpers.null_maps_from_nimare`. When provided, sets
         ``maps_nulls=nimare_nulls`` in ``permute_kwargs``.
-
-    (all other parameters identical to :func:`xsea`)
 
     Returns
     -------
