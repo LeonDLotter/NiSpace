@@ -14,7 +14,13 @@ lgr = logging.getLogger(__name__)
 
 @njit(cache=True)
 def np_any_axis1(x):
-    """Numba compatible version of np.any(x, axis=1)."""
+    """Numba-compatible ``np.any(x, axis=1)``.
+
+    Numba does not support the ``axis`` argument of ``np.any``; this is a
+    manual row-wise OR reduction over a 2D ``np.ndarray``, used internally by
+    :func:`residuals_nan`/:func:`partial_residuals_nan` to build a combined
+    NaN mask across their stacked input columns.
+    """
     out = np.zeros(x.shape[0], dtype=np.bool_)
     for i in range(x.shape[1]):
         out = np.logical_or(out, x[:, i])
@@ -23,8 +29,13 @@ def np_any_axis1(x):
 
 @njit(cache=True, nogil=True)
 def residuals(x, y, decenter=False):
-    """Compute residuals for Regression with dependent variable y and independent variable(s) x.
-    Requires numpy arrays with columns as independent variables.
+    """OLS residuals of ``y`` on ``x`` (plus intercept).
+
+    Numba-compiled; requires plain ``np.ndarray`` inputs (no pandas) and does
+    **not** handle NaN — any NaN in ``x``/``y`` propagates silently through
+    ``np.linalg.pinv``. Dead code on the live pipeline: nothing in NiSpace
+    actually calls this function — every real caller uses the NaN-tolerant
+    :func:`residuals_nan` instead.
 
     Args:
         x (numpy.ndarray): shape (n_values, n_predictors)
@@ -34,7 +45,7 @@ def residuals(x, y, decenter=False):
     Returns:
         numpy.ndarray: 1D array of residuals w or w/o added mean of y
     """
-   
+
     X = np.column_stack((x, np.ones(x.shape[0], dtype=x.dtype)))
     beta = np.linalg.pinv((X.T).dot(X)).dot(X.T.dot(y))
     y_hat = np.dot(X, beta)
@@ -47,8 +58,18 @@ def residuals(x, y, decenter=False):
 
 @njit(cache=True, nogil=True)
 def residuals_nan(x, y, decenter=False):
-    """Compute residuals for Regression with dependent variable y and independent variable(s) x. 
-    Requires numpy arrays with columns as independent variables.
+    """OLS residuals of ``y`` on ``x`` (plus intercept), NaN-tolerant.
+
+    NaN-tolerant sibling of :func:`residuals`: rows where any of ``x``/``y``
+    is NaN are dropped before fitting (via :func:`np_any_axis1`), and NaN is
+    restored at those positions in the output. Numba-compiled; requires
+    plain ``np.ndarray`` inputs (no pandas). This is the version actually
+    used throughout NiSpace: by ``core/clean_y.py`` for covariate regression
+    and by ``core/colocalize.py``'s ``_rank_regress`` to residualize X/Y
+    against Z before correlating (the real mechanism behind
+    ``method="partialpearson"/"partialspearman"`` in ``colocalize()`` — see
+    :func:`nispace.stats.coloc.partialcorr` for the closed-form alternative
+    that is *not* on this code path).
 
     Args:
         x (numpy.ndarray): shape (n_values, n_predictors)
@@ -56,7 +77,8 @@ def residuals_nan(x, y, decenter=False):
         decenter (bool, optional): add mean of y to residuals before return
 
     Returns:
-        numpy.ndarray: 1D array of residuals w or w/o added mean of y
+        numpy.ndarray: 1D array of residuals w or w/o added mean of y, NaN
+        where input had NaN
     """
     nan_mask = np_any_axis1(np.isnan(np.column_stack((x, y))))
     x_ = x[~nan_mask]
@@ -84,6 +106,13 @@ def partial_residuals_nan(x_nuisance, x_protect, y):
     removes only the nuisance component. The protected effects (e.g. group
     differences) are preserved in the returned values.
 
+    Numba-compiled; requires plain ``np.ndarray`` inputs (no pandas).
+    NaN-tolerant: rows where any input is NaN are dropped before fitting
+    (via :func:`np_any_axis1`), and NaN is restored at those positions in the
+    output. Used by ``core/clean_y.py``'s "protect" covariate-regression mode
+    (protected OLS), where ``x_protect`` holds variables whose effect should
+    be kept in ``y`` while ``x_nuisance`` is removed.
+
     Args:
         x_nuisance (numpy.ndarray): shape (n, p) — confounds to remove
         x_protect  (numpy.ndarray): shape (n, q) — variables to control for but keep
@@ -107,7 +136,13 @@ def partial_residuals_nan(x_nuisance, x_protect, y):
 
 
 def rho_to_z(array, replace_1=1 - np.finfo(float).eps):
-    """Fisher's z-transformation of correlation coefficients."""
+    """Fisher's z-transformation of correlation coefficients.
+
+    Plain numpy (no numba). Values isclose to 1 are clipped to ``replace_1``
+    first, since ``arctanh(1) == inf``. Used in ``core/region_influence.py``
+    and ``core/colocalize.py`` to average/compare correlation coefficients
+    on a variance-stabilized scale.
+    """
     array = np.array(array)
     array[np.isclose(array, 1)] = replace_1
     array_z = np.arctanh(array)
@@ -115,23 +150,41 @@ def rho_to_z(array, replace_1=1 - np.finfo(float).eps):
 
 
 def z_to_rho(array):
-    """Inverse Fisher's z-transformation of correlation coefficients."""
+    """Inverse Fisher's z-transformation of correlation coefficients.
+
+    Plain numpy (no numba). Has no internal caller in NiSpace (``rho_to_z``
+    is used one-way in ``core/region_influence.py``/``core/colocalize.py``,
+    without inverting back); exercised directly by round-trip tests in
+    ``tests/test_stats_misc.py``.
+    """
     array = np.array(array)
     array_rho = np.tanh(array)
     return array_rho
 
 
 def zscore_df(df, along="cols", force_df=True):
-    """Z-standardizes array and returns pandas dataframe.
+    """Z-standardize a DataFrame/Series/ndarray, preserving its type.
+
+    Plain numpy/pandas (via ``scipy.stats.zscore``, ``ddof=0``, NaN omitted
+    per column/row). Widely used across NiSpace (``api.py``, ``core/permute.py``,
+    ``core/clean_y.py``, ``core/nullmaps.py``, ``datasets.py``) for
+    self-normalization of maps/vectors (population, not sample, convention).
 
     Args:
-        df (pandas dataframe): input dataframe
+        df (pandas dataframe, Series, or ndarray): input data
         along (str, optional): Either "cols" or "rows". Defaults to "cols".
+        force_df (bool, optional): for Series/ndarray input, wrap the output
+            in a DataFrame instead of returning a Series/ndarray. Defaults
+            to True.
 
     Returns:
         pd.DataFrame or pd.Series: standardized dataframe/series
-    """    
-    
+
+    Raises:
+        ValueError: if `along` is not "cols" or "rows".
+        TypeError: if `df` is not a DataFrame, Series, or ndarray.
+    """
+
     if along=="cols":
         axis = 0
     elif along=="rows":
@@ -185,7 +238,52 @@ def zscore_df(df, along="cols", force_df=True):
 
 def permute_groups(groups, strategy="proportional", paired=False, subjects=None, n_perm=1, 
                    n_proc=1, seed=None, verbose=False):
-    
+    """Permute group-membership labels for group-comparison null distributions.
+
+    Plain numpy/pandas + joblib (no numba); operates on discrete group labels,
+    not continuous data, so NaN handling doesn't apply. Used internally by
+    ``api.py``'s group-comparison null generation (``groups_*`` kwargs of
+    :meth:`~nispace.api.NiSpace.permute`).
+
+    Parameters
+    ----------
+    groups : array-like
+        Group/session labels, length n_samples.
+    strategy : str, default="shuffle"
+        Must contain one of ``"shuff"`` (random full permutation), ``"draw"``
+        (unpaired only; random draw with replacement), or ``"prop"``
+        (proportional: permuted groups keep the same size/composition as the
+        originals).
+    paired : bool, default=False
+        If True, permute within each subject (across that subject's own
+        group/session labels) instead of across the whole sample; requires
+        `subjects`.
+    subjects : array-like, optional
+        Subject identifier per sample, same length as `groups`. Required if
+        `paired=True`.
+    n_perm : int, default=1
+        Number of permuted label vectors to generate.
+    n_proc : int, default=1
+        Number of parallel jobs (joblib).
+    seed : int, optional
+        Base random seed; each permutation draws from ``seed + i``.
+    verbose : bool or "debug", optional
+        Show a progress bar; "debug" additionally prints per-group sample
+        counts for the "prop" strategy (permutation 0 only).
+
+    Returns
+    -------
+    ndarray or list of ndarray
+        Permuted group-label vector(s), same dtype as `groups`. A single
+        array if `n_perm` == 1, otherwise a list of length `n_perm`.
+
+    Raises
+    ------
+    ValueError
+        If `paired=True` without `subjects`, if group sizes are unequal
+        across sessions in the paired case, or if `strategy` doesn't match
+        a known mode.
+    """
     groups = np.array(groups)
     n = len(groups)
     group_labels, group_sizes = np.unique(groups, return_counts=True)
@@ -439,6 +537,26 @@ def meff_sidak_correction(p_array, meff, alpha=0.05, dtype=None):
     """Sidak correction using Meff effective number of tests.
 
     p_corr = 1 - (1 - p)^meff
+
+    Plain numpy/pandas (no numba). `meff` is typically obtained from
+    :func:`compute_meff` (eigenvalue-based effective test count from a data
+    matrix). Used in ``api.py`` as one of the available `mc_method` options.
+
+    Parameters
+    ----------
+    p_array : array-like, DataFrame, or Series
+        Uncorrected p-values.
+    meff : float
+        Effective number of independent tests.
+    alpha : float, default=0.05
+        Significance threshold for the `reject` output.
+    dtype : optional
+        Cast the DataFrame/Series outputs to this dtype.
+
+    Returns
+    -------
+    p_corr, reject : same type as `p_array`
+        Corrected p-values (clipped to [0, 1]) and boolean rejection mask.
     """
     p = np.array(p_array, dtype=float)
     p_corr = np.clip(1.0 - (1.0 - p) ** meff, 0.0, 1.0)
@@ -511,6 +629,40 @@ def step_maxT_correction(obs_stats, null_colocs, stat, tail="two", how="r", alph
     """Step-down Max-T FWER correction (Westfall & Young 1993).
 
     Enforces monotonicity on sorted max-T p-values for increased power over plain maxT.
+
+    Plain numpy/pandas (no numba). Companion to :func:`maxT_correction` (same
+    signature); used in ``api.py`` as the `mc_method="stepdownmaxT"` option,
+    dispatched alongside `maxT_correction` based on `mc_method`.
+
+    Parameters
+    ----------
+    obs_stats : DataFrame or array, shape (n_Y, n_X)
+        Observed test statistics.
+    null_colocs : list[n_perm] of {stat: (n_Y, n_X) array}
+        Per-permutation null statistic dicts, as produced by the permutation
+        machinery in ``core/permute.py``.
+    stat : str
+        Key to extract from each `null_colocs` dict.
+    tail : {"two", "upper", "lower"}, default="two"
+        Sidedness of the comparison.
+    how : {"r", "a"}, default="r"
+        "r": step-down max computed per-Y row, across X. "a": step-down max
+        computed globally across the flattened Y×X array.
+    alpha : float, default=0.05
+        Significance threshold for the `reject` output.
+    dtype : optional
+        Cast the DataFrame/Series outputs to this dtype.
+
+    Returns
+    -------
+    p, reject : same type as `obs_stats`
+        Step-down max-T p-values (clipped to [0, 1]) and boolean rejection
+        mask.
+
+    Raises
+    ------
+    ValueError
+        If `how` is not "r" or "a".
     """
     obs = np.array(obs_stats, dtype=float)
     n_Y, n_X = obs.shape
@@ -551,7 +703,33 @@ def step_maxT_correction(obs_stats, null_colocs, stat, tail="two", how="r", alph
 
 
 def mc_correction(p_array, alpha=0.05, method="fdr_bh", how="array", dtype=None):
-    
+    """Multiple-comparison correction via ``statsmodels.stats.multitest.multipletests``.
+
+    Plain numpy/pandas (no numba). Used in ``api.py`` as the default
+    (non-permutation-based) `mc_method` option.
+
+    Parameters
+    ----------
+    p_array : array-like, DataFrame, or Series
+        Uncorrected p-values, 1D or 2D.
+    alpha : float, default=0.05
+        Significance threshold for the `reject` output.
+    method : str, default="fdr_bh"
+        Correction method name forwarded to `multipletests` (e.g.
+        ``"fdr_bh"``, ``"bonferroni"``, ``"holm"``, ...).
+    how : str, default="array"
+        Correction scope for 2D input: ``"array"``/``"a"``/``"arr"``
+        (flatten and correct across the whole array), ``"cols"``/``"c"``/...
+        (correct each column independently), or ``"rows"``/``"r"``/... (each
+        row independently). Ignored (treated as whole-array) for 1D input.
+    dtype : optional
+        Cast the DataFrame/Series outputs to this dtype.
+
+    Returns
+    -------
+    pcor, reject : same type as `p_array`
+        Corrected p-values and boolean rejection mask.
+    """
     # prepare data
     p = np.array(p_array)
     p_shape = p.shape

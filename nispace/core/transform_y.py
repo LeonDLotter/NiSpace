@@ -44,27 +44,35 @@ def _num_code_subjects(subjects):
 
    
 def return_arr(x):
+    """Identity function; backs the ``"*"`` (no transform) entry of `_FUN_MAP`."""
     return x
 
 def mean0(x):
+    """NaN-aware mean along axis 0; backs the ``"mean(*)"`` `_FUN_MAP` formula."""
     return np.nanmean(x, axis=0)
 
 def median0(x):
+    """NaN-aware median along axis 0; backs the ``"median(*)"`` `_FUN_MAP` formula."""
     return np.nanmedian(x, axis=0)
 
 def std0(x):
+    """NaN-aware sample SD (ddof=1) along axis 0; backs the ``"std(*)"`` `_FUN_MAP` formula."""
     return np.nanstd(x, axis=0, ddof=1)
 
 def var0(x):
+    """NaN-aware sample variance (ddof=1) along axis 0; backs the ``"var(*)"`` `_FUN_MAP` formula."""
     return np.nanvar(x, axis=0, ddof=1)
 
 def elem_diff(a, b):
+    """Elementwise difference ``a - b``; backs the ``"elemdiff(*,*)"`` `_FUN_MAP` formula."""
     return a - b
 
 def mean0_diff(a, b):
+    """Difference of `mean0` reductions; backs the ``"meandiff(*,*)"`` `_FUN_MAP` formula."""
     return mean0(a) - mean0(b)
 
 def center0(a, b=None):
+    """Mean-center `a` (by its own mean, or `b`'s if given); backs ``"center(*,*)"`` in `_FUN_MAP`."""
     if b is None:
         return a - mean0(a)
     else:

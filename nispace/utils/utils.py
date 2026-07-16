@@ -51,6 +51,30 @@ _quiet_ctx = threading.local()
 
 
 def set_log(lgr, verbose=True):
+    """Set the "nispace" root logger's level and return whether INFO is enabled.
+
+    A no-op (returns False immediately) while inside a :func:`_quiet` context
+    manager block (``_quiet_ctx.active``), so temporary silencing can't be
+    overridden by a nested `verbose=True` call. `lgr` is accepted for call-site
+    symmetry with module-level loggers but is not itself used — the level is
+    always set on the shared "nispace" root logger.
+
+    Parameters
+    ----------
+    lgr : logging.Logger
+        Unused; kept for signature compatibility with callers that pass their
+        module-level logger.
+    verbose : bool, int, or None, default=True
+        ``True``: set level to INFO. ``False``/``None``/``0``: set level to
+        WARNING. Any other value is passed directly to ``Logger.setLevel``
+        (e.g. a numeric logging level or level name).
+
+    Returns
+    -------
+    bool
+        Whether INFO-level messages are (now) enabled, or False if silenced
+        by an active `_quiet` context.
+    """
     if getattr(_quiet_ctx, 'active', False):
         return False
     root = logging.getLogger("nispace")
@@ -201,6 +225,26 @@ def _del_from_tuple(tpl, elem):
     
     
 def nan_detector(*arrays):
+    """Build a combined 1D NaN mask across one or more arrays sharing dim-0 length.
+
+    Plain numpy (no numba). For any array with more than 1 dimension, NaN is
+    reduced across `axis=1` (any NaN in the row marks it). This is the
+    pre-masking step used before calling the NaN-intolerant numba functions
+    in ``stats/coloc.py`` (``pearson``, ``mlr``, etc.): callers in
+    ``core/colocalize.py``/``core/region_influence.py`` build
+    ``parcel_mask = ~nan_detector(X_T, y)`` and index with it before passing
+    data into those functions.
+
+    Parameters
+    ----------
+    *arrays : np.ndarray
+        One or more arrays with the same length along axis 0.
+
+    Returns
+    -------
+    np.ndarray of bool
+        Shape ``(n,)``; True where any input array has NaN at that position.
+    """
     # Create an initial mask filled with False, with length equal to the first dimension of the first array
     nan_mask = np.full(arrays[0].shape[0], False)
     
@@ -216,7 +260,22 @@ def nan_detector(*arrays):
 
 
 def remove_nan(data, which="col"):
-    
+    """Drop rows or columns containing NaN from an array/DataFrame/Series.
+
+    Plain numpy/pandas (no numba). Not currently called anywhere in NiSpace
+    (dead code) — kept as a public utility.
+
+    Parameters
+    ----------
+    data : np.ndarray, pd.DataFrame, or pd.Series
+        Input data.
+    which : {"col", "row"}, default="col"
+        Which axis to drop entries containing NaN along.
+
+    Returns
+    -------
+    Same type as `data`, with NaN-containing rows/columns removed.
+    """
     if isinstance(data, np.ndarray):
         axis = 0 if which=="col" else 1 # 0 drops cols, 1 drops rows
         data = data[np.isnan(data.any(axis=axis))]
@@ -229,7 +288,33 @@ def remove_nan(data, which="col"):
 
 
 def fill_nan(data, idx, idx_label=None, which="col"):
-    
+    """Re-insert all-NaN rows/columns at given positions (inverse of dropping them).
+
+    Plain numpy/pandas (no numba). Used in ``api.py``'s dimensionality-reduction
+    path (`X_reduction`) to restore parcels/maps that were dropped (as
+    all-NaN) before PCA/ICA/FA, so the reduced output keeps the original
+    column/row layout with NaN at the dropped positions.
+
+    Parameters
+    ----------
+    data : array-like or pd.DataFrame
+        Input data to insert NaN rows/columns into.
+    idx : array-like of int
+        Positions (in the *output*, post-insertion, array) at which to
+        insert a new all-NaN row/column.
+    idx_label : list of str, optional
+        For DataFrame input, labels to assign to the newly inserted
+        index/column entries. Defaults to ``"nan"`` for each.
+    which : str, default="col"
+        Whether to insert rows (any string starting with ``"row"``) or
+        columns (starting with ``"col"``).
+
+    Returns
+    -------
+    np.ndarray or pd.DataFrame
+        `data` with NaN rows/columns inserted at `idx`. Integer input is
+        upcast to float (NaN requires a float dtype).
+    """
     data_nan = np.array(data)
     if data_nan.dtype == int:
         data_nan = data_nan.astype(float)
@@ -264,6 +349,24 @@ def fill_nan(data, idx, idx_label=None, which="col"):
     return data_nan
 
 def print_arg_pairs(**kwargs):
+    """Format keyword arguments as an aligned two-row key/value log table.
+
+    Plain string formatting (no numba/numpy). Used throughout ``api.py`` to
+    build ``lgr.info(...)`` summary messages (e.g. reduction/transform
+    settings actually used for a given call).
+
+    Parameters
+    ----------
+    **kwargs
+        Arbitrary label=value pairs to display.
+
+    Returns
+    -------
+    str
+        Two-line string: uppercased, pipe-delimited labels on the first
+        line, corresponding values aligned beneath on the second. Empty
+        string if no kwargs are given.
+    """
     if len(kwargs) == 0:
         return ""
     else:
@@ -276,6 +379,39 @@ def print_arg_pairs(**kwargs):
 
 
 def mean_by_set_df(df, mean_by_set=True, weighted=True, mean_median="mean"):
+    """(Weighted) mean/median aggregation of a DataFrame grouped by a "set" index level.
+
+    Plain pandas/numpy (no numba). Used in ``api.py``'s set-aggregation path
+    (aggregating multiple maps within a named "set" of X reference maps into
+    a single representative map). NaN is excluded via ``np.ma``/``nanmedian``.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Must have a "set" level in its index for grouping to take effect,
+        and (if `weighted=True`) a "weight" level with per-row weights.
+    mean_by_set : bool, default=True
+        Group by the "set" index level. Silently disabled (treated as False)
+        if `df.index` has no "set" level.
+    weighted : bool, default=True
+        Weight rows by the "weight" index level. Silently disabled if `df.index`
+        has no "weight" level.
+    mean_median : {"mean", "median"}, default="mean"
+        Aggregation statistic. Weighted median is computed via a
+        value-repetition workaround (``np.repeat`` by integer weight), not a
+        true weighted-median algorithm.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per set (or a single row if `mean_by_set=False`), indexed by
+        a "map" level.
+
+    Raises
+    ------
+    ValueError
+        If `df` is not a pandas DataFrame.
+    """
     if not isinstance(df, pd.DataFrame):
         raise ValueError("df must be a pandas DataFrame")
     if "set" not in df.index.names:
@@ -343,6 +479,22 @@ def get_column_names(df_or_series, force_list=False):
 
 
 def lower(str_list):
+    """Lowercase a string, or each string element of a list (non-strings passed through).
+
+    Plain Python (no numpy/numba). Not currently called anywhere in NiSpace
+    (dead code) — everywhere lowercasing is actually needed, `api.py` uses
+    Python's builtin ``str.lower()`` directly instead.
+
+    Parameters
+    ----------
+    str_list : str or list
+        Input string, or list of strings/other objects.
+
+    Returns
+    -------
+    str or list
+        Lowercased string, or list with string elements lowercased.
+    """
     if isinstance(str_list, str):
         return str_list.lower()
     elif isinstance(str_list, list):
@@ -350,7 +502,27 @@ def lower(str_list):
 
 
 def get_background_value(img, border_size=2):
-    
+    """Auto-detect a volumetric image's background value from its border voxels.
+
+    Adapted from ``nilearn.masking.compute_background_mask``. Only
+    implemented for 3D/volumetric input — for anything else (e.g. surface
+    data), this silently returns ``None`` rather than raising. Used by
+    :class:`~nispace.parcellate.Parcellater` to resolve ``background_value="auto"``
+    (see [[project_parcellation_bg_handling]]).
+
+    Parameters
+    ----------
+    img : image-like
+        Input accepted by ``neuromaps.images.load_data``.
+    border_size : int, default=2
+        Border thickness (in voxels) sampled to estimate the background.
+
+    Returns
+    -------
+    float, np.nan, or None
+        The detected background value (border median), ``np.nan`` if any
+        border voxel is NaN, or ``None`` if `img` is not 3D.
+    """
     data = images.load_data(img).squeeze()
     background = None
     
@@ -367,6 +539,37 @@ def get_background_value(img, border_size=2):
 
 @njit
 def vect_to_vol_arr(vect, parc_arr, parc_idc, bg_value=0):
+    """Broadcast a per-parcel value vector back into a full volume array.
+
+    Numba-compiled; requires plain ``np.ndarray`` inputs. Inverse operation
+    of parcel-mean extraction (e.g. :func:`vol_to_vect_arr`): each voxel is
+    assigned its parcel's value via a label lookup. No NaN-specific handling
+    (a NaN in `vect` is simply assigned as-is). Used in ``plotting.py`` to
+    reconstruct volume/vertex arrays for rendering.
+
+    Parameters
+    ----------
+    vect : np.ndarray
+        Per-parcel values, shape ``(n_parcels,)``, in the same order as
+        `parc_idc`.
+    parc_arr : np.ndarray
+        Parcellation label array (any shape; flattened internally).
+    parc_idc : np.ndarray
+        Parcel label values corresponding to each entry of `vect`.
+    bg_value : scalar, default=0
+        Value assigned to voxels not belonging to any parcel in `parc_idc`.
+
+    Returns
+    -------
+    np.ndarray
+        Same shape as `parc_arr`, with each voxel set to its parcel's value
+        from `vect` (or `bg_value`).
+
+    Raises
+    ------
+    ValueError
+        If `vect` and `parc_idc` have different lengths.
+    """
     parc_arr_1d = parc_arr.flatten().astype(vect.dtype)
     vect_arr_1d = np.full_like(parc_arr_1d, bg_value, dtype=vect.dtype)
     parc_idc = parc_idc.astype(vect.dtype)
@@ -423,6 +626,33 @@ def vol_to_vect_arr(vol_arr, parc_arr, parc_idc, bg_values):
     
 
 def parc_vect_to_vol(vect, parc):
+    """Convert a per-parcel value vector into a full volumetric NIfTI image.
+
+    Thin nilearn/nibabel wrapper around :func:`vect_to_vol_arr`: loads `parc`,
+    determines its (nonzero, sorted) parcel labels, broadcasts `vect` back
+    onto the voxel grid, and returns a proper ``Nifti1Image``. Unlike most
+    functions in this module, this one is a real end-user-facing utility
+    (used directly in ``docs/nb_examples/drug_challenge.ipynb``), not just an
+    internal helper.
+
+    Parameters
+    ----------
+    vect : array-like
+        1D per-parcel values, length must match the number of nonzero labels
+        in `parc`.
+    parc : image-like
+        Parcellation image, loaded via ``nilearn.image.load_img``.
+
+    Returns
+    -------
+    nibabel.Nifti1Image
+        Volume with each parcel's voxels set to its value from `vect`.
+
+    Raises
+    ------
+    ValueError
+        If `vect` is not 1D or list-like.
+    """
     # check data
     if isinstance(vect, (list, set, tuple, pd.Series)):
         vect = np.array(vect)
@@ -443,7 +673,31 @@ def parc_vect_to_vol(vect, parc):
 
 
 def relabel_gifti_parc(parc, new_labels=None):
-    
+    """Reassign a surface parcellation's integer labels to a new label sequence.
+
+    Plain numpy/nibabel (no numba). Used in ``core/parcellation.py`` to
+    harmonize labels when combining a cortex surface parcellation with a
+    subcortex volume parcellation into one combined ("+") parcellation.
+
+    Parameters
+    ----------
+    parc : nib.GiftiImage
+        Input surface parcellation (single hemisphere).
+    new_labels : array-like of int, optional
+        New label values, one per existing (nonzero) parcel, in the order of
+        ``np.unique`` of the existing labels. Defaults to ``1..n_parcels``.
+
+    Returns
+    -------
+    nib.GiftiImage
+        Deep copy of `parc` with labels reassigned.
+
+    Raises
+    ------
+    ValueError
+        If `parc` is not a GiftiImage, if `new_labels` is not 1D array-like,
+        or if its length doesn't match the number of existing parcels.
+    """
     if not isinstance(parc, nib.GiftiImage):
         raise ValueError("'parc' must be a GiftiImage!")
     
@@ -473,7 +727,37 @@ def relabel_gifti_parc(parc, new_labels=None):
 
 
 def relabel_nifti_parc(parc, new_order=None, new_labels=None, dtype=None):
-    
+    """Reassign a volumetric parcellation's integer labels to a new label sequence.
+
+    Plain numpy/nibabel (no numba). Volumetric counterpart of
+    :func:`relabel_gifti_parc`; used in ``core/parcellation.py`` for the same
+    combined cortex+subcortex label-harmonization step.
+
+    Parameters
+    ----------
+    parc : image-like
+        Input volumetric parcellation, loaded via ``neuromaps.images.load_nifti``.
+    new_order : array-like of int, optional
+        Existing label values to keep, in the order they should be relabeled.
+        Defaults to all nonzero labels present in `parc`, sorted.
+    new_labels : array-like of int, optional
+        New label values corresponding to `new_order`. Defaults to
+        ``1..len(new_order)``.
+    dtype : optional
+        Output label dtype. Defaults to the input image's dtype.
+
+    Returns
+    -------
+    nibabel.Nifti1Image
+        Volume with labels reassigned.
+
+    Raises
+    ------
+    ValueError
+        If `new_order`/`new_labels` lengths don't match the number of
+        existing parcels, or if `new_order` isn't a subset of the labels
+        actually present in `parc`.
+    """
     parc_orig = images.load_nifti(parc)
     data_orig = parc_orig.get_fdata()
     if dtype is None:
@@ -496,6 +780,43 @@ def relabel_nifti_parc(parc, new_order=None, new_labels=None, dtype=None):
 
 
 def merge_parcellations(parcellations, labels=None, quick=False):
+    """Combine two or more NIfTI parcellation images into one labeled volume.
+
+    Plain numpy/nibabel (no numba). Only implemented for ``nib.Nifti1Image``
+    input. Used in ``datasets.py`` and ``core/parcellation.py`` to merge a
+    cortex and a subcortex parcellation into one combined image — always via
+    the fast 2-image path (`quick=True`) in practice.
+
+    Parameters
+    ----------
+    parcellations : list of nib.Nifti1Image
+        Images to merge; all must be the same type and shape.
+    labels : list, optional
+        Per-parcellation label sequences to assign (only used by the slow,
+        `quick=False` path). Defaults to each parcellation's own existing
+        label values.
+    quick : bool, default=False
+        If True, take the first parcellation's labels as-is and offset the
+        second parcellation's nonzero labels by the first's max label (only
+        supports exactly 2 parcellations; returns just the merged image). If
+        False, sequentially relabels every parcel across all parcellations
+        starting at 1 (supports any number of parcellations; also returns a
+        `labels_merged` Series mapping new label -> original label).
+
+    Returns
+    -------
+    nibabel.Nifti1Image, or (nibabel.Nifti1Image, pd.Series) if `quick=False`
+        Merged parcellation image (and, for the slow path, a Series mapping
+        each new integer label to its original source label).
+
+    Raises
+    ------
+    ValueError
+        If `parcellations`/`labels` aren't lists, have mismatched lengths, or
+        the parcellations aren't uniformly typed/shaped.
+    NotImplementedError
+        If `parcellations[0]` is not a ``nib.Nifti1Image``.
+    """
     if not isinstance(parcellations, list):
         raise ValueError("parcellations must be a list")
     if labels is None:
@@ -548,6 +869,36 @@ def merge_parcellations(parcellations, labels=None, quick=False):
 
 
 def correlate_hemispheres(img, mask=None):
+    """Correlate a volumetric image with its own left-right mirror image.
+
+    Plain numpy/nibabel (no numba). Not currently called anywhere in NiSpace
+    (dead code) — a sibling of the equally-dead
+    :func:`nispace.nulls.correlate_hemis_parc` (voxel-level here vs.
+    parcel-level there). Kept as a public utility, e.g. for sanity-checking
+    whole-brain left-right symmetry of a volume before/without parcellation.
+
+    Parameters
+    ----------
+    img : str, Path, nib.Nifti1Image, np.ndarray, or size-2 tuple/list
+        Volumetric image (single 3D array/image, mirrored internally via
+        `mask`/x-axis flip) or a size-2 tuple/list of two pre-split
+        hemisphere arrays/GiftiImages (used as-is, no mirroring).
+    mask : str, Path, nib.Nifti1Image, or np.ndarray, optional
+        Boolean/loadable mask restricting which voxels enter the
+        correlation. Only used for single-image input; defaults to
+        excluding NaN and exact-zero voxels.
+
+    Returns
+    -------
+    float
+        Pearson correlation between the (masked, flattened) original and
+        its left-right-flipped counterpart.
+
+    Raises
+    ------
+    ValueError
+        If `img` is not one of the supported types/shapes.
+    """
     if isinstance(img, (str, Path, nib.Nifti1Image)):
         #raise NotImplementedError("Nifti1Image input not implemented yet!")
         img = images.load_nifti(img)
@@ -583,6 +934,41 @@ def correlate_hemispheres(img, mask=None):
 
 
 def mirror_nifti(img, affine=None, direction="left_to_right", match_r=False, mask=None):
+    """Mirror/flip a volumetric image across the (affine-derived) x=0 hemisphere boundary.
+
+    Plain numpy/nibabel (no numba). Not currently called anywhere in NiSpace
+    (dead code) — kept as a public utility. `match_r`/`mask` parameters are
+    accepted but currently unused by the implementation.
+
+    Parameters
+    ----------
+    img : np.ndarray or image-like
+        Input volume. If an array, `affine` must be provided.
+    affine : np.ndarray, optional
+        4x4 affine; required when `img` is an array, otherwise taken from
+        `img` itself.
+    direction : str, default="left_to_right"
+        One of ``"left_to_right"``/``"right_to_left"`` (overwrite one
+        hemisphere with the mirrored other), ``"average"``/``"bilateral"``
+        (average both mirrored hemispheres), ``"switch"`` (swap
+        hemispheres), or ``"drop_left"``/``"drop_right"`` (zero out one
+        hemisphere).
+    match_r : bool, optional
+        Currently unused.
+    mask : optional
+        Currently unused.
+
+    Returns
+    -------
+    np.ndarray or nibabel.Nifti1Image
+        Mirrored volume, same type as the input (array in, array out).
+
+    Raises
+    ------
+    ValueError
+        If `img` is an array without `affine`, if `img` is not 3D, or if
+        `direction` is not one of the supported modes.
+    """
     if isinstance(img, (np.ndarray)):
         dat = np.squeeze(np.array(img))
         return_array = True
@@ -636,6 +1022,38 @@ def mirror_nifti(img, affine=None, direction="left_to_right", match_r=False, mas
     
     
 def mirror_gifti(img, direction="left_to_right", match_r=False, mask=None):
+    """Mirror/flip a bilateral surface image pair across hemispheres.
+
+    Plain numpy/nibabel (no numba). Surface counterpart of :func:`mirror_nifti`,
+    with fewer supported modes (no per-hemisphere drop/switch). Not currently
+    called anywhere in NiSpace (dead code) — kept as a public utility.
+    `match_r`/`mask` parameters are accepted but currently unused.
+
+    Parameters
+    ----------
+    img : tuple of (nib.GiftiImage, nib.GiftiImage) or (np.ndarray, np.ndarray)
+        (left, right) hemisphere data.
+    direction : str, default="left_to_right"
+        ``"left_to_right"``: copy LH data to RH. ``"right_to_left"``: copy RH
+        data to LH. ``"average"``/``"bilateral"``: average both hemispheres,
+        assigned to both outputs.
+    match_r : bool, optional
+        Currently unused.
+    mask : optional
+        Currently unused.
+
+    Returns
+    -------
+    tuple
+        (left, right) mirrored pair, same type as the input (arrays in,
+        arrays out; GiftiImages in, GiftiImages out).
+
+    Raises
+    ------
+    ValueError
+        If `img` is not a tuple, or its elements are neither ndarrays nor
+        GiftiImages.
+    """
     if not isinstance(img, tuple):
         raise ValueError("Input must be a tuple of two GiftiImages or arrays!")
     
@@ -687,6 +1105,30 @@ def _corr_vector(data_1d, correlation=1, seed=None):
     return output
 
 def correlated_vector(data_1d, correlation=1, seed=None):
+    """Generate a vector correlated with `data_1d` at a target Pearson r.
+
+    Public wrapper around the numba-jitted :func:`_corr_vector`
+    (``output = correlation * standardized_input + sqrt(1-correlation**2) * noise``,
+    rescaled back to the input's mean/SD). Not currently called anywhere in
+    NiSpace (dead code) — kept as a public utility, e.g. for generating
+    synthetic test data with a known ground-truth correlation.
+
+    Parameters
+    ----------
+    data_1d : array-like
+        1D input vector.
+    correlation : float, default=1
+        Target Pearson correlation with `data_1d`. If exactly 1, `data_1d`
+        is returned unchanged (no noise added).
+    seed : int, optional
+        Random seed for the noise draw.
+
+    Returns
+    -------
+    np.ndarray
+        1D vector of the same length as `data_1d`, correlated with it at
+        (approximately) `correlation`.
+    """
     # if correlation is 1, return the original vector
     if correlation == 1:
         return data_1d.copy()

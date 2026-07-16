@@ -114,10 +114,12 @@ def mni_to_mni(img, mni_from, mni_to, order=3, res=None,
                nispace_data_dir=None, hash_check=True, verbose=True):
     """Transform a NIfTI image between MNI template spaces using EasyReg fields.
 
-    Deformation fields were estimated with EasyReg (Freesurfer) between each
-    supported source space and both hub spaces (``MNI152NLin2009cAsym`` and
-    ``MNI152NLin6Asym``). Transforms between two non-hub spaces (e.g.
-    ``MNI305`` → ``MNIColin27``) are not directly supported.
+    Deformation fields were estimated with EasyReg [1]_ (Freesurfer), which
+    builds on the SynthMorph [2]_ registration and SynthSeg [3]_ segmentation
+    networks, between each supported source space and both hub spaces
+    (``MNI152NLin2009cAsym`` and ``MNI152NLin6Asym``). Transforms between two
+    non-hub spaces (e.g. ``MNI305`` → ``MNIColin27``) are not directly
+    supported.
 
     Parameters
     ----------
@@ -215,17 +217,15 @@ def mni_to_mni(img, mni_from, mni_to, order=3, res=None,
 
     References
     ----------
-    Iglesias, J. E. et al. (2023). Ready-to-use, open-source, deformable
-    registration of brain MRI. *Scientific Reports*, 13, 6657.
-    https://doi.org/10.1038/s41598-023-33781-0
-
-    Hoffmann, M. et al. (2022). SynthMorph: learning contrast-invariant
-    registration without acquired images. *IEEE Transactions on Medical
-    Imaging*, 41(3), 543–558. https://doi.org/10.1109/TMI.2021.3116879
-
-    Billot, B. et al. (2023). SynthSeg: Segmentation of brain MRI scans of
-    any contrast and resolution without retraining. *Medical Image Analysis*,
-    86, 102789. https://doi.org/10.1016/j.media.2023.102789
+    .. [1] Iglesias et al. (2023). Ready-to-use, open-source, deformable
+           registration of brain MRI. *Scientific Reports*.
+           https://doi.org/10.1038/s41598-023-33781-0
+    .. [2] Hoffmann et al. (2022). SynthMorph: learning contrast-invariant
+           registration without acquired images. *IEEE Transactions on
+           Medical Imaging*. https://doi.org/10.1109/TMI.2021.3116879
+    .. [3] Billot et al. (2023). SynthSeg: Segmentation of brain MRI scans
+           of any contrast and resolution without retraining. *Medical
+           Image Analysis*. https://doi.org/10.1016/j.media.2023.102789
     """
     try:
         from nitransforms import DenseFieldTransform
@@ -303,12 +303,13 @@ def compute_transform_displacement(mni_from, mni_to,
                                    verbose=True):
     """Compute a voxel-wise displacement magnitude map for a MNI space transform.
 
-    For each voxel in the ``fwd_field`` deformation field (the field used for
-    pull resampling; see Notes in :func:`mni_to_mni`), computes the Euclidean
-    distance in mm between the voxel's RAS position in ``mni_to`` space and
-    the stored ``mni_from`` RAS coordinates. The result visualises how much
-    each location is displaced between the two spaces and is useful for
-    registration quality control.
+    For each voxel in the ``fwd_field`` deformation field (estimated with
+    EasyReg [1]_, built on SynthMorph [2]_ and SynthSeg [3]_; the field used
+    for pull resampling — see Notes in :func:`mni_to_mni`), computes the
+    Euclidean distance in mm between the voxel's RAS position in ``mni_to``
+    space and the stored ``mni_from`` RAS coordinates. The result visualises
+    how much each location is displaced between the two spaces and is useful
+    for registration quality control.
 
     Parameters
     ----------
@@ -351,17 +352,15 @@ def compute_transform_displacement(mni_from, mni_to,
 
     References
     ----------
-    Iglesias, J. E. et al. (2023). Ready-to-use, open-source, deformable
-    registration of brain MRI. *Scientific Reports*, 13, 6657.
-    https://doi.org/10.1038/s41598-023-33781-0
-
-    Hoffmann, M. et al. (2022). SynthMorph: learning contrast-invariant
-    registration without acquired images. *IEEE Transactions on Medical
-    Imaging*, 41(3), 543–558. https://doi.org/10.1109/TMI.2021.3116879
-
-    Billot, B. et al. (2023). SynthSeg: Segmentation of brain MRI scans of
-    any contrast and resolution without retraining. *Medical Image Analysis*,
-    86, 102789. https://doi.org/10.1016/j.media.2023.102789
+    .. [1] Iglesias et al. (2023). Ready-to-use, open-source, deformable
+           registration of brain MRI. *Scientific Reports*.
+           https://doi.org/10.1038/s41598-023-33781-0
+    .. [2] Hoffmann et al. (2022). SynthMorph: learning contrast-invariant
+           registration without acquired images. *IEEE Transactions on
+           Medical Imaging*. https://doi.org/10.1109/TMI.2021.3116879
+    .. [3] Billot et al. (2023). SynthSeg: Segmentation of brain MRI scans
+           of any contrast and resolution without retraining. *Medical
+           Image Analysis*. https://doi.org/10.1016/j.media.2023.102789
     """
     verbose = set_log(lgr, verbose)
 

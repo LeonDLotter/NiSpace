@@ -45,7 +45,7 @@ def _array_to_gifti(data):
 class Parcellater():
     """
     Class for parcellating arbitrary volumetric / surface data.
-    Copied from neuromaps 0.0.4 and adapted for convenient use in NiSpace.
+    Copied from neuromaps [1]_ 0.0.4 and adapted for convenient use in NiSpace.
 
     Parameters
     ----------
@@ -67,11 +67,27 @@ class Parcellater():
         atlas then this specifies which hemisphere. If not specified it is
         assumed that `parcellation` is (L, R) hemisphere. Ignored if `space` is
         'MNI152'. Default: None
-    labels : list, optional
-        List of labels corresponding to indices in parcellation file
+
+    References
+    ----------
+    .. [1] Markello et al. (2022). neuromaps: structural and functional
+           interpretation of brain maps. *Nature Methods*.
+           https://doi.org/10.1038/s41592-022-01625-w
     """
 
     def __init__(self, parcellation, space, resampling_target='data', hemi=None):
+        """
+        Construct a Parcellater from a parcellation image/surfaces.
+
+        See the class docstring for parameter details.
+
+        Raises
+        ------
+        ValueError
+            If `resampling_target` is not one of {'data', 'parcellation', None},
+            or if `space` is not a space known to neuromaps (see
+            ``neuromaps.datasets.DENSITIES``).
+        """
         self.parcellation = parcellation
         self.space = ALIAS.get(space, space)
         self.resampling_target = resampling_target
@@ -96,7 +112,19 @@ class Parcellater():
             raise ValueError(f'Invalid value for `space`: {space}')
 
     def fit(self):
-        """ Prepare parcellation for data extraction
+        """
+        Load and validate the parcellation, preparing it for data extraction.
+
+        Loads `self.parcellation` into memory (as a `Nifti1Image` or tuple of
+        `GiftiImage`, depending on `space`) and populates
+        `self.parcellation_idc` with the sorted, non-zero parcel IDs found in
+        it. Must be called before `.transform()`; `.fit_transform()` calls it
+        automatically.
+
+        Returns
+        -------
+        self : Parcellater
+            The fitted instance, to allow chaining (e.g. `self.fit().transform(...)`).
         """
 
         # load parcellation
@@ -322,8 +350,38 @@ class Parcellater():
                       background_value=["auto", 0.0], hemi=None,
                       fill_dropped=True, background_parcels_to_nan=False,
                       min_num_valid_datapoints=None, min_fraction_valid_datapoints=None):
-                      
-        """ Prepare and perform parcellation of `data`
+
+        """
+        Call `.fit()` followed by `.transform(data, space, ...)` in one step.
+
+        Convenience wrapper; see `.fit()` and `.transform()` for details on
+        what each step does. All parameters are forwarded to `.transform()`.
+
+        Parameters
+        ----------
+        data : str or os.PathLike or Nifti1Image or GiftiImage or tuple
+            Data to parcellate. See `.transform()`.
+        space : str
+            The space in which `data` is defined. See `.transform()`.
+        ignore_background_data : bool
+            See `.transform()`. Default: True
+        background_value : float, list, set, array, or 'auto'
+            See `.transform()`. Default: ``['auto', 0.0]``
+        hemi : {'L', 'R'}, optional
+            See `.transform()`. Default: None
+        fill_dropped : bool
+            See `.transform()`. Default: True
+        background_parcels_to_nan : bool
+            See `.transform()`. Default: False
+        min_num_valid_datapoints : int, optional
+            See `.transform()`. Default: None
+        min_fraction_valid_datapoints : float, optional
+            See `.transform()`. Default: None
+
+        Returns
+        -------
+        parcellated : np.ndarray
+            Parcellated `data`. See `.transform()`.
         """
         return self.fit().transform(data, space, ignore_background_data,
                                     background_value, hemi, fill_dropped,

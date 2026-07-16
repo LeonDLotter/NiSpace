@@ -187,6 +187,31 @@ def _symmetrize_nans(data_1d, idc):
     return data_1d
 
 def correlate_hemis_parc(data, parc_idc_lh=None, parc_idc_rh=None, rank=False):
+    """Per-row left/right-hemisphere correlation of parcellated data.
+
+    Plain numpy, using :func:`nispace.stats.coloc.corr` (not numba itself,
+    but the underlying `corr` call is numba-jitted). Not currently called
+    anywhere in NiSpace (dead code) — kept as a standalone diagnostic
+    utility, e.g. for sanity-checking left-right symmetry of a map.
+
+    Parameters
+    ----------
+    data : array-like
+        1D (single map) or 2D (``n_maps, n_parcels``) parcellated data;
+        1D input is treated as a single row.
+    parc_idc_lh, parc_idc_rh : array-like of int, optional
+        Column positions belonging to the left/right hemisphere. Default:
+        split the columns into two equal halves.
+    rank : bool, default=False
+        Rank-transform before correlating (Spearman instead of Pearson).
+
+    Returns
+    -------
+    np.ndarray
+        Shape ``(n_maps,)``; per-row LH-RH correlation. NaN pairs are
+        excluded per row; rows with fewer than 2 valid pairs or zero
+        variance in either hemisphere give NaN.
+    """
     data = np.atleast_2d(np.array(data))
     n = data.shape[1]
     n_hemi = n // 2
@@ -213,7 +238,33 @@ def correlate_hemis_parc(data, parc_idc_lh=None, parc_idc_rh=None, rank=False):
 
 
 def find_parcel_hemispheres(parcellation):
-    
+    """Auto-detect per-parcel hemisphere membership for a parcellation.
+
+    Plain numpy/nibabel (no numba). Used in ``core/parcellation.py`` for
+    parcel-hemisphere bookkeeping (e.g. building `parc_idc_lh`/`parc_idc_rh`
+    for downstream spin/distance-based null generation).
+
+    Parameters
+    ----------
+    parcellation : tuple of two GiftiImage, nib.Nifti1Image, or single GiftiImage
+        - Bilateral surface (``(lh_img, rh_img)``): trivial split by hemisphere.
+        - Volumetric: each parcel's hemisphere is decided by the majority of
+          its voxels' x-coordinate sign (world space, via the image affine).
+        - Single (unilateral) GiftiImage: hemisphere membership cannot be
+          determined without a second hemisphere to compare against.
+
+    Returns
+    -------
+    (idc_lh, idc_rh), (labels_lh, labels_rh)
+        Index arrays (positions into the concatenated label list) and label
+        arrays for each hemisphere. All four are ``None`` for single-Gifti
+        input (undeterminable).
+
+    Raises
+    ------
+    ValueError
+        If `parcellation` is not one of the supported types.
+    """
     # easy: surface
     if isinstance(parcellation, tuple):
         
@@ -1076,9 +1127,56 @@ def apply_spins(data_1d, spins_lh, spins_rh, idc_lh, idc_rh, n_perm=None):
     return null_data
 
 
-def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"], 
+def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"],
                         parc_resample=2, centroids=False, surf_euclidean=False,
                         n_proc=1, verbose=True, dtype=np.float32):
+    """Compute a parcel-by-parcel distance matrix for a volumetric or surface parcellation.
+
+    Dispatches on `parc_space`: MNI/volumetric parcellations get a euclidean
+    distance matrix (voxel-to-voxel mean, or centroid-to-centroid if
+    `centroids=True`, via :func:`find_vol_parc_centroids`); fsaverage/fsLR
+    surface parcellations get a geodesic (mesh-surface) distance matrix by
+    default, or a euclidean centroid-to-centroid one if `surf_euclidean=True`
+    (via :func:`find_surf_parc_centroids`). `parc_resample` triggers a
+    parcel-loss-guarded resampling pass first (skipped with a warning if it
+    would drop any parcel). Used by ``api.py`` and
+    ``core/parcellation.py``'s ``Parcellation.get_dist_mat`` path (see
+    [[project_distance_matrices]]) whenever no precomputed distance matrix is
+    available.
+
+    Parameters
+    ----------
+    parc : image-like or tuple
+        Volumetric parcellation image, or ``(lh_img, rh_img)`` tuple of
+        surface GiftiImages.
+    parc_space : str
+        Reference space; must contain ``"mni"`` for the volumetric path, or
+        be one of ``"fsaverage"``/``"fsLR"``/``"fsa"``/``"fslr"`` for the
+        surface path.
+    parc_hemi : list of str, default=["L", "R"]
+        Hemispheres present (surface path only).
+    parc_resample : int, str, or bool, default=2
+        Volumetric: target voxel size in mm (``True`` -> 3mm). Surface:
+        target density string (e.g. ``"32k"``). Falsy disables resampling.
+    centroids : bool, default=False
+        Volumetric path: use centroid-to-centroid distances instead of mean
+        voxel-to-voxel distances.
+    surf_euclidean : bool, default=False
+        Surface path: use euclidean centroid-to-centroid distances instead
+        of the default geodesic mesh distance.
+    n_proc : int, default=1
+        Number of parallel jobs for the (per-parcel or per-hemisphere) loop.
+    verbose : bool, default=True
+        Show progress bars / info logging.
+    dtype : default=np.float32
+        Output distance matrix dtype.
+
+    Returns
+    -------
+    np.ndarray or tuple of np.ndarray
+        A single 2D distance matrix for a volumetric parcellation; a tuple
+        of one 2D matrix per hemisphere for a surface parcellation.
+    """
     verbose = set_log(lgr, verbose)
 
     ## generate distance matrix
@@ -1221,6 +1319,39 @@ def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"],
     return dist
 
 def find_vol_parc_centroids(parc, affine=None, parcel_idc=None, return_data_space=False, snap=True):
+    """Compute per-parcel mean voxel coordinates in world (MNI) space.
+
+    Plain numpy/nibabel (no numba). Used internally by :func:`get_distance_matrix`
+    (`centroids=True` path).
+
+    Parameters
+    ----------
+    parc : np.ndarray or image-like
+        Parcellation label array, or an image to load one from.
+    affine : np.ndarray, optional
+        4x4 affine mapping voxel to world coordinates. Required if `parc` is
+        a plain array; otherwise taken from `parc` itself.
+    parcel_idc : array-like, optional
+        Parcel label values to compute centroids for. Defaults to all
+        nonzero labels present in `parc`.
+    return_data_space : bool, default=False
+        Also return centroid coordinates in voxel (data) space.
+    snap : bool, default=True
+        Snap the mean coordinate to the nearest voxel actually inside the
+        parcel (guards against the raw mean landing outside a non-convex
+        parcel). If False, the raw (possibly off-parcel) mean is returned.
+
+    Returns
+    -------
+    np.ndarray, or (np.ndarray, np.ndarray) if `return_data_space=True`
+        Centroid coordinates in world space, shape ``(n_parcels, 3)`` (and,
+        if requested, the same in voxel space).
+
+    Raises
+    ------
+    TypeError
+        If `affine` is not given and `parc` is not a Nifti1Image.
+    """
     # get parcellation data
     if isinstance(parc, np.ndarray):
         parc_data = parc
@@ -1254,7 +1385,44 @@ def find_vol_parc_centroids(parc, affine=None, parcel_idc=None, return_data_spac
 
 
 def find_surf_parc_centroids(parc, parc_space="fsaverage", parc_hemi=None, parc_density=None, snap=True):
-    
+    """Compute per-parcel mean vertex coordinates on a standard cortical surface.
+
+    Plain numpy/nibabel/neuromaps (no numba). Surface counterpart of
+    :func:`find_vol_parc_centroids`. Used internally by
+    :func:`get_distance_matrix` (`surf_euclidean=True` path) and directly by
+    :func:`generate_spins` for the single-hemisphere spin-index code path.
+
+    Parameters
+    ----------
+    parc : str, nib.GiftiImage, or tuple/list of two
+        Surface parcellation: a single GiftiImage/path (one hemisphere) or a
+        2-tuple/list ``(lh, rh)``.
+    parc_space : str, default="fsaverage"
+        Standard surface space to fetch coordinates from (``"fsaverage"`` or
+        ``"fsLR"``).
+    parc_hemi : str or list of str, optional
+        Which hemisphere(s) `parc` represents. Required (as a 1-element
+        list) for single-hemisphere input; forced to ``["L", "R"]`` (with an
+        info message) for 2-tuple input.
+    parc_density : str, optional
+        Surface density (e.g. ``"32k"``). Guessed from `parc`'s vertex count
+        if not given.
+    snap : bool, default=True
+        Snap the mean coordinate to the nearest vertex actually inside the
+        parcel (the raw mean of surface coordinates is generally not itself
+        a vertex on the mesh). If False, the raw mean is returned.
+
+    Returns
+    -------
+    np.ndarray
+        Centroid coordinates, shape ``(n_parcels_total, 3)``, concatenated
+        across hemispheres in the order given by `parc`/`parc_hemi`.
+
+    Raises
+    ------
+    TypeError
+        If `parc` is not a supported type.
+    """
     # get parcellation
     if isinstance(parc_hemi, str):
         parc_hemi = [parc_hemi]

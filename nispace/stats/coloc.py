@@ -14,13 +14,33 @@ from ..utils.utils import _del_from_tuple
 # for backwards compatibility
 @njit(nogil=True)
 def rank_array(array):
+    """Backwards-compatibility alias for `rank1d` (same signature/behavior)."""
     return rank1d(array)
 
 @njit(cache=True, nogil=True)
 def rank1d(arr):
     """Rank a 1D array using mid-ranks (average rank) for tied values.
-    Constant arrays receive identical ranks -> zero variance -> NaN correlation.
-    CAVE: does not handle nan's; strip them before calling."""
+
+    Parameters
+    ----------
+    arr : np.ndarray, shape (n,), dtype float
+        Numba-jitted: must be a plain 1D `np.ndarray`, not a list/Series.
+        **Does not handle NaN** -- strip NaN entries before calling
+        (see e.g. `rank2d`, which does this per-column). Constant arrays
+        receive identical ranks, i.e. zero variance, which yields NaN
+        when the ranks are subsequently correlated.
+
+    Returns
+    -------
+    ranked : np.ndarray, shape (n,), dtype float64
+
+    Notes
+    -----
+    Used internally by `rank2d` (per non-NaN column) and by `corr` (when
+    `rank=True`). `core/colocalize.py`'s Spearman path ranks data via
+    `rank2d` and then calls plain `pearson` on the ranks, rather than
+    calling `rank1d`/`corr` directly.
+    """
 
     n = arr.size
     _args = arr.argsort()
@@ -42,7 +62,28 @@ def rank1d(arr):
 
 @njit(cache=True, nogil=True)
 def rank2d(arr):
-    """Rank a 2D array column-wise using mid-ranks. Handles nan's."""
+    """Rank a 2D array column-wise using mid-ranks, skipping NaN per column.
+
+    Parameters
+    ----------
+    arr : np.ndarray, shape (n_obs, n_features) or (n_obs,), dtype float
+        Numba-jitted: must be a plain `np.ndarray`. 1D input is dispatched
+        to `rank1d` directly.
+
+    Returns
+    -------
+    ranked : np.ndarray, same shape as `arr`, dtype float64
+        Each column's non-NaN values are ranked independently (mid-ranks
+        for ties); NaN positions are left as NaN. This is the one
+        NaN-*tolerant* function in this module -- unlike `rank1d`,
+        `pearson`, `mlr`, etc., which all require pre-masked input.
+
+    Notes
+    -----
+    Used by `core/colocalize.py`'s `_rank_regress` to rank X/Y/null arrays
+    for Spearman-style correlation, where different columns may have
+    different NaN patterns.
+    """
 
     if arr.ndim == 1:
         return rank1d(arr)
@@ -58,7 +99,29 @@ def rank2d(arr):
 
 @njit(cache=True, nogil=True)
 def corr(x, y, rank=False):
-    """Compute Pearson or Spearman correlation for two 1D arrays."""
+    """Compute Pearson (or, with `rank=True`, Spearman) correlation for two 1D arrays.
+
+    Parameters
+    ----------
+    x, y : np.ndarray, shape (n,), dtype float
+        Numba-jitted: must be plain 1D ``np.ndarray`` instances of equal length.
+        **Does not handle NaN** -- strip/mask NaN entries before calling.
+    rank : bool, default False
+        If True, rank `x`/`y` via `rank1d` first (Spearman); if False,
+        compute Pearson directly on the raw values.
+
+    Returns
+    -------
+    r : float
+        NaN if either array has zero variance.
+
+    Notes
+    -----
+    A more generic rank-optional sibling of `pearson`; used by `nulls.py`
+    and `stats/autocorr.py` for spatial-autocorrelation-null comparisons.
+    `core/colocalize.py`'s own pearson/spearman colocalization path calls
+    `rank2d` + plain `pearson` instead of this function.
+    """
 
     if rank:
         x = rank1d(x)
@@ -75,7 +138,27 @@ def corr(x, y, rank=False):
 
 @njit(cache=True, nogil=True)
 def pearson(x, y):
-    """Compute Pearson correlation for two 1D arrays."""
+    """Compute Pearson correlation for two 1D arrays.
+
+    Parameters
+    ----------
+    x, y : np.ndarray, shape (n,), dtype float
+        Numba-jitted: must be plain 1D ``np.ndarray`` instances of equal length.
+        **Does not handle NaN** -- callers must pre-mask (e.g.
+        `x[mask], y[mask]`).
+
+    Returns
+    -------
+    r : float
+        NaN if either array has zero variance.
+
+    Notes
+    -----
+    The workhorse of `core/colocalize.py`'s `"pearson"`/`"spearman"`
+    colocalization path (Spearman is computed by ranking with `rank2d`
+    first, then calling this function on the ranks) and of
+    `core/reduce_x.py`/`core/region_influence.py`.
+    """
 
     m_x = x.mean()
     m_y = y.mean()
@@ -88,16 +171,32 @@ def pearson(x, y):
 
 @njit(cache=True, nogil=True)
 def partialcorr(x, y, z, rank=False):
-    """Computes partial correlation between {x} and {y} controlled for {z}
+    """Closed-form partial correlation between `x` and `y`, controlling for `z`.
 
-    Args:
-        x (array-like): input vector 1
-        y (array-like): input vector 2
-        z (array-like): input vector to be controlled for
-        rank (bool, optional): True or False. Defaults to False. -> Pearson correlation
+    Computed via inversion of the 3-variable correlation matrix, not by
+    residualization.
 
-    Returns:
-        rp (float): (ranked) partial correlation coefficient between x and y
+    Parameters
+    ----------
+    x, y, z : np.ndarray, shape (n,), dtype float
+        Numba-jitted: must be plain 1D ``np.ndarray`` instances of equal length.
+        **Does not handle NaN** -- strip/mask NaN entries before calling.
+    rank : bool, default False
+        If True, rank `x`/`y`/`z` via `rank1d` first (partial Spearman); if
+        False, use raw values (partial Pearson).
+
+    Returns
+    -------
+    rp : float
+        (Ranked) partial correlation coefficient between `x` and `y`.
+
+    Notes
+    -----
+    Not on NiSpace's live `colocalize()` code path: `method="partialpearson"`/
+    `"partialspearman"` there is computed by residualizing X/Y against Z
+    first (`core/colocalize.py`'s `_rank_regress` -> `residuals_nan`) and
+    then correlating the residuals with plain `pearson`, not by this
+    closed-form formula. Provided as a standalone utility.
     """
     
     if rank:
@@ -115,15 +214,29 @@ def partialcorr(x, y, z, rank=False):
 
 @njit(cache=True, nogil=True)
 def partialpearson(x, y, z):
-    """Computes partial Pearson correlation between {x} and {y} controlled for {z}
+    """Closed-form partial Pearson correlation between `x` and `y`, controlling for `z`.
 
-    Args:
-        x (array-like): input vector 1
-        y (array-like): input vector 2
-        z (array-like): input array to be controlled for
+    Equivalent to `partialcorr(x, y, z, rank=False)`, without the branch.
 
-    Returns:
-        rp (float): partial correlation coefficient between x and y
+    Parameters
+    ----------
+    x, y, z : np.ndarray, shape (n,), dtype float
+        Numba-jitted: must be plain 1D ``np.ndarray`` instances of equal length.
+        **Does not handle NaN** -- strip/mask NaN entries before calling.
+
+    Returns
+    -------
+    rp : float
+        Partial correlation coefficient between `x` and `y`.
+
+    Notes
+    -----
+    Not on NiSpace's live `colocalize()` code path: `method="partialpearson"`
+    there is computed by residualizing X/Y against Z first
+    (`core/colocalize.py`'s `_rank_regress` -> `residuals_nan`) and then
+    correlating the residuals with plain `pearson`, not by this closed-form
+    formula. Imported into `api.py`'s namespace but not called there either
+    -- provided as a standalone utility.
     """
     
     C = np.column_stack((x, y, z))
@@ -135,15 +248,28 @@ def partialpearson(x, y, z):
 
 
 def mutualinfo(x, y, n_neighbors=3):
-    """Compute mutual information between x and y using sklearn.
+    """Compute mutual information between `x` and `y` via sklearn's k-NN estimator.
 
-    Args:
-        x (numpy.ndarray): shape (n_values, n_predictors)
-        y (numpy.ndarray): shape (n_values, 1) or (n_values,)
-        n_neighbors (int, optional): Number of neighbors for MI estimation. Defaults to 3.
+    Thin wrapper around `sklearn.feature_selection.mutual_info_regression`
+    (not numba-jitted).
 
-    Returns:
-        float: mutual information between x and y
+    Parameters
+    ----------
+    x : np.ndarray, shape (n_obs,) or (n_obs, 1)
+        1D input is reshaped to a column vector.
+    y : np.ndarray, shape (n_obs,)
+    n_neighbors : int, default 3
+        Number of neighbors for the k-NN MI estimator.
+
+    Returns
+    -------
+    mi : float
+
+    Notes
+    -----
+    Not NaN-tolerant (sklearn errors on NaN) -- called with pre-masked,
+    NaN-free `x[mask]`/`y[mask]` in `core/colocalize.py`'s `"mi"`
+    colocalization method.
     """
     if x.ndim == 1:
         x = x[:, np.newaxis]
@@ -152,18 +278,34 @@ def mutualinfo(x, y, n_neighbors=3):
     
 @njit(cache=True, nogil=True)
 def mlr(x, y, adj_r2=True, intercept=True):
-    """Compute Regression of predictor(s) x on target y. 
-    Requires numpy arrays with columns as predictors/target.
+    """Multiple linear regression of predictor(s) `x` on target `y` (via pseudo-inverse).
 
-    Args:
-        x (numpy.ndarray): shape (n_values, n_predictors)
-        y (numpy.ndarray): shape (n_values, 1) or (n_values,)
-        adj_r2 (bool, optional): Calculate adjusted R2. Defaults to True.
-        intercept(bool, optional): Return intercept in leading position of beta array or omit 
+    Parameters
+    ----------
+    x : np.ndarray, shape (n_obs, n_predictors), dtype float
+        Numba-jitted: must be a plain 2D `np.ndarray`.
+        **Does not handle NaN** -- callers must pre-mask (e.g.
+        `x[mask, :], y[mask]`).
+    y : np.ndarray, shape (n_obs,), dtype float
+    adj_r2 : bool, default True
+        Return the adjusted (rather than raw) R2.
+    intercept : bool, default True
+        If True, the leading entry of the returned `beta` array is the
+        fitted intercept; if False, it's omitted.
 
-    Returns:
-        float: (adjusted) R2
-        array: parameters, starting with or w/o intercept
+    Returns
+    -------
+    rsq : float
+        (Adjusted) R2 of the fit.
+    beta : np.ndarray, shape (n_predictors + 1,) or (n_predictors,)
+        Regression coefficients, with or without the leading intercept
+        per `intercept`.
+
+    Notes
+    -----
+    Used throughout `core/colocalize.py` (the `"mlr"` colocalization
+    method and its per-predictor `"individual"` R2 drops) and
+    `core/region_influence.py` (full-model R2 for regional influence).
     """
     
     n_obs = x.shape[0]
@@ -188,16 +330,29 @@ def mlr(x, y, adj_r2=True, intercept=True):
 
 @njit(cache=True, nogil=True)
 def r2(x, y, adj_r2=True):
-    """Compute R2 for Regression of predictor(s) x on target y. 
-    Requires numpy arrays with columns as predictors/target.
+    """R2 of the regression of predictor(s) `x` on target `y` (see `mlr`).
 
-    Args:
-        x (numpy.ndarray): shape (n_values, n_predictors)
-        y (numpy.ndarray): shape (n_values, 1) or (n_values,)
-        adj_r2 (bool, optional): Calculate adjusted R2. Defaults to True.
+    Same fitting procedure as `mlr` but returns only the R2, without the
+    beta coefficients.
 
-    Returns:
-        float: (adjusted) R2
+    Parameters
+    ----------
+    x : np.ndarray, shape (n_obs, n_predictors), dtype float
+        Numba-jitted: must be a plain 2D `np.ndarray`.
+        **Does not handle NaN** -- callers must pre-mask.
+    y : np.ndarray, shape (n_obs,), dtype float
+    adj_r2 : bool, default True
+        Return the adjusted (rather than raw) R2.
+
+    Returns
+    -------
+    rsq : float
+
+    Notes
+    -----
+    Used by `core/colocalize.py`'s `"slr"` (single-predictor) colocalization
+    method, its `"mlr"` method's per-predictor `"individual"` R2 drops, and
+    by `dominance` (combinatorial R2 over predictor subsets).
     """
     
     n_obs = x.shape[0]
@@ -218,16 +373,30 @@ def r2(x, y, adj_r2=True):
 
 @njit(cache=True, nogil=True)
 def beta(x, y, intercept=True):
-    """Compute beta coefficients for Regression of predictor(s) x on target y. 
-    Requires numpy arrays with columns as predictors/target.
+    """Beta coefficients for the regression of predictor(s) `x` on target `y` (see `mlr`).
 
-    Args:
-        x (numpy.ndarray): shape (n_values, n_predictors)
-        y (numpy.ndarray): shape (n_values, 1) or (n_values,)
-        intercept(bool, optional): Return intercept in leading position of beta array or omit  
+    Same fitting procedure as `mlr` but returns only the coefficients,
+    without the R2.
 
-    Returns:
-        numpy.ndarray: 1D array of beta coefficients (w or w/o intercept)
+    Parameters
+    ----------
+    x : np.ndarray, shape (n_obs, n_predictors), dtype float
+        Numba-jitted: must be a plain 2D `np.ndarray`.
+        **Does not handle NaN** -- callers must pre-mask.
+    y : np.ndarray, shape (n_obs,), dtype float
+    intercept : bool, default True
+        If True, the leading entry is the fitted intercept; if False,
+        it's omitted.
+
+    Returns
+    -------
+    beta : np.ndarray, shape (n_predictors + 1,) or (n_predictors,)
+
+    Notes
+    -----
+    Imported into `api.py`'s namespace; no direct call site found in
+    `core/colocalize.py` (which uses `mlr` when both R2 and coefficients
+    are needed) -- provided as a standalone coefficients-only utility.
     """
 
     X = np.column_stack((np.ones(x.shape[0], dtype=x.dtype), x))
@@ -240,6 +409,50 @@ def beta(x, y, intercept=True):
 
 
 def dominance(x, y, adj_r2=False, verbose=False):
+    """Dominance analysis: decompose R2 into each predictor's average contribution.
+
+    Fits `r2` on every possible predictor subset (`2**n_predictors - 1`
+    models) and averages each predictor's marginal R2 contribution across
+    subset sizes, giving "individual", "partial", and "total" dominance per
+    predictor (the total dominance values sum exactly to the full model's
+    R2). Not numba-jitted; cost grows combinatorially with `n_predictors`.
+
+    Parameters
+    ----------
+    x : np.ndarray, shape (n_obs, n_predictors), dtype float
+        **Does not handle NaN** -- callers must pre-mask.
+    y : np.ndarray, shape (n_obs,), dtype float
+    adj_r2 : bool, default False
+        Use adjusted R2 in the underlying `r2` fits.
+    verbose : bool, default False
+        Print progress (model count, running R2) as fitting proceeds.
+
+    Returns
+    -------
+    dom_stats : dict
+        ``"sum"`` (full-model R2, float), ``"individual"`` (shape
+        ``(1, n_predictors)``), ``"partial"`` (shape
+        ``(n_predictors, n_predictors - 1)``), ``"total"`` (shape
+        ``(n_predictors,)``, sums to ``"sum"``), ``"relative"`` (``"total"``
+        normalized to sum to 1).
+
+    Raises
+    ------
+    ValueError
+        If the summed total dominance does not reconstruct the full-model
+        R2 within `np.allclose` tolerance (internal consistency check).
+
+    Notes
+    -----
+    Used by `core/colocalize.py`'s `"dominance"` colocalization method, on
+    pre-masked, NaN-free `x`/`y`.
+
+    References
+    ----------
+    Azen, R., & Budescu, D. V. (2003). The dominance analysis approach for
+    comparing predictors in multiple regression. *Psychological Methods*.
+    https://doi.org/10.1037/1082-989X.8.2.129
+    """
 
     if verbose: print(f"Dominance analysis with {x.shape[1]} predictors and {len(y)} features.")
     
@@ -298,7 +511,29 @@ def dominance(x, y, adj_r2=False, verbose=False):
 
 
 def pls(x, y, n_components=np.inf, **kwargs):
-    """
+    """Partial least squares regression of `x` on `y` via scikit-learn's NIPALS `PLSRegression`.
+
+    Parameters
+    ----------
+    x : np.ndarray, shape (n_obs, n_predictors)
+        **Does not handle NaN** -- sklearn errors on NaN input; pre-mask.
+    y : np.ndarray, shape (n_obs,) or (n_obs, 1)
+    n_components : int, default `np.inf`
+        Number of latent components; clipped to `n_predictors` if larger.
+    **kwargs
+        Forwarded to `sklearn.cross_decomposition.PLSRegression`.
+
+    Returns
+    -------
+    out : dict
+        ``"r2"`` (float), ``"beta"`` (shape ``(n_predictors,)``),
+        ``"loadings"`` (``reg.x_loadings_``).
+
+    Notes
+    -----
+    Reference/cross-check implementation only -- NiSpace's
+    `colocalize(method="pls")` actually calls `fast_pls1` (a numba SIMPLS
+    implementation, ~5x faster), not this function.
     """
     reg = PLSRegression(
         n_components=np.min([n_components, x.shape[1]]).astype(int),
@@ -316,7 +551,30 @@ def pls(x, y, n_components=np.inf, **kwargs):
 
 
 def pcr(x, y, adj_r2=True, n_components=np.inf, **kwargs):
-    """
+    """Principal component regression: PCA-reduce `x`, then regress on `y` via `r2`.
+
+    Parameters
+    ----------
+    x : np.ndarray, shape (n_obs, n_predictors)
+        **Does not handle NaN** -- sklearn errors on NaN input; pre-mask.
+    y : np.ndarray, shape (n_obs,)
+    adj_r2 : bool, default True
+        Use adjusted R2 in the underlying `r2` fit.
+    n_components : int, default `np.inf`
+        Number of principal components to retain; clipped to
+        `n_predictors` if larger.
+    **kwargs
+        Forwarded to `sklearn.decomposition.PCA`.
+
+    Returns
+    -------
+    out : dict
+        ``{"r2": rsq}`` -- the R2 of `y` regressed on the retained PCs.
+
+    Notes
+    -----
+    Used by `core/colocalize.py`'s `"pcr"` colocalization method, on
+    pre-masked, NaN-free `x`/`y`.
     """
     n_components = np.min([n_components, x.shape[1]]).astype(int)
     
@@ -328,9 +586,35 @@ def pcr(x, y, adj_r2=True, n_components=np.inf, **kwargs):
 
 
 def elasticnet(x, y, cv=None, seed=None, **kwargs):
+    """Elastic-net regularized regression of `x` on `y` via `sklearn.linear_model.ElasticNetCV`.
+
+    Parameters
+    ----------
+    x : np.ndarray, shape (n_obs, n_predictors)
+        **Does not handle NaN** -- sklearn errors on NaN input; pre-mask.
+    y : np.ndarray, shape (n_obs,)
+    cv : int, cross-validation generator, or None
+        Passed to `ElasticNetCV` for selecting `alpha`/`l1_ratio`.
+    seed : int, optional
+        Passed as `ElasticNetCV`'s `random_state`.
+    **kwargs
+        Forwarded to `ElasticNetCV`.
+
+    Returns
+    -------
+    out : dict
+        ``"alpha"``/``"l1ratio"`` (selected regularization strength/mix),
+        ``"r2"``, ``"beta"`` (shape ``(n_predictors,)``).
+
+    Notes
+    -----
+    Used by `core/colocalize.py`'s regularized-regression colocalization
+    case. Unlike the other coloc.py methods (which exclude NaN case-wise,
+    i.e. per predictor combination), the regularized methods
+    (`elasticnet`/`lasso`/`ridge`) exclude NaN list-wise across all
+    predictors at once before calling this function.
     """
-    """
-    
+
     regCV = ElasticNetCV(
         cv=cv,
         random_state=seed,
@@ -349,9 +633,33 @@ def elasticnet(x, y, cv=None, seed=None, **kwargs):
 
 
 def lasso(x, y, cv=None, seed=None, kwargs={}):
+    """Lasso-regularized regression of `x` on `y` via `sklearn.linear_model.LassoCV`.
+
+    Parameters
+    ----------
+    x : np.ndarray, shape (n_obs, n_predictors)
+        **Does not handle NaN** -- sklearn errors on NaN input; pre-mask.
+    y : np.ndarray, shape (n_obs,)
+    cv : int, cross-validation generator, or None
+        Passed to `LassoCV` for selecting `alpha`.
+    seed : int, optional
+        Passed as `LassoCV`'s `random_state`.
+    kwargs : dict, default {}
+        Forwarded to `LassoCV`.
+
+    Returns
+    -------
+    out : dict
+        ``"alpha"`` (selected regularization strength), ``"r2"``,
+        ``"beta"`` (shape ``(n_predictors,)``).
+
+    Notes
+    -----
+    Used by `core/colocalize.py`'s regularized-regression colocalization
+    case, with NaN excluded list-wise (see `elasticnet`'s Notes) before
+    calling this function.
     """
-    """
-    
+
     regCV = LassoCV(
         cv=cv,
         random_state=seed,
@@ -369,9 +677,34 @@ def lasso(x, y, cv=None, seed=None, kwargs={}):
     
 
 def ridge(x, y, cv=None, seed=None, kwargs={}):
+    """Ridge-regularized regression of `x` on `y` via `sklearn.linear_model.RidgeCV`.
+
+    Parameters
+    ----------
+    x : np.ndarray, shape (n_obs, n_predictors)
+        **Does not handle NaN** -- sklearn errors on NaN input; pre-mask.
+    y : np.ndarray, shape (n_obs,)
+    cv : int, cross-validation generator, or None
+        Passed to `RidgeCV` for selecting `alpha`.
+    seed : int, optional
+        Unused by `RidgeCV` (which has no `random_state`); accepted for a
+        uniform signature with `lasso`/`elasticnet`.
+    kwargs : dict, default {}
+        Forwarded to `RidgeCV`.
+
+    Returns
+    -------
+    out : dict
+        ``"alpha"`` (selected regularization strength), ``"r2"``,
+        ``"beta"`` (shape ``(n_predictors,)``).
+
+    Notes
+    -----
+    Used by `core/colocalize.py`'s regularized-regression colocalization
+    case, with NaN excluded list-wise (see `elasticnet`'s Notes) before
+    calling this function.
     """
-    """
-    
+
     regCV = RidgeCV(
         cv=cv,
         **kwargs
@@ -444,11 +777,18 @@ def fast_pls1(
     n_components: int
 ):
     """
-    Fast PLS (SIMPLS) for a single target.
+    Fast PLS via the SIMPLS algorithm for a single target.
+
+    Numba-accelerated (`_simpls1_loop`); matches
+    `sklearn.cross_decomposition.PLSRegression` output with ~5x speed-up.
+    This is the implementation NiSpace's `colocalize(method="pls")`
+    actually calls (not the plain sklearn-based `pls` function above).
+    Implements SIMPLS [1]_.
 
     Parameters
     ----------
     x : (n_samples, n_features) array_like
+        **Does not handle NaN** -- callers must pre-mask.
     y : (n_samples,) or (n_samples, 1) array_like
     n_components : int
         Number of latent components.
@@ -462,6 +802,12 @@ def fast_pls1(
         Coefficient of determination.
     x_loadings : (n_features, n_components) ndarray
         Same meaning as ``PLSRegression.x_loadings_`` from scikit-learn.
+
+    References
+    ----------
+    .. [1] de Jong (1993). SIMPLS: An alternative approach to partial least
+           squares regression. *Chemometrics and Intelligent Laboratory
+           Systems*. https://doi.org/10.1016/0169-7439(93)85002-X
     """
     x = np.asarray(x, dtype=np.float64)
     y = np.asarray(y, dtype=np.float64).ravel()
