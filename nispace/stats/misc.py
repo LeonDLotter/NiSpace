@@ -49,11 +49,12 @@ def residuals(x, y, decenter=False):
     X = np.column_stack((x, np.ones(x.shape[0], dtype=x.dtype)))
     beta = np.linalg.pinv((X.T).dot(X)).dot(X.T.dot(y))
     y_hat = np.dot(X, beta)
-    
+    resid = y - y_hat
+
     if decenter:
-        y_hat += y.mean()
-        
-    return y - y_hat
+        resid += y.mean()
+
+    return resid
 
 
 @njit(cache=True, nogil=True)
@@ -87,12 +88,13 @@ def residuals_nan(x, y, decenter=False):
     X = np.column_stack((x_, np.ones(x_.shape[0], dtype=x_.dtype)))
     beta = np.linalg.pinv((X.T).dot(X)).dot(X.T.dot(y_))
     y_hat = np.dot(X, beta)
-    
+    resid_ = y_ - y_hat
+
     if decenter:
-        y_hat += y_.mean()
-        
+        resid_ += y_.mean()
+
     resid = np.full(y.shape, np.nan, dtype=y.dtype)
-    resid[~nan_mask] = y_ - y_hat
+    resid[~nan_mask] = resid_
 
     return resid
 

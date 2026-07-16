@@ -147,6 +147,19 @@ def cohen_paired(a, b):
     formula path in `core/transform_y.py` dispatches to the numba-jitted
     `cohen_paired_nan_fast`).
 
+    This is Cohen's *d_z* (mean difference over the SD of the difference
+    scores itself), not *d_avg* (mean difference over the average of each
+    condition's own, unpaired variance -- the formula pingouin's
+    `compute_effsize(paired=True)` uses by default). The two aren't
+    interchangeable: `d_z`'s denominator folds in the correlation between
+    the paired conditions (`var(diff) = var_a + var_b - 2*cov(a,b)`), while
+    `d_avg` discards it entirely. `d_z` is the internally-consistent choice
+    here because it's the standardized member of the same family as
+    NiSpace's other paired `Y_transform` options (`prc`/`logfc`/plain
+    difference) -- all of them, `d_z` included, are pure functions of the
+    paired observations alone. `d_avg` would break that by pulling in each
+    condition's *unpaired* variance, a quantity none of the others touch.
+
     References
     ----------
     Cohen, J. (1988). *Statistical Power Analysis for the Behavioral
@@ -156,7 +169,7 @@ def cohen_paired(a, b):
     b = np.array(b)
     if a.shape != b.shape:
         raise ValueError("Arrays 'a' and 'b' must have the same shape.")
-    
+
     # Calculate the difference between pairs for each column
     diff = a - b
 
@@ -209,6 +222,37 @@ def cohen_paired_nan(a, b):
 
 @njit(cache=True, nogil=True)
 def cohen_paired_nan_fast(a, b):
+    """Numba-jitted NaN-aware Cohen's *d_z* for paired/dependent samples (see `cohen_paired`).
+
+    Parameters
+    ----------
+    a, b : np.ndarray, shape (n_obs, n_features), dtype float
+        Numba-jitted: must be plain 2D `np.ndarray` instances of identical
+        shape (row `i` in `a` paired with row `i` in `b`). NaN pairs are
+        excluded per-column via a single-pass Welford update over `a - b`
+        (mirrors `cohen_nan_fast`'s approach, applied to the difference
+        scores rather than to `a`/`b` separately).
+
+    Returns
+    -------
+    d : np.ndarray, shape (n_features,)
+        NaN where fewer than 2 valid (non-NaN in both `a` and `b`) pairs
+        remain in a column.
+
+    Notes
+    -----
+    This is the function `core/transform_y.py`'s `Y_transform=
+    "pairedcohen(a,b)"` actually dispatches to -- see `cohen_paired`'s Notes
+    for why *d_z* (not *d_avg*) is the correct formula for this use: it's
+    the standardized member of the same family as NiSpace's other paired
+    `Y_transform` options (`prc`/`logfc`/plain difference), all of which are
+    pure functions of the paired observations alone.
+
+    References
+    ----------
+    Cohen, J. (1988). *Statistical Power Analysis for the Behavioral
+    Sciences* (2nd ed.). Routledge.
+    """
     n_rows, n_cols = a.shape
     d = np.empty(n_cols, dtype=np.float64)
     for j in range(n_cols):

@@ -16,6 +16,7 @@ from nispace.nulls import (
     nulls_random, nulls_moran, nulls_variomoran,
     nulls_burt2018, nulls_burt2020,
     _BRAINSMASH_AVAILABLE,
+    generate_null_maps,
 )
 from nispace._brainspace_moran import compute_mem, moran_randomization
 
@@ -377,3 +378,55 @@ def test_nulls_burt2020_different_seeds_differ(linear_dist_mat, smooth_map):
     a = nulls_burt2020(smooth_map, linear_dist_mat, n_nulls=5, seed=1)
     b = nulls_burt2020(smooth_map, linear_dist_mat, n_nulls=5, seed=2)
     assert not np.array_equal(a, b)
+
+
+# ---------------------------------------------------------------------------
+# generate_null_maps: requirement-check regression tests
+# ---------------------------------------------------------------------------
+
+def test_generate_null_maps_random_no_parc_no_distmat(rng):
+    # Bug fix: method="random" needs no parcellation and no dist_mat
+    data = rng.standard_normal(20).astype(np.float32)
+    nulls, result_mat = generate_null_maps(
+        method="random",
+        data=data,
+        parcellation=None,
+        dist_mat=None,
+        n_nulls=10,
+        seed=0,
+        verbose=False,
+    )
+    assert nulls.shape == (1, 10, 20)
+    assert result_mat is None
+
+
+def test_generate_null_maps_random_with_tuple_distmat_does_not_crash(rng):
+    # Bug fix: method="random" + tuple dist_mat should not crash (dist_mat is ignored)
+    pts = np.linspace(0, 1, 10)[:, None]
+    dm = cdist(pts, pts).astype(np.float64)
+    data = rng.standard_normal(20).astype(np.float32)
+    nulls, _ = generate_null_maps(
+        method="random",
+        data=data,
+        parcellation=None,
+        dist_mat=(dm, dm),  # tuple — was crashing before the fix
+        n_nulls=5,
+        seed=0,
+        verbose=False,
+    )
+    assert nulls.shape == (1, 5, 20)
+
+
+def test_generate_null_maps_none_parc_none_distmat_raises_clearly(rng):
+    # Bug fix: parcellation=None + dist_mat=None for distance method must raise ValueError
+    # (not an opaque TypeError "data type not defined")
+    data = rng.standard_normal(20).astype(np.float32)
+    with pytest.raises(ValueError, match="parcellation.*dist_mat.*None"):
+        generate_null_maps(
+            method="moran",
+            data=data,
+            parcellation=None,
+            dist_mat=None,
+            n_nulls=5,
+            verbose=False,
+        )

@@ -1941,7 +1941,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
 
     ## random nulls -> no distmat
     if random_nulls:
-        dist_mat = (None, None) if isinstance(dist_mat, tuple) else None
+        dist_mat = None  # random nulls never use dist_mat; drop any provided value (including tuples)
 
     ## distance matrix provided -> we dont need parcellation
     if dist_mat is not None and not random_nulls:        
@@ -1986,7 +1986,13 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
             return parc, parc_space, n_parcels
         
         # recognize parcellation type
-        if isinstance(parcellation, nib.Nifti1Image):
+        if parcellation is None:
+            lgr.critical_raise(
+                f"Null method '{method}' requires a parcellation or a pre-computed distance "
+                "matrix, but both 'parcellation' and 'dist_mat' are None.",
+                ValueError,
+            )
+        elif isinstance(parcellation, nib.Nifti1Image):
             parc_type = "nifti"
         elif isinstance(parcellation, nib.GiftiImage):
             parc_type = "gifti"
@@ -2003,7 +2009,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
                                 ValueError)
         else:
             lgr.critical_raise(f"'parcellation' data type ({type(parcellation)}) not defined!",
-                            TypeError)    
+                            TypeError)
             
         # load parcellation
         parc, parc_space, n_parcels = load_parc(parcellation, parc_type, parc_space)

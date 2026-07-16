@@ -1,11 +1,15 @@
 """Tests for load-bearing functions in stats/misc.py:
 - null_to_p
 - rho_to_z / z_to_rho
+- residuals_nan / partial_residuals_nan (ground-truth checked against
+  statsmodels.OLS -- these back the actual "partialpearson"/"partialspearman"
+  colocalize() code path and clean_y()'s "protect" covariate-regression mode,
+  see nispace.stats.coloc.partialpearson's docstring)
 """
 
 import numpy as np
 import pytest
-from nispace.stats.misc import null_to_p, rho_to_z, z_to_rho
+from nispace.stats.misc import null_to_p, rho_to_z, z_to_rho, residuals_nan, partial_residuals_nan
 
 
 # ---------------------------------------------------------------------------
@@ -165,3 +169,96 @@ def test_rho_to_z_monotone():
     rhos = np.linspace(-0.95, 0.95, 20)
     zs = rho_to_z(rhos.copy())
     assert np.all(np.diff(zs) > 0)
+
+
+# ---------------------------------------------------------------------------
+# residuals_nan vs statsmodels.OLS
+# ---------------------------------------------------------------------------
+
+def test_residuals_nan_matches_statsmodels_ols():
+    sm = pytest.importorskip("statsmodels.api")
+    rng = np.random.default_rng(9)
+    n = 100
+    X = rng.normal(size=(n, 2))
+    y = 0.5 * X[:, 0] - 0.3 * X[:, 1] + rng.normal(scale=0.5, size=n)
+
+    result = residuals_nan(X, y)
+
+    Xc = sm.add_constant(X)
+    model = sm.OLS(y, Xc).fit()
+    np.testing.assert_allclose(result, model.resid)
+
+
+def test_residuals_nan_with_nan_matches_statsmodels_ols_on_complete_cases():
+    sm = pytest.importorskip("statsmodels.api")
+    rng = np.random.default_rng(9)
+    n = 100
+    X = rng.normal(size=(n, 2))
+    y = rng.normal(size=n)
+    X[3, 0] = np.nan
+    y[10] = np.nan
+
+    result = residuals_nan(X, y)
+
+    Xc = sm.add_constant(X)
+    mask = ~np.isnan(Xc).any(axis=1) & ~np.isnan(y)
+    model = sm.OLS(y[mask], Xc[mask]).fit()
+
+    assert np.isnan(result[3]) and np.isnan(result[10])
+    np.testing.assert_allclose(result[mask], model.resid)
+
+
+def test_residuals_nan_decenter_adds_back_mean():
+    sm = pytest.importorskip("statsmodels.api")
+    rng = np.random.default_rng(9)
+    n = 60
+    X = rng.normal(size=(n, 1))
+    y = 0.4 * X[:, 0] + rng.normal(scale=0.3, size=n)
+
+    plain = residuals_nan(X, y)
+    decentered = residuals_nan(X, y, decenter=True)
+    np.testing.assert_allclose(decentered, plain + y.mean())
+
+
+# ---------------------------------------------------------------------------
+# partial_residuals_nan vs statsmodels.OLS (joint model, nuisance-only removal)
+# ---------------------------------------------------------------------------
+
+def test_partial_residuals_nan_removes_only_nuisance_component():
+    sm = pytest.importorskip("statsmodels.api")
+    rng = np.random.default_rng(9)
+    n = 100
+    x_nuisance = rng.normal(size=(n, 1))
+    x_protect = rng.normal(size=(n, 1))
+    y = 0.5 * x_nuisance[:, 0] - 0.3 * x_protect[:, 0] + rng.normal(scale=0.5, size=n)
+
+    result = partial_residuals_nan(x_nuisance, x_protect, y)
+
+    X_full = sm.add_constant(np.column_stack([x_nuisance, x_protect]))
+    model = sm.OLS(y, X_full).fit()
+    nuisance_beta = model.params[1]  # column order: const, nuisance, protect
+    expected = y - x_nuisance[:, 0] * nuisance_beta
+    np.testing.assert_allclose(result, expected)
+
+
+def test_partial_residuals_nan_with_nan_matches_statsmodels_on_complete_cases():
+    sm = pytest.importorskip("statsmodels.api")
+    rng = np.random.default_rng(9)
+    n = 100
+    x_nuisance = rng.normal(size=(n, 1))
+    x_protect = rng.normal(size=(n, 1))
+    y = rng.normal(size=n)
+    x_nuisance[4, 0] = np.nan
+    y[15] = np.nan
+
+    result = partial_residuals_nan(x_nuisance, x_protect, y)
+
+    stacked = np.column_stack([x_nuisance, x_protect, y])
+    mask = ~np.isnan(stacked).any(axis=1)
+    X_full = sm.add_constant(np.column_stack([x_nuisance[mask], x_protect[mask]]))
+    model = sm.OLS(y[mask], X_full).fit()
+    nuisance_beta = model.params[1]
+    expected = y[mask] - x_nuisance[mask, 0] * nuisance_beta
+
+    assert np.isnan(result[4]) and np.isnan(result[15])
+    np.testing.assert_allclose(result[mask], expected)

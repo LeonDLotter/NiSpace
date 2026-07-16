@@ -10,6 +10,15 @@ One real docstring gap found and fixed while writing these tests:
 only a one-line docstring, and its `_fast` name incorrectly implied it's
 numba-jitted -- it isn't (plain Python with a searchsorted loop). Docstring
 now brought up to the file's own convention and corrected.
+
+A later pass added ground-truth checks against established libraries
+(scipy/pingouin) for cohen/hedges/zscore/centile_fast, rather than only
+comparing against hand-written "expected" formulas in this file -- a shared
+bug between the implementation and a hand-written test formula wouldn't be
+caught by the earlier tests alone. Includes NaN handling where the reference
+library supports it (scipy's `nan_policy="omit"`; pingouin has no NaN
+handling, so `cohen_nan`/`hedges_nan` are checked against pingouin computed
+on the same manually-dropna'd data).
 """
 
 import numpy as np
@@ -280,3 +289,125 @@ def test_centile_fast_output_range():
     result = centile_fast(a)
     valid = result[~np.isnan(result)]
     assert np.all(valid >= 0) and np.all(valid <= 100)
+
+
+# ── Ground-truth checks against established libraries ───────────────────────
+# scipy/pingouin, called directly (not through another nispace wrapper).
+
+# -- cohen / cohen_nan vs pingouin.compute_effsize(eftype="cohen") -----------
+
+def test_cohen_matches_pingouin(rng):
+    pg = pytest.importorskip("pingouin")
+    a = rng.normal(1.0, size=(15, 3))
+    b = rng.normal(0.0, size=(18, 3))
+    result = cohen(a, b)
+    for i in range(3):
+        expected = pg.compute_effsize(a[:, i], b[:, i], eftype="cohen")
+        assert np.isclose(result[i], expected)
+
+
+def test_cohen_nan_matches_pingouin_on_dropna(rng):
+    # pingouin has no NaN handling -- ground-truth against pingouin computed
+    # on the same per-column dropna'd 1D data.
+    pg = pytest.importorskip("pingouin")
+    a = rng.normal(1.0, size=(15, 1))
+    b = rng.normal(0.0, size=(18, 1))
+    a[2, 0] = np.nan
+    b[5, 0] = np.nan
+    result = cohen_nan(a, b)[0]
+    expected = pg.compute_effsize(
+        a[~np.isnan(a[:, 0]), 0], b[~np.isnan(b[:, 0]), 0], eftype="cohen"
+    )
+    assert np.isclose(result, expected)
+
+
+def test_cohen_paired_matches_pingouin_cohen_dz(rng):
+    # nispace's cohen_paired uses the SD-of-difference-scores formula, i.e.
+    # what pingouin calls "cohen_dz" -- NOT pingouin's default paired "cohen"
+    # (which is the d_avg formula, sqrt((var1+var2)/2) in the denominator, a
+    # materially different number; see test_cohen_paired_matches_manual_formula
+    # above, which already checks nispace against the diff.mean()/diff.std(ddof=1)
+    # formula directly). d_z is the internally-consistent choice given nispace's
+    # other paired Y_transform options (prc/logfc/diff are all pure functions of
+    # the paired observations alone; d_avg would break that by pulling in each
+    # condition's *unpaired* variance instead).
+    #
+    # eftype="cohen_dz" itself needs pingouin>=0.6 (Python>=3.10), unavailable
+    # on the 3.9 test env -- so derive it version-independently instead, via
+    # pingouin's own documented identity d_z = t / sqrt(n) from the paired
+    # t-test (pg.ttest exists in every pingouin version).
+    pg = pytest.importorskip("pingouin")
+    a = rng.normal(size=(20, 2))
+    b = a + rng.normal(scale=0.3, size=(20, 2))
+    n = a.shape[0]
+    result = cohen_paired(a, b)
+    for i in range(2):
+        t = pg.ttest(a[:, i], b[:, i], paired=True)["T"].iloc[0]
+        expected = t / np.sqrt(n)
+        assert np.isclose(result[i], expected)
+
+
+# -- hedges / hedges_nan vs pingouin.compute_effsize(eftype="hedges") --------
+
+def test_hedges_matches_pingouin(rng):
+    pg = pytest.importorskip("pingouin")
+    a = rng.normal(1.0, size=(15, 3))
+    b = rng.normal(0.0, size=(18, 3))
+    result = hedges(a, b)
+    for i in range(3):
+        expected = pg.compute_effsize(a[:, i], b[:, i], eftype="hedges")
+        assert np.isclose(result[i], expected)
+
+
+def test_hedges_nan_matches_pingouin_on_dropna(rng):
+    pg = pytest.importorskip("pingouin")
+    a = rng.normal(1.0, size=(15, 1))
+    b = rng.normal(0.0, size=(18, 1))
+    a[2, 0] = np.nan
+    b[5, 0] = np.nan
+    result = hedges_nan(a, b)[0]
+    expected = pg.compute_effsize(
+        a[~np.isnan(a[:, 0]), 0], b[~np.isnan(b[:, 0]), 0], eftype="hedges"
+    )
+    assert np.isclose(result, expected)
+
+
+# -- zscore / zscore_nan vs scipy.stats.zscore --------------------------------
+
+def test_zscore_matches_scipy(rng):
+    from scipy.stats import zscore as scipy_zscore
+    a = rng.normal(size=(20, 3))
+    assert np.allclose(zscore(a), scipy_zscore(a, axis=0, ddof=1))
+
+
+def test_zscore_nan_matches_scipy_nan_policy_omit(rng):
+    from scipy.stats import zscore as scipy_zscore
+    a = rng.normal(size=(20, 3))
+    a[0, 0] = np.nan
+    a[5, 1] = np.nan
+    result = zscore_nan(a)
+    expected = scipy_zscore(a, axis=0, ddof=1, nan_policy="omit")
+    assert np.allclose(result, expected, equal_nan=True)
+
+
+# -- centile_fast vs scipy.stats.percentileofscore ----------------------------
+
+def test_centile_fast_matches_scipy_percentileofscore(rng):
+    from scipy.stats import percentileofscore
+    b = rng.normal(size=30)
+    a = rng.normal(size=5)
+    result = centile_fast(a[:, np.newaxis], b[:, np.newaxis]).ravel()
+    expected = np.array([percentileofscore(b, v, kind="weak") for v in a])
+    assert np.allclose(result, expected)
+
+
+def test_centile_fast_with_nan_matches_scipy_nan_policy_omit(rng):
+    from scipy.stats import percentileofscore
+    b = rng.normal(size=30)
+    b[3] = np.nan
+    a = rng.normal(size=5)
+    result = centile_fast(a[:, np.newaxis], b[:, np.newaxis]).ravel()
+    expected = np.array([
+        percentileofscore(b, v, kind="weak", nan_policy="omit") for v in a
+    ])
+    assert np.allclose(result, expected)

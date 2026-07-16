@@ -64,6 +64,7 @@ data = [
 test = [
     "pytest",
     "pytest-cov",
+    "pingouin",
 ]
 
 [project.urls]
