@@ -53,6 +53,26 @@ def _check_hash(local: Union[str, Path], remote: Union[str, Path] = None) -> boo
      
     
 def download(url, path=None, headers=None, suffix=""):
+    """
+    Stream-download a file from a URL.
+
+    Parameters
+    ----------
+    url : str
+        URL to download from.
+    path : str or os.PathLike, optional
+        Destination file path. If not given, saved under a temp directory using
+        the URL's basename (plus `suffix`).
+    headers : dict, optional
+        HTTP headers to send with the request (e.g. an ``Authorization`` token).
+    suffix : str, default ""
+        Appended to the auto-derived filename when `path` is not given.
+
+    Returns
+    -------
+    Path
+        Path to the downloaded file.
+    """
     from urllib.parse import urlparse
     r = requests.get(url, headers=headers, stream=True)
     r.raise_for_status()
@@ -67,6 +87,32 @@ def download(url, path=None, headers=None, suffix=""):
 
 def download_via_osfclient(osf_repo, osf_file_id, save_path,
                            osf_username=None, osf_password=None, osf_token=None):
+    """
+    Download a single file from a (typically private) OSF project via ``osfclient``.
+
+    Slower than the direct ``files.osf.io`` URL used by public downloads (see
+    :func:`download_file`'s ``"osf"`` host), but supports authentication.
+
+    Parameters
+    ----------
+    osf_repo : str
+        OSF project (repo) ID.
+    osf_file_id : str
+        ID of the remote file within the project's storage.
+    save_path : str or os.PathLike
+        Local destination file path.
+    osf_username : str, optional
+        OSF account username, for password authentication.
+    osf_password : str, optional
+        OSF account password, for password authentication.
+    osf_token : str, optional
+        OSF personal access token, for token authentication.
+
+    Returns
+    -------
+    save_path
+        The same `save_path` passed in.
+    """
     osf = osfclient.OSF(username=osf_username, password=osf_password, token=osf_token)
     project = osf.project(osf_repo)
     storage = project.storage()
@@ -77,13 +123,63 @@ def download_via_osfclient(osf_repo, osf_file_id, save_path,
     return save_path
 
 
-def download_file(host: Literal["url", "github", "github-nispace", "github-nispace-private", 
-                                "osf", "osfprivate", "neuromaps"] = "url", 
-                  remote: Union[str, Path, tuple[str, str], tuple[str, str, str]] = None, 
+def download_file(host: Literal["url", "github", "github-nispace", "github-nispace-private",
+                                "osf", "osfprivate", "neuromaps"] = "url",
+                  remote: Union[str, Path, tuple[str, str], tuple[str, str, str]] = None,
                   save_path: Union[str, Path] = None,
                   osf_config_file: str = None,
                   github_config_file: str = None):
-    
+    """
+    Download a single file from one of several supported hosts.
+
+    Dispatches to the right download mechanism based on `host`; used internally
+    by :func:`get_file` as the actual download backend for every dataset host
+    NiSpace supports.
+
+    Parameters
+    ----------
+    host : {"url", "github", "github-nispace", "github-nispace-private", "osf", "osfprivate", "neuromaps"}, default "url"
+        Which download mechanism/source to use.
+    remote : str, os.PathLike, or tuple, required
+        The remote file identifier; shape depends on `host`:
+
+        - ``"url"``: a full URL string/path.
+        - ``"github"``: ``(repo, branch, path)`` — any public GitHub repo.
+        - ``"github-nispace"``: a path string within the NiSpace-data repo
+          (repo/commit taken from :mod:`nispace.config`).
+        - ``"github-nispace-private"``: same as ``"github-nispace"`` but against
+          the private NiSpace-data repo; requires `github_config_file`.
+        - ``"osf"``: ``(osf_repo, osf_id)`` for a public OSF file, downloaded
+          directly via the ``files.osf.io`` URL.
+        - ``"osfprivate"``: ``(osf_repo, osf_id)`` for a private OSF file,
+          downloaded via ``osfclient``; requires `osf_config_file`.
+        - ``"neuromaps"``: ``(source, tracer, space)`` or ``(source, tracer, space, hemi)``,
+          forwarded to ``neuromaps.datasets.fetch_annotation``.
+    save_path : str, os.PathLike, or "cwd", optional
+        Local destination. A directory path is combined with the remote file's
+        basename. ``"cwd"`` uses the current working directory. If not given,
+        defaults to a temp directory (ignored for `host="neuromaps"`, which
+        requires an explicit `save_path`).
+    osf_config_file : str, optional
+        Path to an INI file with an ``[osf]`` section (``username``/``password``/
+        ``token``); required when `host="osfprivate"`.
+    github_config_file : str, optional
+        Path to an INI file with a ``[github]`` section (``username``/``token``);
+        required when `host="github-nispace-private"`.
+
+    Returns
+    -------
+    Path
+        Path to the downloaded (or copied, for `host="neuromaps"`) file.
+
+    Raises
+    ------
+    ValueError
+        If `host` is not one of the supported values, `remote` is missing/malformed
+        for the given `host`, or a required config file doesn't exist.
+    ImportError
+        If `host="osfprivate"` and the optional ``osfclient`` dependency is not installed.
+    """
     # errors
     hosts_avail = ["url", "github", "github-nispace", "github-nispace-private", 
                    "osf", "osfprivate", "neuromaps"]
@@ -267,7 +363,52 @@ def get_file(local_path, host, remote,
              hash_check=True,
              overwrite=False,
              **_ignored):
-    
+    """
+    Return a local, up-to-date copy of a remote file, downloading only if needed.
+
+    This is the caching entry point used throughout :mod:`nispace.datasets` for
+    every remote file lookup — it downloads via :func:`download_file` only when
+    the local file is missing, stale (per `hash_check`), or `overwrite=True`.
+
+    Parameters
+    ----------
+    local_path : str or os.PathLike
+        Local destination path. If its filename contains the literal placeholder
+        ``"%s"``, it is filled in with the extension inferred from `remote`
+        (via an internal helper) when `ext` is not given.
+    host : str
+        Download host; forwarded to :func:`download_file` (see its docstring for
+        the supported values and corresponding `remote` shapes).
+    remote : str, os.PathLike, or tuple
+        Remote file identifier; forwarded to :func:`download_file`.
+    ext : str, optional
+        File extension to use for `local_path` instead of the inferred one.
+    osf_config_file : str, optional
+        Forwarded to :func:`download_file` (used for `host="osfprivate"`).
+    github_config_file : str, optional
+        Forwarded to :func:`download_file` (used for `host="github-nispace-private"`).
+    hash_check : bool, default True
+        If True and `host="github-nispace"`, re-download when the local file's
+        SHA-256 hash no longer matches the hash recorded in NiSpace's data-library
+        hash file (i.e. the remote file was updated upstream). Ignored for other
+        hosts, for which no reference hash is available.
+    overwrite : bool, default False
+        If True, always re-download regardless of whether the local file exists
+        or matches its hash.
+    **_ignored
+        Extra keyword arguments are accepted and silently ignored, so callers can
+        pass a shared kwargs dict across different host types.
+
+    Returns
+    -------
+    Path
+        Path to the (now-local) file.
+
+    Raises
+    ------
+    ValueError
+        If `local_path` points to an existing directory.
+    """
     # local path
     local_path = Path(local_path)
     # infer file extension if necessary
@@ -338,7 +479,59 @@ def sync_osf(local_path, osf_id, username=None, password=None, token=None,
              dry_run=False, exclude=[r"^\."], config_file=None,
              skip_new_file_url_error=False, skip_file_exists_error=False,
              use_R=False):
-    
+    """
+    Two-way sync a local directory with an OSF project's storage (dev tool).
+
+    For every local file under `local_path`: uploads it if missing remotely,
+    updates it if its MD5 hash differs from the remote copy, and leaves it
+    otherwise. Remote files with no corresponding local file are deleted.
+    Used to publish/update NiSpace's reference data on OSF, not part of the
+    end-user data-fetching path.
+
+    Parameters
+    ----------
+    local_path : str or os.PathLike
+        Local directory to sync from; must already exist.
+    osf_id : str
+        OSF project (repo) ID to sync to.
+    username : str, optional
+        OSF account username, for password authentication.
+    password : str, optional
+        OSF account password, for password authentication.
+    token : str, optional
+        OSF personal access token, for token authentication.
+    dry_run : bool, default False
+        If True, only print what would be uploaded/updated/deleted without
+        making any remote changes.
+    exclude : list of str, default [r"^\\."]
+        Regex patterns; local filenames matching any pattern are skipped
+        (default excludes dotfiles).
+    config_file : str, optional
+        Path to an INI file with an ``[osf]`` section (``username``/``password``/
+        ``token``), used instead of the individual credential arguments if given.
+    skip_new_file_url_error : bool, default False
+        If True, catch and record (rather than raise) an ``AttributeError``
+        sometimes raised by ``osfclient`` when uploading brand-new files.
+    skip_file_exists_error : bool, default False
+        If True, catch (rather than raise) a ``FileExistsError`` during upload.
+    use_R : bool, default False
+        If True, shell out to a local ``get_osf_ids.R`` script (via ``Rscript``)
+        to enumerate remote file IDs instead of using ``osfclient`` directly.
+
+    Returns
+    -------
+    dict
+        Mapping of remote file path to ``{"id": ..., "md5": ...}`` for every file
+        present on OSF after the sync.
+
+    Raises
+    ------
+    ImportError
+        If the optional ``osfclient`` dependency is not installed.
+    FileNotFoundError
+        If `local_path` doesn't exist / isn't a directory, or `use_R=True` and
+        ``get_osf_ids.R`` isn't found in the current working directory.
+    """
     # check if osfclient is installed
     if not _OSF_AVAIL:
         raise ImportError("'osfclient' is not installed. Install it with, e.g., 'pip install osfclient'.")

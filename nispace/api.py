@@ -102,9 +102,35 @@ _DEPR_L2RMAP = (
 
 class NiSpace:
     """
-    The NiSpace class. To be imported via `from nispace import NiSpace`.
-    Docs under construction.
-    
+    Main analysis object for spatial colocalization / imaging-transcriptomics-style
+    workflows between a set of X (predictor) maps and a set of Y (target) maps,
+    with optional Z covariate maps. Import via ``from nispace import NiSpace``.
+
+    Typical usage follows a fixed pipeline of method calls, each acting on and
+    updating the same object:
+
+    1. Construct with `x`/`y`/(optional `z`) and a `parcellation`, then call
+       :meth:`fit` to parcellate/validate the data.
+    2. Optionally reduce/clean/transform the data: :meth:`reduce_x`,
+       :meth:`clean_y`, :meth:`transform_y`, :meth:`transform_z`.
+    3. Compute colocalization statistics between X and Y with :meth:`colocalize`.
+    4. Optionally decompose a colocalization result region-by-region with
+       :meth:`regional_influence` / :meth:`regional_contribution`.
+    5. Assess significance via permutation testing with :meth:`permute`, then
+       :meth:`correct_p` for multiple comparisons and/or
+       :meth:`normalize_colocalizations` against the null distribution.
+    6. Retrieve results with the `get_*` methods (`get_x`, `get_y`, `get_z`,
+       `get_colocalizations`, `get_p_values`, `get_regional_influence`,
+       `get_regional_contribution`, ...), visualize with :meth:`plot` /
+       :meth:`plot_brain`, and persist the object with :meth:`to_pickle` /
+       :meth:`from_pickle` / :meth:`copy`.
+
+    Attributes
+    ----------
+    `NiSpace` has no public instance attributes. All state (data, colocalization
+    results, null distributions, p-values, parcellation, and internal settings) is
+    stored on private, underscore-prefixed attributes and is not meant to be
+    accessed directly — use the `get_*` methods instead.
     """
 
     def __init__(self, 

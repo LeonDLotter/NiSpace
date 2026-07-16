@@ -23,6 +23,10 @@ apply_surface_plot_patches()
 
 
 def nice_stats_labels(string, add_dollars=True):
+    """Map an internal stat/method name (e.g. "pearson", "cohen") to a nicely
+    formatted display label (e.g. "Pearson's Rho"), optionally wrapped in
+    matplotlib math-text dollar signs. Unrecognized strings are returned as-is.
+    """
     replace_dict = {
         "r2": "R^2",
         "R2": "R^2",
@@ -71,11 +75,14 @@ def nice_stats_labels(string, add_dollars=True):
 
 
 def hide_empty_axes(axes):
-    
+    """Turn off any axes in a 2D array of subplot axes that were never drawn
+    into (i.e. still at matplotlib's default (0, 1, 0, 1) data limits)."""
     [ax.axis("off") for ax in axes.ravel() if ax.axis() == (0.0, 1.0, 0.0, 1.0)]
 
 
 def colors_from_values(values, palette_name):
+    """Map a numeric array to RGB colors from a seaborn palette, linearly
+    normalizing *values* to [0, 1] before indexing into the palette."""
     # normalize the values to range [0, 1]
     normalized = (values - min(values)) / (max(values) - min(values))
     # convert to indices
@@ -86,8 +93,15 @@ def colors_from_values(values, palette_name):
 
 
 def move_legend_fig_to_ax(fig, ax, loc, bbox_to_anchor=None, no_legend_error=False, **kwargs):
+        """Move a figure-level legend (as produced by ``seaborn.objects.Plot``)
+        onto a specific axes, merging it with any existing axes-level legend.
+
+        Workaround for `seaborn.objects` always attaching legends to the figure;
+        copied from GitHub user thuiop,
+        https://github.com/mwaskom/seaborn/issues/3247#issuecomment-1420731692.
+        """
         # copied from GitHub user thuiop
-        # https://github.com/mwaskom/seaborn/issues/3247#issuecomment-1420731692 
+        # https://github.com/mwaskom/seaborn/issues/3247#issuecomment-1420731692
 
         if hasattr(fig, "legends"):
             if len(fig.legends) > 0:
@@ -146,7 +160,7 @@ def linewidth_from_data_units(linewidth, axis, reference='x'):
         data (data limits and size must not change afterwards)
     reference: string
         The axis that is taken as a reference for the data width.
-        Possible values: 'x' and 'y'. Defaults to 'y'.
+        Possible values: 'x' and 'y'. Defaults to 'x'.
 
     Returns
     -------
@@ -353,6 +367,8 @@ def print_significance(ax, p_values, q_values=None, coloc_values=None,
 
 
 def pivot_brainspan_result(brainspan_vector):
+    """Reshape a length-80 BrainSpan result Series (index formatted as
+    "stage-region") into a stage x region pivot table for plotting."""
     if brainspan_vector.shape != (80,):
         raise ValueError(f"brainspan_vector must have shape (80,), not shape {brainspan_vector.shape}.")
     elif not isinstance(brainspan_vector, pd.Series):
@@ -383,8 +399,80 @@ def catplot(fig, ax, data_long, categorical_var="variable", continuous_var="valu
             hlines=None,
             vlines=None,
             legend=None
-            ):   
-    
+            ):
+    """Draw a categorical plot combining any mix of bars, violins, scatter
+    points, summary dots, and errorbars, built on top of `seaborn.objects`.
+
+    Values along ``continuous_var`` are shown per level of ``categorical_var``
+    (optionally further split by ``group_var``), with automatic coloring by
+    either the continuous variable (diverging colormap if data cross zero,
+    sequential otherwise) or the categorical variable.
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+        Parent figure, needed to relocate the legend onto `ax` after plotting.
+    ax : matplotlib.axes.Axes
+        Axes to draw into.
+    data_long : pandas.DataFrame
+        Long-format data with at least the columns named by `categorical_var`
+        and `continuous_var` (and `group_var` if given).
+    categorical_var, continuous_var : str, default "variable", "value"
+        Column names for the categorical grouping variable and the plotted
+        continuous values.
+    group_var : str, optional
+        Column name for an additional grouping/dodge variable (e.g. for
+        side-by-side sub-categories within each `categorical_var` level).
+    categorical_axis : {"x", "y"}, default "x"
+        Which plot axis carries the categorical variable; the other axis
+        carries `continuous_var`.
+    sort_categories : False or {"mean", "median"}, default False
+        If truthy, sort categories by their mean/median `continuous_var`
+        value (descending). Ignored if `category_order` is given.
+    category_order : list, optional
+        Explicit category order; takes precedence over `sort_categories`.
+    color_how : {"continuous", "categorical", False}, default "continuous"
+        Whether to color elements by `continuous_var` (per-point color scale),
+        by `categorical_var` (discrete "Spectral" palette), or not at all.
+    color_which : "auto" or str, default "auto"
+        Colormap/palette name. For `color_how="continuous"`, "auto" resolves
+        to "icefire" (diverging) if the data cross zero, else "inferno".
+    color_center : bool, optional
+        For continuous coloring, force the color scale to be centered at 0
+        (symmetric limits). Auto-enabled when `color_which="auto"` picks the
+        diverging colormap.
+    labels : dict, optional
+        Forwarded to `Plot.label()` (e.g. ``{"x": "...", "y": "...", "color": "..."}``).
+    limits : dict, optional
+        Forwarded to `Plot.limit()`; a "color" key sets explicit color-scale
+        limits and is popped out before the rest is passed through.
+    bars, violins, scatters, dots, errorbars : dict, optional
+        Per-layer options, each merged over its own defaults via
+        ``defaults | user_dict`` (so only overridden keys need to be passed).
+        Common keys: ``"plot"`` (bool, whether to draw the layer), ``"label"``
+        (bool or str, legend label; ``True`` auto-derives one from the layer's
+        aggregation method), ``"kwargs"`` (dict forwarded to the underlying
+        matplotlib/seaborn artist). `bars`/`dots`/`errorbars` also take
+        ``"agg_method"`` (e.g. "mean", "ci"); layers with a `group_var` split
+        also take ``"dodge_width"``.
+    hline, vline : dict, optional
+        Single reference line at one or more fixed positions
+        (keys: ``"plot"``, ``"y"``/``"x"``, ``"color"``, ``"linewidth"``,
+        ``"linestyle"``, ``"zorder"``, ``"kwargs"``).
+    hlines, vlines : list of dict, optional
+        Multiple independently styled reference lines; each dict supports
+        ``"y"``/``"x"``, ``"color"``, ``"linewidth"``, ``"linestyle"``,
+        ``"zorder"``, and ``"label"`` (added to the axes legend if given).
+    legend : dict, optional
+        Legend placement/formatting (keys: ``"plot"``, ``"loc"``,
+        ``"bbox_to_anchor"``, ``"nice_labels"`` (apply
+        :func:`nice_stats_labels` to auto-derived labels), ``"kwargs"``).
+
+    Returns
+    -------
+    seaborn.objects.Plot
+        The finalized, already-rendered `Plot` object.
+    """
     # defaults, overwrite with user input
     bars = dict(
         plot=False, label=True,
@@ -628,7 +716,62 @@ def nullplot(fig, ax, data_long, categorical_var="variable", continuous_var="val
              labels=None,
              limits=None,
              legend=None
-             ):   
+             ):
+    """Draw a null distribution as shaded percentile bands with a median
+    line (and optionally overlaid violins), per level of `categorical_var`.
+
+    Built on `seaborn.objects`. For each category, the empirical quantiles of
+    `continuous_var` (from `data_long`, typically a long-format table of null
+    permutation values) are computed at `quantiles_below_median` and their
+    mirror image above the median, then drawn as nested translucent bands
+    with the median as a solid line.
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+        Parent figure, needed to relocate the legend onto `ax` after plotting.
+    ax : matplotlib.axes.Axes
+        Axes to draw into.
+    data_long : pandas.DataFrame
+        Long-format data with at least the columns named by `categorical_var`
+        and `continuous_var`.
+    categorical_var, continuous_var : str, default "variable", "value"
+        Column names for the categorical grouping variable and the null
+        values plotted along the continuous axis.
+    categorical_axis : {"x", "y"}, default "x"
+        Which plot axis carries the categorical variable; the other axis
+        carries `continuous_var`.
+    category_order : list, optional
+        Explicit category order.
+    color_which : str or None, default "viridis_r"
+        Palette used to color the nested bands (one color per quantile pair)
+        and the median line; if the name can't be resolved, treated as a
+        single fixed color for all bands, and `None` uses plain grey.
+    quantiles_below_median : list of float, default [0.01, 0.05, 0.25]
+        Quantiles below 0.5 defining the band edges; each is mirrored to
+        ``1 - q`` to form one band, giving nested bands from widest to narrowest.
+    bands : dict, optional
+        Band styling/labeling (keys: ``"plot"``, ``"label"``, ``"label_prefix"``,
+        ``"alpha"``, ``"edgewidth"``, ``"edgestyle"``, ``"edgealpha"``, ``"kwargs"``).
+    median_line : dict, optional
+        Median line styling (keys: ``"plot"``, ``"label"``, ``"alpha"``, ``"kwargs"``).
+    violins : dict, optional
+        Optional overlaid violin plot of the raw null distribution (keys:
+        ``"plot"``, ``"label"``, ``"legend"``, ``"kwargs"``).
+    labels : dict, optional
+        Forwarded to `Plot.label()`; the continuous axis defaults to
+        `continuous_var` unless overridden.
+    limits : dict, optional
+        Forwarded to `Plot.limit()`.
+    legend : dict, optional
+        Legend placement/formatting (keys: ``"plot"``, ``"loc"``,
+        ``"bbox_to_anchor"``, ``"nice_labels"``, ``"kwargs"``).
+
+    Returns
+    -------
+    seaborn.objects.Plot
+        The finalized, already-rendered `Plot` object.
+    """
     bands = dict(
         plot=True, label=True, label_prefix="Null percentile ",
         alpha=0.1,
@@ -779,7 +922,14 @@ def heatmap(ax,
             legend_shapes=True,
             legend_shapes_kwargs=None,
             ):
-    
+    """Draw a heatmap-style grid of markers whose color, size, and/or shape
+    each independently encode a separate 2D array (`data_colors`,
+    `data_sizes`, `data_shapes`), with an optional boolean `mask` and
+    automatic legends for each encoded dimension.
+
+    Experimental: this function is still under active development and its
+    parameters/behavior may change in future releases.
+    """
     # kwargs
     legend_colors_kwargs = {} if legend_colors_kwargs is None else legend_colors_kwargs
     legend_sizes_kwargs = {} if legend_sizes_kwargs is None else legend_sizes_kwargs
@@ -1032,6 +1182,15 @@ def heatmap(ax,
 def view_surf(data=None, parcellation=None, hemi="L", template="fsaverage", replace_nan=0,
               template_kwargs=None, parcellation_kwargs=None,
               verbose=False, **kwargs):
+    """Quick interactive nilearn surface viewer for parcellated or vertex-wise
+    data on a fetched `template`/`parcellation`.
+
+    If `data` is a 1D array/Series matching the number of parcels, it is
+    expanded to a vertex-wise surface map first; if it already matches the
+    template's vertex count, it is used as-is. If `data` is omitted, the
+    parcellation's own parcel indices are plotted. Thin wrapper around
+    `nilearn.plotting.view_surf`; `**kwargs` are forwarded to it.
+    """
     set_log(lgr, verbose)
     
     # kwargs 

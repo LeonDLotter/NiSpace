@@ -48,9 +48,11 @@ _DEPR_COMBINED_PARC_NAME = (
 )
 
 def keys2list(dct):
+    """Return `dct`'s keys as a list."""
     return list(dct.keys())
 
 def keys2str(dct, sep=", "):
+    """Return `dct`'s keys joined into a single string, separated by `sep`."""
     return sep.join(list(dct.keys()))
 
 # TODO (first non-dev release): remove nispace_data_dir parameter from all fetch_* functions and delete _resolve_nispace_data_dir()
@@ -122,10 +124,21 @@ def fetch_template(template: str = _SPACE_DEFAULT_VOL,
         
     nispace_data_dir : str orPath, optional
         The directory containing the NiSpace data. Default is None.
-        
+
+    overwrite : bool, default False
+        Re-download the template even if already cached locally.
+
+    check_file_hash : bool, default True
+        Verify the SHA-256 hash of the cached file against the known reference hash.
+
+    verbose : bool, default True
+        Print progress messages.
+
     Returns
     -------
-    The template.
+    Path or tuple of Path
+        Path to the downloaded template file. For surface templates with 2
+        hemispheres requested, a 2-tuple of paths (one per hemisphere).
     """
     verbose = set_log(lgr, verbose)
     
@@ -364,7 +377,63 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
                        check_file_hash: bool = True,
                        verbose: bool = True):
     """
-    Fetch a parcellation.
+    Fetch a parcellation, as a :class:`~nispace.core.parcellation.Parcellation`
+    object (preferred) or, in legacy mode, as individual loaded arrays/paths.
+
+    Parameters
+    ----------
+    parcellation : str or tuple of str, default from :data:`nispace.core.constants._PARC_DEFAULT`
+        Registered parcellation name (e.g. ``"Schaefer100"``), a "+"-combined
+        cortex+subcortex name (e.g. ``"Schaefer100+TianS1"``), or a tuple of two
+        such names.
+    space : str, optional
+        Template space to fetch/activate (e.g. ``"MNI152NLin6Asym"``, ``"fsLR"``).
+        If ``None`` (default), no space is activated up front — a
+        :class:`Parcellation` is returned lazily configured to load spaces on
+        demand, and `return_parcellation_only` is implied.
+    hemi : str or list of str, default ["L", "R"]
+        Hemisphere(s) to restrict to (surface spaces only). A single hemisphere
+        triggers :meth:`Parcellation.select_hemi` on the returned object (new path).
+    bilateral : bool, default False
+        If True, call :meth:`Parcellation.make_bilateral` on the returned object
+        (new path only; requires a symmetric parcellation).
+    return_parcellation_only : bool, default False
+        If True (or if `space` is None), return a :class:`Parcellation` object
+        instead of individual arrays. This is the preferred, non-deprecated mode.
+    return_labels, return_space, return_resolution, return_symmetric, return_dist_mat, return_spin_mat : bool
+        Legacy mode only (ignored when a `Parcellation` object is returned):
+        which additional pieces of information to include in the output tuple.
+        `return_labels` defaults to True; the rest default to False.
+    return_loaded : bool, default True
+        Legacy mode only: whether to return loaded objects (nifti/gifti images,
+        label lists, arrays) instead of file paths.
+    nispace_data_dir : str or Path, optional
+        Deprecated; use the ``NISPACE_DATA_DIR`` environment variable instead.
+    overwrite : bool, default False
+        Re-download files even if already cached locally.
+    check_file_hash : bool, default True
+        Verify the SHA-256 hash of cached files against the known reference hash.
+    verbose : bool, default True
+        Print progress messages.
+
+    Returns
+    -------
+    Parcellation
+        If `space` is None or `return_parcellation_only=True` (the preferred path).
+    object or tuple
+        Legacy path only (deprecated): a single value if only one `return_*` flag
+        is set, otherwise a tuple in the order parc/label/space/res/sym/distmat/spinmat
+        (only including the requested ones); for a cortex+subcortex `parcellation`,
+        the two are merged (with `distmat`/`spinmat` returned as None, not yet
+        supported for merged parcellations).
+
+    Notes
+    -----
+    The legacy array-returning path (triggered when `space` is given explicitly
+    and `return_parcellation_only=False`) is deprecated and will be removed in the
+    first non-dev release. Prefer omitting `space` (or passing
+    `return_parcellation_only=True`) and using the returned `Parcellation`
+    object's `get_image()`/`get_dist_mat()`/etc. methods instead.
     """
     verbose = set_log(lgr, verbose)
     
@@ -728,6 +797,34 @@ def fetch_collection(collection: Union[str,Path, np.ndarray, pd.DataFrame, pd.Se
         
 
 def apply_collection(data: pd.DataFrame, collection: pd.DataFrame):
+    """
+    Re-index a parcellated-data DataFrame by a collection's set/weight structure.
+
+    Restricts `data` to the maps present in `collection` and replaces its index
+    with the collection's columns (``map``, and ``set``/``weight`` if present) as
+    a MultiIndex — so a single map that belongs to multiple sets appears multiple
+    times, once per set membership.
+
+    Parameters
+    ----------
+    data : pd.DataFrame
+        Parcellated data indexed by map name (rows = maps, columns = parcels).
+    collection : pd.DataFrame
+        A collection DataFrame as returned by :func:`fetch_collection`, with at
+        least a ``"map"`` column.
+
+    Returns
+    -------
+    pd.DataFrame
+        `data` restricted to maps in `collection`, indexed by a MultiIndex of
+        `collection`'s columns (``map`` alone, or ``["set", "map"]``, or
+        ``["set", "map", "weight"]``).
+
+    Raises
+    ------
+    ValueError
+        If `collection` has no ``"map"`` column.
+    """
     if not np.isin(["map"], collection.columns).all():
         lgr.critical_raise("collection must have at least a 'map' column.")
     
@@ -1115,6 +1212,108 @@ def fetch_reference(dataset: str,
                     overwrite: bool = False,
                     check_file_hash: bool = True,
                     verbose: bool = True):
+    """
+    Fetch reference/annotation maps (or parcellated data derived from them) for a dataset.
+
+    This is the main entry point for NiSpace's integrated reference datasets (e.g.
+    PET tracer maps, mRNA expression, ENIGMA disorder maps). Depending on whether
+    `parcellation` is given, it returns either paths to the raw map images or
+    already-parcellated tabular data; `maps`/`collection`/`sets` narrow down which
+    maps are returned.
+
+    Parameters
+    ----------
+    dataset : str
+        Name of an integrated reference dataset (e.g. ``"pet"``, ``"mrna"``,
+        ``"enigma"``). See ``fetch_collection``/the online docs for the full list.
+    maps : str, list of str, or dict, optional
+        Restrict to a subset of map IDs. A string/list is matched as a substring
+        against available map names; a dict is matched as ``{filter_name: value(s)}``
+        filters (e.g. ``{"n": ">20"}`` on sample size). ``None`` keeps all maps.
+    space : str, optional
+        Template space for the raw map images (only used when `parcellation` is
+        None). Auto-selected (preferring the package's default volumetric, then
+        surface, space) if not given.
+    collection : str, optional
+        Name of an integrated collection to filter/group maps by (see
+        :func:`fetch_collection`); ``"All"`` is equivalent to not filtering.
+    sets : str or list of str, optional
+        Restrict to specific named sets within `collection`. Requires `collection`
+        to define sets.
+    set_size_range : tuple (int, int), optional
+        Keep only collection sets whose membership count falls within this range.
+        Forwarded to :func:`fetch_collection`.
+    weight_range : tuple (float, float), optional
+        Keep only weighted collection entries within this weight range. Forwarded
+        to :func:`fetch_collection`.
+    weight_quantile : float, optional
+        Within each collection set, keep only entries at or above this weight
+        quantile. Forwarded to :func:`fetch_collection`.
+    set_top_n : int, optional
+        Within each collection set, keep only the top-n entries by weight.
+        Forwarded to :func:`fetch_collection`.
+    set_specificity : float, optional
+        Keep only maps appearing in at most this fraction of collection sets.
+        Forwarded to :func:`fetch_collection`.
+    parcellation : str, tuple of str, or Parcellation, optional
+        If given, return parcellated tabular data instead of image paths. Accepts
+        a registered parcellation name, a cortex+subcortex tuple, a "+"-combined
+        name, or a :class:`~nispace.core.parcellation.Parcellation` object (its
+        name is extracted automatically).
+    bilateral : bool, default False
+        If True (and `parcellation` is symmetric), average matched left/right
+        columns into single bilateral parcels. Only meaningful with `parcellation`.
+    hemi : str or list of str, optional
+        Restrict to one hemisphere (``"L"`` or ``"R"``). For parcellated data,
+        keeps only columns with the matching ``hemi-*`` label prefix; has no
+        effect on raw image paths.
+    standardize_parcellated : bool, default False
+        If True, z-score parcellated data across maps (forwarded to
+        :func:`~nispace.stats.misc.zscore_df`). Only used with `parcellation`.
+    return_metadata : bool, default False
+        If True, also return the dataset's per-map metadata table (see
+        :func:`fetch_map_info`) alongside the data.
+    print_references : bool, default True
+        Print the dataset's description and citation information (and, if
+        `return_metadata` or metadata is otherwise loaded, a per-map citation
+        table) to stdout.
+    osf_config_file : str, optional
+        Path to an OSF credentials config file, required to access private maps
+        hosted on OSF (see :func:`~nispace.utils.utils_datasets.download_file`).
+    github_config_file : str, optional
+        Path to a GitHub credentials config file, required to access private maps
+        hosted on the private NiSpace-data GitHub repo.
+    nispace_data_dir : str or Path, optional
+        Deprecated; use the ``NISPACE_DATA_DIR`` environment variable instead.
+    overwrite : bool, default False
+        Re-download files even if already cached locally.
+    check_file_hash : bool, default True
+        Verify the SHA-256 hash of cached files against the known reference hash.
+    verbose : bool, default True
+        Print progress messages.
+
+    Returns
+    -------
+    list, pd.DataFrame, or tuple
+        If `parcellation` is None: a list of paths to the raw map images (or, for
+        surface spaces, a list of ``(lh_path, rh_path)`` tuples), one per matched
+        map.
+        If `parcellation` is given: a DataFrame of shape (n_maps, n_parcels),
+        indexed by map name (or a ``["set", "map"]``/``["set", "map", "weight"]``
+        MultiIndex if `collection` groups maps into sets).
+        If `return_metadata=True`: the above, plus the metadata DataFrame from
+        :func:`fetch_map_info`, as a 2-tuple (or an n+1-tuple if the data itself
+        was already a tuple of per-hemisphere paths).
+
+    Raises
+    ------
+    ValueError
+        If `dataset` is not a registered dataset, requires a parcellation but none
+        is given, or `space`/`collection`/`sets`/`bilateral` don't match what's
+        available for the dataset.
+    TypeError
+        If `dataset` is not a string.
+    """
     verbose = set_log(lgr, verbose)
 
     # --- handle Parcellation object passed as parcellation= ---
@@ -1372,6 +1571,28 @@ def fetch_map_info(dataset: str,
                    overwrite: bool = False,
                    check_file_hash: bool = True,
                    nispace_data_dir: Union[str,Path] = None):
+    """
+    Fetch a dataset's per-map metadata table (e.g. sample size, tracer, condition).
+
+    Parameters
+    ----------
+    dataset : str
+        Name of an integrated reference dataset (see :func:`fetch_reference`).
+    maps : str or list of str, optional
+        Restrict the returned table to these map IDs. ``None`` returns all.
+    overwrite : bool, default False
+        Re-download the metadata file even if already cached locally.
+    check_file_hash : bool, default True
+        Verify the SHA-256 hash of the cached file against the known reference hash.
+    nispace_data_dir : str or Path, optional
+        Deprecated; use the ``NISPACE_DATA_DIR`` environment variable instead.
+
+    Returns
+    -------
+    pd.DataFrame or None
+        Metadata table indexed by map name, or ``None`` if `dataset` is not a
+        string, is not registered, or has no metadata table.
+    """
     if not isinstance(dataset, str):
         return None
     dataset = dataset.lower()
@@ -1420,10 +1641,43 @@ def fetch_example(example: str,
                   check_file_hash: bool = True,
                   verbose: bool = True):
     """
-    Fetch an example dataset.
+    Fetch an integrated example dataset, pre-parcellated with a given parcellation.
+
+    Parameters
+    ----------
+    example : str
+        Name of an integrated example dataset (case-insensitive).
+    parcellation : str or tuple of str, required
+        Parcellation name (or cortex+subcortex tuple) the example was parcellated
+        with. Currently required — only parcellated example data is available.
+    return_associated_data : bool, default True
+        If True and the example has associated subject-level info (e.g. group,
+        age, sex), also return it as a second DataFrame.
+    nispace_data_dir : str or Path, optional
+        Deprecated; use the ``NISPACE_DATA_DIR`` environment variable instead.
+    overwrite : bool, default False
+        Re-download files even if already cached locally.
+    check_file_hash : bool, default True
+        Verify the SHA-256 hash of cached files against the known reference hash.
+    verbose : bool, default True
+        Print progress messages.
+
+    Returns
+    -------
+    pd.DataFrame
+        Parcellated example data of shape (n_subjects/files, n_parcels).
+    pd.DataFrame
+        Only if `return_associated_data=True` and available: subject-level info,
+        indexed to match `example_data`.
+
+    Raises
+    ------
+    ValueError
+        If `example` is not registered, `parcellation` is not given, or the
+        example has no data for the requested parcellation.
     """
     verbose = set_log(lgr, verbose)
-    
+
     nispace_data_dir = _resolve_nispace_data_dir(nispace_data_dir)
 
     # base dir

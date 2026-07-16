@@ -40,8 +40,22 @@ def parcellate_data(data,
 
     Parameters
     ----------
-    parcellation : str, os.PathLike, nib.Nifti1Image, nib.GiftiImage, or tuple
-        The parcellation image or surfaces, where each region is identified by a unique integer ID.
+    data : list, dict, pd.DataFrame, pd.Series, or np.ndarray
+        The imaging data to be parcellated. Lists/dicts are treated as paths or
+        loaded nifti/gifti images (dict values become the data, dict keys become
+        `data_labels`); DataFrames/Series/ndarrays are treated as already-parcellated
+        data of shape (n_files, n_parcels).
+    data_labels : list, optional
+        Labels for the input data. If not given, derived from file basenames (list
+        input) or from the DataFrame/Series index/name (already-parcellated input).
+    data_space : str
+        The space in which the input data is defined.
+    parcellation : str, os.PathLike, nib.Nifti1Image, nib.GiftiImage, tuple, or Parcellation
+        The parcellation image or surfaces, where each region is identified by a
+        unique integer ID. A :class:`~nispace.core.parcellation.Parcellation` object
+        is also accepted; `parc_labels`/`parc_hemi`/`parc_space` are then taken from
+        its active space unless explicitly overridden. Required (non-None) when
+        `data` is a list/dict.
     parc_labels : list
         Labels for the parcellation regions.
     parc_space : str
@@ -50,12 +64,6 @@ def parcellate_data(data,
         Hemispheres to consider for parcellation, e.g., ["L", "R"].
     resampling_target : {'data', 'parcellation'}
         Specifies which image gives the final shape/size.
-    data : list, dict, pd.DataFrame, pd.Series, or np.ndarray
-        The imaging data to be parcellated.
-    data_labels : list
-        Labels for the input data.
-    data_space : str
-        The space in which the input data is defined.
     ignore_background_data : bool
         Whether to exclude background voxels from parcel-mean computation.
         When True, values specified by `background_value` are masked before
@@ -81,15 +89,24 @@ def parcellate_data(data,
         Minimum number of valid datapoints required per parcel.
     min_fraction_valid_datapoints : float, optional
         Minimum fraction of valid datapoints required per parcel.
-    n_proc : int
-        Number of processors to use for parallel processing.
-    dtype : data-type
+    return_parc : bool, default False
+        If True, also return the loaded parcellation image (nifti/gifti/tuple).
+    dtype : data-type, optional
         Desired data type of the output.
+    n_proc : int, default 1
+        Number of processors to use for parallel processing (list/dict input only).
+    verbose : bool, default True
+        Whether to print progress/info messages.
+    ignore_zero_division_warning : bool, default True
+        Whether to suppress numpy's "invalid value encountered in divide" warning
+        raised when a parcel's mean is computed from zero valid datapoints.
 
     Returns
     -------
     pd.DataFrame
-        Parcellated data in a DataFrame.
+        Parcellated data of shape (n_files, n_parcels).
+    pd.DataFrame, nib.Nifti1Image or nib.GiftiImage or tuple
+        If `return_parc=True`, also returns the loaded parcellation image.
 
     Raises
     ------
@@ -336,6 +353,18 @@ def parcellate_data(data,
 
 
 def read_json(json_path):
+    """
+    Load a JSON file, or pass through a dict-like object as a dict.
+
+    Parameters
+    ----------
+    json_path : str, os.PathLike, or dict-like
+        Path to a JSON file, or an already-loaded dict-like object.
+
+    Returns
+    -------
+    dict
+    """
     if isinstance(json_path, (str, Path)):
         with open(json_path) as f:
             json_dict = json.load(f)
@@ -348,6 +377,21 @@ def read_json(json_path):
 
 
 def write_json(json_dict, json_path):
+    """
+    Write a dict to a JSON file (pretty-printed, indent=4).
+
+    Parameters
+    ----------
+    json_dict : dict
+        Dictionary to serialize.
+    json_path : str or os.PathLike
+        Destination file path.
+
+    Returns
+    -------
+    Path
+        The resolved destination path.
+    """
     if isinstance(json_path, (str, Path)):
         json_path = Path(json_path)
         with open(json_path, "w") as f:
@@ -358,6 +402,30 @@ def write_json(json_dict, json_path):
 
 
 def load_img(img, override_file_format=False):
+    """
+    Load one or more nifti/gifti images, passing through already-loaded objects.
+
+    Parameters
+    ----------
+    img : str, os.PathLike, nib.Nifti1Image, nib.GiftiImage, list, or tuple
+        A single image (path or loaded object), or a list/tuple of up to 2 such
+        elements (e.g. left/right hemisphere gifti paths). Also accepts ``.curv``
+        FreeSurfer morphometry files, wrapped into a `nib.GiftiImage`.
+    override_file_format : {False, '.nii', '.nii.gz', '.gii', '.gii.gz'}, default False
+        If given, rename+reinterpret path inputs with an unrecognized extension as
+        this format before loading, instead of raising.
+
+    Returns
+    -------
+    nib.Nifti1Image, nib.GiftiImage, or tuple
+        A single loaded image, or a tuple of loaded images if `img` had 2 elements.
+
+    Raises
+    ------
+    ValueError
+        If `override_file_format` is invalid, an element's type/extension is
+        unsupported, or `img` is not a path/list/tuple/image object.
+    """
     # check override_file_format
     if override_file_format not in [False, ".nii", ".nii.gz", ".gii", ".gii.gz"]:
         raise ValueError("'override_file_format' must be False, '.nii', '.nii.gz', '.gii' or '.gii.gz'")
@@ -403,6 +471,38 @@ def load_img(img, override_file_format=False):
 
 
 def load_labels(labels, concat=True, header=None, index=None):
+    """
+    Load one or more label lists from paths, arrays, or Series.
+
+    Parameters
+    ----------
+    labels : str, os.PathLike, list, np.ndarray, pd.Series, or tuple
+        A single label source, or a tuple of up to 2 such elements (e.g. left/right
+        hemisphere label files). list/ndarray/Series elements are passed through as
+        plain lists; str/Path elements are read as the first column of a csv-like
+        text file.
+    concat : bool, default True
+        If `labels` has 2 elements, whether to concatenate them into a single flat
+        list (True) or return them as a 2-tuple (False).
+    header : int, optional
+        Row index to use as column header when reading a csv-like file; forwarded
+        to ``pandas.read_csv``.
+    index : int, optional
+        Column index to use as the row index when reading a csv-like file;
+        forwarded to ``pandas.read_csv``.
+
+    Returns
+    -------
+    list or tuple
+        A single flat list if `labels` had 1 element (or 2 with `concat=True`);
+        otherwise a 2-tuple of lists.
+
+    Raises
+    ------
+    ValueError
+        If `labels` is not a path/list/ndarray/Series/tuple thereof, or a path
+        element can't be read as a csv-like file.
+    """
     # to tuple
     if isinstance(labels, (str, Path, list, np.ndarray, pd.Series)):
         labels = (labels,)
@@ -437,6 +537,29 @@ def load_labels(labels, concat=True, header=None, index=None):
 
 
 def load_distmat(distmat):
+    """
+    Load one or more distance matrices from paths, arrays, or DataFrames.
+
+    Parameters
+    ----------
+    distmat : None, str, os.PathLike, np.ndarray, pd.DataFrame, list, or tuple
+        A single distance matrix source, or a tuple of up to 2 such elements (e.g.
+        left/right hemisphere matrices). ``None`` (or a tuple/list of all ``None``)
+        is passed through unchanged. array/DataFrame elements are converted to
+        plain ndarrays; str/Path elements are read as a headerless csv-like file.
+
+    Returns
+    -------
+    np.ndarray, tuple, or None
+        A single ndarray if `distmat` had 1 element; otherwise a 2-tuple of
+        ndarrays. `None` is passed through unchanged.
+
+    Raises
+    ------
+    ValueError
+        If `distmat` is not a path/list/tuple/ndarray/DataFrame thereof, or a path
+        element can't be read as a csv-like file.
+    """
     # catch None content
     if distmat is None or (isinstance(distmat, tuple) and all([d is None for d in distmat])):
         return distmat
@@ -469,6 +592,30 @@ def load_distmat(distmat):
 
 
 def load_spinmat(spinmat):
+    """
+    Load one or more spin-permutation index/weight arrays from paths or arrays.
+
+    Parameters
+    ----------
+    spinmat : None, str, os.PathLike, np.ndarray, list, or tuple
+        A single spin matrix source, or a tuple of up to 2 such elements (e.g.
+        left/right hemisphere spins). ``None`` (or a tuple/list of all ``None``) is
+        passed through unchanged. ``.npz`` paths are read via their ``"data"`` key;
+        other array file paths are memory-mapped (``mmap_mode='c'``) rather than
+        fully loaded into memory.
+
+    Returns
+    -------
+    np.ndarray, tuple, or None
+        A single array if `spinmat` had 1 element; otherwise a 2-tuple of arrays.
+        `None` is passed through unchanged.
+
+    Raises
+    ------
+    ValueError
+        If `spinmat` is not a path/ndarray/list/tuple thereof, or an element's type
+        is unsupported.
+    """
     if spinmat is None or (isinstance(spinmat, tuple) and all(s is None for s in spinmat)):
         return spinmat
     if isinstance(spinmat, (str, Path, np.ndarray)):
@@ -504,7 +651,16 @@ def to_pickle(obj, filepath, use_dill=False):
     obj : object
         Any python object to be pickled.
     filepath : str
-        File path destination.
+        File path destination; must end in ``.pkl``, ``.pkl.gz``, or ``.pkl.blosc``
+        (determines the compression method used).
+    use_dill : bool, default False
+        Whether to pickle with ``dill`` instead of the standard ``pickle`` module
+        (needed for objects `pickle` can't handle, e.g. local functions/lambdas).
+
+    Raises
+    ------
+    ValueError
+        If `filepath`'s extension is not one of the supported formats.
     """
     
     # use dill instead of pickle
@@ -535,7 +691,26 @@ def to_pickle(obj, filepath, use_dill=False):
 
 def from_pickle(filepath, use_dill=False):
     """
-    Unpickle a python object.
+    Unpickle a python object saved with :func:`to_pickle`.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to a ``.pkl``, ``.pkl.gz``, or ``.pkl.blosc`` file (extension
+        determines the decompression method used).
+    use_dill : bool, default False
+        Whether to unpickle with ``dill`` instead of the standard ``pickle``
+        module; must match what was used to save the file.
+
+    Returns
+    -------
+    object
+        The unpickled python object.
+
+    Raises
+    ------
+    ValueError
+        If `filepath`'s extension is not one of the supported formats.
     """
     
     # use dill instead of pickle
