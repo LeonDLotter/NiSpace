@@ -3,6 +3,19 @@
 These are written to be generic and reusable across the whole test suite,
 not specific to any one feature -- e.g. any future test of colocalize()/
 permute() can reuse ``toy_regression``/``synthetic_nispace`` as-is.
+
+Unit vs. integration
+---------------------
+Plain tests (no marker) are the default tier: fast, offline, no dependency
+on real parcellation/reference data -- built on ``synthetic_nispace`` or
+pure-function inputs. This is what runs in CI and on a bare ``pytest``.
+
+Tests that need real data (``~/projects/nispace-data``) and/or network
+access -- e.g. exercising ``fetch_*``, null generation on real geometry,
+or a full pipeline run against the ``docs/nb_introduction`` pickles --
+should be marked ``@pytest.mark.integration``. These are excluded by
+default (see ``addopts`` in pyproject.toml) and must be run explicitly:
+``pytest -m integration``.
 """
 
 import numpy as np

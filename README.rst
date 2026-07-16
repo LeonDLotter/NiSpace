@@ -14,6 +14,9 @@
 .. image:: https://github.com/LeonDLotter/NiSpace/actions/workflows/tests.yml/badge.svg
   :target: https://github.com/LeonDLotter/NiSpace/actions/workflows/tests.yml
   :alt: Tests
+.. image:: https://codecov.io/gh/LeonDLotter/NiSpace/branch/dev/graph/badge.svg
+  :target: https://codecov.io/gh/LeonDLotter/NiSpace
+  :alt: Coverage
 
 
 

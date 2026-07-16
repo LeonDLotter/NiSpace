@@ -63,6 +63,7 @@ data = [
 ]
 test = [
     "pytest",
+    "pytest-cov",
 ]
 
 [project.urls]
@@ -80,3 +81,11 @@ fallback_version = "0.0.0+unknown"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "integration: needs ~/projects/nispace-data and/or network access; excluded by default, run explicitly with -m integration",
+]
+addopts = "-m 'not integration'"
+
+[tool.coverage.run]
+source = ["nispace"]
+omit = ["nispace/_version.py"]
