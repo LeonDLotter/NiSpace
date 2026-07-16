@@ -147,8 +147,9 @@ def _get_colocalize_fun(method,
                 _colocs[i_x] = mutualinfo(
                     x=x[parcel_mask], # atlas
                     y=y[parcel_mask], # subject
+                    seed=seed,
                     **kwargs
-                ) 
+                )
                 
             return {"mi": _colocs}
             

@@ -65,7 +65,7 @@ def nice_stats_labels(string, add_dollars=True):
         "groups": "Groups",
         "sets": "Sets",
         "xmaps": "X maps",
-        "ymaps": "X maps",
+        "ymaps": "Y maps",
         "xymaps": "X and Y maps"
     }
     result = replace_dict.get(string, string)

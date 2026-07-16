@@ -247,7 +247,7 @@ def partialpearson(x, y, z):
     return rp
 
 
-def mutualinfo(x, y, n_neighbors=3):
+def mutualinfo(x, y, n_neighbors=3, seed=None):
     """Compute mutual information between `x` and `y` via sklearn's k-NN estimator.
 
     Thin wrapper around `sklearn.feature_selection.mutual_info_regression`
@@ -260,6 +260,10 @@ def mutualinfo(x, y, n_neighbors=3):
     y : np.ndarray, shape (n_obs,)
     n_neighbors : int, default 3
         Number of neighbors for the k-NN MI estimator.
+    seed : int, optional
+        Passed as `mutual_info_regression`'s `random_state`. The estimator adds
+        small random noise to break ties, so results are not reproducible
+        across calls unless this is set.
 
     Returns
     -------
@@ -273,7 +277,8 @@ def mutualinfo(x, y, n_neighbors=3):
     """
     if x.ndim == 1:
         x = x[:, np.newaxis]
-    return mutual_info_regression(x, y, discrete_features=False, n_neighbors=n_neighbors)[0]
+    return mutual_info_regression(x, y, discrete_features=False, n_neighbors=n_neighbors,
+                                   random_state=seed)[0]
 
     
 @njit(cache=True, nogil=True)

@@ -165,7 +165,8 @@ class NiSpace:
                  load_dist_mat: bool = True,
                  load_spin_mat: bool = True,
                  resampling_target: Literal["data", "parcellation"] = "data",
-                 n_proc: int = 1, 
+                 n_proc: int = 1,
+                 seed: int = None,
                  verbose: bool = True,
                  dtype: Union[type, str] = np.float32,
                  return_self: bool = True,
@@ -235,8 +236,13 @@ class NiSpace:
             input data is in MNI space and parcellation is in fsaverage, resampling_target will be
             forced to "parcellation", as MNI -> fsaverage/fslr transformation is not supported.
         n_proc : int, optional
-            The number of processes to use in joblib parallelization. Default is 1. -1 will use as 
+            The number of processes to use in joblib parallelization. Default is 1. -1 will use as
             many processes as cores are detected.
+        seed : int, optional
+            Default random seed, used by :meth:`reduce_x`, :meth:`colocalize`, and
+            :meth:`permute` whenever their own ``seed`` argument is left at
+            ``None``. Passing ``seed`` directly to one of those methods
+            overrides this default for that call only.
         verbose : bool, optional
             Whether to print (a lot of) verbose output. Default is True.
         dtype : data-type, optional
@@ -310,6 +316,7 @@ class NiSpace:
         self._load_spin_mat = load_spin_mat
         self._resampl_target = resampling_target
         self._n_proc = n_proc
+        self._seed = seed
         self._drop_nan = drop_nan
         self._dtype = dtype
         self._verbose = verbose
@@ -650,7 +657,8 @@ class NiSpace:
             Rotation method, forwarded to ``factor_analyzer.FactorAnalyzer``.
             Only used for ``"fa"``.
         seed : int, optional
-            Random seed. Only used by ``"ica"``.
+            Random seed. Only used by ``"ica"``. Defaults to the seed set at
+            init (``NiSpace(seed=...)``) if not given here.
         store : bool, default True
             Store the reduced X (accessible via ``get_x(X_reduction=reduction)``)
             and, for ``"pca"``/``"ica"``/``"fa"``, its per-component metadata
@@ -670,7 +678,8 @@ class NiSpace:
         """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.reduce_x() - X dimensionality reduction. ***")
-        
+        seed = seed if seed is not None else self._seed
+
         ## check if fit was run
         self._check_fit()
         if self._X.shape[0] <= 1:
@@ -1296,7 +1305,8 @@ class NiSpace:
             set at init.
         seed : int, optional
             Random seed forwarded to the regularized-regression methods'
-            cross-validation splitting. Not persisted across calls.
+            cross-validation splitting. Not persisted across calls. Defaults to
+            the seed set at init (``NiSpace(seed=...)``) if not given here.
         verbose : bool, optional
             Print progress messages. Defaults to the value set at init.
         dist_mat_kwargs : dict, optional
@@ -1348,8 +1358,9 @@ class NiSpace:
         
         ## settings
         n_proc = self._n_proc if n_proc is None else n_proc
+        seed = self._seed if seed is None else seed
         dtype = self._dtype
-        
+
         ## settings
         # NOTE: `rank` is intentionally NOT resolved via _get_last -- unlike X_reduction/
         # Y_transform (which legitimately should persist across calls), rank must default
@@ -2288,7 +2299,8 @@ class NiSpace:
         n_proc : int, optional
             Number of parallel processes. Defaults to the value set at init.
         seed : int, optional
-            Random seed for reproducibility.
+            Random seed for reproducibility. Defaults to the seed set at init
+            (``NiSpace(seed=...)``) if not given here.
         store : bool, optional
             Store p-values and z-scores in the object. Default is True.
         verbose : bool, optional
@@ -2349,6 +2361,7 @@ class NiSpace:
         """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.permute() - Estimate exact non-parametric p values. ***")
+        seed = seed if seed is not None else self._seed
 
         ## check if fit was run
         self._check_fit()
