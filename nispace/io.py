@@ -371,8 +371,8 @@ def read_json(json_path):
     else:
         try:
             json_dict = dict(json_path)
-        except ValueError:
-            print("Provide path to json-like file or dict-like object!")
+        except (TypeError, ValueError):
+            lgr.critical_raise("Provide path to json-like file or dict-like object!", ValueError)
     return json_dict
 
 
@@ -397,7 +397,10 @@ def write_json(json_dict, json_path):
         with open(json_path, "w") as f:
             json.dump(json_dict, f, indent=4)
     else:
-        print("Provide path-like object for argument 'json_path'")
+        lgr.critical_raise(
+            f"Provide path-like object for argument 'json_path', not {type(json_path)}!",
+            ValueError
+        )
     return json_path
 
 

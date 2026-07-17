@@ -50,9 +50,11 @@ dependencies = [
 
 [project.optional-dependencies]
 opt = [
-    "brainsmash >=0.10.0",
+    "brainsmash>=0.10.0",
     "factor-analyzer",
+    "scikit-learn<1.8.0",  # factor-analyzer 0.5.1 (latest) calls check_array(force_all_finite=...), removed in sklearn 1.8.0
     "nitransforms>=24.0.0",
+    "nimare",
 ]
 data = [
     "abagen",

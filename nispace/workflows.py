@@ -44,7 +44,8 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
     Will load X data, initialize NiSpace object """
     
     status = {fun: False for fun in ["init", "fit"]}
-    
+    null_maps = None
+
     # check colocalization method
     if isinstance(colocalization_method, (list, tuple)):
        if not all(method in _COLOC_METHODS for method in colocalization_method):

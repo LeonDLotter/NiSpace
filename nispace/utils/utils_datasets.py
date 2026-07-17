@@ -323,6 +323,10 @@ def _compress_nifti(file_path, save_path, dtype=np.float32):
     # change dtype
     img_dat = img.get_fdata().astype(dtype)
     img = image.new_img_like(img, img_dat, copy_header=True)
+    # copy_header=True carries over the *original* on-disk storage dtype in the
+    # header too, silently overriding the cast above -- set it explicitly so the
+    # file is actually written (and thus actually compressed) at the new dtype
+    img.header.set_data_dtype(dtype)
     # save
     img.to_filename(save_path)
     

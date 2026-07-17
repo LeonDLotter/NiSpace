@@ -1607,7 +1607,7 @@
     "reference/magicc/tab/dset-magicc_parc-Schaefer400Parcels17Networks.csv.gz": "1cccc971292d0e053af3b5a583e1a0884fbead6d1fcfd2e46ec843f9633ae398",
     "reference/magicc/tab/dset-magicc_parc-Schaefer400Parcels7Networks.csv.gz": "850b90fbe73a5c75e34696fd9355a087116192cd1893221a8799f44c8a38286c",
     "reference/magicc/tab/dset-magicc_parc-Glasser.csv.gz": "996e4086bd6c45bfc4db24048270eadf0234defd45f33bfddb77532675a44941",
-    "template/affines.yaml": "c7263fafeeb101dd53dda0b3ccee52a794a9ee18942b51bf61ed5a7c77c42907",
+    "template/affines.yaml": "0906eeac36fc9cf41873ababf6e4f68b840e40215d6451f241c2fb8a1803a72b",
     "template/fsLR/template.yaml": "6d5ab5c82b0357924b5b3b8f99bf5c2a1b8611f0d0e14e2ff1d4c3b18d6d2f05",
     "template/fsLR/map/veryinflated/tpl-fsLR_desc-veryinflated_res-164k_hemi-L.surf.gii": "b30bfaff328730e7048830ff54ae890d022932060c6b6c34ccb3d2f0d87d2373",
     "template/fsLR/map/veryinflated/tpl-fsLR_desc-veryinflated_res-164k_hemi-R.surf.gii": "086fca1ab46cfeac6a451e7e9020aac7c5f55871047948bdb74d05efeeb69a0d",

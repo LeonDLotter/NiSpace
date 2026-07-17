@@ -755,8 +755,7 @@ class NiSpace:
         
         ## case not defined
         else:
-            lgr.error(f"Dimensionality reduction '{reduction}' not defined!",
-                      ValueError)
+            lgr.error(f"Dimensionality reduction '{reduction}' not defined!")
             return None
                         
         ## save and return     
@@ -2378,8 +2377,20 @@ class NiSpace:
         ## check if fit was run
         self._check_fit()
 
+        ## check for allowed permutation combinations
+        # check what variable (validated first: the "maps" membership check right
+        # below assumes 'what' is already a list, and would raise a confusing
+        # TypeError instead of this ValueError for e.g. an int/float 'what')
+        if isinstance(what, str):
+            what = [what]
+        elif isinstance(what, (list, tuple)):
+            what = list(what)
+        else:
+            lgr.critical_raise(f"'what' must be list, tuple, or string, not {type(what)}",
+                               ValueError)
+
         ## map permutation: raise early only when parc is genuinely needed
-        if "maps" in ([what] if isinstance(what, str) else what) and self._parc is None:
+        if "maps" in what and self._parc is None:
             _has_nulls    = maps_nulls is not None or (self._nulls.get("maps_null") is not None)
             _has_dist     = dist_mat is not None
             _is_spin      = maps_method in _SPIN_METHODS if maps_method else False
@@ -2391,16 +2402,6 @@ class NiSpace:
                     "or a distance matrix (dist_mat=) with a non-spin null method.",
                     ValueError,
                 )
-        
-        ## check for allowed permutation combinations
-        # check what variable
-        if isinstance(what, str):
-            what = [what]
-        elif isinstance(what, (list, tuple)):
-            pass
-        else:
-            lgr.critical_raise(f"'what' must be list, tuple, or string, not {type(what)}",
-                               ValueError)
         what = sorted(what)
         if self._binary_y and "groups" in what:
             lgr.critical_raise(

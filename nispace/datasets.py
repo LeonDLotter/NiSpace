@@ -1419,9 +1419,16 @@ def fetch_reference(dataset: str,
     # Filter by 'maps'
     if maps:
         n_tmp = len(maps_avail)
+        show = maps_avail[:20]
         lgr.info(f"Applying filter: {maps}")
         maps_avail = _filter_maps(maps_avail, maps)
         lgr.info(f"Filtered from {n_tmp} to {len(maps_avail)} maps.")
+        if not maps_avail:
+            lgr.critical_raise(
+                f"'maps={maps}' filter matched no maps. Available ({n_tmp}): {show}"
+                + (" ..." if n_tmp > 20 else ""),
+                ValueError
+            )
     
     # Filter by 'collection'
     if collection == "All":
@@ -1570,7 +1577,8 @@ def fetch_map_info(dataset: str,
                    maps: Union[str, list] = None,
                    overwrite: bool = False,
                    check_file_hash: bool = True,
-                   nispace_data_dir: Union[str,Path] = None):
+                   nispace_data_dir: Union[str,Path] = None,
+                   verbose: bool = True):
     """
     Fetch a dataset's per-map metadata table (e.g. sample size, tracer, condition).
 
@@ -1586,6 +1594,8 @@ def fetch_map_info(dataset: str,
         Verify the SHA-256 hash of the cached file against the known reference hash.
     nispace_data_dir : str or Path, optional
         Deprecated; use the ``NISPACE_DATA_DIR`` environment variable instead.
+    verbose : bool, default True
+        Print progress messages.
 
     Returns
     -------
@@ -1593,6 +1603,8 @@ def fetch_map_info(dataset: str,
         Metadata table indexed by map name, or ``None`` if `dataset` is not a
         string, is not registered, or has no metadata table.
     """
+    verbose = set_log(lgr, verbose)
+
     if not isinstance(dataset, str):
         return None
     dataset = dataset.lower()
@@ -1604,6 +1616,7 @@ def fetch_map_info(dataset: str,
     nispace_data_dir = _resolve_nispace_data_dir(nispace_data_dir)
     base_dir =Path(nispace_data_dir) / "reference" / dataset
 
+    lgr.info(f"Fetching map info for dataset '{dataset}'.")
     meta = pd.read_csv(
         get_file(
             base_dir / "map_info.csv", **reference_lib[dataset]["metadata"],
@@ -1625,10 +1638,12 @@ def fetch_metadata(dataset: str,
                    collection: str = None,
                    overwrite: bool = False,
                    check_file_hash: bool = True,
-                   nispace_data_dir: Union[str,Path] = None):
+                   nispace_data_dir: Union[str,Path] = None,
+                   verbose: bool = True):
     """Deprecated alias for fetch_map_info()."""
     return fetch_map_info(dataset, maps=maps, overwrite=overwrite,
-                          check_file_hash=check_file_hash, nispace_data_dir=nispace_data_dir)
+                          check_file_hash=check_file_hash, nispace_data_dir=nispace_data_dir,
+                          verbose=verbose)
 
 
 # EXAMPLE DATA =====================================================================================

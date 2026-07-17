@@ -1113,16 +1113,20 @@ def mirror_gifti(img, direction="left_to_right", match_r=False, mask=None):
 @njit
 def _corr_vector(data_1d, correlation=1, seed=None):  
     
-    # standardize input (ddof=0: standardizing the given vector to itself, not
-    # estimating a population parameter from a sample)
-    mu, sigma = np.nanmean(data_1d), np.nanstd(data_1d, ddof=0)
+    # standardize input (population std, ddof=0: standardizing the given vector
+    # to itself, not estimating a population parameter from a sample -- hand-rolled
+    # since numba's np.nanstd doesn't accept a ddof kwarg)
+    mu = np.nanmean(data_1d)
+    sigma = np.sqrt(np.nanmean((data_1d - mu) ** 2))
     data_1d = (data_1d - mu) / sigma
 
     # generate random noise with same length as input
     if seed is not None:
         np.random.seed(seed)
     epsilon = np.random.normal(0, 1, len(data_1d))
-    epsilon = (epsilon - np.mean(epsilon)) / np.std(epsilon, ddof=0)
+    eps_mu = np.mean(epsilon)
+    eps_sigma = np.sqrt(np.mean((epsilon - eps_mu) ** 2))
+    epsilon = (epsilon - eps_mu) / eps_sigma
     
     # correlated vector using the formula:
     # output = ρ * input + √(1-ρ²) * ε
