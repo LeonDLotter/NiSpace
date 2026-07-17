@@ -2,8 +2,7 @@
 
 These reproduce, exactly, the result of deleting one observation and
 refitting from scratch -- not an approximation -- via the standard
-regression-diagnostics identities (Cook & Weisberg 1982; Belsley, Kuh &
-Welsch 1980), computed once from the full fit rather than by refitting
+regression-diagnostics identities (:cite:`cook1982`; :cite:`belsley1980`), computed once from the full fit rather than by refitting
 n times. Internally always computed in float64 regardless of input dtype
 (rank-1 downdates can lose precision at small pivots in float32), matching
 the "float64 internally" convention already used by ``rank1d``/``rank2d``

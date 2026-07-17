@@ -1681,7 +1681,7 @@ class NiSpace:
         Reports a stat_full/stat_loo delta per region rather than Cook's distance/
         DFFITS/leverage: those answer a classical outlier-flagging question; this
         answers "how much does the reported effect change without this region", which
-        is what's needed here.
+        is what's needed here. Developed and first applied in :cite:`lotter2024`.
 
         The default (``signed=False``) takes the absolute value of the full-data and
         LOO stat before differencing. This is a no-op for mlr/dominance/pls/pcr/mi/slr
@@ -1730,12 +1730,6 @@ class NiSpace:
         Returns
         -------
         pandas.DataFrame or dict of pandas.DataFrame
-
-        References
-        ----------
-        Lotter et al. (2024). Regional patterns of human cortex development
-        correlate with underlying neurobiology. *Nature Communications*.
-        https://doi.org/10.1038/s41467-024-52366-7
         """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.regional_influence() - Estimating regional influence. ***")
@@ -1994,7 +1988,7 @@ class NiSpace:
         explicit opt-in via ``get_regional_contribution(quadrant=True)``.
 
         This is a standard decomposition of the spatial correlation between two maps,
-        similar to what was presented in Faskowitz et al. (2026) [faskowitz2026]_ at OHBM 2026.
+        similar to what was presented in Faskowitz et al. (2026) :cite:`faskowitz2026` at OHBM 2026.
 
         Parameters
         ----------
@@ -2019,11 +2013,6 @@ class NiSpace:
             (not ``quadrant``); use get_regional_contribution(quadrant=True) for the
             labels.
 
-        References
-        ----------
-        .. [faskowitz2026] Faskowitz et al. (2026). Spatial maps of similarity across the cortex.
-               OHBM 2026 Annual Meeting, Abstract #0342.
-               https://doi.org/10.5281/zenodo.20817055
         """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.regional_contribution() - Estimating regional contribution. ***")
@@ -2249,10 +2238,10 @@ class NiSpace:
         what : str or list of str
             What to permute. One or more of:
             ``"maps"`` — spatially constrained null maps for X and/or Y brain maps;
-            ``"groups"`` — Y group labels (requires ``Y_transform``); [dukart2021]_
+            ``"groups"`` — Y group labels (requires ``Y_transform``); :cite:`dukart2021`
             ``"sets"`` — X set membership labels (requires XSEA);
             ``"pairs"`` — within-pair colocalization against a between-pair null
-            (SPICE test; requires N matched maps in both X and Y). [weinstein2021]_ Pairs can
+            (SPICE test; requires N matched maps in both X and Y). :cite:`weinstein2021` Pairs can
             be subjects, studies, tracer targets, or any unit for which one map
             exists in each modality.
             Allowed combinations for multi-element lists: ``["maps", "groups"]``,
@@ -2360,15 +2349,6 @@ class NiSpace:
             the colocalization method produces multiple statistics or when
             ``force_dict=True``.
 
-        References
-        ----------
-        .. [dukart2021] Dukart et al. (2021). JuSpace: A tool for spatial correlation
-               analyses of magnetic resonance imaging data with nuclear imaging
-               derived neurotransmitter maps. *Human Brain Mapping*.
-               https://doi.org/10.1002/hbm.25244
-        .. [weinstein2021] Weinstein et al. (2021). A simple permutation-based test of
-               intermodal correspondence. *Human Brain Mapping*.
-               https://doi.org/10.1002/hbm.25577
         """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.permute() - Estimate exact non-parametric p values. ***")
@@ -3280,16 +3260,16 @@ class NiSpace:
             * ``"meff"`` / ``"meff_galwey"`` (default) -- Šidák correction using
               an effective number of independent tests estimated from the
               eigenvalues of X's (and, for ``mc_dimension="array"`` with
-              multiple Y rows, also Y's) correlation matrix. [galwey2009]_
+              multiple Y rows, also Y's) correlation matrix. :cite:`galwey2009`
             * ``"meff_li_ji"`` -- same Šidák-correction scheme, with an
-              alternative eigenvalue-based effective-N estimator. [liji2005]_
+              alternative eigenvalue-based effective-N estimator. :cite:`liji2005`
             * ``"maxT"`` -- single-step max-statistic FWER correction from the
               permutation null computed by :meth:`permute`; requires the null
               colocalization distributions to still be available (i.e. not
-              dropped via ``save_nulls=False``). [westfall1993]_
+              dropped via ``save_nulls=False``). :cite:`westfall1993`
             * ``"step_maxT"`` -- step-down variant of ``"maxT"``, more powerful
-              while preserving FWER control. [westfall1993]_
-            * ``"fdr_bh"`` -- Benjamini-Hochberg false discovery rate. [benjamini1995]_
+              while preserving FWER control. :cite:`westfall1993`
+            * ``"fdr_bh"`` -- Benjamini-Hochberg false discovery rate. :cite:`benjamini1995`
             * ``"bonferroni"``, or any other method name accepted by
               ``statsmodels.stats.multitest.multipletests`` (e.g. ``"holm"``,
               ``"hommel"``, ``"sidak"``, ``"fdr_by"``) -- passed through as-is.
@@ -3322,21 +3302,6 @@ class NiSpace:
         dict of pandas.DataFrame
             Corrected p-values keyed by their internal storage key string.
 
-        References
-        ----------
-        .. [galwey2009] Galwey (2009). A new measure of the effective number of tests, a
-               practical tool for comparing families of non-independent
-               significance tests. *Genetic Epidemiology*.
-               https://doi.org/10.1002/gepi.20408
-        .. [liji2005] Li & Ji (2005). Adjusting multiple testing in multilocus analyses
-               using the eigenvalues of a correlation matrix. *Heredity*.
-               https://doi.org/10.1038/sj.hdy.6800717
-        .. [westfall1993] Westfall & Young (1993). Resampling-Based Multiple Testing:
-               Examples and Methods for p-Value Adjustment. Wiley.
-        .. [benjamini1995] Benjamini & Hochberg (1995). Controlling the False Discovery
-               Rate: A Practical and Powerful Approach to Multiple Testing.
-               *Journal of the Royal Statistical Society: Series B*.
-               https://doi.org/10.1111/j.2517-6161.1995.tb02031.x
         """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.correct_p() - Correct p values for multiple comparisons. ***")

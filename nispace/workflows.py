@@ -823,9 +823,7 @@ def paired_colocalization(y,
     grouped by target), or any other unit for which matched maps exist in both
     modalities.
 
-    Reference: Weinstein et al. (2021). A simple permutation-based test of
-    intermodal correspondence. *Human Brain Mapping*.
-    https://doi.org/10.1002/hbm.25577
+    Reference: :cite:`weinstein2021`.
 
     Parameters
     ----------

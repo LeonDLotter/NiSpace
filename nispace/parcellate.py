@@ -45,7 +45,7 @@ def _array_to_gifti(data):
 class Parcellater():
     """
     Class for parcellating arbitrary volumetric / surface data.
-    Copied from neuromaps [1]_ 0.0.4 and adapted for convenient use in NiSpace.
+    Copied from neuromaps :cite:`markello2022` 0.0.4 and adapted for convenient use in NiSpace.
 
     Parameters
     ----------
@@ -70,9 +70,7 @@ class Parcellater():
 
     References
     ----------
-    .. [1] Markello et al. (2022). neuromaps: structural and functional
-           interpretation of brain maps. *Nature Methods*.
-           https://doi.org/10.1038/s41592-022-01625-w
+    :cite:`markello2022`.
     """
 
     def __init__(self, parcellation, space, resampling_target='data', hemi=None):

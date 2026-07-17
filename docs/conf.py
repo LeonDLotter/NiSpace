@@ -33,8 +33,12 @@ extensions = [
     'nbsphinx',
     'sphinx_copybutton',
     'sphinx_gallery.load_style',
-    'IPython.sphinxext.ipython_console_highlighting'
+    'IPython.sphinxext.ipython_console_highlighting',
+    'sphinxcontrib.bibtex',
 ]
+
+bibtex_bibfiles = ['references.bib']
+bibtex_default_style = 'unsrt'
 
 napoleon_google_docstring = True   # Turn off googledoc strings
 napoleon_numpy_docstring = True     # Turn on numpydoc strings

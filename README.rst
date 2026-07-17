@@ -50,7 +50,8 @@ For reproducibility, consider installing a specific commit:
 
    pip install git+https://github.com/LeonDLotter/NiSpace.git@{commit_hash}
 
-``NiSpace`` by default generates null maps using the Moran randomization method. All other null models are optional dependencies.
+``NiSpace`` by default generates null maps using the Moran randomization method. Spin-nulls are also natively supported.  
+However, some functions, including BrainSMASH/variogram null maps need optional dependences.    
 Install optional dependencies directly with:
 
 .. code-block:: bash

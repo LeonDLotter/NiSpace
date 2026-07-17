@@ -454,9 +454,7 @@ def dominance(x, y, adj_r2=False, verbose=False):
 
     References
     ----------
-    Azen, R., & Budescu, D. V. (2003). The dominance analysis approach for
-    comparing predictors in multiple regression. *Psychological Methods*.
-    https://doi.org/10.1037/1082-989X.8.2.129
+    :cite:`azen2003`.
     """
 
     if verbose: print(f"Dominance analysis with {x.shape[1]} predictors and {len(y)} features.")
@@ -788,7 +786,7 @@ def fast_pls1(
     `sklearn.cross_decomposition.PLSRegression` output with ~5x speed-up.
     This is the implementation NiSpace's `colocalize(method="pls")`
     actually calls (not the plain sklearn-based `pls` function above).
-    Implements SIMPLS [1]_.
+    Implements SIMPLS :cite:`dejong1993`.
 
     Parameters
     ----------
@@ -810,9 +808,7 @@ def fast_pls1(
 
     References
     ----------
-    .. [1] de Jong (1993). SIMPLS: An alternative approach to partial least
-           squares regression. *Chemometrics and Intelligent Laboratory
-           Systems*. https://doi.org/10.1016/0169-7439(93)85002-X
+    :cite:`dejong1993`.
     """
     x = np.asarray(x, dtype=np.float64)
     y = np.asarray(y, dtype=np.float64).ravel()

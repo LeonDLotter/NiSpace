@@ -42,8 +42,7 @@ def cohen(a, b):
 
     References
     ----------
-    Cohen, J. (1988). *Statistical Power Analysis for the Behavioral
-    Sciences* (2nd ed.). Routledge.
+    :cite:`cohen1988`.
     """
     a = np.array(a)
     b = np.array(b)
@@ -83,8 +82,7 @@ def cohen_nan(a, b):
 
     References
     ----------
-    Cohen, J. (1988). *Statistical Power Analysis for the Behavioral
-    Sciences* (2nd ed.). Routledge.
+    :cite:`cohen1988`.
     """
     a = np.array(a)
     b = np.array(b)
@@ -162,8 +160,7 @@ def cohen_paired(a, b):
 
     References
     ----------
-    Cohen, J. (1988). *Statistical Power Analysis for the Behavioral
-    Sciences* (2nd ed.). Routledge.
+    :cite:`cohen1988`.
     """
     a = np.array(a)
     b = np.array(b)
@@ -204,8 +201,7 @@ def cohen_paired_nan(a, b):
 
     References
     ----------
-    Cohen, J. (1988). *Statistical Power Analysis for the Behavioral
-    Sciences* (2nd ed.). Routledge.
+    :cite:`cohen1988`.
     """
     a = np.array(a)
     b = np.array(b)
@@ -250,8 +246,7 @@ def cohen_paired_nan_fast(a, b):
 
     References
     ----------
-    Cohen, J. (1988). *Statistical Power Analysis for the Behavioral
-    Sciences* (2nd ed.). Routledge.
+    :cite:`cohen1988`.
     """
     n_rows, n_cols = a.shape
     d = np.empty(n_cols, dtype=np.float64)
@@ -300,10 +295,7 @@ def hedges(a, b):
 
     References
     ----------
-    Cohen, J. (1988). *Statistical Power Analysis for the Behavioral
-    Sciences* (2nd ed.). Routledge.
-    Hedges, L. V., & Olkin, I. (1985). *Statistical Methods for
-    Meta-Analysis*. Academic Press.
+    :cite:`cohen1988`; :cite:`hedges1985`.
     """
     a = np.array(a)
     b = np.array(b)
@@ -342,10 +334,7 @@ def hedges_nan(a, b):
 
     References
     ----------
-    Cohen, J. (1988). *Statistical Power Analysis for the Behavioral
-    Sciences* (2nd ed.). Routledge.
-    Hedges, L. V., & Olkin, I. (1985). *Statistical Methods for
-    Meta-Analysis*. Academic Press.
+    :cite:`cohen1988`; :cite:`hedges1985`.
     """
     a = np.array(a)
     b = np.array(b)

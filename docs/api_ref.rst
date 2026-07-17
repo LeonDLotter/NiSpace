@@ -2,8 +2,8 @@
 
 .. currentmodule:: nispace
 
-Reference API
-==============
+API Reference
+=============
 
 .. contents:: **List of modules**
    :local:

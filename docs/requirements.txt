@@ -5,3 +5,4 @@ sphinx_copybutton
 nbsphinx
 IPython
 Pillow
+sphinxcontrib-bibtex

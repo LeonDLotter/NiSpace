@@ -330,7 +330,7 @@ def nulls_burt2020(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
     Generates surrogates by permuting ``data_1d`` and smoothing to match its empirical
     variogram, via the ``brainsmash`` package's ``Base`` class. ``dist_mat`` is the
     parcel-by-parcel distance matrix; ``**kwargs`` (e.g. ``resample``, ``batch_size``) are
-    forwarded to ``Base``. See :doc:`/citation` for the citation.
+    forwarded to ``Base``. :cite:`burt2020`.
 
     Intended to be called through :func:`generate_null_maps`, which handles NaN masking,
     hemisphere splitting, and parallelization across maps — not meant to be called directly.
@@ -361,8 +361,7 @@ def nulls_burt2018(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
 
     Generates surrogates via ``brainsmash.utils.batch_surrogates``, which fits a spatial
     autoregressive model relating ``data_1d`` to ``dist_mat`` and samples from it (values are
-    Box-Cox-shifted internally to satisfy positivity, then shifted back). See :doc:`/citation`
-    for the citation.
+    Box-Cox-shifted internally to satisfy positivity, then shifted back). :cite:`burt2018`.
 
     Intended to be called through :func:`generate_null_maps`, which handles NaN masking,
     hemisphere splitting, and parallelization across maps — not meant to be called directly.
@@ -476,8 +475,7 @@ def nulls_moran(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
     map's own Moran's I is below ``variogram_threshold``). Notable ``**kwargs``:
     ``procedure`` (default ``"singleton"``), ``joint``, ``n_components`` (default 15),
     ``fit_variogram``, ``variogram_n_bins``/``variogram_kernel``/``variogram_nugget``/``variogram_threshold``.
-    See :doc:`/citation` for the citation (original method: Wagner & Dray 2015; implementation:
-    Vos de Wael et al. 2020, BrainSpace).
+    :cite:`wagner2015` (original MSR method); :cite:`vos_de_wael2020` (BrainSpace implementation).
 
     Intended to be called through :func:`generate_null_maps`, which handles NaN masking,
     hemisphere splitting, and parallelization across maps — not meant to be called directly.
@@ -761,7 +759,8 @@ def generate_spins(parc, parc_space, n_perm=1000, method="original", seed=None,
     method : str, default="original"
         Rotation-generation method forwarded to ``neuromaps``' ``gen_spinsamples``. One of
         ``"original"`` (Alexander-Bloch method), ``"vasa"``, ``"hungarian"``, or
-        ``"cornblath"``. See :doc:`/citation` for the citation of each.
+        ``"cornblath"`` (:cite:`alexander_bloch2018`, :cite:`vasa2018`, :cite:`kuhn1955`,
+        :cite:`cornblath2020`).
     seed : int, optional
         Random seed for reproducibility.
     parc_hemi : list of str, optional

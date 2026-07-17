@@ -272,7 +272,7 @@ def permute_groups(groups, strategy="shuffle", paired=False, subjects=None, n_pe
           ordering (for 2 sessions: exactly half the subjects keep the
           original order, half get the fully swapped order) -- a *fixed*,
           balanced split, not a free per-subject choice. This mirrors
-          JuSpace's own exact-permutation scheme [1]_ (``compute_exact_pvalue.m``):
+          JuSpace's own exact-permutation scheme :cite:`dukart2021` (``compute_exact_pvalue.m``):
           the unpaired "es between" case (``options(1)==1``) draws a fixed,
           ``round()``-determined count from each original group's pool into
           each new group (not a free permutation), and the paired "es
@@ -335,10 +335,7 @@ def permute_groups(groups, strategy="shuffle", paired=False, subjects=None, n_pe
 
     References
     ----------
-    .. [1] Dukart et al. (2021). JuSpace: A tool for spatial correlation
-           analyses of magnetic resonance imaging data with nuclear imaging
-           derived neurotransmitter maps. *Human Brain Mapping*.
-           https://doi.org/10.1002/hbm.25244
+    :cite:`dukart2021`.
     """
     groups = np.array(groups)
     n = len(groups)
@@ -562,7 +559,7 @@ def compute_meff(X, method="galwey"):
     ----------
     X : array-like, shape (n_maps, n_features)
     method : "galwey" (default) or "li_ji"
-        Galwey (2009) Genet Epidemiol 33:559; Li & Ji (2005) Heredity 95:221.
+        :cite:`galwey2009`; :cite:`liji2005`.
 
     Returns
     -------
@@ -652,7 +649,7 @@ def _df_like(array, template, dtype):
 
 
 def maxT_correction(obs_stats, null_colocs, stat, tail="two", how="r", alpha=0.05, dtype=None):
-    """Max-T FWER correction (Westfall & Young 1993).
+    """Max-T FWER correction (:cite:`westfall1993`).
 
     Parameters
     ----------
@@ -682,7 +679,7 @@ def maxT_correction(obs_stats, null_colocs, stat, tail="two", how="r", alpha=0.0
 
 
 def step_maxT_correction(obs_stats, null_colocs, stat, tail="two", how="r", alpha=0.05, dtype=None):
-    """Step-down Max-T FWER correction (Westfall & Young 1993).
+    """Step-down Max-T FWER correction (:cite:`westfall1993`).
 
     Enforces monotonicity on sorted max-T p-values for increased power over plain maxT.
 

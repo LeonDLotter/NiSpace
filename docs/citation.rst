@@ -5,44 +5,44 @@ Citation
 
 There is currently no dedicated toolbox paper for ``NiSpace``. Please cite at least the following when you use our tools in your work:
 
-* NiSpace Zenodo DOI: `Lotter & Dukart, Zenodo 2024 <https://doi.org/10.5281/zenodo.12514622>`_
-* JuSpace toolbox paper: `Dukart et al., HBM 2021 <https://doi.org/10.1002/hbm.25244>`_
-* neuromaps toolbox paper: `Markello, Hansen, et al., Nat. Methods 2022 <https://doi.org/10.1038/s41592-022-01625-w>`_
-* Application papers in the context of which ``NiSpace``'s core methods were developed: `Lotter et al., Neurosci. & Biobehav. Rev. 2023 <https://doi.org/10.1016/j.neubiorev.2023.105042>`_; `Lotter et al., Nat. Commun. 2024 <https://doi.org/10.1038/s41467-024-52366-7>`_; `Lotter et al., bioRxiv 2026 <https://doi.org/10.64898/2026.04.28.721294>`_
+* NiSpace Zenodo DOI: :cite:`lotter_zenodo2024`
+* JuSpace toolbox paper: :cite:`dukart2021`
+* neuromaps toolbox paper: :cite:`markello2022`
+* Application papers in the context of which ``NiSpace``'s core methods were developed:
+  :cite:`lotter2023`; :cite:`lotter2024`; :cite:`lotter2026`
 * If you use the implemented null map functions:
 
-  * "moran": `Wagner & Dray, Methods Ecol. Evol. 2015 <https://doi.org/10.1111/2041-210X.12407>`_ (original method); implemented via BrainSpace: `Vos de Wael et al., Comm. Biol. 2020 <https://doi.org/10.1038/s42003-020-0794-7>`_
-  * "burt2020": `Burt et al., NeuroImage 2020 <https://doi.org/10.1016/j.neuroimage.2020.117038>`_; implemented via `brainsmash <https://github.com/murraylab/brainsmash>`_
-  * "burt2018": `Burt et al., Nat. Neurosci. 2018 <https://doi.org/10.1038/s41593-018-0195-0>`_
-  * "spin" / "cornblath": `Cornblath et al., Comm. Biol. 2020 <https://doi.org/10.1038/s42003-020-0961-x>`_
-  * "baum": `Baum et al., PNAS 2020 <https://doi.org/10.1073/pnas.1912034117>`_
-  * "alexander_bloch": `Alexander-Bloch et al., NeuroImage 2018 <https://doi.org/10.1016/j.neuroimage.2018.05.070>`_
-  * "vasa": `Váša et al., Cereb. Cortex 2018 <https://doi.org/10.1093/cercor/bhx249>`_
-  * "hungarian": `Kuhn, Naval Res. Logist. Q. 1955 <https://doi.org/10.1002/nav.3800020109>`_ (assignment algorithm); popularized for spin tests by `Váša et al., Cereb. Cortex 2018 <https://doi.org/10.1093/cercor/bhx249>`_
+  * ``"moran"``: :cite:`wagner2015` (original method); :cite:`vos_de_wael2020` (BrainSpace implementation)
+  * ``"burt2020"``: :cite:`burt2020`; implemented via `brainsmash <https://github.com/murraylab/brainsmash>`_
+  * ``"burt2018"``: :cite:`burt2018`
+  * ``"spin"`` / ``"cornblath"``: :cite:`cornblath2020`
+  * ``"baum"``: :cite:`baum2020`
+  * ``"alexander_bloch"``: :cite:`alexander_bloch2018`
+  * ``"vasa"``: :cite:`vasa2018`
+  * ``"hungarian"``: :cite:`kuhn1955` (assignment algorithm); popularized for spin tests by :cite:`vasa2018`
 * If you use MNI space transform functionality (``mni_to_mni``):
 
-  * EasyReg: `Iglesias, Sci. Rep. 2023 <https://doi.org/10.1038/s41598-023-33781-0>`_
-  * SynthMorph: `Hoffmann et al., IEEE TMI 2022 <https://doi.org/10.1109/TMI.2021.3116879>`_
-  * SynthSeg: `Billot et al., Med. Image Anal. 2023 <https://doi.org/10.1016/j.media.2023.102789>`_
-* If you use combat-harmonization functionality: `Fortin et al., NeuroImage 2017 <https://doi.org/10.1016/j.neuroimage.2017.11.024>`_; `Pomponio et al., NeuroImage 2019 <https://doi.org/10.1016/j.neuroimage.2019.116450>`_
+  * EasyReg: :cite:`iglesias2023`
+  * SynthMorph: :cite:`hoffmann2022`
+  * SynthSeg: :cite:`billot2023`
+* If you use combat-harmonization functionality: :cite:`fortin2017`; :cite:`pomponio2019`
 * When fetching included reference datasets, ``NiSpace`` will automatically print information on references we ask you to cite
 
 Furthermore, the preceding tools, JuSpyce and ABAnnotate, were used in the following works:
 
-* JuSpyce: `Lotter et al., Nat. Commun. 2024 <https://doi.org/10.1038/s41467-024-52366-7>`_ (as above)
-* JuSpyce: `Lotter et al., Neuropsychopharm. 2024 <https://doi.org/10.1038/s41386-024-01880-9>`_
-* JuSpyce/ABAnnotate: `Lotter et al., Neurosci. & Biobehav. Rev. 2023 <https://doi.org/10.1016/j.neubiorev.2023.105042>`_ (as above)
-* ABAnnotate: `Feng et al., Comm. Biol. 2023 <https://doi.org/10.1038/s42003-023-05647-8>`_
+* JuSpyce: :cite:`lotter2024` (as above); :cite:`lotter_npp2024`
+* JuSpyce/ABAnnotate: :cite:`lotter2023` (as above)
+* ABAnnotate: :cite:`feng2023`
 
 Lastly, ``NiSpace`` strongly depends on several foundational Python packages, among them:
 
-* numpy: `Harris et al., Nature 2020 <https://doi.org/10.1038/s41586-020-2649-2>`_
-* pandas: `McKinney, SciPy Proc. 2010 <https://doi.org/10.25080/Majora-92bf1922-00a>`_
-* scipy: `Virtanen et al., Nat. Methods 2020 <https://doi.org/10.1038/s41592-019-0686-2>`_
-* statsmodels: `Seabold & Perktold, SciPy Proc. 2010 <https://doi.org/10.25080/majora-92bf1922-011>`_
-* nibabel: `Brett et al., Zenodo <https://doi.org/10.5281/zenodo.591597>`_
-* nilearn and scikit-learn: `Abraham et al., Front. Neuroinform. 2014 <https://doi.org/10.3389/fninf.2014.00014>`_
-* matplotlib: `Hunter, Comput. Sci. Eng. 2007 <https://doi.org/10.1109/MCSE.2007.55>`_
-* seaborn: `Waskom, JOSS 2021 <https://doi.org/10.21105/joss.03021>`_
+* numpy: :cite:`harris2020`
+* pandas: :cite:`mckinney2010`
+* scipy: :cite:`virtanen2020`
+* statsmodels: :cite:`seabold2010`
+* nibabel: :cite:`brett_nibabel`
+* nilearn and scikit-learn: :cite:`abraham2014`
+* matplotlib: :cite:`hunter2007`
+* seaborn: :cite:`waskom2021`
 
-
+Full bibliographic details for all references are listed on the :doc:`references` page.

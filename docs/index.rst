@@ -29,3 +29,4 @@
    :caption: Reference
 
    api_ref
+   references
