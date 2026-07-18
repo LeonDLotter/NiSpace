@@ -1,4 +1,4 @@
-"""Tests for the 7 user-facing workflow functions in workflows.py, plus the
+"""Tests for the 8 user-facing workflow functions in workflows.py, plus the
 3 deprecated name-only aliases kept for backward compatibility.
 
 All tests reuse a synthetic, network-free, already-fitted NiSpace object
@@ -18,7 +18,7 @@ import pytest
 
 from nispace import NiSpace
 from nispace.workflows import (
-    colocalization, group_colocalization, paired_colocalization,
+    colocalization, group_colocalization, paired_colocalization, correlate_within_region,
     xsea, group_xsea, nimare_colocalization, nimare_xsea,
     simple_colocalization, group_comparison, simple_xsea,
 )
@@ -224,6 +224,72 @@ def test_paired_colocalization_end_to_end(prefit_nispace_matched_pairs):
     p = out.get_p_values()
     assert p.shape == (1, 1)
     assert 0 <= p.to_numpy().item() <= 1
+
+
+# ── correlate_within_region() ────────────────────────────────────────────
+
+def test_correlate_within_region_end_to_end(rng):
+    n_subj, n_parcels = 12, 10
+    X = rng.normal(size=(n_subj, n_parcels))
+    Y = 0.8 * X + rng.normal(scale=0.3, size=(n_subj, n_parcels))
+    parcel_labels = [f"parcel{i}" for i in range(n_parcels)]
+    subj_labels = [f"s{i}" for i in range(n_subj)]
+    x_df = pd.DataFrame(X, index=subj_labels, columns=parcel_labels)
+    y_df = pd.DataFrame(Y, index=subj_labels, columns=parcel_labels)
+
+    out = correlate_within_region(
+        x=x_df, y=y_df, parcellation=None, method="pearson",
+        n_perm=200, seed=1, verbose=False,
+    )
+    res = out.get_within_region_correlations()
+    assert res["stat"].shape == (1, n_parcels)
+    assert res["mc_method"] == "step_maxT"  # new default
+    assert res["p_corr"] is not None
+
+
+def test_correlate_within_region_1d_y_covariate_matches_object_level(rng):
+    # this used to crash: NiSpace.fit() has no notion of a subject-length
+    # covariate, only NiSpace.correlate_within_region()'s X=/Y= overrides do --
+    # the workflow function must fit on the 2D side and route the 1D side
+    # through as a direct override, transparently to the caller
+    n_subj, n_parcels = 12, 10
+    X = rng.normal(size=(n_subj, n_parcels))
+    yvec = rng.normal(size=n_subj)
+    parcel_labels = [f"parcel{i}" for i in range(n_parcels)]
+    subj_labels = [f"s{i}" for i in range(n_subj)]
+    x_df = pd.DataFrame(X, index=subj_labels, columns=parcel_labels)
+    yvec_s = pd.Series(yvec, index=subj_labels)
+
+    out_wf = correlate_within_region(
+        x=x_df, y=yvec_s, parcellation=None, method="pearson", n_perm=0, verbose=False,
+    )
+    rho_wf = out_wf.get_within_region_correlations(mc_method=None)["stat"]
+
+    nsp_direct = NiSpace(x=x_df, y=x_df, parcellation=None, standardize=False,
+                         n_proc=1, verbose=False, return_self=False)
+    nsp_direct.fit()
+    nsp_direct.correlate_within_region(Y=yvec_s, method="pearson", n_perm=0)
+    rho_direct = nsp_direct.get_within_region_correlations(mc_method=None)["stat"]
+
+    np.testing.assert_allclose(rho_wf.values, rho_direct.values, atol=1e-10)
+
+
+def test_correlate_within_region_1d_x_covariate(rng):
+    n_subj, n_parcels = 12, 10
+    Y = rng.normal(size=(n_subj, n_parcels))
+    xvec = rng.normal(size=n_subj)
+
+    out = correlate_within_region(
+        x=xvec, y=Y, parcellation=None, method="pearson", n_perm=0, verbose=False,
+    )
+    rho = out.get_within_region_correlations(mc_method=None)["stat"]
+    assert rho.shape == (1, n_parcels)
+
+
+def test_correlate_within_region_both_1d_raises(rng):
+    xvec = rng.normal(size=12)
+    with pytest.raises(ValueError):
+        correlate_within_region(x=xvec, y=xvec, parcellation=None, verbose=False)
 
 
 # ── xsea() ────────────────────────────────────────────────────────────────

@@ -9,7 +9,7 @@ There is currently no dedicated toolbox paper for ``NiSpace``. Please cite at le
 * JuSpace toolbox paper: :cite:`dukart2021`
 * neuromaps toolbox paper: :cite:`markello2022`
 * Application papers in the context of which ``NiSpace``'s core methods were developed:
-  :cite:`lotter2023`; :cite:`lotter2024`; :cite:`lotter2026`
+  :cite:`lotter2023`; :cite:`lotter2024`; :cite:`lotter_npp2024`; :cite:`lotter2026`
 * If you use the implemented null map functions:
 
   * ``"moran"``: :cite:`wagner2015` (original method); :cite:`vos_de_wael2020` (BrainSpace implementation)
@@ -30,7 +30,7 @@ There is currently no dedicated toolbox paper for ``NiSpace``. Please cite at le
 
 Furthermore, the preceding tools, JuSpyce and ABAnnotate, were used in the following works:
 
-* JuSpyce: :cite:`lotter2024` (as above); :cite:`lotter_npp2024`
+* JuSpyce: :cite:`lotter2024`; :cite:`lotter_npp2024` (as above)
 * JuSpyce/ABAnnotate: :cite:`lotter2023` (as above)
 * ABAnnotate: :cite:`feng2023`
 

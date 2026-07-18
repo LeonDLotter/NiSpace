@@ -20,6 +20,7 @@ from .core.region_influence import (_get_region_influence_fun, _sort_region_infl
                                      _pool_region_influence, _ANALYTIC_METHODS)
 from .core.region_contribution import (_get_region_contribution_fun, _sort_region_contribution,
                                        _CONTRIBUTION_METHODS)
+from .core.correlate_within_region import correlate_within_region_core, _CWR_METHODS
 from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_method,
                                _EMPIRICAL_MC_METHODS, _resolve_permute_combo,
                                _resolve_permute_mode_settings)
@@ -39,6 +40,41 @@ from .plotting import nice_stats_labels, brainplot
 from .utils.utils import (set_log, _quiet, fill_nan, _get_df_string, _lower_strip_ws, mean_by_set_df,
                           get_column_names, lower, print_arg_pairs,
                           _parse_df_string, _parse_bool, dedupe_rows)
+
+
+def _cwr_null_p(obs, null):
+    """Two-tailed empirical p per column: fraction of |null| >= |obs|, floor-clipped
+    to avoid an exact-0 p (matches null_to_p's floor convention, stats/misc.py).
+    Used for correlate_within_region()'s raw per-parcel p and, with the same floor,
+    for get_within_region_correlations()'s maxT/step_maxT correction -- so
+    'corrected p >= raw p' holds by construction, not just approximately."""
+    n_perm = null.shape[0]
+    p = (np.abs(null) >= np.abs(obs)[np.newaxis, :]).mean(axis=0)
+    floor = max(np.finfo(float).eps, 1.0 / n_perm)
+    return np.clip(p, floor, 1.0 - floor)
+
+
+_CWR_OMNIBUS_STATS = ("rho", "absrho", "rho2")
+
+
+def _cwr_omnibus_aggregate(rho, omnibus_stat):
+    """Aggregate per-parcel rho (last axis) into one number per row: signed mean
+    ("rho"), mean absolute value ("absrho"), or mean squared value ("rho2").
+    Applied identically to the observed per-parcel rho (1D) and to each
+    permutation's per-parcel null (2D, (n_perm, n_parcels)) so the two are
+    directly comparable via _cwr_null_p -- for "absrho"/"rho2" that two-tailed
+    |.| comparison collapses to a one-tailed test since both are already >= 0."""
+    if omnibus_stat == "rho":
+        return np.mean(rho, axis=-1)
+    elif omnibus_stat == "absrho":
+        return np.mean(np.abs(rho), axis=-1)
+    elif omnibus_stat == "rho2":
+        return np.mean(rho ** 2, axis=-1)
+    else:
+        lgr.critical_raise(
+            f"'omnibus_stat' must be one of {_CWR_OMNIBUS_STATS}, got '{omnibus_stat}'.",
+            ValueError
+        )
 
 
 def _match_maps(index, queries):
@@ -342,6 +378,8 @@ class NiSpace:
         self._z_colocs = {}
         self._regional_influence = {}
         self._regional_contribution = {}
+        self._corr_within = {}
+        self._p_corr_within = {}
 
         # defaults for get functions (IMPORTANT: this determines what coloc and get function will do!)
         self._last_settings = {
@@ -355,6 +393,7 @@ class NiSpace:
             "mc_method": None,
             "z_method": "robust",
             "pooled_p": False,
+            "cwr_method": None,
         }
         
         # deprecation adjustment
@@ -396,10 +435,14 @@ class NiSpace:
                 auto-detection), ``None`` (same as ``'auto'``), or any
                 collection of the above. Default: ``['auto', 0.0]``
             drop_background_parcels : bool
-                Whether to set all-background parcels to NaN after
-                aggregation. Redundant when ``ignore_background_data=True``
-                because those parcels already return NaN from empty-mean
-                aggregation; only useful with ``ignore_background_data=False``.
+                Whether to explicitly flag (and log) all-background parcels.
+                Only applies when ``ignore_background_data=True``; such
+                parcels are already NaN via empty-mean aggregation regardless
+                of this flag, so it only affects whether they're
+                recorded/logged, not the returned values. Always a no-op
+                when ``ignore_background_data=False`` (e.g. ``binary_y=True``
+                data, where an all-zero parcel is a genuine 0%-overlap
+                result, not missing background, and must never be NaN'd out).
                 Default: False
 
         Returns
@@ -2220,6 +2263,465 @@ class NiSpace:
         lgr.setLevel(loglevel)
         return out
 
+
+    # CORRELATE WITHIN REGION ======================================================================
+
+    def correlate_within_region(self, X=None, Y=None, method="pearson",
+                                X_reduction=None, Y_transform=None,
+                                n_perm=1000, seed=None, store=True, verbose=None):
+        """
+        Per-parcel, across-subject correlation between X and Y -- the transpose
+        of :meth:`colocalize` (which correlates across parcels, within a
+        subject/map). For each parcel independently: do maps with a higher X
+        value at this parcel also have a higher Y value at this parcel, across
+        the set of X/Y maps (e.g. subjects)?
+
+        By default, operates on the object's stored X/Y (via :meth:`get_x`/
+        :meth:`get_y`, respecting ``X_reduction``/``Y_transform``). Pass ``X``/
+        ``Y`` directly to override with different data -- including a 1D,
+        subject-length vector (e.g. an external covariate like age), which is
+        broadcast against every parcel of the other (2D) side.
+
+        If the object's stored X/Y is used (not overridden) and was
+        constructed with ``standardize`` including ``"x"``/``"y"``, a warning
+        is raised: that z-scores each *map* across its own parcels, which is
+        the right normalization for :meth:`colocalize`'s across-parcel axis,
+        but distorts the across-subject axis this method actually correlates
+        along (each map/subject would get its own rescaling before the
+        per-parcel comparison).
+
+        A binary (two-level, e.g. 0/1) 1D vector is a common special case of
+        this: with ``method="pearson"``, the per-parcel ``rho`` is exactly the
+        point-biserial correlation, which converts deterministically to the
+        classic pooled-variance (Student's) two-sample t-statistic via
+        ``t = rho * sqrt((n-2)/(1-rho**2))`` -- so it recovers the same
+        per-parcel effect ranking as an independent-samples t-test. The
+        default permutation null (subject/group-label pairing shuffled, group
+        sizes preserved since the labels themselves aren't resampled) is
+        exactly the classical nonparametric permutation test for two
+        independent samples -- valid without the normality/equal-variance
+        assumptions the parametric t-test needs, since it only relies on
+        exchangeability under the true null. Combined with ``maxT``/
+        ``step_maxT`` (see :meth:`get_within_region_correlations`), this gives
+        a mass-univariate, FWER-controlled group-difference test per parcel --
+        distinct from :meth:`transform_y`'s ``hedges(a,b)``/:meth:`colocalize`
+        route, which tests whether the *shape* of a group-difference map
+        matches other maps, not per-parcel significance of the difference
+        itself. Note that ``rho``'s sign depends on which group is coded
+        higher.
+
+        The null distribution is built by permuting map/subject identity
+        (which X row pairs with which Y row) -- not a spatial/spin null, since
+        parcels are not the resampled axis here. The same permutation is
+        applied consistently across all parcels within one iteration, which is
+        what makes maxT-style FWER correction (via
+        :meth:`get_within_region_correlations`) valid.
+
+        Parameters
+        ----------
+        X, Y : array-like, DataFrame, Series, or None
+            Override data. 2D input must be shape (n_subjects, n_parcels); 1D
+            input must be length n_subjects (broadcast across parcels). At
+            least one of the (possibly-defaulted) X/Y must be 2D. Defaults
+            (``None``) to the object's stored ``get_x()``/``get_y()`` output.
+        method : {"pearson", "spearman"}, default "pearson"
+        X_reduction : str, optional
+            Which stored X reduction to use when ``X`` is not given directly
+            (see :meth:`reduce_x`). Defaults to the last one used, or raw X.
+        Y_transform : str, optional
+            Which stored Y transform to use when ``Y`` is not given directly
+            (see :meth:`transform_y`). Defaults to the last one used, or raw Y.
+        n_perm : int, default 1000
+            Number of map/subject-identity permutations for the null. 0/None
+            skips the null (rho only, no p-values).
+        seed : int, optional
+            Defaults to the seed set at init (``NiSpace(seed=...)``).
+        store : bool, default True
+            Store the result (accessible via :meth:`get_within_region_correlations`)
+            and remember these settings as "last used".
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+
+        Returns
+        -------
+        NiSpace or pandas.DataFrame
+            ``self`` if ``self._return_self`` (default), else the observed
+            per-parcel correlation as a one-row DataFrame.
+        """
+        loglevel = lgr.getEffectiveLevel()
+        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
+        lgr.info("*** NiSpace.correlate_within_region() - per-parcel, across-subject correlation. ***")
+
+        self._check_fit()
+        seed = seed if seed is not None else self._seed
+
+        if method not in _CWR_METHODS:
+            lgr.critical_raise(f"'method' must be one of {_CWR_METHODS}, got '{method}'!",
+                               ValueError)
+
+        # resolve X: explicit override, or the object's stored X
+        if X is None:
+            if "x" in self._zscore:
+                lgr.warning(
+                    "X was Z-standardized (standardize='...x...'), which z-scores each map "
+                    "across parcels -- correlate_within_region() correlates across maps/"
+                    "subjects instead, so this rescales each one differently before that "
+                    "comparison and distorts the result. Consider NiSpace(standardize=...) "
+                    "without 'x', or pass a raw X= override here."
+                )
+            with _quiet():
+                X_df = self.get_x(X_reduction=X_reduction)
+            x_arr, x_index, x_columns = X_df.values, X_df.index, X_df.columns
+        else:
+            x_arr = np.asarray(X.values if isinstance(X, (pd.Series, pd.DataFrame)) else X,
+                               dtype=float)
+            x_index = X.index if isinstance(X, (pd.Series, pd.DataFrame)) else None
+            x_columns = X.columns if isinstance(X, pd.DataFrame) else None
+
+        # resolve Y: explicit override, or the object's stored Y
+        if Y is None:
+            if "y" in self._zscore:
+                lgr.warning(
+                    "Y was Z-standardized (standardize='...y...'), which z-scores each map "
+                    "across parcels -- correlate_within_region() correlates across maps/"
+                    "subjects instead, so this rescales each one differently before that "
+                    "comparison and distorts the result. Consider NiSpace(standardize=...) "
+                    "without 'y', or pass a raw Y= override here."
+                )
+            with _quiet():
+                Y_df = self.get_y(Y_transform=Y_transform)
+            y_arr, y_index, y_columns = Y_df.values, Y_df.index, Y_df.columns
+        else:
+            y_arr = np.asarray(Y.values if isinstance(Y, (pd.Series, pd.DataFrame)) else Y,
+                               dtype=float)
+            y_index = Y.index if isinstance(Y, (pd.Series, pd.DataFrame)) else None
+            y_columns = Y.columns if isinstance(Y, pd.DataFrame) else None
+
+        # subject/map alignment: index-based when available, else positional (with a warning)
+        if x_arr.shape[0] != y_arr.shape[0]:
+            lgr.critical_raise(f"X has {x_arr.shape[0]} subjects/maps, Y has {y_arr.shape[0]} "
+                               "-- counts must match.",
+                               ValueError)
+        if x_index is not None and y_index is not None:
+            if list(x_index) != list(y_index):
+                lgr.warning("X and Y subject/map labels do not match. Pairing is done "
+                            "positionally (same row order assumed for X and Y).")
+        else:
+            lgr.warning("X and/or Y has no subject/map index; assuming positional order "
+                        "matches (same row order for X and Y).")
+
+        parcel_labels = x_columns if x_columns is not None else y_columns
+
+        rho, null = correlate_within_region_core(x_arr, y_arr, method=method, n_perm=n_perm,
+                                                  seed=seed)
+
+        if parcel_labels is None:
+            parcel_labels = [f"parcel{i}" for i in range(len(rho))]
+        _rho_df = pd.DataFrame([rho], index=[method], columns=parcel_labels, dtype=self._dtype)
+
+        if store:
+            X_reduction, Y_transform = self._get_last(X_reduction=X_reduction,
+                                                       Y_transform=Y_transform)
+            _key = _get_df_string("corrwithin", xdimred=X_reduction, ytrans=Y_transform,
+                                  method=method)
+            self._corr_within[_key] = _rho_df
+            if null is not None:
+                self._nulls.setdefault("corr_within", {})[_key] = {
+                    "null_dist": null,
+                    "n_perm": n_perm,
+                    "seed": seed,
+                }
+                p = _cwr_null_p(rho, null)
+                self._p_corr_within[_key] = pd.DataFrame([p], index=[method],
+                                                         columns=parcel_labels, dtype=self._dtype)
+            else:
+                # avoid stale p/null from a prior call under the same key (same
+                # xdimred/ytrans/method) contaminating a fresh n_perm=0 result
+                self._p_corr_within.pop(_key, None)
+                self._nulls.get("corr_within", {}).pop(_key, None)
+            self._set_last(cwr_method=method, X_reduction=X_reduction, Y_transform=Y_transform)
+
+            lgr.setLevel(loglevel)
+            if self._return_self:
+                return self
+            return _rho_df
+
+        lgr.setLevel(loglevel)
+        return _rho_df
+
+    # ----------------------------------------------------------------------------------------------
+
+    def get_within_region_correlations(self, method=None, mc_method="step_maxT",
+                                    X_reduction=None, Y_transform=None, verbose=None):
+        """
+        Retrieve per-parcel, across-subject correlation results from
+        :meth:`correlate_within_region`, optionally multiple-comparison
+        corrected across parcels. See :meth:`get_within_region_correlations_omnibus`
+        for a single global test across all parcels instead of one p-value per
+        parcel.
+
+        Parameters
+        ----------
+        method : {"pearson", "spearman"}, optional
+            Defaults to the last one used.
+        mc_method : {"fdr_bh", "bonferroni", "holm", "maxT", "step_maxT"}, optional
+            Multiple-comparison correction across parcels. Defaults to
+            ``"step_maxT"`` -- the recommended, proven-calibrated choice (see
+            below and ``bench5-1_region_correlation_fpr.ipynb``); pass
+            ``None`` explicitly to get uncorrected results only
+            (``"p_corr"`` then stays ``None``). Requires
+            :meth:`correlate_within_region` to have been run with
+            ``n_perm > 0`` -- raises ``KeyError`` otherwise, including under
+            this default, since silently falling back to uncorrected results
+            would hide that no null was ever computed. Unlike :meth:`correct_p`
+            (which is specific to :meth:`colocalize` results), this dispatches
+            directly to the underlying ``nispace.stats.misc`` primitives.
+
+            ``"maxT"``/``"step_maxT"`` (:cite:`westfall1993`) control the
+            family-wise error rate using the *same* subject-permutation null
+            already generated by :meth:`correlate_within_region` (requires
+            ``n_perm > 0`` there): for each permutation, the **maximum**
+            ``|rho|`` across *all* parcels is taken, giving one "how extreme
+            can the single most extreme parcel get under H0" draw per
+            permutation. A parcel's corrected p-value is the fraction of
+            these per-permutation maxima that meet or exceed its own
+            observed ``|rho|``. Because the max is taken jointly across
+            parcels within each permutation, whatever correlation exists
+            between parcels' test statistics (e.g. from spatial
+            autocorrelation in X/Y) is preserved automatically -- no
+            independence assumption is made, unlike ``"bonferroni"``/
+            ``"fdr_bh"``. ``"step_maxT"`` refines this by excluding
+            already-more-extreme parcels from the max at each step, which
+            can reject more parcels than plain ``"maxT"`` when several true
+            effects are present -- but the two are mathematically identical
+            on whether *any* parcel is rejected (both reduce to the same
+            top-ranked-parcel computation).
+
+            ``"meff"`` (Sidak correction via an effective-number-of-
+            independent-tests estimate) is **not supported** here: it needs
+            a parcel-parcel correlation matrix estimated from only
+            ``n_subjects`` observations, typically far fewer than
+            ``n_parcels`` for this method, which badly underestimates true
+            dimensionality and is anti-conservative (see
+            ``bench5-1_region_correlation_fpr.ipynb``). Use ``"maxT"``/
+            ``"step_maxT"`` instead.
+        X_reduction, Y_transform : str, optional
+            Which stored X/Y to have used. Defaults to the last one used.
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+
+        Returns
+        -------
+        dict
+            ``{"stat_type": "rho", "mc_method": mc_method, "stat": DataFrame,
+            "p": DataFrame or None, "p_corr": DataFrame or None}``. ``"p"`` is
+            ``None`` if :meth:`correlate_within_region` was run with
+            ``n_perm=0``; ``"p_corr"`` is ``None`` unless ``mc_method`` is
+            given.
+        """
+        loglevel = lgr.getEffectiveLevel()
+        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
+
+        cwr_method, X_reduction, Y_transform = self._get_last(
+            cwr_method=method, X_reduction=X_reduction, Y_transform=Y_transform
+        )
+        _key = _get_df_string("corrwithin", xdimred=X_reduction, ytrans=Y_transform,
+                              method=cwr_method)
+
+        try:
+            rho_df = self._corr_within[_key]
+        except KeyError:
+            available = "\n".join(list(self._corr_within.keys()))
+            lgr.critical_raise(
+                f"No correlate_within_region result for method='{cwr_method}', "
+                f"X_reduction='{X_reduction}', Y_transform='{Y_transform}'. Did you run "
+                f"NiSpace.correlate_within_region()? Available:\n{available}",
+                KeyError
+            )
+
+        has_p = _key in self._p_corr_within
+        if mc_method is not None and not has_p:
+            lgr.critical_raise(
+                f"No p-values stored for '{_key}' -- 'mc_method' requires n_perm > 0 to "
+                "have been used in correlate_within_region().",
+                KeyError
+            )
+
+        p_df, p_corr_df = None, None
+        if has_p:
+            p_df = self._p_corr_within[_key]
+
+            if mc_method is not None:
+                if mc_method in ("maxT", "step_maxT"):
+                    null_entry = self._nulls.get("corr_within", {}).get(_key)
+                    if null_entry is None:
+                        lgr.critical_raise(
+                            f"No null distribution stored for '{_key}' -- maxT/step_maxT "
+                            "correction requires n_perm > 0 in correlate_within_region().",
+                            KeyError
+                        )
+                    null_dist = null_entry["null_dist"]  # (n_perm, n_parcels)
+                    obs_abs = np.abs(rho_df.values)[0]      # (n_parcels,)
+                    null_abs = np.abs(null_dist)            # (n_perm, n_parcels)
+                    if mc_method == "maxT":
+                        null_max = null_abs.max(axis=1)     # (n_perm,)
+                        counts = np.mean(null_max[:, np.newaxis] >= obs_abs[np.newaxis, :], axis=0)
+                    else:  # step_maxT
+                        order = np.argsort(obs_abs)[::-1]
+                        obs_s = obs_abs[order]
+                        null_s = null_abs[:, order]
+                        null_rev_cummax = np.maximum.accumulate(null_s[:, ::-1], axis=1)[:, ::-1]
+                        p_s = np.maximum.accumulate(np.mean(null_rev_cummax >= obs_s[np.newaxis, :], axis=0))
+                        counts = np.empty_like(p_s)
+                        counts[order] = p_s
+                    # same floor-clip convention as the raw per-parcel p (_cwr_null_p) so
+                    # 'corrected >= raw' holds by construction, not just approximately
+                    n_perm_used = null_entry["n_perm"]
+                    floor = max(np.finfo(float).eps, 1.0 / n_perm_used)
+                    p_corr = np.clip(counts, floor, 1.0 - floor)
+                    p_corr_df = pd.DataFrame([p_corr], index=p_df.index, columns=p_df.columns,
+                                             dtype=self._dtype)
+
+                elif mc_method == "meff":
+                    # Deliberately unsupported here, not just unimplemented: with
+                    # n_subjects typically far fewer than n_parcels, the parcel-parcel
+                    # correlation matrix meff needs is rank-deficient (rank capped at
+                    # n_subjects-1 regardless of orientation), so meff badly
+                    # underestimates true effective dimensionality and gives an
+                    # anti-conservative (too liberal) correction -- confirmed empirically
+                    # across n_subjects=10-100 in bench5-1_region_correlation_fpr.ipynb
+                    # (FWER 11-55% at nominal alpha=0.05, never converging to nominal in
+                    # that range). 'maxT'/'step_maxT' have the same n_perm>0 prerequisite
+                    # and are proven well-calibrated -- use those instead.
+                    lgr.critical_raise(
+                        "'meff' correction is not supported for correlate_within_region() -- "
+                        "it is anti-conservative (too liberal) whenever n_subjects is far "
+                        "fewer than n_parcels, which is the typical regime for this method. "
+                        "Use 'maxT' or 'step_maxT' instead (same n_perm>0 prerequisite, "
+                        "proven well-calibrated across n_subjects=10-100 -- see "
+                        "bench5-1_region_correlation_fpr.ipynb).",
+                        ValueError
+                    )
+
+                else:
+                    # alpha only affects the reject mask (not returned here, see
+                    # get_within_region_correlations_omnibus discussion), not the
+                    # corrected p-values themselves for fdr_bh/bonferroni/holm
+                    p_corr_df, _ = mc_correction(p_df, alpha=0.05, method=mc_method,
+                                                 dtype=self._dtype)
+
+        out = {"stat_type": "rho", "mc_method": mc_method, "stat": rho_df, "p": p_df,
+               "p_corr": p_corr_df}
+
+        lgr.info(f"Returning correlate_within_region results: \n"
+                 f"{print_arg_pairs(method=cwr_method, X_reduction=X_reduction, Y_transform=Y_transform, mc_method=mc_method)}")
+        lgr.setLevel(loglevel)
+
+        return out
+
+    # ----------------------------------------------------------------------------------------------
+
+    def get_within_region_correlations_omnibus(self, omnibus_stat="absrho", method=None,
+                                             X_reduction=None, Y_transform=None, verbose=None):
+        """
+        Single global test from :meth:`correlate_within_region`: "are region
+        values more correlated between X and Y, on average across all
+        parcels, than expected by chance?" -- one p-value for the whole
+        analysis, as opposed to :meth:`get_within_region_correlations`'s one
+        p-value per parcel.
+
+        Reuses the same subject-permutation null already generated by
+        :meth:`correlate_within_region` (requires ``n_perm > 0`` there):
+        ``omnibus_stat`` aggregates the per-parcel ``rho`` into one number,
+        and the same aggregation is applied to each permutation's per-parcel
+        null to build a null distribution of that one number, against which
+        the observed aggregate is compared (same floor-clipped empirical
+        p-value convention as :meth:`get_within_region_correlations`'s raw
+        p).
+
+        Parameters
+        ----------
+        omnibus_stat : {"rho", "absrho", "rho2"}, default "absrho"
+            How to aggregate the per-parcel ``rho`` values into one number.
+
+            - ``"rho"`` -- signed mean. Most powerful if you expect a
+              consistent-direction relationship across parcels (mirrors
+              :meth:`paired_colocalization`'s ``pooled_p="mean"``), but a
+              sign-heterogeneous true effect (positive in some regions,
+              negative in others) can cancel out and hide it.
+            - ``"absrho"`` (default) -- mean absolute value. Robust to
+              sign-heterogeneity; matches the ``|rho|`` convention already
+              used by ``"maxT"``/``"step_maxT"`` in
+              :meth:`get_within_region_correlations`.
+            - ``"rho2"`` -- mean squared value ("average variance
+              explained"). More powerful than ``"absrho"`` when the true
+              effect is concentrated in a few strongly-correlated parcels
+              rather than spread thinly across most of them, at the cost of
+              being more sensitive to a single outlier parcel.
+        method : {"pearson", "spearman"}, optional
+            Defaults to the last one used.
+        X_reduction, Y_transform : str, optional
+            Which stored X/Y to have used. Defaults to the last one used.
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+
+        Returns
+        -------
+        dict
+            ``{"stat_type": omnibus_stat, "stat": float, "p": float}``.
+
+        Raises
+        ------
+        KeyError
+            If the requested combination was never computed, or was computed
+            with ``n_perm=0`` (no null to test the omnibus statistic
+            against).
+        """
+        loglevel = lgr.getEffectiveLevel()
+        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
+
+        if omnibus_stat not in _CWR_OMNIBUS_STATS:
+            lgr.critical_raise(
+                f"'omnibus_stat' must be one of {_CWR_OMNIBUS_STATS}, got '{omnibus_stat}'.",
+                ValueError
+            )
+
+        cwr_method, X_reduction, Y_transform = self._get_last(
+            cwr_method=method, X_reduction=X_reduction, Y_transform=Y_transform
+        )
+        _key = _get_df_string("corrwithin", xdimred=X_reduction, ytrans=Y_transform,
+                              method=cwr_method)
+
+        try:
+            rho_df = self._corr_within[_key]
+        except KeyError:
+            available = "\n".join(list(self._corr_within.keys()))
+            lgr.critical_raise(
+                f"No correlate_within_region result for method='{cwr_method}', "
+                f"X_reduction='{X_reduction}', Y_transform='{Y_transform}'. Did you run "
+                f"NiSpace.correlate_within_region()? Available:\n{available}",
+                KeyError
+            )
+
+        null_entry = self._nulls.get("corr_within", {}).get(_key)
+        if null_entry is None:
+            lgr.critical_raise(
+                f"No null distribution stored for '{_key}' -- the omnibus test requires "
+                "n_perm > 0 in correlate_within_region().",
+                KeyError
+            )
+
+        stat_obs = _cwr_omnibus_aggregate(rho_df.values[0], omnibus_stat)
+        null_agg = _cwr_omnibus_aggregate(null_entry["null_dist"], omnibus_stat)
+        p = _cwr_null_p(np.array([stat_obs]), null_agg[:, np.newaxis])[0]
+
+        out = {"stat_type": omnibus_stat, "stat": float(stat_obs), "p": float(p)}
+
+        lgr.info(f"Returning correlate_within_region omnibus test: \n"
+                 f"{print_arg_pairs(method=cwr_method, X_reduction=X_reduction, Y_transform=Y_transform, omnibus_stat=omnibus_stat)}")
+        lgr.setLevel(loglevel)
+
+        return out
 
     # PERMUTE ======================================================================================
 

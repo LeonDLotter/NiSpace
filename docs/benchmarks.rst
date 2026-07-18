@@ -11,5 +11,5 @@ that can be re-run after code changes.
 .. toctree::
    :maxdepth: 1
 
-   nb_benchmarks/bench01_null_methods_fpr
-   nb_benchmarks/bench03_group_permutation_fpr
+   nb_benchmarks/bench1-1_map_surrogates_fpr
+   nb_benchmarks/bench2-1_group_permutation_fpr

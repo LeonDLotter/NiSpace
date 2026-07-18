@@ -212,6 +212,12 @@ def _get_df_string(kind, xdimred=None, ytrans=None, method=None, stat=None, xsea
         else:
             raise ValueError("Provide method, stat, and perm!")
 
+    elif kind=="corrwithin":
+        if method is not None:
+            df_str = f"xdimred-{xdimred}_ytrans-{ytrans}_corrwithin-{method}"
+        else:
+            raise ValueError("Provide method!")
+
     else:
         raise ValueError(f"Kind {kind} not defined!")
 

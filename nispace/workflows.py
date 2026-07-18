@@ -951,6 +951,166 @@ def paired_colocalization(y,
     return nsp
 
 
+def correlate_within_region(x,
+                            y,
+                            standardize=False,
+                            space=_SPACE_DEFAULT_VOL,
+                            data_space=None,
+                            parcellation_space=None,
+                            parcellation=_PARC_DEFAULT,
+                            parcellation_labels=None,
+                            parcellation_hemi=["L", "R"],
+                            method="pearson",
+                            n_perm=1000,
+                            seed=None,
+                            n_proc=1,
+                            verbose=True,
+                            nispace_object=None,
+                            init_kwargs=None,
+                            fit_kwargs=None,
+                            correlate_kwargs=None):
+    """Per-parcel, across-subject correlation workflow.
+
+    For each parcel independently, tests whether maps with a higher X value at
+    that parcel also have a higher Y value at that parcel, across the set of
+    X/Y maps (e.g. subjects) -- the transpose of :func:`colocalization` (which
+    correlates across parcels, within a map).
+
+    One of ``x``/``y`` may be a 1D, subject-length vector instead of full
+    brain-map data (e.g. an external covariate like age) -- it is broadcast
+    against every parcel of the other (2D) side, exactly like
+    :meth:`NiSpace.correlate_within_region`'s own ``X=``/``Y=`` override
+    contract. Internally, :meth:`NiSpace.fit` needs real 2D map data (it has
+    no notion of "this is a subject-length covariate, not a map"; a bare 1D
+    vector passed to ``fit()`` directly would be mis-parsed as a single
+    already-parcellated map and fail on a parcel-count mismatch) -- so the 2D
+    side is used to fit the object, and the 1D side is passed through as a
+    direct override afterward. This is transparent to the caller; both
+    ``x``/``y`` can simply be passed as given. At least one of ``x``/``y``
+    must be 2D.
+
+    The null distribution is built by permuting map identity (not a spatial/
+    spin null); the same permutation is applied consistently across all
+    parcels within one iteration.
+
+    Parameters
+    ----------
+    x : array-like or DataFrame
+        Modality A -- N brain maps (N x n_parcels), or a length-N 1D subject
+        covariate if ``y`` is 2D (see above). Same ordering as ``y`` is
+        required; matching is done positionally. Unlike other workflow
+        functions, ``x`` is expected to be individual-level data here, not a
+        reference dataset string.
+    y : array-like, DataFrame, or list
+        Modality B, in the same map order as ``x`` -- or a length-N 1D
+        subject covariate if ``x`` is 2D (see above).
+    standardize : str or bool, default=False
+        Which data to z-standardize (parcels). Can contain "x", "y". Defaults to ``False``:
+        this z-scores each *map* across its own parcels, which distorts the across-map axis
+        this function actually correlates (see :meth:`NiSpace.correlate_within_region`). 
+    space : str
+        Image space for parcellation and data loading.
+    data_space : str or None
+        Override for the data image space.
+    parcellation_space : str or None
+        Override for the parcellation space.
+    parcellation : str or int, default=_PARC_DEFAULT
+        Brain parcellation to use.
+    parcellation_labels : array-like or None
+        Optional subset of parcellation region labels.
+    parcellation_hemi : list, default=["L", "R"]
+        Hemispheres to include.
+    method : {"pearson", "spearman"}, default "pearson"
+    n_perm : int, default 1000
+        Number of map-identity permutations for the null distribution.
+    seed : int or None
+        Random seed for reproducibility.
+    n_proc : int, default 1
+        Parallel workers (passed to NiSpace init).
+    verbose : bool, default True
+        Whether to print progress messages.
+    nispace_object : NiSpace or None
+        Pre-fitted NiSpace object to reuse; skips init/fit when provided.
+    init_kwargs : dict, optional
+        Extra keyword arguments for :class:`NiSpace` initialisation.
+    fit_kwargs : dict, optional
+        Extra keyword arguments for :meth:`NiSpace.fit`.
+    correlate_kwargs : dict, optional
+        Extra keyword arguments for :meth:`NiSpace.correlate_within_region`.
+
+    Returns
+    -------
+    nsp : NiSpace
+        Fitted NiSpace object. Use
+        :meth:`~NiSpace.get_within_region_correlations` to retrieve the
+        per-parcel correlation, p-values, and (optionally corrected) results,
+        or :meth:`~NiSpace.get_within_region_correlations_omnibus` for a
+        single global test across all parcels instead.
+    """
+    verbose = set_log(lgr, verbose)
+    init_kwargs = {} if init_kwargs is None else dict(init_kwargs)
+    fit_kwargs = {} if fit_kwargs is None else fit_kwargs
+    correlate_kwargs = {} if correlate_kwargs is None else correlate_kwargs
+
+    # 1D-covariate detection: a Series/1D array/list is a subject-length covariate,
+    # never a single brain map (this function always needs an across-subject axis,
+    # which a lone map doesn't have) -- so this is unambiguous, not a heuristic guess
+    def _is_1d(v):
+        if isinstance(v, pd.DataFrame):
+            return False
+        return (v.values if isinstance(v, pd.Series) else np.asarray(v)).ndim == 1
+
+    x_is_1d, y_is_1d = _is_1d(x), _is_1d(y)
+    if x_is_1d and y_is_1d:
+        lgr.critical_raise("At least one of 'x'/'y' must be full brain-map data "
+                           "(N maps x n_parcels) -- both were given as 1D vectors.",
+                           ValueError)
+
+    # fit() needs real 2D map data to build parcellation metadata from; when one side
+    # is a 1D covariate, fit on the 2D side for both x and y, then pass the covariate
+    # through as a direct correlate_within_region(X=/Y=) override below (bypassing
+    # fit()/get_x()/get_y() entirely for that side, same as the object-level method)
+    fit_x, fit_y = x, y
+    if y_is_1d:
+        fit_y = x
+    elif x_is_1d:
+        fit_x = y
+
+    status, nsp, _ = _workflow_base(
+        x=fit_x, y=fit_y, z=None,
+        x_collection=None,
+        space=space,
+        data_space=data_space,
+        parcellation_space=parcellation_space,
+        standardize=standardize,
+        parcellation=parcellation,
+        parcellation_labels=parcellation_labels,
+        parcellation_hemi=parcellation_hemi,
+        colocalization_method=[method],
+        n_proc=n_proc,
+        verbose=verbose,
+        nispace_object=nispace_object,
+        fetch_x_kwargs={},
+        init_kwargs=init_kwargs,
+        fit_kwargs=fit_kwargs,
+    )
+    status = status | {"correlate_within_region": False}
+
+    ## CORRELATE WITHIN REGION
+    if not status["correlate_within_region"]:
+        overrides = {}
+        if x_is_1d:
+            overrides["X"] = x
+        if y_is_1d:
+            overrides["Y"] = y
+        nsp.correlate_within_region(
+            **dict(method=method, n_perm=n_perm, seed=seed) | overrides | correlate_kwargs
+        )
+        status["correlate_within_region"] = True
+
+    return nsp
+
+
 def xsea(y,
          x="mRNA",
          z=None,
