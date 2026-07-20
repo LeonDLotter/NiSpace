@@ -635,7 +635,7 @@ def _resolve_bg_array(bg_spec, auto_value=np.nan):
     return np.array(sorted(values), dtype=np.float64)
 
 
-@njit
+@njit(cache=True, nogil=True)
 def vol_to_vect_arr(vol_arr, parc_arr, parc_idc, bg_values):
     """Aggregate vol_arr into parcel means, excluding NaN and any values in bg_values.
 
@@ -658,7 +658,71 @@ def vol_to_vect_arr(vol_arr, parc_arr, parc_idc, bg_values):
         vals = vol_arr2d[idc]
         vect[i] = vals.mean() if len(vals) > 0 else np.nan
     return vect
-    
+
+
+@njit(cache=True, nogil=True)
+def vol_to_vect_arr_stats(vol_arr, parc_arr, parc_idc, bg_values):
+    """Aggregate vol_arr into parcel means plus coverage/background-flag stats,
+    in a single pass over parc_idc.
+
+    Unlike :func:`vol_to_vect_arr`, `parc_idc` here is expected to be the FULL
+    original label set (``Parcellater.parcellation_idc``), not just labels
+    present in this call's resampled `parc_arr` -- a label absent from `parc_arr`
+    naturally yields ``n_total=0`` (the "dropped during resampling" case), so
+    callers don't need a separate NaN-fill/reindex step for that.
+
+    Parameters
+    ----------
+    bg_values : np.ndarray of float64
+        Values to exclude in addition to NaN, same as :func:`vol_to_vect_arr`.
+
+    Returns
+    -------
+    means : np.ndarray
+        NaN- and bg_values-excluded mean per parcel (NaN where n_valid==0).
+    n_valid : np.ndarray of int64
+        Count of non-NaN, non-bg datapoints per parcel -- the mean's numerator,
+        and the coverage-check numerator (``min_num_valid_datapoints``).
+    n_total : np.ndarray of int64
+        Pure parcel-membership count per parcel, NOT NaN-filtered (i.e. how many
+        voxels/vertices carry this label in `parc_arr`, regardless of what the
+        data looks like there). ``n_total==0`` means the label has zero
+        voxels/vertices in `parc_arr` at all -- dropped during resampling. Also
+        the coverage-check denominator (``min_fraction_valid_datapoints``). Kept
+        NaN-agnostic deliberately, to keep "dropped during resampling" distinct
+        from "voxels present but data is all-NaN there" (a different cause).
+    all_background : np.ndarray of bool
+        True iff n_valid==0 and this parcel had at least one non-NaN raw
+        datapoint -- i.e. every non-NaN raw value in the parcel was itself a
+        background value. Correctly False both for "genuinely all-NaN, no
+        background voxels present" and for "dropped during resampling" (both
+        have zero non-NaN raw datapoints too).
+    """
+    vol_arr2d = vol_arr.flatten()
+    parc_arr2d = parc_arr.flatten().astype(vol_arr.dtype)
+    parc_idc = parc_idc.astype(vol_arr.dtype)
+    n = len(parc_idc)
+    means = np.full(n, np.nan, dtype=vol_arr.dtype)
+    n_valid = np.zeros(n, dtype=np.int64)
+    n_total = np.zeros(n, dtype=np.int64)
+    all_background = np.zeros(n, dtype=np.bool_)
+    not_nan = ~np.isnan(vol_arr2d)
+    for i in range(n):
+        idx = parc_idc[i]
+        in_parcel = parc_arr2d == idx
+        n_total[i] = in_parcel.sum()
+        raw = in_parcel & not_nan
+        n_raw = raw.sum()
+        valid_mask = raw
+        for bg in bg_values:
+            valid_mask = valid_mask & (vol_arr2d != bg)
+        vals = vol_arr2d[valid_mask]
+        n_valid[i] = len(vals)
+        if len(vals) > 0:
+            means[i] = vals.mean()
+        all_background[i] = (n_valid[i] == 0) and (n_raw > 0)
+    return means, n_valid, n_total, all_background
+
 
 def parc_vect_to_vol(vect, parc):
     """Convert a per-parcel value vector into a full volumetric NIfTI image.

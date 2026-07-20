@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Functionality for parcellating data, copied from neuromaps 0.0.4 and 
+Functionality for parcellating data, copied from neuromaps 0.0.4 and
 adapted for convenient use in NiSpace
 """
 
@@ -16,6 +16,20 @@ from neuromaps.resampling import resample_images
 from neuromaps.transforms import _check_hemi, _estimate_density
 from neuromaps.nulls.spins import parcels_to_vertices
 
+import logging
+lgr = logging.getLogger(__name__)
+
+# ==================================================================================================
+# DEPRECATION MESSAGE STRINGS
+# ==================================================================================================
+
+_DEPR_IGNORE_BACKGROUND_DATA = (
+    "'ignore_background_data' is deprecated and will be removed in the first non-dev "
+    "release. Use 'background_value' instead: pass background_value=False to disable "
+    "background exclusion (equivalent to ignore_background_data=False), or a scalar/"
+    "list/'auto' to enable it (equivalent to ignore_background_data=True)."
+)
+
 # monkey patch to neuromaps ALIAS
 # TODO: ALIAS is only still needed for DENSITIES validation (line ~91) and resample_images calls.
 # _volumetric detection and transform branching already use 'mni' in space.lower() instead.
@@ -29,7 +43,7 @@ ALIAS = dict(
     FSLR='fsLR', CIVET='civet'
 )
 
-from nispace.utils.utils import get_background_value, vol_to_vect_arr, _resolve_bg_array
+from nispace.utils.utils import get_background_value, vol_to_vect_arr, vol_to_vect_arr_stats, _resolve_bg_array
 
 def _gifti_to_array(gifti):
     """ Converts tuple of `gifti` to numpy array
@@ -139,10 +153,10 @@ class Parcellater():
         self._fit = True
         return self
 
-    def transform(self, data, space, ignore_background_data=True,
-                  background_value=["auto", 0.0], hemi=None,
-                  fill_dropped=True, background_parcels_to_nan=False,
-                  min_num_valid_datapoints=None, min_fraction_valid_datapoints=None):
+    def transform(self, data, space, background_value="auto", hemi=None,
+                  fill_dropped=True, report_background_parcels=False,
+                  min_num_valid_datapoints=None, min_fraction_valid_datapoints=None,
+                  ignore_background_data=None):
         """
         Applies parcellation to `data` in `space`
 
@@ -152,32 +166,64 @@ class Parcellater():
             Data to parcellate
         space : str
             The space in which `data` is defined
+        background_value : float, list, set, array, 'auto', or False
+            Value(s) to treat as background, or ``False`` to disable
+            background exclusion entirely. When disabled, background/zero is
+            treated as real data -- never masked, never triggers the
+            empty-mean-to-NaN path (NaN itself is still always excluded,
+            regardless of this parameter). Accepts:
+
+            - ``'auto'`` (default): auto-detect from border voxels
+              (volumetric) or medial wall median (surface), combined with
+              exact ``0.0`` -- equivalent to ``['auto', 0.0]``.
+            - float (e.g. ``0.0``): exclude that specific value only.
+            - list/set/array: any combination of floats and the
+              ``'auto'``/``None`` sentinel.
+            - ``False``: disable background exclusion entirely.
         hemi : {'L', 'R'}, optional
             If provided `data` represents only one hemisphere of a surface
             dataset then this specifies which hemisphere. If not specified it
             is assumed that `data` is (L, R) hemisphere. Ignored if `space` is
             'MNI152'. Default: None
-        ignore_background_data : bool
-            Whether to exclude background voxels/vertices from parcel-mean
-            computation. When True, values specified by `background_value` are
-            masked before averaging. Default: True
-        background_value : float, list, set, array, or 'auto'
-            Value(s) to treat as background when `ignore_background_data=True`.
-            Accepts a scalar, or any collection of scalars and/or the sentinel
-            string ``'auto'``/``None``:
-
-            - float (e.g. ``0.0``): exclude that specific value
-            - ``'auto'`` or ``None``: auto-detect from border voxels (volumetric)
-              or medial wall median (surface)
-            - list/set/array: any combination of the above
-
-            Default: ``['auto', 0.0]`` (excludes detected background and zeros)
-        background_parcels_to_nan : bool
-            Whether to set parcels whose mean equals the single resolved
-            background value to NaN after aggregation. Only meaningful when
-            `ignore_background_data=False` and `background_value` resolves to
-            exactly one scalar; otherwise redundant (all-background parcels
-            already return NaN from empty-mean aggregation). Default: False
+        fill_dropped : bool
+            Whether to expand the returned array to the full original parcel
+            set (`self.parcellation_idc`, from `.fit()`), NaN-filling any
+            parcel that vanished entirely during resampling to `data`'s grid
+            (`self._parc_idc_dropped`). If False, the returned array only
+            covers parcels present in the resampled parcellation, which may
+            be shorter than `self.parcellation_idc`. Default: True
+        report_background_parcels : bool
+            Whether to explicitly record parcels whose raw (pre-exclusion)
+            data was entirely background -- every non-NaN raw voxel/vertex in
+            the parcel matches `background_value`. Such parcels are already
+            NaN via empty-mean aggregation regardless of this flag, so
+            enabling it does not change the returned values -- it only
+            additionally records the affected parcels (`self._parc_idc_bg`,
+            surfaced in `parcellate_data()`'s logging), separately from
+            parcels dropped during resampling or excluded via the
+            `min_*_valid_datapoints` options. Always a no-op when
+            `background_value=False`: with background exclusion disabled,
+            `background_value` may label real, meaningful data (e.g.
+            binary/cluster-coverage maps, where an all-zero parcel is a
+            genuine 0%-overlap result, not missing background) and must never
+            be flagged here. Default: False
+        min_num_valid_datapoints : int, optional
+            Minimum number of valid (non-background, non-NaN) datapoints
+            required per parcel; parcels below this are set to NaN and
+            recorded in `self._parc_idc_excl`. Default: None
+        min_fraction_valid_datapoints : float, optional
+            Minimum fraction of valid (non-background, non-NaN) datapoints,
+            relative to the parcel's total voxel/vertex count in the
+            resampled parcellation, required per parcel; parcels below this
+            are set to NaN and recorded in `self._parc_idc_excl`.
+            Default: None
+        ignore_background_data : bool, optional
+            Deprecated. Use `background_value` instead -- pass
+            ``background_value=False`` for what used to be
+            ``ignore_background_data=False``. If explicitly passed, takes
+            precedence over `background_value` and replicates the old
+            two-independent-parameter behavior for the deprecation transition
+            period. Default: None (not set)
 
         Returns
         -------
@@ -224,10 +270,28 @@ class Parcellater():
         self._parc_idc_bg = []
         self._parc_idc_excl = []
         
-        # normalise background_value spec to a plain list once, used by both branches
-        bg_spec = list(background_value) if isinstance(background_value, (list, tuple, np.ndarray, set)) \
-                  else [background_value]
-        needs_auto = ignore_background_data and any(v in (None, "auto") for v in bg_spec)
+        # resolve background_value (+ deprecated ignore_background_data) into
+        # (is_disabled, bg_spec) -- see _DEPR_IGNORE_BACKGROUND_DATA for the
+        # legacy path, which replicates the old two-independent-parameter
+        # behavior exactly for the deprecation transition period.
+        if ignore_background_data is not None:
+            lgr.warning(_DEPR_IGNORE_BACKGROUND_DATA)
+            bg_spec = list(background_value) if isinstance(background_value, (list, tuple, np.ndarray, set)) \
+                      else [background_value]
+            is_disabled = not ignore_background_data
+        elif background_value is False:
+            is_disabled = True
+            bg_spec = []
+        elif isinstance(background_value, (list, tuple, np.ndarray, set)):
+            is_disabled = False
+            bg_spec = list(background_value)
+        elif background_value is None or background_value == "auto":
+            is_disabled = False
+            bg_spec = ["auto", 0.0]
+        else:
+            is_disabled = False
+            bg_spec = [background_value]
+        needs_auto = (not is_disabled) and any(v in (None, "auto") for v in bg_spec)
 
         if ((self.resampling_target == 'data'
              and 'mni' in space.lower())
@@ -236,9 +300,10 @@ class Parcellater():
             data = nib.concat_images([nib.squeeze_image(data)])
             darr = data.get_fdata()
             auto_value = get_background_value(data) if needs_auto else np.nan
-            bg_arr = _resolve_bg_array(bg_spec, auto_value) if ignore_background_data \
+            bg_arr = _resolve_bg_array(bg_spec, auto_value) if not is_disabled \
                      else np.array([], dtype=np.float64)
-            parcellated = vol_to_vect_arr(darr, self._parc_arr, self._parc_idc, bg_arr)
+            means, n_valid, n_total, all_background = vol_to_vect_arr_stats(
+                darr, self._parc_arr, self.parcellation_idc, bg_arr)
 
         else:
             if not self._volumetric:
@@ -257,67 +322,67 @@ class Parcellater():
             else:
                 auto_value = np.nan
             parc_arr = _gifti_to_array(parc)
-            bg_arr = _resolve_bg_array(bg_spec, auto_value) if ignore_background_data \
+            bg_arr = _resolve_bg_array(bg_spec, auto_value) if not is_disabled \
                      else np.array([], dtype=np.float64)
-            parcellated = vol_to_vect_arr(darr, parc_arr, self._parc_idc, bg_arr)
+            means, n_valid, n_total, all_background = vol_to_vect_arr_stats(
+                darr, parc_arr, self.parcellation_idc, bg_arr)
 
-        # detect parcels that vanished after resampling and fill their positions with NaN
-        # this ensures output length always equals len(self.parcellation_idc) and prevents
-        # index shifts in the caller (io.py allocates the full-size output array)
-        dropped_mask = ~np.isin(self.parcellation_idc, self._parc_idc)
+        parcellated = means
+
+        # detect parcels that vanished after resampling (n_total==0 -- zero
+        # voxels/vertices carry this label in the resampled parcellation at
+        # all) -- means already contains NaN there "for free", no separate
+        # fill step needed. domain_idc tracks which label set parcellated/
+        # n_valid/n_total are currently indexed by, for the blocks below.
+        dropped_mask = (n_total == 0)
         self._parc_idc_dropped = list(self.parcellation_idc[dropped_mask])
-        if fill_dropped and len(self._parc_idc_dropped) > 0:
-            filled = np.full(len(self.parcellation_idc), np.nan, dtype=parcellated.dtype)
-            filled[~dropped_mask] = parcellated
-            parcellated = filled
+        if not fill_dropped:
+            keep = ~dropped_mask
+            parcellated = parcellated[keep]
+            n_valid = n_valid[keep]
+            n_total = n_total[keep]
+            domain_idc = self.parcellation_idc[keep]
+        else:
+            domain_idc = self.parcellation_idc
 
-        # drop parcels whose mean equals the background value — only for the scalar case
-        if background_parcels_to_nan and len(bg_arr) == 1:
-            bg_idc = parcellated == bg_arr[0]
-            parcellated[bg_idc] = np.nan
-            self._parc_idc_bg = list(self.parcellation_idc[bg_idc])
-            
+        # record parcels whose raw (pre-exclusion) data was entirely background --
+        # i.e. every non-NaN raw voxel/vertex in the parcel is a background value.
+        # These parcels are already NaN via the empty-valid-mean path regardless
+        # of this flag; enabling it only additionally records them in
+        # self._parc_idc_bg (surfaced in parcellate_data()'s logging),
+        # distinguishing "NaN because background" from "NaN because all raw data
+        # was itself NaN" (missing data, not reported here) or "NaN because the
+        # parcel vanished during resampling" (self._parc_idc_dropped, above --
+        # a dropped parcel always has all_background=False by construction, so
+        # this never double-reports a dropped parcel as background).
+        # Deliberately gated to background exclusion being enabled: when
+        # background_value=False, background_value may label real, meaningful
+        # data (e.g. binary_y cluster-coverage maps, where an all-zero parcel
+        # is a genuine 0%-overlap result, not missing background) and must
+        # never be flagged here.
+        if report_background_parcels and not is_disabled and len(bg_arr) > 0:
+            self._parc_idc_bg = list(self.parcellation_idc[all_background])
+
         # drop parcels for which there are too few non-background voxels/vertices (= datapoints)
         # given as a minimum number of datapoints and/or a minimum fraction of datapoints
-        # this option is computationally expensive!
-        # TODO: improve efficiency, get rid of loop?
-        if ((min_num_valid_datapoints or min_fraction_valid_datapoints) 
-                and background_value is not None):
-            
-            # load data
-            parc_array = load_data(parc)
-            data_arr = load_data(data)
-            not_bg = ~np.isnan(data_arr.astype(float))
-            for _v in bg_arr:
-                not_bg &= (data_arr != _v)
-            parc_array_nogb = parc_array[not_bg]
-            
-            parc_n_datapoints = np.zeros(len(self.parcellation_idc), dtype=int)
-            data_n_nobg = parc_n_datapoints.copy()
-            for i, idx in enumerate(self.parcellation_idc):
-                # number of datapoints per original parcel in resampled parcellation 
-                parc_n_datapoints[i] = (parc_array==idx).sum()
-                # number of non-bg datapoints in data per parcel
-                data_n_nobg[i] = (parc_array_nogb==idx).sum()
-
-            # exclude parcels based on criteria
-            excl_filter = np.full_like(parc_n_datapoints, False, dtype=bool)
+        if min_num_valid_datapoints or min_fraction_valid_datapoints:
+            excl_filter = np.zeros(len(domain_idc), dtype=bool)
             # criterion: minimum number of valid datapoints per parcel
             if min_num_valid_datapoints:
-                excl_filter = excl_filter | (data_n_nobg < min_num_valid_datapoints)
+                excl_filter = excl_filter | (n_valid < min_num_valid_datapoints)
             # criterion: minimum fraction of non-bg datapoints in data relative to parc per parcel
             if min_fraction_valid_datapoints:
-                data_frac_nobg = np.divide(
-                    data_n_nobg, parc_n_datapoints, 
-                    out=np.zeros_like(data_n_nobg, dtype=np.float64), 
-                    where=parc_n_datapoints!=0
+                frac_valid = np.divide(
+                    n_valid, n_total,
+                    out=np.zeros(len(domain_idc), dtype=np.float64),
+                    where=n_total != 0
                 )
-                excl_filter = excl_filter | (data_frac_nobg < min_fraction_valid_datapoints)
-            
+                excl_filter = excl_filter | (frac_valid < min_fraction_valid_datapoints)
+
             # apply
             parcellated[excl_filter] = np.nan
-            self._parc_idc_excl = list(self.parcellation_idc[excl_filter])
-        
+            self._parc_idc_excl = list(domain_idc[excl_filter])
+
         return parcellated
 
     def inverse_transform(self, data):
@@ -344,10 +409,10 @@ class Parcellater():
                                                       .inverse_transform(data)
         return img
 
-    def fit_transform(self, data, space, ignore_background_data=True,
-                      background_value=["auto", 0.0], hemi=None,
-                      fill_dropped=True, background_parcels_to_nan=False,
-                      min_num_valid_datapoints=None, min_fraction_valid_datapoints=None):
+    def fit_transform(self, data, space, background_value="auto", hemi=None,
+                      fill_dropped=True, report_background_parcels=False,
+                      min_num_valid_datapoints=None, min_fraction_valid_datapoints=None,
+                      ignore_background_data=None):
 
         """
         Call `.fit()` followed by `.transform(data, space, ...)` in one step.
@@ -361,31 +426,33 @@ class Parcellater():
             Data to parcellate. See `.transform()`.
         space : str
             The space in which `data` is defined. See `.transform()`.
-        ignore_background_data : bool
-            See `.transform()`. Default: True
-        background_value : float, list, set, array, or 'auto'
-            See `.transform()`. Default: ``['auto', 0.0]``
+        background_value : float, list, set, array, 'auto', or False
+            See `.transform()`. Default: ``'auto'``
         hemi : {'L', 'R'}, optional
             See `.transform()`. Default: None
         fill_dropped : bool
             See `.transform()`. Default: True
-        background_parcels_to_nan : bool
+        report_background_parcels : bool
             See `.transform()`. Default: False
         min_num_valid_datapoints : int, optional
             See `.transform()`. Default: None
         min_fraction_valid_datapoints : float, optional
             See `.transform()`. Default: None
+        ignore_background_data : bool, optional
+            Deprecated. See `.transform()`. Default: None (not set)
 
         Returns
         -------
         parcellated : np.ndarray
             Parcellated `data`. See `.transform()`.
         """
-        return self.fit().transform(data, space, ignore_background_data,
-                                    background_value, hemi, fill_dropped,
-                                    background_parcels_to_nan,
-                                    min_num_valid_datapoints,
-                                    min_fraction_valid_datapoints)
+        return self.fit().transform(data, space,
+                                    background_value=background_value, hemi=hemi,
+                                    fill_dropped=fill_dropped,
+                                    report_background_parcels=report_background_parcels,
+                                    min_num_valid_datapoints=min_num_valid_datapoints,
+                                    min_fraction_valid_datapoints=min_fraction_valid_datapoints,
+                                    ignore_background_data=ignore_background_data)
 
     def _check_fitted(self):
         if not hasattr(self, '_fit'):

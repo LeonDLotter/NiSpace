@@ -16,25 +16,42 @@ lgr = logging.getLogger(__name__)
 from .utils.utils import set_log
 from .parcellate import Parcellater
 
+# ==================================================================================================
+# DEPRECATION MESSAGE STRINGS
+# ==================================================================================================
 
-def parcellate_data(data, 
+_DEPR_IGNORE_BACKGROUND_DATA = (
+    "'ignore_background_data' is deprecated and will be removed in the first non-dev "
+    "release. Use 'background_value' instead: pass background_value=False to disable "
+    "background exclusion (equivalent to ignore_background_data=False), or a scalar/"
+    "list/'auto' to enable it (equivalent to ignore_background_data=True)."
+)
+_DEPR_DROP_BACKGROUND_PARCELS = (
+    "'drop_background_parcels' is deprecated and will be removed in the first non-dev "
+    "release. Use 'report_background_parcels' instead (same meaning, now named "
+    "consistently across Parcellater and parcellate_data())."
+)
+
+
+def parcellate_data(data,
                     data_labels=None,
-                    data_space=None, 
-                    parcellation=None, 
+                    data_space=None,
+                    parcellation=None,
                     parc_labels=None,
                     parc_space=None,
                     parc_hemi=None,
                     resampling_target="data",
-                    ignore_background_data=True,
-                    background_value=["auto", 0.0],
-                    drop_background_parcels=False,
-                    min_num_valid_datapoints=None, 
+                    background_value="auto",
+                    report_background_parcels=False,
+                    min_num_valid_datapoints=None,
                     min_fraction_valid_datapoints=None,
                     return_parc=False,
                     dtype=None,
                     n_proc=1,
                     verbose=True,
-                    ignore_zero_division_warning=True):
+                    ignore_zero_division_warning=True,
+                    ignore_background_data=None,
+                    drop_background_parcels=None):
     """
     Parcellates given imaging data using a specified parcellation.
 
@@ -64,27 +81,30 @@ def parcellate_data(data,
         Hemispheres to consider for parcellation, e.g., ["L", "R"].
     resampling_target : {'data', 'parcellation'}
         Specifies which image gives the final shape/size.
-    ignore_background_data : bool
-        Whether to exclude background voxels from parcel-mean computation.
-        When True, values specified by `background_value` are masked before
-        averaging, so they do not dilute parcel means. Default: True
-    background_value : float, list, set, array, or 'auto'
-        Value(s) to treat as background when `ignore_background_data=True`.
-        Accepts a scalar, or any collection of scalars and/or the sentinel
-        string ``'auto'``/``None``:
+    background_value : float, list, set, array, 'auto', or False
+        Value(s) to treat as background, or ``False`` to disable background
+        exclusion entirely (background/zero is then treated as real data --
+        never masked, never triggers the empty-mean-to-NaN path; NaN is
+        still always excluded regardless of this parameter). Accepts:
 
-        - float (e.g. ``0.0``): exclude that specific value
-        - ``'auto'`` or ``None``: auto-detect from border voxels (volumetric)
-          or medial wall median (surface)
-        - list/set/array: any combination of the above
-
-        Default: ``['auto', 0.0]`` (excludes detected background and zeros)
-    drop_background_parcels : bool
-        Whether to set parcels whose mean equals `background_value` to NaN
-        after aggregation. Only meaningful when `ignore_background_data` is
-        False: if `ignore_background_data=True`, all-background parcels
-        already return NaN from aggregation (no valid values → empty mean),
-        making this flag redundant. Default: False
+        - ``'auto'`` (default): auto-detect from border voxels (volumetric)
+          or medial wall median (surface), combined with exact ``0.0`` --
+          equivalent to ``['auto', 0.0]``.
+        - float (e.g. ``0.0``): exclude that specific value only.
+        - list/set/array: any combination of floats and the ``'auto'``/
+          ``None`` sentinel.
+        - ``False``: disable background exclusion entirely.
+    report_background_parcels : bool
+        Whether to explicitly flag (and log) parcels whose raw data was
+        entirely background -- every non-NaN raw voxel/vertex in the parcel
+        matches `background_value`. Such parcels are already NaN via
+        empty-mean aggregation regardless of this flag, so it only affects
+        whether they're recorded/logged, not the returned values. Always a
+        no-op when `background_value=False`, since in that mode
+        `background_value` may label real, meaningful data (e.g. binary Y
+        cluster-coverage maps, where an all-zero parcel is a genuine
+        0%-overlap result, not missing background) that must never be
+        flagged here. Default: False
     min_num_valid_datapoints : int, optional
         Minimum number of valid datapoints required per parcel.
     min_fraction_valid_datapoints : float, optional
@@ -100,6 +120,13 @@ def parcellate_data(data,
     ignore_zero_division_warning : bool, default True
         Whether to suppress numpy's "invalid value encountered in divide" warning
         raised when a parcel's mean is computed from zero valid datapoints.
+    ignore_background_data : bool, optional
+        Deprecated. Use `background_value` instead -- pass
+        ``background_value=False`` for what used to be
+        ``ignore_background_data=False``. Default: None (not set)
+    drop_background_parcels : bool, optional
+        Deprecated. Use `report_background_parcels` instead (same meaning).
+        Default: None (not set)
 
     Returns
     -------
@@ -121,6 +148,17 @@ def parcellate_data(data,
     It also manages different parcellation formats and resampling targets.
     """
     verbose = set_log(lgr, verbose)
+
+    # deprecation shims -- both legacy params are forwarded through to
+    # Parcellater.transform() as-is (it's the single source of truth for
+    # old-vs-new precedence); only drop_background_parcels needs resolving
+    # here since parcellate_data() invented that name itself (Parcellater's
+    # own name for the same flag is report_background_parcels).
+    if ignore_background_data is not None:
+        lgr.warning(_DEPR_IGNORE_BACKGROUND_DATA)
+    if drop_background_parcels is not None:
+        lgr.warning(_DEPR_DROP_BACKGROUND_PARCELS)
+        report_background_parcels = drop_background_parcels
 
     # unpack Parcellation object into flat args (lazy import avoids circular dependency)
     from .core.parcellation import Parcellation
@@ -215,15 +253,15 @@ def parcellate_data(data,
             
             # apply parcellater
             kwargs = dict(
-                data=file, 
+                data=file,
                 space="mni152" if "mni" in data_space.lower() else data_space,
                 hemi=parc_hemi,
-                ignore_background_data=ignore_background_data,
                 background_value=background_value,
                 fill_dropped=True,
-                background_parcels_to_nan=drop_background_parcels,
+                report_background_parcels=report_background_parcels,
                 min_num_valid_datapoints=min_num_valid_datapoints,
-                min_fraction_valid_datapoints=min_fraction_valid_datapoints
+                min_fraction_valid_datapoints=min_fraction_valid_datapoints,
+                ignore_background_data=ignore_background_data,
             )
             # apply parcellater
             if ignore_zero_division_warning:
@@ -239,9 +277,10 @@ def parcellate_data(data,
         
         # extract data (in parallel)
         lgr.info(
-            f"Background (bg) handling: ignoring bg: {ignore_background_data}"
-            + (f" (bg value: {background_value})" if ignore_background_data else "")
-            + f"; dropping bg parcels: {drop_background_parcels}"
+            f"Background (bg) handling: background_value={background_value!r}"
+            + (f", ignore_background_data={ignore_background_data!r} (deprecated override)"
+               if ignore_background_data is not None else "")
+            + f"; reporting bg-only parcels: {report_background_parcels}"
         )
         lgr.info(f"Parcellating imaging data.")
     
@@ -267,9 +306,10 @@ def parcellate_data(data,
                         f"avoid this behavior ({[int(i) for i in nan_parcels['drop']]}).")
             
         # background intensity parcels
-        if drop_background_parcels:
+        if report_background_parcels:
             lgr.info(f"Combined across images, {len(nan_parcels['bg'])} parcel(s) had only background "
-                     f"intensity and were set to nan ({[int(i) for i in nan_parcels['bg']]}).")
+                     f"intensity (already nan via empty-mean aggregation) "
+                     f"({[int(i) for i in nan_parcels['bg']]}).")
         
         # below parcel threshold parcels
         if min_num_valid_datapoints or min_fraction_valid_datapoints:

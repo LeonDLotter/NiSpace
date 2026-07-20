@@ -11,7 +11,8 @@ import nibabel as nib
 import pytest
 
 from nispace.utils.utils import (
-    get_background_value, vect_to_vol_arr, vol_to_vect_arr, parc_vect_to_vol,
+    get_background_value, vect_to_vol_arr, vol_to_vect_arr, vol_to_vect_arr_stats,
+    parc_vect_to_vol,
     relabel_gifti_parc, relabel_nifti_parc, merge_parcellations,
     correlate_hemispheres, mirror_nifti, mirror_gifti, correlated_vector,
 )
@@ -46,6 +47,38 @@ def test_vect_to_vol_arr_and_vol_to_vect_arr_roundtrip(synthetic_parc_nifti):
 
     back = vol_to_vect_arr(vol_arr, parc_arr, parc_idc, np.array([], dtype=np.float64))
     np.testing.assert_allclose(back, vect)
+
+
+def test_vol_to_vect_arr_stats_mean_coverage_and_background_flag(synthetic_parc_nifti):
+    """vol_to_vect_arr_stats is a separate function from vol_to_vect_arr
+    (nimare.py's permutation hot loop calls vol_to_vect_arr directly and must
+    not be affected by this) -- covers means/n_valid/n_total/all_background,
+    including a label absent from parc_arr (the "dropped during resampling"
+    case, parc_idc[3]=4.0 here) which must yield n_total=0, NaN mean, and
+    all_background=False (not confused with a genuine all-background parcel)."""
+    parc_arr = synthetic_parc_nifti.get_fdata().astype(np.float64)
+    n_per_parcel = int((parc_arr == 1).sum())  # 72 voxels/parcel for this 6x6x6/3-parcel fixture
+    # parcel 1: all real values (10.0) -> mean=10, n_valid=n_total=n_per_parcel, not bg
+    # parcel 2: all bg (0.0) -> mean=NaN, n_valid=0, n_total=n_per_parcel, all_background=True
+    # parcel 3: n_p3_nan NaN + rest real (20.0) -> mean=20, n_valid=n_per_parcel-n_p3_nan, not bg
+    # parcel 4: absent from parc_arr entirely -> "dropped during resampling" case
+    vol_arr = np.zeros_like(parc_arr)
+    vol_arr[parc_arr == 1] = 10.0
+    vol_arr[parc_arr == 2] = 0.0
+    n_p3_nan = 4
+    p3_idc = np.argwhere(parc_arr == 3)
+    for i, idx in enumerate(p3_idc):
+        vol_arr[tuple(idx)] = np.nan if i < n_p3_nan else 20.0
+    parc_idc = np.array([1.0, 2.0, 3.0, 4.0])  # label 4 absent from parc_arr -> "dropped"
+    bg_values = np.array([0.0], dtype=np.float64)
+
+    means, n_valid, n_total, all_background = vol_to_vect_arr_stats(
+        vol_arr, parc_arr, parc_idc, bg_values)
+
+    np.testing.assert_allclose(means, [10.0, np.nan, 20.0, np.nan], equal_nan=True)
+    np.testing.assert_array_equal(n_valid, [n_per_parcel, 0, n_per_parcel - n_p3_nan, 0])
+    np.testing.assert_array_equal(n_total, [n_per_parcel, n_per_parcel, n_per_parcel, 0])
+    np.testing.assert_array_equal(all_background, [False, True, False, False])
 
 
 def test_vect_to_vol_arr_length_mismatch_raises(synthetic_parc_nifti):

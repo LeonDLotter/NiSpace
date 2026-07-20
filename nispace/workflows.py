@@ -1575,8 +1575,10 @@ def nimare_colocalization(y,
 
     Sets the following defaults relative to :func:`colocalization`:
 
-    * ``ignore_background_data=False`` in ``fit_kwargs`` — zero-valued voxels
-      in ALE maps are meaningful (no activation there), not missing data
+    * ``background_value={"y": False}`` in ``fit_kwargs`` — zero-valued voxels
+      in ALE maps are meaningful (no activation there), not missing data. Scoped
+      to Y only: X (and Z, if given) keep the normal ``'auto'`` background
+      handling, since only Y is guaranteed to be an ALE/cluster-coverage map here.
     * ``maps_which="Y"`` in ``permute_kwargs`` when ``nimare_nulls`` is provided,
       so Y is permuted with coordinate-sampling null maps; otherwise ``"X"``
 
@@ -1622,7 +1624,7 @@ def nimare_colocalization(y,
         colocalization_method = "pearson" if binary_y else "spearman"
 
     fit_kwargs = {} if fit_kwargs is None else dict(fit_kwargs)
-    fit_kwargs.setdefault("ignore_background_data", False)
+    fit_kwargs.setdefault("background_value", {"y": False})
 
     permute_kwargs = {} if permute_kwargs is None else dict(permute_kwargs)
     if nimare_nulls is not None:
@@ -1704,9 +1706,10 @@ def nimare_xsea(y,
     Convenience wrapper around :func:`xsea` for Y maps derived from NiMARE
     meta-analyses. Equivalent to :func:`nimare_colocalization` with XSEA enabled.
 
-    Sets ``ignore_background_data=False`` in ``fit_kwargs`` and routes
-    ``nimare_nulls`` into ``permute_kwargs``. See :func:`nimare_colocalization`
-    for full details on NiMARE-specific parameters.
+    Sets ``background_value={"y": False}`` in ``fit_kwargs`` (scoped to Y only --
+    X/Z keep normal ``'auto'`` background handling) and routes ``nimare_nulls``
+    into ``permute_kwargs``. See :func:`nimare_colocalization` for full details
+    on NiMARE-specific parameters.
 
     Parameters
     ----------
@@ -1748,7 +1751,7 @@ def nimare_xsea(y,
         colocalization_method = "pearson" if binary_y else "spearman"
 
     fit_kwargs = {} if fit_kwargs is None else dict(fit_kwargs)
-    fit_kwargs.setdefault("ignore_background_data", False)
+    fit_kwargs.setdefault("background_value", {"y": False})
 
     permute_kwargs = {} if permute_kwargs is None else dict(permute_kwargs)
     if nimare_nulls is not None:

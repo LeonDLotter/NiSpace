@@ -131,6 +131,23 @@ _DEPR_L2RMAP = (
     "'parcellation_l2rmap' is deprecated and will be removed in the first non-dev release. "
     "Left-to-right parcel mapping is no longer supported. The parameter is silently ignored."
 )
+_DEPR_IGNORE_BACKGROUND_DATA = (
+    "'ignore_background_data' is deprecated and will be removed in the first non-dev "
+    "release. Use 'background_value' instead: pass background_value=False to disable "
+    "background exclusion (equivalent to ignore_background_data=False), or a scalar/"
+    "list/'auto'/per-role dict to enable it (equivalent to ignore_background_data=True)."
+)
+
+
+def _resolve_per_role(value, role, default="auto"):
+    """Resolve a background_value spec (scalar/False/dict) for one X/Y/Z role.
+
+    `value` is either a plain scalar/list/'auto'/False (applied uniformly to
+    every role, passed through unchanged) or a per-role dict like
+    ``{"y": False}`` (keys are exactly "x"/"y"/"z"; a role absent from the
+    dict falls back to `default`, never to some other implicit value).
+    """
+    return value.get(role, default) if isinstance(value, dict) else value
 
 # ==================================================================================================
 # DEFINE CLASS
@@ -403,8 +420,9 @@ class NiSpace:
         self._binary_y = binary_y
         if binary_y:
             lgr.info("binary_y=True: Expecting Y input derived from binary maps "
-                     "(e.g., cluster or network maps); ignore_background_data=False "
-                     "for Y parcellation.")
+                     "(e.g., cluster or network maps); background_value=False "
+                     "for Y parcellation (unless explicitly overridden via "
+                     "background_value={'y': ...} in .fit()).")
         if binary_y and "y" in self._zscore:
             self._zscore = self._zscore.replace("y", "")
             lgr.warning(
@@ -424,26 +442,47 @@ class NiSpace:
         ----------
         **kwargs
             Any keyword argument accepted by :func:`parcellate_data` can be
-            passed here and will override that function's defaults. The three
-            most commonly needed ones are:
+            passed here and will override that function's defaults. The most
+            commonly needed ones are:
 
-            ignore_background_data : bool
-                Whether to exclude background voxels from parcel-mean
-                computation. Default: True
-            background_value : float, list, set, array, or 'auto'
-                Value(s) treated as background. Scalar, ``'auto'`` (border-voxel
-                auto-detection), ``None`` (same as ``'auto'``), or any
-                collection of the above. Default: ``['auto', 0.0]``
-            drop_background_parcels : bool
+            background_value : float, list, set, array, 'auto', False, or dict
+                Value(s) treated as background, or ``False`` to disable
+                background exclusion entirely (background/zero is then real
+                data, e.g. for binary/coverage-style maps -- NaN is still
+                always excluded regardless). ``'auto'`` (default) auto-detects
+                a border-voxel/medial-wall value and combines it with exact
+                ``0.0``. Also accepts a **per-role dict**,
+                ``{"x": ..., "y": ..., "z": ...}``, to set X/Y/Z
+                independently -- any of the above per key; roles absent from
+                the dict fall back to ``'auto'``. Default: ``'auto'``
+
+                ``NiSpace(binary_y=True)`` automatically applies
+                ``background_value=False`` to Y only (an all-zero parcel in a
+                binary/fractional cluster-coverage map is a genuine 0%-overlap
+                result, not missing background); this default backs off only
+                if the dict passed here explicitly contains a ``"y"`` key --
+                a plain top-level scalar/list meant for X/Z does not affect it.
+            report_background_parcels : bool
                 Whether to explicitly flag (and log) all-background parcels.
-                Only applies when ``ignore_background_data=True``; such
-                parcels are already NaN via empty-mean aggregation regardless
-                of this flag, so it only affects whether they're
-                recorded/logged, not the returned values. Always a no-op
-                when ``ignore_background_data=False`` (e.g. ``binary_y=True``
-                data, where an all-zero parcel is a genuine 0%-overlap
-                result, not missing background, and must never be NaN'd out).
-                Default: False
+                Such parcels are already NaN via empty-mean aggregation
+                regardless of this flag, so it only affects whether they're
+                recorded/logged, not the returned values. Always a no-op for
+                a role resolved to ``background_value=False`` (e.g. Y under
+                ``binary_y=True``). Default: False
+            min_num_valid_datapoints : int, optional
+                Minimum number of valid (non-background, non-NaN) datapoints
+                required per parcel; parcels below this are set to NaN.
+                Default: None
+            min_fraction_valid_datapoints : float, optional
+                Minimum fraction of valid (non-background, non-NaN)
+                datapoints, relative to the parcel's total size in the
+                resampled parcellation, required per parcel. Default: None
+
+            The deprecated ``ignore_background_data``/``drop_background_parcels``
+            kwargs are still accepted (forwarded through, with a deprecation
+            warning) but bypass the per-role ``background_value`` dict/
+            ``binary_y`` resolution above entirely -- use ``background_value``
+            instead.
 
         Returns
         -------
@@ -508,6 +547,20 @@ class NiSpace:
                 )
 
         ## extract input data
+        # background_value resolution: a plain scalar/list/'auto'/False applies
+        # uniformly to X/Y/Z (as merged into _input_kwargs below); a per-role
+        # dict ({"x": ..., "y": ..., "z": ...}) is resolved independently per
+        # role via _resolve_per_role, with roles absent from the dict falling
+        # back to 'auto'. Legacy ignore_background_data (if explicitly passed)
+        # takes precedence and skips this resolution entirely -- forwarded
+        # uniformly to X/Y/Z exactly as before the background_value redesign.
+        # TODO (first non-dev release): remove legacy ignore_background_data kwarg
+        #   support and the _legacy_bg branches below
+        _legacy_bg = "ignore_background_data" in kwargs
+        if _legacy_bg:
+            lgr.warning(_DEPR_IGNORE_BACKGROUND_DATA)
+        _bg_spec = kwargs.get("background_value", "auto")
+
         _input_kwargs = dict(
             parcellation=self._parc,
             resampling_target=self._resampl_target,
@@ -515,17 +568,19 @@ class NiSpace:
             verbose=verbose,
             dtype=self._dtype,
         ) | kwargs
-        
+        if not _legacy_bg:
+            _input_kwargs["background_value"] = _resolve_per_role(_bg_spec, "x")
+
         # reference data -> usually e.g. PET atlases
         lgr.info("Checking input data for 'x' (should be, e.g., PET data):")
         self._X = parcellate_data(
-            self._x, 
+            self._x,
             data_labels=self._x_lab,
-            data_space=self._data_space[0], 
+            data_space=self._data_space[0],
             **_input_kwargs
         )
         lgr.info(f"Got 'x' data for {self._X.shape[0]} x {self._X.shape[1]} parcels.")
-        
+
         # target data -> usually e.g. subject data or group-level outcome data
         if self._y is None:
             lgr.warning("No 'y' data detected. Will use 'X' as both reference and target data!")
@@ -537,8 +592,15 @@ class NiSpace:
         else:
             lgr.info("Checking input data for 'y' (should be, e.g., subject data):")
             _input_kwargs_y = _input_kwargs.copy()
-            if self._binary_y:
-                _input_kwargs_y.setdefault("ignore_background_data", False)
+            if _legacy_bg:
+                if self._binary_y:
+                    _input_kwargs_y.setdefault("ignore_background_data", False)
+            else:
+                _y_val = _resolve_per_role(_bg_spec, "y")
+                _explicit_y = isinstance(_bg_spec, dict) and "y" in _bg_spec
+                if self._binary_y and not _explicit_y:
+                    _y_val = False
+                _input_kwargs_y["background_value"] = _y_val
             self._Y = parcellate_data(
                 self._y,
                 data_labels=self._y_lab,
@@ -561,11 +623,14 @@ class NiSpace:
                                           print_references=False, verbose=verbose)
                 if self._z_lab is None:
                     self._z_lab = _z_list
+            _input_kwargs_z = _input_kwargs.copy()
+            if not _legacy_bg:
+                _input_kwargs_z["background_value"] = _resolve_per_role(_bg_spec, "z")
             self._Z = parcellate_data(
-                self._z, 
+                self._z,
                 data_labels=self._z_lab,
                 data_space=self._data_space[2],
-                **_input_kwargs
+                **_input_kwargs_z
             )
             lgr.info(f"Got 'z' data for {self._Z.shape[0]} x {self._Z.shape[1]} parcels.")
             
@@ -1455,7 +1520,7 @@ class NiSpace:
 
         ## get X and Y data (so this function can be run on direct X & Y input data)
         # X
-        if not X:
+        if X is None:
             if not X_reduction:
                 X = self._X
             else:
@@ -1499,7 +1564,7 @@ class NiSpace:
         # Y
         groups = kwargs.pop("groups", None)
         subjects = kwargs.pop("subjects", None)
-        if not Y:
+        if Y is None:
             if not Y_transform:
                 Y = self._Y
             else:
@@ -1509,9 +1574,9 @@ class NiSpace:
                 with _quiet():
                     Y = self.get_y(Y_transform=Y_transform)
         Y_arr = np.array(Y, dtype=dtype)
-        
+
         # Z
-        if not Z:
+        if Z is None:
             Z = self._Z
         # if regress_z is True, we regress Z from X and Y, if None or False, we don't regress Z
         if Z is None or regress_z is None or regress_z == False:
@@ -1804,7 +1869,7 @@ class NiSpace:
         ## get X and Y data, mirroring colocalize()'s own data-prep so the exact same
         ## (post rank/Z-regression) arrays are reproduced
         # X
-        if not X:
+        if X is None:
             if not X_reduction:
                 X = self._X
             else:
@@ -1824,7 +1889,7 @@ class NiSpace:
                              for set_name, set_X in X.groupby(level="set", sort=False)}
 
         # Y
-        if not Y:
+        if Y is None:
             if not Y_transform:
                 Y = self._Y
             else:
@@ -1846,7 +1911,7 @@ class NiSpace:
         rank = coloc_kwargs.get("rank", "spearman" in method)
         zy_matched = coloc_kwargs.get("zy_matched", zy_matched)
         regress_z = coloc_kwargs.get("regress_z", "")
-        if not Z:
+        if Z is None:
             Z = self._Z
         Z_arr = np.array(Z, dtype=dtype) if regress_z else None
         # standard partial Spearman correlation ranks X, Y, AND Z before partial-
@@ -2091,7 +2156,7 @@ class NiSpace:
         ## get X and Y data, mirroring colocalize()'s/regional_influence()'s own
         ## data-prep so the exact same (post rank/Z-regression) arrays are reproduced
         # X
-        if not X:
+        if X is None:
             if not X_reduction:
                 X = self._X
             else:
@@ -2111,7 +2176,7 @@ class NiSpace:
                              for set_name, set_X in X.groupby(level="set", sort=False)}
 
         # Y
-        if not Y:
+        if Y is None:
             if not Y_transform:
                 Y = self._Y
             else:
@@ -2129,7 +2194,7 @@ class NiSpace:
         rank = coloc_kwargs.get("rank", "spearman" in method)
         zy_matched = coloc_kwargs.get("zy_matched", zy_matched)
         regress_z = coloc_kwargs.get("regress_z", "")
-        if not Z:
+        if Z is None:
             Z = self._Z
         Z_arr = np.array(Z, dtype=dtype) if regress_z else None
         if rank and Z_arr is not None:
