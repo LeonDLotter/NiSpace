@@ -15,4 +15,4 @@ These notebooks are under construction -- more will follow in the future.
 
    nb_benchmarks/bench1-1_map_surrogates_fpr
    nb_benchmarks/bench2-1_group_permutation_fpr
-   nb_benchmarks/bench5-1_region_correlation_fpr.ipynb
+   nb_benchmarks/bench5-1_region_correlation_fpr

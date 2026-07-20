@@ -80,11 +80,17 @@ def parcellate_data(data,
 
         Default: ``['auto', 0.0]`` (excludes detected background and zeros)
     drop_background_parcels : bool
-        Whether to set parcels whose mean equals `background_value` to NaN
-        after aggregation. Only meaningful when `ignore_background_data` is
-        False: if `ignore_background_data=True`, all-background parcels
-        already return NaN from aggregation (no valid values → empty mean),
-        making this flag redundant. Default: False
+        Whether to explicitly flag (and log) parcels whose raw data was
+        entirely background -- every non-NaN raw voxel/vertex in the parcel
+        matches `background_value`. Only applies when
+        `ignore_background_data=True`; such parcels are already NaN via
+        empty-mean aggregation regardless of this flag, so it only affects
+        whether they're recorded/logged, not the returned values. Always a
+        no-op when `ignore_background_data=False`, since in that mode
+        `background_value` may label real, meaningful data (e.g. binary Y
+        cluster-coverage maps, where an all-zero parcel is a genuine
+        0%-overlap result, not missing background) that must never be NaN'd
+        out here. Default: False
     min_num_valid_datapoints : int, optional
         Minimum number of valid datapoints required per parcel.
     min_fraction_valid_datapoints : float, optional

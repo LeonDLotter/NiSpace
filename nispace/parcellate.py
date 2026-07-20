@@ -173,11 +173,20 @@ class Parcellater():
 
             Default: ``['auto', 0.0]`` (excludes detected background and zeros)
         background_parcels_to_nan : bool
-            Whether to set parcels whose mean equals the single resolved
-            background value to NaN after aggregation. Only meaningful when
-            `ignore_background_data=False` and `background_value` resolves to
-            exactly one scalar; otherwise redundant (all-background parcels
-            already return NaN from empty-mean aggregation). Default: False
+            Whether to explicitly flag parcels whose raw (pre-exclusion) data
+            was entirely background -- every non-NaN raw voxel/vertex in the
+            parcel matches `background_value`. Only applies when
+            `ignore_background_data=True`; such parcels are already NaN via
+            empty-mean aggregation regardless of this flag, so enabling it
+            does not change the returned values -- it only additionally
+            records the affected parcels (`self._parc_idc_bg`, surfaced in
+            `parcellate_data()`'s logging), separately from parcels dropped
+            during resampling or excluded via the `min_*_valid_datapoints`
+            options. Always a no-op when `ignore_background_data=False`: in
+            that mode `background_value` may label real, meaningful data
+            (e.g. binary/cluster-coverage maps, where an all-zero parcel is a
+            genuine 0%-overlap result, not missing background) and must never
+            be NaN'd out here. Default: False
 
         Returns
         -------
@@ -239,6 +248,7 @@ class Parcellater():
             bg_arr = _resolve_bg_array(bg_spec, auto_value) if ignore_background_data \
                      else np.array([], dtype=np.float64)
             parcellated = vol_to_vect_arr(darr, self._parc_arr, self._parc_idc, bg_arr)
+            agg_parc_arr = self._parc_arr
 
         else:
             if not self._volumetric:
@@ -260,6 +270,32 @@ class Parcellater():
             bg_arr = _resolve_bg_array(bg_spec, auto_value) if ignore_background_data \
                      else np.array([], dtype=np.float64)
             parcellated = vol_to_vect_arr(darr, parc_arr, self._parc_idc, bg_arr)
+            agg_parc_arr = parc_arr
+
+        # flag parcels whose raw (pre-exclusion) data was entirely background --
+        # i.e. every non-NaN raw voxel/vertex in the parcel is a background value.
+        # These parcels are already NaN via vol_to_vect_arr's empty-valid-mean
+        # path regardless of this flag; enabling it only additionally records
+        # them in self._parc_idc_bg (surfaced in parcellate_data()'s logging),
+        # distinguishing "NaN because background" from "NaN because all raw data
+        # was itself NaN" (missing data, not reported here) or "NaN because the
+        # parcel vanished during resampling" (self._parc_idc_dropped, below).
+        # Deliberately gated to ignore_background_data=True only: with
+        # ignore_background_data=False, background_value may label real,
+        # meaningful data (e.g. binary_y cluster-coverage maps, where an
+        # all-zero parcel is a genuine 0%-overlap result, not missing
+        # background) and must never be NaN'd out here.
+        if background_parcels_to_nan and ignore_background_data and len(bg_arr) > 0:
+            flat_data = darr.flatten()
+            flat_parc = agg_parc_arr.flatten().astype(flat_data.dtype)
+            bg_mask = np.zeros(len(self._parc_idc), dtype=bool)
+            for i, idx in enumerate(self._parc_idc):
+                valid = flat_data[flat_parc == idx]
+                valid = valid[~np.isnan(valid)]
+                if len(valid) > 0 and np.isin(valid, bg_arr).all():
+                    bg_mask[i] = True
+            parcellated[bg_mask] = np.nan
+            self._parc_idc_bg = list(self._parc_idc[bg_mask])
 
         # detect parcels that vanished after resampling and fill their positions with NaN
         # this ensures output length always equals len(self.parcellation_idc) and prevents
@@ -271,12 +307,6 @@ class Parcellater():
             filled[~dropped_mask] = parcellated
             parcellated = filled
 
-        # drop parcels whose mean equals the background value — only for the scalar case
-        if background_parcels_to_nan and len(bg_arr) == 1:
-            bg_idc = parcellated == bg_arr[0]
-            parcellated[bg_idc] = np.nan
-            self._parc_idc_bg = list(self.parcellation_idc[bg_idc])
-            
         # drop parcels for which there are too few non-background voxels/vertices (= datapoints)
         # given as a minimum number of datapoints and/or a minimum fraction of datapoints
         # this option is computationally expensive!
