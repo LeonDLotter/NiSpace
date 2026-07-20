@@ -240,12 +240,17 @@ class NiSpace:
             for x. Default is None. If None, NiSpace will create a copy of the reference maps to 
             evaluate reference map-to-map intercorrelations.
         z : str, list of str, or array-like, optional
-            Maps to regress from reference/target maps across parcels. Can be one of the shortcut
-            strings "gm", "wm", "csf", "veins", or "arteries" (or a list of several) to
-            automatically fetch the corresponding tissue probability map (TPM) from the NiSpace
-            data library. Alternatively, accepts a numpy array, pandas DataFrame/Series, or a list
-            of image paths/objects. Default is None. If only one map is provided it is regressed
-            from every Y map; if multiple maps are provided they are used jointly as predictors.
+            Covariate maps to regress out of X and/or Y before colocalization. Can be one of the
+            shortcut strings ``"gm"``, ``"wm"``, ``"csf"``, ``"veins"``, or ``"arteries"`` (or a
+            list of several) to automatically fetch the corresponding tissue probability map (TPM)
+            from the NiSpace data library. Alternatively, accepts a numpy array, pandas
+            DataFrame/Series, or a list of image paths/objects. Default is None.
+            When Z is provided and :meth:`colocalize` is called with its default
+            ``regress_z=True``, Z is regressed from X and Y before computing the correlation —
+            making ``colocalize("spearman")`` operationally equivalent to
+            ``colocalize("partialspearman")``. The ``partial*`` method names are self-documenting
+            aliases that additionally raise an error if Z is missing. Pass ``regress_z=False`` to
+            :meth:`colocalize` to suppress regression even when Z is set.
         x_labels : sequence of str, optional
             Labels for the x data. Default is None. If None and x is DataFrame or Series, the 
             labels are taken from x's index (DataFrame) or name (Series).
@@ -2386,9 +2391,11 @@ class NiSpace:
         ----------
         X, Y : array-like, DataFrame, Series, or None
             Override data. 2D input must be shape (n_subjects, n_parcels); 1D
-            input must be length n_subjects (broadcast across parcels). At
-            least one of the (possibly-defaulted) X/Y must be 2D. Defaults
-            (``None``) to the object's stored ``get_x()``/``get_y()`` output.
+            input must be length n_subjects (broadcast across parcels). A
+            (n_subjects, 1) 2D input (e.g. a single-column DataFrame) is
+            treated the same as 1D. At least one of the (possibly-defaulted)
+            X/Y must be 2D with more than one column. Defaults (``None``) to
+            the object's stored ``get_x()``/``get_y()`` output.
         method : {"pearson", "spearman"}, default "pearson"
         X_reduction : str, optional
             Which stored X reduction to use when ``X`` is not given directly

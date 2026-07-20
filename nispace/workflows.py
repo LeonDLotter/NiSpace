@@ -790,27 +790,28 @@ def group_colocalization(y, design,
 
 
 def paired_colocalization(y,
-                           x,
-                           standardize="xz",
-                           space=_SPACE_DEFAULT_VOL,
-                           data_space=None,
-                           parcellation_space=None,
-                           parcellation=_PARC_DEFAULT,
-                           parcellation_labels=None,
-                           parcellation_hemi=["L", "R"],
-                           colocalization_method="spearman",
-                           pooled_p="mean",
-                           plot=True,
-                           n_perm=10000,
-                           seed=None,
-                           n_proc=1,
-                           verbose=True,
-                           nispace_object=None,
-                           init_kwargs=None,
-                           fit_kwargs=None,
-                           colocalize_kwargs=None,
-                           permute_kwargs=None,
-                           plot_kwargs=None):
+                          x,
+                          z=None,
+                          standardize="xz",
+                          space=_SPACE_DEFAULT_VOL,
+                          data_space=None,
+                          parcellation_space=None,
+                          parcellation=_PARC_DEFAULT,
+                          parcellation_labels=None,
+                          parcellation_hemi=["L", "R"],
+                          colocalization_method="spearman",
+                          pooled_p="mean",
+                          plot=True,
+                          n_perm=10000,
+                          seed=None,
+                          n_proc=1,
+                          verbose=True,
+                          nispace_object=None,
+                          init_kwargs=None,
+                          fit_kwargs=None,
+                          colocalize_kwargs=None,
+                          permute_kwargs=None,
+                          plot_kwargs=None):
     """Within-pair colocalization workflow (SPICE test).
 
     Tests whether within-pair correspondence between two brain map modalities
@@ -836,6 +837,9 @@ def paired_colocalization(y,
         data, not a reference dataset string — this is a usage contract (there is
         no ``x_collection`` parameter here and no dedicated runtime check forbidding
         a string), not an enforced validation.
+    z : array-like, DataFrame, or list, optional
+        Covariate maps to partial out. Required for partial correlation methods
+        (``"partialspearman"``, ``"partialpearson"``); ignored otherwise.
     standardize : str, default="xz"
         Which data to z-standardize (parcels). Can contain "x", "y", "z".
     space : str
@@ -901,7 +905,7 @@ def paired_colocalization(y,
         colocalization_method = [colocalization_method]
 
     status, nsp, _ = _workflow_base(
-        x=x, y=y, z=None,
+        x=x, y=y, z=z,
         x_collection=None,
         space=space,
         data_space=data_space,
@@ -976,9 +980,10 @@ def correlate_within_region(x,
     X/Y maps (e.g. subjects) -- the transpose of :func:`colocalization` (which
     correlates across parcels, within a map).
 
-    One of ``x``/``y`` may be a 1D, subject-length vector instead of full
-    brain-map data (e.g. an external covariate like age) -- it is broadcast
-    against every parcel of the other (2D) side, exactly like
+    One of ``x``/``y`` may be a 1D, subject-length vector (or an equivalent
+    single-column DataFrame/(n_subjects, 1) array) instead of full brain-map
+    data (e.g. an external covariate like age) -- it is broadcast against
+    every parcel of the other (2D) side, exactly like
     :meth:`NiSpace.correlate_within_region`'s own ``X=``/``Y=`` override
     contract. Internally, :meth:`NiSpace.fit` needs real 2D map data (it has
     no notion of "this is a subject-length covariate, not a map"; a bare 1D
@@ -1052,13 +1057,24 @@ def correlate_within_region(x,
     fit_kwargs = {} if fit_kwargs is None else fit_kwargs
     correlate_kwargs = {} if correlate_kwargs is None else correlate_kwargs
 
-    # 1D-covariate detection: a Series/1D array/list is a subject-length covariate,
-    # never a single brain map (this function always needs an across-subject axis,
-    # which a lone map doesn't have) -- so this is unambiguous, not a heuristic guess
+    # 1D-covariate detection: a Series/1D array/list, or a single-column DataFrame/
+    # (n_subjects, 1) array, is a subject-length covariate, never a single brain map
+    # (this function always needs an across-subject axis, which a lone map doesn't
+    # have) -- so this is unambiguous, not a heuristic guess
     def _is_1d(v):
         if isinstance(v, pd.DataFrame):
-            return False
-        return (v.values if isinstance(v, pd.Series) else np.asarray(v)).ndim == 1
+            return v.shape[1] == 1
+        arr = v.values if isinstance(v, pd.Series) else np.asarray(v)
+        return arr.ndim == 1 or (arr.ndim == 2 and arr.shape[1] == 1)
+
+    def _squeeze_1d(v):
+        """(n_subjects, 1) DataFrame/array -> true 1D, matching correlate_within_region_core."""
+        if isinstance(v, pd.DataFrame):
+            return v.iloc[:, 0]
+        if isinstance(v, pd.Series):
+            return v
+        arr = np.asarray(v)
+        return arr[:, 0] if arr.ndim == 2 else arr
 
     x_is_1d, y_is_1d = _is_1d(x), _is_1d(y)
     if x_is_1d and y_is_1d:
@@ -1100,9 +1116,9 @@ def correlate_within_region(x,
     if not status["correlate_within_region"]:
         overrides = {}
         if x_is_1d:
-            overrides["X"] = x
+            overrides["X"] = _squeeze_1d(x)
         if y_is_1d:
-            overrides["Y"] = y
+            overrides["Y"] = _squeeze_1d(y)
         nsp.correlate_within_region(
             **dict(method=method, n_perm=n_perm, seed=seed) | overrides | correlate_kwargs
         )

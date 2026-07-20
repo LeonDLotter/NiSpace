@@ -274,6 +274,35 @@ def test_correlate_within_region_1d_y_covariate_matches_object_level(rng):
     np.testing.assert_allclose(rho_wf.values, rho_direct.values, atol=1e-10)
 
 
+@pytest.mark.parametrize("shape_as", ["dataframe_1col", "array_nx1"])
+def test_correlate_within_region_column_shaped_covariate_matches_1d(rng, shape_as):
+    # a (n_subjects, 1) DataFrame/array covariate (e.g. df[["age"]] instead of
+    # df["age"]) must be treated identically to a true 1D vector, not routed
+    # through fit() as if it were a single already-parcellated map
+    n_subj, n_parcels = 12, 10
+    X = rng.normal(size=(n_subj, n_parcels))
+    yvec = rng.normal(size=n_subj)
+    parcel_labels = [f"parcel{i}" for i in range(n_parcels)]
+    subj_labels = [f"s{i}" for i in range(n_subj)]
+    x_df = pd.DataFrame(X, index=subj_labels, columns=parcel_labels)
+
+    if shape_as == "dataframe_1col":
+        y_col = pd.DataFrame({"cov": yvec}, index=subj_labels)
+    else:
+        y_col = yvec.reshape(-1, 1)
+
+    out_1d = correlate_within_region(
+        x=x_df, y=pd.Series(yvec, index=subj_labels), parcellation=None,
+        method="pearson", n_perm=0, verbose=False,
+    )
+    out_col = correlate_within_region(
+        x=x_df, y=y_col, parcellation=None, method="pearson", n_perm=0, verbose=False,
+    )
+    rho_1d = out_1d.get_within_region_correlations(mc_method=None)["stat"]
+    rho_col = out_col.get_within_region_correlations(mc_method=None)["stat"]
+    np.testing.assert_allclose(rho_1d.values, rho_col.values, atol=1e-10)
+
+
 def test_correlate_within_region_1d_x_covariate(rng):
     n_subj, n_parcels = 12, 10
     Y = rng.normal(size=(n_subj, n_parcels))

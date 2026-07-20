@@ -89,6 +89,28 @@ def test_core_1d_y_broadcast_matches_manual_loop(rng):
     assert null.shape == (50, n_parcels)
 
 
+def test_core_column_shaped_y_matches_1d_broadcast(rng):
+    # (n_subjects, 1) must behave exactly like (n_subjects,) -- both in the
+    # vectorized no-NaN path and the NaN-aware loop fallback, which used to
+    # IndexError on a (n_subjects, 1) side since it assumed matching column
+    # counts on both inputs
+    n_subj, n_parcels = 15, 8
+    X = rng.normal(size=(n_subj, n_parcels))
+    yvec = rng.normal(size=n_subj)
+
+    rho_1d, null_1d = correlate_within_region_core(X, yvec, method="pearson", n_perm=30, seed=4)
+    rho_col, null_col = correlate_within_region_core(X, yvec[:, None], method="pearson",
+                                                      n_perm=30, seed=4)
+    np.testing.assert_allclose(rho_1d, rho_col, atol=1e-10)
+    np.testing.assert_allclose(null_1d, null_col, atol=1e-10)
+
+    X_nan = X.copy()
+    X_nan[0, 0] = np.nan
+    rho_nan_1d, _ = correlate_within_region_core(X_nan, yvec, method="pearson", n_perm=0)
+    rho_nan_col, _ = correlate_within_region_core(X_nan, yvec[:, None], method="pearson", n_perm=0)
+    np.testing.assert_allclose(rho_nan_1d, rho_nan_col, atol=1e-10)
+
+
 def test_core_x_vector_and_y_vector_are_symmetric(rng):
     n_subj, n_parcels = 15, 8
     X = rng.normal(size=(n_subj, n_parcels))

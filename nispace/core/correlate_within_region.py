@@ -13,7 +13,9 @@ def _validate_cwr_input(X, Y):
 
     X, Y : array-like, shape (n_subjects, n_parcels) or (n_subjects,)
         At least one of X/Y must be 2D. The 1D case represents a subject-level
-        covariate (e.g. age) that gets broadcast against every parcel.
+        covariate (e.g. age) that gets broadcast against every parcel. A
+        (n_subjects, 1) 2D shape is treated identically to the 1D case (squeezed
+        down before validation).
     """
     X = np.asarray(X, dtype=np.float64)
     Y = np.asarray(Y, dtype=np.float64)
@@ -23,6 +25,13 @@ def _validate_cwr_input(X, Y):
             f"X and Y must be 1D or 2D arrays, got ndim={X.ndim}/{Y.ndim}.",
             ValueError
         )
+    # a (n_subjects, 1) column is a 1D covariate in disguise -- squeeze it down so it
+    # goes through the same broadcast path as a true 1D vector (otherwise the NaN-aware
+    # loop path below indexes past column 0 of the "other" side and raises IndexError)
+    if X.ndim == 2 and X.shape[1] == 1:
+        X = X[:, 0]
+    if Y.ndim == 2 and Y.shape[1] == 1:
+        Y = Y[:, 0]
     if X.ndim == 1 and Y.ndim == 1:
         lgr.critical_raise(
             "Both X and Y are 1D (subject-level) vectors -- nothing to compute per parcel. "
