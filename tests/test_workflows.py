@@ -15,6 +15,7 @@ see the living testing-batches plan), not by this batch.
 import numpy as np
 import pandas as pd
 import pytest
+import nibabel as nib
 
 from nispace import NiSpace
 from nispace.workflows import (
@@ -392,6 +393,66 @@ def test_nimare_colocalization_with_nimare_nulls_permutes_y(prefit_nispace, rng)
         return_nispace_only=True,
     )
     assert out._nulls["maps_null"].null_which == "Y"
+
+
+def test_nimare_colocalization_background_value_y_false_default_applies_on_fit(rng):
+    """`nimare_colocalization()` sets `fit_kwargs.setdefault("background_value",
+    {"y": False})` (see workflows.py) so a genuinely all-zero Y parcel (e.g. "no
+    activation" in an ALE map) survives as real 0.0 rather than being excluded as
+    background. Every other nimare_colocalization/nimare_xsea test in this file
+    uses an already-fitted `nispace_object=`, which bypasses `_workflow_base`'s
+    `nsp.fit(**fit_kwargs)` call entirely (see module docstring) -- so none of
+    them actually exercise this default. This test deliberately builds a fresh,
+    unfitted NiSpace via raw synthetic images + a fake non-brain-shaped
+    parcellation (mirroring tests/test_parcellate_background.py's fixtures) so
+    `nispace_object=None` forces `_workflow_base` to call `.fit()` for real.
+
+    Uses 20 parcels (not 3, like test_parcellate_background.py's fixtures) --
+    with only 3 points, this workflow's default permutation ("random" nulls,
+    n_perm draws recorrelated against fixed Y) has a real chance of a null
+    landing at Pearson r==1 by coincidence, tripping colocalize.py's
+    r_equal_one="raise" guard and failing the test for reasons unrelated to
+    background handling. 20 points avoids that degeneracy. Per-parcel X values
+    get tiny jitter so no whole parcel coincidentally equals the tiny synthetic
+    volume's auto-detected border background value (a real collision risk with
+    uniform per-parcel constants, see project_parcellation_bg_handling memory)."""
+    affine = np.eye(4)
+    n_parcels = 20
+    shape = (n_parcels, 2, 2)  # 4 voxels per parcel
+
+    def _parc_img():
+        arr = np.zeros(shape)
+        for i in range(n_parcels):
+            arr[i] = i + 1
+        return nib.Nifti1Image(arr, affine)
+
+    bg_parcel_idx = 5  # 0-based; label bg_parcel_idx+1 -- genuine "no activation" 0.0
+
+    x_arr = np.zeros(shape)
+    for i in range(n_parcels):
+        x_arr[i] = rng.normal(loc=i, scale=0.01, size=(2, 2))
+
+    y_arr = np.zeros(shape)
+    y_means = rng.normal(size=n_parcels)
+    y_means[bg_parcel_idx] = 0.0
+    for i in range(n_parcels):
+        y_arr[i] = y_means[i]
+
+    out = nimare_colocalization(
+        y=[nib.Nifti1Image(y_arr, affine)],
+        x=[nib.Nifti1Image(x_arr, affine)],
+        parcellation=_parc_img(), parcellation_space="MNI152NLin6Asym",
+        parcellation_labels=[f"p{i + 1}" for i in range(n_parcels)],
+        data_space="MNI152NLin6Asym",
+        colocalization_method="pearson",
+        permute_kwargs={"maps_method": "random"},
+        n_perm=20, seed=1, plot=False, verbose=False,
+        nispace_object=None,
+        return_nispace_only=True,
+    )
+    Y = out.get_y()
+    assert Y.shape[1] == n_parcels
+    assert Y.iloc[0, bg_parcel_idx] == 0.0  # stayed real 0.0, not NaN'd out as background
 
 
 # ── nimare_xsea() ─────────────────────────────────────────────────────────

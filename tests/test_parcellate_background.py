@@ -202,6 +202,50 @@ def test_report_background_parcels_with_auto_detected_background():
     assert p._parc_idc_bg == [3.0]
 
 
+def _dropped_parcel_img():
+    """Data covering only slices 0-1 of SHAPE=(3,4,4) -- parcel 3 (slice 2 of
+    the parcellation) has zero corresponding voxels after resampling onto
+    this smaller grid, i.e. it is dropped, not merely background/NaN."""
+    arr = np.zeros((2, 4, 4))
+    arr[0] = 10.0
+    arr[1] = 20.0
+    return nib.Nifti1Image(arr, AFFINE)
+
+
+def test_report_background_parcels_never_flags_dropped_parcel():
+    """A parcel dropped during resampling (n_total==0: zero voxels carry that
+    label in the resampled parcellation at all) is a structurally different
+    cause of NaN than "all raw values were background" (n_total>0 but
+    n_valid==0) -- `all_background` must stay False for it, and
+    `report_background_parcels` must record it in `_parc_idc_dropped`, never
+    in `_parc_idc_bg`, even though both end up NaN in the output. Regression
+    coverage for the integration-level (not just the raw
+    `vol_to_vect_arr_stats` unit-level, see test_utils_smoke.py) version of
+    this invariant, through the actual `Parcellater.transform()` resampling
+    path."""
+    p = _fitted_parcellater()
+    img = _dropped_parcel_img()
+    out = p.transform(img, space="mni152",
+                      background_value=0.0, report_background_parcels=True)
+    np.testing.assert_allclose(out, [10.0, 20.0, np.nan], equal_nan=True)
+    assert p._parc_idc_dropped == [3.0]
+    assert p._parc_idc_bg == []
+
+
+def test_fill_dropped_false_excludes_dropped_parcel_from_output():
+    """With `fill_dropped=False`, the returned array only covers parcels
+    present in the resampled parcellation -- shorter than
+    `self.parcellation_idc`, with no NaN placeholder for the dropped parcel.
+    `_parc_idc_dropped` still records it regardless."""
+    p = _fitted_parcellater()
+    img = _dropped_parcel_img()
+    out = p.transform(img, space="mni152",
+                      background_value=0.0, fill_dropped=False)
+    np.testing.assert_allclose(out, [10.0, 20.0])
+    assert len(out) == 2
+    assert p._parc_idc_dropped == [3.0]
+
+
 # ==================================================================================================
 # Parcellater.transform() directly -- min_num/min_fraction_valid_datapoints
 # ==================================================================================================
