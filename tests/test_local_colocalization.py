@@ -595,7 +595,11 @@ def test_null_false_still_works_for_every_supported_method(rng):
                   "mi", "slr", "mlr", "dominance", "pls", "pcr"]:
         nsp = _make_nsp(rng, n_parcels=n_parcels, n_x=2, with_z=True)
         nsp.colocalize(method=method, verbose=False)
-        out = diagnostics.local_colocalization(nsp, k=8, dist_mat=dist_mat, null=False,
+        # k=15 (not 8): an 8-point window occasionally produces an exact rank tie
+        # (spearman rho==1), tripping colocalize()'s r_equal_one safety check;
+        # this was flaky across environments (rng draw count for _make_nsp is
+        # identical, but the resulting window statistics are small-sample-sensitive)
+        out = diagnostics.local_colocalization(nsp, k=15, dist_mat=dist_mat, null=False,
                                                verbose=False)
         assert out["p"] is None and out["p_corr"] is None
         assert isinstance(out["stat"], (dict, pd.DataFrame))
