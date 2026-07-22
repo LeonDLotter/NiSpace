@@ -16,10 +16,6 @@ from .core.parcellation import Parcellation
 from .core.reduce_x import _reduce_dimensions
 from .core.transform_y import _dummy_code_groups, _num_code_subjects, _get_transform_fun
 from .core.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats, _rank_regress, _xsea_aggregate
-from .core.region_influence import (_get_region_influence_fun, _sort_region_influence,
-                                     _pool_region_influence, _ANALYTIC_METHODS)
-from .core.region_contribution import (_get_region_contribution_fun, _sort_region_contribution,
-                                       _CONTRIBUTION_METHODS)
 from .core.correlate_within_region import correlate_within_region_core, _CWR_METHODS
 from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_method,
                                _EMPIRICAL_MC_METHODS, _resolve_permute_combo,
@@ -168,13 +164,12 @@ class NiSpace:
        :meth:`clean_y`, :meth:`transform_y`, :meth:`transform_z`.
     3. Compute colocalization statistics between X and Y with :meth:`colocalize`.
     4. Optionally decompose a colocalization result region-by-region with
-       :meth:`regional_influence` / :meth:`regional_contribution`.
+       ``nispace.diagnostics.regional_influence`` / ``regional_contribution``.
     5. Assess significance via permutation testing with :meth:`permute`, then
        :meth:`correct_p` for multiple comparisons and/or
        :meth:`normalize_colocalizations` against the null distribution.
     6. Retrieve results with the `get_*` methods (`get_x`, `get_y`, `get_z`,
-       `get_colocalizations`, `get_p_values`, `get_regional_influence`,
-       `get_regional_contribution`, ...), visualize with :meth:`plot` /
+       `get_colocalizations`, `get_p_values`, ...), visualize with :meth:`plot` /
        :meth:`plot_brain`, and persist the object with :meth:`to_pickle` /
        :meth:`from_pickle` / :meth:`copy`.
 
@@ -398,8 +393,6 @@ class NiSpace:
         }
         self._p_colocs = {}
         self._z_colocs = {}
-        self._regional_influence = {}
-        self._regional_contribution = {}
         self._corr_within = {}
         self._p_corr_within = {}
 
@@ -1356,8 +1349,8 @@ class NiSpace:
         Compute colocalization statistics between each X map (or set, if XSEA is
         active) and each Y map, optionally regressing Z out of X and/or Y first.
         This is the core computation step of the NiSpace pipeline, feeding
-        :meth:`permute`, :meth:`correct_p`, :meth:`regional_influence`, and
-        :meth:`regional_contribution`.
+        :meth:`permute`, :meth:`correct_p`, and ``nispace.diagnostics.regional_influence``/
+        ``regional_contribution``.
 
         Parameters
         ----------
@@ -1524,6 +1517,12 @@ class NiSpace:
             )
 
         ## get X and Y data (so this function can be run on direct X & Y input data)
+        # NOTE: this X/Y/Z resolution block is mirrored (not shared) by
+        # nispace/diagnostics.py's _resolve_coloc_data() helper, used by
+        # regional_influence()/regional_contribution()/local_colocalization(). Deliberately
+        # not unified with that helper -- this block also auto-runs transform_y(), mutates
+        # XSEA state, and handles the regularized-regression CV-split branch below, none of
+        # which _resolve_coloc_data() needs to reproduce.
         # X
         if X is None:
             if not X_reduction:
@@ -1743,13 +1742,13 @@ class NiSpace:
                 self._colocs[df_str] = _colocs[stat]
             # save coloc. function
             self._colocs_fun[method] = _y_colocalize
-            # save per-method settings (needed by regional_influence(), which -- unlike
-            # permute() -- can't rely solely on the closure since it does its own math
+            # save per-method settings (needed by diagnostics.regional_influence(), which --
+            # unlike permute() -- can't rely solely on the closure since it does its own math
             # rather than calling _y_colocalize). rank/regress_z/zy_matched are the fully
             # *resolved* values (post the partial-method-fallback/zy_matched-mismatch
-            # branches above) -- regional_influence() reads them back verbatim rather than
-            # re-deriving them, since re-deriving independently is exactly what caused the
-            # rank staleness bug fixed above.
+            # branches above) -- diagnostics.regional_influence() reads them back verbatim
+            # rather than re-deriving them, since re-deriving independently is exactly what
+            # caused the rank staleness bug fixed above.
             self._coloc_kwargs_by_method[method] = self._coloc_kwargs.copy()
             self._coloc_kwargs_by_method[method]["rank"] = rank
             self._coloc_kwargs_by_method[method]["regress_z"] = regress_z
@@ -1773,565 +1772,6 @@ class NiSpace:
             return _colocs
         else:
             return _colocs[list(_colocs.keys())[0]]
-
-
-    # REGIONAL INFLUENCE ===========================================================================
-
-    def regional_influence(self, method=None, stat=None, engine="auto", signed=False,
-                           X_reduction=None, Y_transform=None, xsea=None,
-                           regress_z=True, zy_matched=False,
-                           X=None, Y=None, Z=None,
-                           store=True, n_proc=None, verbose=None, force_dict=False):
-        """
-        Estimate, per region, the true leave-one-out sensitivity of a colocalization
-        result: ``|stat_full| - |stat_loo|`` for the region excluded (or the signed
-        ``stat_full - stat_loo`` if ``signed=True``), not an approximation (either
-        computed exactly via closed-form case-deletion identities -- engine="analytic"
-        -- or by literally rerunning colocalize() with the region excluded --
-        engine="bruteforce"). Requires colocalize() to have been run first with the same
-        method (reuses its stored settings/closure).
-
-        Reports a stat_full/stat_loo delta per region rather than Cook's distance/
-        DFFITS/leverage: those answer a classical outlier-flagging question; this
-        answers "how much does the reported effect change without this region", which
-        is what's needed here. Developed and first applied in :cite:`lotter2024`.
-
-        The default (``signed=False``) takes the absolute value of the full-data and
-        LOO stat before differencing. This is a no-op for mlr/dominance/pls/pcr/mi/slr
-        (their stat -- R^2 or MI -- is already >= 0, no direction to speak of), but for
-        the correlation methods (pearson/spearman/partialpearson/partialspearman) it
-        makes the default homogeneous with the other methods: every method's default
-        answers "does this region strengthen or weaken the association" without regard
-        to direction. ``signed=True`` recovers the original directional delta for the
-        correlation methods -- positive means the region pulls the correlation toward
-        +1, negative toward -1, regardless of the sign of the observed correlation
-        itself (a region can oppose the overall trend and still pull toward +1).
-
-        Parameters
-        ----------
-        method : str, optional
-            Colocalization method. Defaults to the last method used in colocalize().
-            Supported: pearson, spearman, partialpearson, partialspearman, mi, slr, mlr,
-            dominance, pls, pcr. Not supported: lasso, ridge, elasticnet (their
-            colocalization closures capture a fixed-size CV split/regularization mask
-            sized to the original number of regions, which would misalign against
-            region-excluded data).
-        stat : str, optional
-            Which colocalization stat to compute influence for. Defaults to the
-            method's primary stat.
-        engine : {"auto", "analytic", "bruteforce"}, default "auto"
-            "analytic" is only available for pearson/spearman/partialpearson/
-            partialspearman/mlr; "auto" picks it for those and falls back to
-            "bruteforce" otherwise. "bruteforce" reruns colocalize() once per excluded
-            region and can be slow for many regions -- a warning is logged above 1000.
-        signed : bool, default False
-            See above. Only changes behavior for pearson/spearman/partialpearson/
-            partialspearman -- a no-op for every other supported method.
-        X_reduction, Y_transform, xsea : see colocalize().
-        regress_z, zy_matched : see colocalize(). Must match the colocalize() call being
-            explained so the same X/Y data (after ranking/Z-regression) is reproduced.
-        store : bool, default True
-            Store the result on the object (accessible via get_regional_influence()).
-        force_dict : bool, default False
-            For methods that fit one joint model per Y-row (mlr/dominance/pls/pcr),
-            the result is a single DataFrame (n_Y x n_regions); force_dict wraps it in a
-            length-1 dict for a uniform return type. For per-predictor/per-set methods
-            (pearson/spearman/partialpearson/partialspearman/mi/slr, or any XSEA call),
-            the result is always a dict of DataFrames keyed by X map / set label, since
-            each X-Y pair (or set) has its own region-influence profile.
-
-        Returns
-        -------
-        pandas.DataFrame or dict of pandas.DataFrame
-        """
-        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
-        lgr.info("*** NiSpace.regional_influence() - Estimating regional influence. ***")
-
-        self._check_fit()
-
-        n_proc = self._n_proc if n_proc is None else n_proc
-        dtype = self._dtype
-
-        method, X_reduction, Y_transform, xsea = self._get_last(
-            method=method,
-            X_reduction=X_reduction,
-            Y_transform=Y_transform,
-            xsea=xsea,
-        )
-        if method is None:
-            lgr.critical_raise("No colocalization method defined! Run colocalize() first.",
-                               ValueError)
-        if method not in self._colocs_fun or method not in self._coloc_kwargs_by_method:
-            lgr.critical_raise(f"No stored colocalize() results for method '{method}'! "
-                               "Did you run colocalize() with this method first?",
-                               KeyError)
-
-        coloc_kwargs = self._coloc_kwargs_by_method[method]
-        adj_r2 = coloc_kwargs.get("adj_r2", True)
-        r_to_z = coloc_kwargs.get("r_to_z", True)
-        xsea_aggregation_method = coloc_kwargs.get("xsea_method", "mean")
-
-        ## get X and Y data, mirroring colocalize()'s own data-prep so the exact same
-        ## (post rank/Z-regression) arrays are reproduced
-        # X
-        if X is None:
-            if not X_reduction:
-                X = self._X
-            else:
-                with _quiet():
-                    X = self.get_x(X_reduction=X_reduction)
-        X_arr = np.array(X, dtype=dtype)
-        X_weights = None
-        if xsea:
-            if (not isinstance(X, pd.DataFrame) or not isinstance(X.index, pd.MultiIndex)
-                    or "set" not in X.index.names):
-                lgr.critical_raise("XSEA requires X data to have a MultiIndex with a 'set' level!",
-                                   ValueError)
-            X_arr = {set_name: np.array(set_X, dtype=dtype)
-                     for set_name, set_X in X.groupby(level="set", sort=False)}
-            if "weighted" in xsea_aggregation_method:
-                X_weights = {set_name: np.array(set_X.index.get_level_values("weight"), dtype=dtype)
-                             for set_name, set_X in X.groupby(level="set", sort=False)}
-
-        # Y
-        if Y is None:
-            if not Y_transform:
-                Y = self._Y
-            else:
-                if not self._check_transform(ytrans=Y_transform, raise_error=True):
-                    lgr.critical_raise(f"Y transform '{Y_transform}' was not run before "
-                                       "colocalize(). Did you run colocalize() first?",
-                                       KeyError)
-                with _quiet():
-                    Y = self.get_y(Y_transform=Y_transform)
-        Y_arr = np.array(Y, dtype=dtype)
-
-        # rank / regress_z / zy_matched -- read back verbatim from the fully-resolved,
-        # per-method values colocalize() stored (not re-derived here): re-deriving these
-        # independently from _last_settings + method-name heuristics is exactly what
-        # caused a staleness bug for `rank` (see colocalize()'s settings-resolution
-        # comment) -- reading colocalize()'s own resolved values avoids that whole class
-        # of divergence, and correctly reproduces a deliberate override too (e.g.
-        # colocalize(method="mlr", rank=True) for ranked regression).
-        rank = coloc_kwargs.get("rank", "spearman" in method)
-        zy_matched = coloc_kwargs.get("zy_matched", zy_matched)
-        regress_z = coloc_kwargs.get("regress_z", "")
-        if Z is None:
-            Z = self._Z
-        Z_arr = np.array(Z, dtype=dtype) if regress_z else None
-        # standard partial Spearman correlation ranks X, Y, AND Z before partial-
-        # correlating (not just X/Y) -- without this, Z stays on its raw scale while
-        # X/Y are ranked, giving a materially different (non-standard) result whenever
-        # Z's distribution isn't already rank-equivalent to raw (e.g. skewed Z).
-        if rank and Z_arr is not None:
-            Z_arr = rank2d(Z_arr.T).T
-
-        if rank or regress_z:
-            X_arr = _rank_regress(arr=X_arr, rank=rank, regress="x" in regress_z, z=Z_arr,
-                                  zy_matched=zy_matched, verbose=verbose)
-            Y_arr = _rank_regress(arr=Y_arr, rank=rank, regress="y" in regress_z, z=Z_arr,
-                                  zy_matched=zy_matched, verbose=verbose)
-
-        ## resolve stat and n_parcels
-        if stat is None:
-            stat = _get_coloc_stats(method, drop_optional=True)[0]
-        n_parcels = X_arr.shape[1] if isinstance(X_arr, np.ndarray) else \
-            next(iter(X_arr.values())).shape[1]
-
-        ## build the region-influence function and run it, same Parallel idiom as colocalize()
-        _y_colocalize = self._colocs_fun[method]
-        fun, engine_used = _get_region_influence_fun(
-            method=method, engine=engine, n_parcels=n_parcels,
-            y_colocalize_fun=_y_colocalize, stat=stat,
-            adj_r2=adj_r2, r_to_z=r_to_z, dtype=dtype,
-            xsea=xsea, xsea_method=xsea_aggregation_method if xsea else None,
-            signed=signed,
-        )
-
-        _infl_list = Parallel(n_jobs=n_proc)(
-            delayed(fun)(X_arr, Y_arr[i_y, :], X_weights)
-            for i_y in tqdm(
-                range(Y.shape[0]),
-                desc=f"Regional influence ({method}, {engine_used}, {n_proc} proc)",
-                disable=not verbose,
-            )
-        )
-
-        ## sort output
-        _infl = _sort_region_influence(
-            y_infl_list=_infl_list,
-            n_parcels=n_parcels,
-            n_Y=Y.shape[0],
-            labs_parcels=X.columns,
-            labs_Y=Y.index,
-            labs_X=X.index if not xsea else list(X_arr.keys()),
-            dtype=dtype,
-        )
-
-        ## store & return
-        if store:
-            df_str = _get_df_string("influence", xdimred=X_reduction, ytrans=Y_transform,
-                                    method=method, stat=stat, xsea=xsea, engine=engine_used,
-                                    signed=signed)
-            self._regional_influence[df_str] = _infl
-            if self._return_self:
-                return self
-        if force_dict and not isinstance(_infl, dict):
-            return {stat: _infl}
-        return _infl
-
-
-    def get_regional_influence(self, method=None, stat=None, engine=None, signed=False,
-                               X_reduction=None, Y_transform=None, xsea=None,
-                               pooled=None, force_dict=False, verbose=None, copy=True):
-        """
-        Retrieve a stored :meth:`regional_influence` result.
-
-        Parameters
-        ----------
-        method : str, optional
-            Colocalization method whose stored result to retrieve; see
-            :meth:`regional_influence` for the list of supported methods.
-            Defaults to the last-used value.
-        stat : str, optional
-            Which colocalization stat's influence result to retrieve. Defaults
-            to the method's primary stat.
-        engine : {"analytic", "bruteforce"}, optional
-            Must match the engine actually used to compute the stored result.
-            Defaults to reproducing what ``regional_influence(engine="auto")``
-            would have picked for ``method`` (``"analytic"`` for
-            pearson/spearman/partialpearson/partialspearman/mlr, otherwise
-            ``"bruteforce"``).
-        signed : bool, default False
-            Must match the ``signed`` value passed to the regional_influence() call
-            being retrieved.
-        X_reduction, Y_transform, xsea : optional
-            Must match the :meth:`colocalize` settings used for the stored
-            result; see :meth:`colocalize`. Default to the last-used values.
-        pooled : {None, False, True, "mean", "median"}, default None
-            Pool (reduce) the per-Y-row result across Y (subjects/maps). None defaults
-            to whatever pooled_p was last set to elsewhere in the pipeline (e.g. by
-            permute()); True is treated as "mean". Pools the per-subject delta directly
-            (median of deltas, not delta of medians) -- the correct choice for this
-            paired quantity.
-        force_dict : bool, default False
-            For methods that fit one joint model per Y-row (mlr/dominance/pls/
-            pcr), wrap the single-DataFrame result in a length-1 dict for a
-            uniform return type; see :meth:`regional_influence`.
-        verbose : bool, optional
-            Print progress messages. Defaults to the value set at init.
-        copy : bool, default True
-            Return independent copies rather than live references to the
-            object's internal data. Ignored (always independent) when
-            ``pooled`` is truthy, since pooling already builds new DataFrames.
-
-        Returns
-        -------
-        pandas.DataFrame or dict of pandas.DataFrame
-            See :meth:`regional_influence`'s Returns.
-
-        Raises
-        ------
-        KeyError
-            If no matching :meth:`regional_influence` result was ever computed.
-        """
-        loglevel = lgr.getEffectiveLevel()
-        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
-
-        method, X_reduction, Y_transform, xsea = self._get_last(
-            method=method,
-            X_reduction=X_reduction,
-            Y_transform=Y_transform,
-            xsea=xsea,
-        )
-        if stat is None:
-            stat = _get_coloc_stats(method, drop_optional=True)[0]
-        if engine is None:
-            engine = "analytic" if method in _ANALYTIC_METHODS else "bruteforce"
-
-        infl_str = _get_df_string("influence", xdimred=X_reduction, ytrans=Y_transform,
-                                  method=method, stat=stat, xsea=xsea, engine=engine,
-                                  signed=signed)
-        if infl_str not in self._regional_influence:
-            available = "\n".join(self._regional_influence.keys())
-            lgr.critical_raise(f"Regional influence for '{infl_str}' not found! Did you run "
-                               f"regional_influence()? Available:\n{available}",
-                               KeyError)
-        out = self._regional_influence[infl_str]
-
-        if pooled is None:
-            pooled = self._last_settings.get("pooled_p", False)
-        if pooled:
-            out = _pool_region_influence(out, "mean" if pooled is True else pooled)
-        elif copy:
-            out = out.copy() if isinstance(out, pd.DataFrame) else {k: v.copy() for k, v in out.items()}
-
-        if force_dict and not isinstance(out, dict):
-            out = {stat: out}
-
-        lgr.setLevel(loglevel)
-        return out
-
-
-    # REGIONAL CONTRIBUTION ========================================================================
-
-    def regional_contribution(self, method=None, X_reduction=None, Y_transform=None, xsea=None,
-                              regress_z=True, zy_matched=False,
-                              X=None, Y=None, Z=None,
-                              store=True, n_proc=None, verbose=None):
-        """
-        Decompose a colocalization result into each region's own additive share of the
-        reported correlation: ``contribution_i = zx_i * zy_i`` (population z-scores of
-        whatever data is already in the pipeline at this point -- raw values for
-        pearson, ranks for spearman/partial*, matching colocalize()'s own convention).
-        This is an exact decomposition, not an approximation or a perturbation --
-        ``mean(contribution) == rho`` exactly. Requires colocalize() to have been run
-        first with the same method (reuses its stored settings).
-
-        Also computes a ``quadrant`` label per region -- "high_high", "low_low", or
-        "discordant" (sign of zx vs zy) -- retrievable via
-        ``get_regional_contribution(quadrant=True)``. This exists because
-        regional_influence() (leave-one-out) is structurally symmetric between
-        high-high and low-low concordant regions -- both reinforce a positive
-        correlation identically, since that symmetry is inherent to what Pearson/
-        Spearman measure, not fixable within the LOO framework. ``contribution`` alone
-        has the same symmetry (both quadrants give a positive value); ``quadrant`` is
-        what actually distinguishes them. Default accessor behavior is
-        ``contribution`` only (the "whole map", no quadrant) -- quadrant is an
-        explicit opt-in via ``get_regional_contribution(quadrant=True)``.
-
-        This is a standard decomposition of the spatial correlation between two maps,
-        similar to what was presented in Faskowitz et al. (2026) :cite:`faskowitz2026` at OHBM 2026.
-
-        Parameters
-        ----------
-        method : str, optional
-            Colocalization method. Defaults to the last method used in colocalize().
-            Supported: pearson, spearman, partialpearson, partialspearman -- the 4
-            methods with a genuinely bidirectional (signed) primary stat. Not
-            supported for R^2/MI-based methods (mlr, dominance, pls, pcr, mi, slr),
-            which have no "high/low" side to decompose into quadrants.
-        X_reduction, Y_transform, xsea : see colocalize().
-        regress_z, zy_matched : see colocalize(). Must match the colocalize() call
-            being explained so the same X/Y data (after ranking/Z-regression) is
-            reproduced.
-        store : bool, default True
-            Store the result on the object (accessible via get_regional_contribution()).
-
-        Returns
-        -------
-        dict of pandas.DataFrame
-            Keyed by X-map/set label (always dict-shaped -- all 4 supported methods
-            are per-X-pair methods). Returns the ``contribution`` dict specifically
-            (not ``quadrant``); use get_regional_contribution(quadrant=True) for the
-            labels.
-
-        """
-        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
-        lgr.info("*** NiSpace.regional_contribution() - Estimating regional contribution. ***")
-
-        self._check_fit()
-
-        n_proc = self._n_proc if n_proc is None else n_proc
-        dtype = self._dtype
-
-        method, X_reduction, Y_transform, xsea = self._get_last(
-            method=method,
-            X_reduction=X_reduction,
-            Y_transform=Y_transform,
-            xsea=xsea,
-        )
-        if method is None:
-            lgr.critical_raise("No colocalization method defined! Run colocalize() first.",
-                               ValueError)
-        if method not in _CONTRIBUTION_METHODS:
-            lgr.critical_raise(f"regional_contribution() does not support method '{method}'. "
-                               f"Supported: {sorted(_CONTRIBUTION_METHODS)} -- methods with a "
-                               "genuinely bidirectional primary stat (rho). R^2/MI-based methods "
-                               "have no 'high/low' side to decompose into quadrants.",
-                               ValueError)
-        if method not in self._colocs_fun or method not in self._coloc_kwargs_by_method:
-            lgr.critical_raise(f"No stored colocalize() results for method '{method}'! "
-                               "Did you run colocalize() with this method first?",
-                               KeyError)
-
-        coloc_kwargs = self._coloc_kwargs_by_method[method]
-        xsea_aggregation_method = coloc_kwargs.get("xsea_method", "mean")
-
-        ## get X and Y data, mirroring colocalize()'s/regional_influence()'s own
-        ## data-prep so the exact same (post rank/Z-regression) arrays are reproduced
-        # X
-        if X is None:
-            if not X_reduction:
-                X = self._X
-            else:
-                with _quiet():
-                    X = self.get_x(X_reduction=X_reduction)
-        X_arr = np.array(X, dtype=dtype)
-        X_weights = None
-        if xsea:
-            if (not isinstance(X, pd.DataFrame) or not isinstance(X.index, pd.MultiIndex)
-                    or "set" not in X.index.names):
-                lgr.critical_raise("XSEA requires X data to have a MultiIndex with a 'set' level!",
-                                   ValueError)
-            X_arr = {set_name: np.array(set_X, dtype=dtype)
-                     for set_name, set_X in X.groupby(level="set", sort=False)}
-            if "weighted" in xsea_aggregation_method:
-                X_weights = {set_name: np.array(set_X.index.get_level_values("weight"), dtype=dtype)
-                             for set_name, set_X in X.groupby(level="set", sort=False)}
-
-        # Y
-        if Y is None:
-            if not Y_transform:
-                Y = self._Y
-            else:
-                if not self._check_transform(ytrans=Y_transform, raise_error=True):
-                    lgr.critical_raise(f"Y transform '{Y_transform}' was not run before "
-                                       "colocalize(). Did you run colocalize() first?",
-                                       KeyError)
-                with _quiet():
-                    Y = self.get_y(Y_transform=Y_transform)
-        Y_arr = np.array(Y, dtype=dtype)
-
-        # rank / regress_z / zy_matched -- read back verbatim from the fully-resolved,
-        # per-method values colocalize() stored (see regional_influence()'s identical
-        # comment for why this isn't re-derived from _last_settings + heuristics)
-        rank = coloc_kwargs.get("rank", "spearman" in method)
-        zy_matched = coloc_kwargs.get("zy_matched", zy_matched)
-        regress_z = coloc_kwargs.get("regress_z", "")
-        if Z is None:
-            Z = self._Z
-        Z_arr = np.array(Z, dtype=dtype) if regress_z else None
-        if rank and Z_arr is not None:
-            Z_arr = rank2d(Z_arr.T).T
-
-        if rank or regress_z:
-            X_arr = _rank_regress(arr=X_arr, rank=rank, regress="x" in regress_z, z=Z_arr,
-                                  zy_matched=zy_matched, verbose=verbose)
-            Y_arr = _rank_regress(arr=Y_arr, rank=rank, regress="y" in regress_z, z=Z_arr,
-                                  zy_matched=zy_matched, verbose=verbose)
-
-        n_parcels = X_arr.shape[1] if isinstance(X_arr, np.ndarray) else \
-            next(iter(X_arr.values())).shape[1]
-
-        ## build the region-contribution function and run it, same Parallel idiom as colocalize()
-        fun = _get_region_contribution_fun(
-            method=method, dtype=dtype, xsea=xsea,
-            xsea_method=xsea_aggregation_method if xsea else None,
-        )
-
-        _contrib_list = Parallel(n_jobs=n_proc)(
-            delayed(fun)(X_arr, Y_arr[i_y, :], X_weights)
-            for i_y in tqdm(
-                range(Y.shape[0]),
-                desc=f"Regional contribution ({method}, {n_proc} proc)",
-                disable=not verbose,
-            )
-        )
-
-        ## sort output -- always (contribution_dict, quadrant_dict)
-        contrib_dict, quadrant_dict = _sort_region_contribution(
-            y_list=_contrib_list,
-            n_parcels=n_parcels,
-            n_Y=Y.shape[0],
-            labs_parcels=X.columns,
-            labs_Y=Y.index,
-            labs_X=X.index if not xsea else list(X_arr.keys()),
-            dtype=dtype,
-        )
-
-        ## store & return
-        if store:
-            df_str_contrib = _get_df_string("contribution", xdimred=X_reduction, ytrans=Y_transform,
-                                            method=method, stat="contribution", xsea=xsea)
-            df_str_quadrant = _get_df_string("contribution", xdimred=X_reduction, ytrans=Y_transform,
-                                             method=method, stat="quadrant", xsea=xsea)
-            self._regional_contribution[df_str_contrib] = contrib_dict
-            self._regional_contribution[df_str_quadrant] = quadrant_dict
-            if self._return_self:
-                return self
-        return contrib_dict
-
-
-    def get_regional_contribution(self, method=None, X_reduction=None, Y_transform=None, xsea=None,
-                                  quadrant=False, pooled=None, verbose=None, copy=True):
-        """
-        Retrieve a stored :meth:`regional_contribution` result.
-
-        Parameters
-        ----------
-        method : str, optional
-            Colocalization method whose stored result to retrieve. Only
-            pearson/spearman/partialpearson/partialspearman are supported (the
-            methods with a bidirectional/signed primary stat); see
-            :meth:`regional_contribution`. Defaults to the last-used value.
-        X_reduction, Y_transform, xsea : optional
-            Must match the :meth:`colocalize` settings used for the stored
-            result; see :meth:`colocalize`. Default to the last-used values.
-        quadrant : bool, default False
-            If False (default), return the ``contribution`` values (the "whole map").
-            If True, return the categorical ``quadrant`` labels ("high_high"/
-            "low_low"/"discordant") instead.
-        pooled : {None, False, True, "mean", "median"}, default None
-            Pool (reduce) the per-Y-row result across Y (subjects/maps). None defaults
-            to whatever pooled_p was last set to elsewhere in the pipeline. Only valid
-            when ``quadrant=False`` -- pooling isn't meaningful for categorical labels.
-        verbose : bool, optional
-            Print progress messages. Defaults to the value set at init.
-        copy : bool, default True
-            Return independent copies rather than live references to the
-            object's internal data. Ignored (always independent) when
-            ``pooled`` is truthy, since pooling already builds new DataFrames.
-
-        Returns
-        -------
-        dict of pandas.DataFrame
-            Keyed by X map/set label -- all supported methods are per-X-pair,
-            so the result is always dict-shaped; see
-            :meth:`regional_contribution`'s Returns.
-
-        Raises
-        ------
-        KeyError
-            If no matching :meth:`regional_contribution` result was ever
-            computed.
-        ValueError
-            If ``quadrant=True`` and ``pooled`` is also truthy (pooling isn't
-            meaningful for categorical labels).
-        """
-        loglevel = lgr.getEffectiveLevel()
-        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
-
-        method, X_reduction, Y_transform, xsea = self._get_last(
-            method=method,
-            X_reduction=X_reduction,
-            Y_transform=Y_transform,
-            xsea=xsea,
-        )
-        stat = "quadrant" if quadrant else "contribution"
-
-        contrib_str = _get_df_string("contribution", xdimred=X_reduction, ytrans=Y_transform,
-                                     method=method, stat=stat, xsea=xsea)
-        if contrib_str not in self._regional_contribution:
-            available = "\n".join(self._regional_contribution.keys())
-            lgr.critical_raise(f"Regional contribution for '{contrib_str}' not found! Did you run "
-                               f"regional_contribution()? Available:\n{available}",
-                               KeyError)
-        out = self._regional_contribution[contrib_str]
-
-        if quadrant and pooled:
-            lgr.critical_raise("'pooled' is not meaningful for categorical quadrant labels "
-                               "(quadrant=True). Retrieve quadrant=False for pooling.",
-                               ValueError)
-        if pooled is None:
-            pooled = False if quadrant else self._last_settings.get("pooled_p", False)
-        if pooled:
-            out = _pool_region_influence(out, "mean" if pooled is True else pooled)
-        elif copy:
-            out = {k: v.copy() for k, v in out.items()}
-
-        lgr.setLevel(loglevel)
-        return out
 
 
     # CORRELATE WITHIN REGION ======================================================================
@@ -5396,8 +4836,6 @@ class NiSpace:
         # introduced would otherwise be missing it entirely (AttributeError on first use)
         for attr, default in [
             ("_coloc_kwargs_by_method", {}),
-            ("_regional_influence", {}),
-            ("_regional_contribution", {}),
         ]:
             if not hasattr(nispace_object, attr):
                 setattr(nispace_object, attr, default)

@@ -27,4 +27,5 @@ from .workflows import (colocalization, group_colocalization, paired_colocalizat
 from .transforms import mni_to_mni, compute_transform_displacement
 from .core.nullmaps import NullMaps
 from .helpers import get_binary_cluster_map, nimare_fwe_thresholds, null_maps_from_nimare
+from . import diagnostics
 

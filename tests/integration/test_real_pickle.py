@@ -31,7 +31,7 @@ def test_load_intro02_with_nulls():
     assert np.isfinite(coloc.to_numpy()).any()
 
     # backfill attrs added after this pickle was created must be present
-    for attr in ["_coloc_kwargs_by_method", "_regional_influence", "_regional_contribution"]:
+    for attr in ["_coloc_kwargs_by_method"]:
         assert hasattr(nsp, attr)
 
     # this pickle was saved with nulls -- p-values and maxT-style correction should work

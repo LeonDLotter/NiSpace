@@ -16,6 +16,7 @@ import pytest
 from scipy.stats import rankdata
 
 from nispace import NiSpace
+import nispace.diagnostics as diagnostics
 from nispace.core.region_contribution import _get_region_contribution_fun, _CONTRIBUTION_METHODS
 from nispace.stats.coloc import pearson
 
@@ -144,10 +145,9 @@ def test_full_workflow_mean_equals_rho(synthetic_nispace):
     tanh(stored value), not the stored value directly."""
     nsp = synthetic_nispace
     nsp.colocalize(method="pearson", verbose=False)
-    nsp.regional_contribution(method="pearson", verbose=False)
+    contrib = diagnostics.regional_contribution(nsp, method="pearson", verbose=False)
 
     coloc = nsp.get_colocalizations(method="pearson")
-    contrib = nsp.get_regional_contribution(method="pearson")
     for x_lab in contrib:
         for i_y, y_lab in enumerate(contrib[x_lab].index):
             r = np.tanh(coloc.loc[y_lab, x_lab])
@@ -157,10 +157,10 @@ def test_full_workflow_mean_equals_rho(synthetic_nispace):
 def test_full_workflow_default_is_contribution_not_quadrant(synthetic_nispace):
     nsp = synthetic_nispace
     nsp.colocalize(method="pearson", verbose=False)
-    nsp.regional_contribution(method="pearson", verbose=False)
 
-    default = nsp.get_regional_contribution(method="pearson")
-    explicit_contrib = nsp.get_regional_contribution(method="pearson", quadrant=False)
+    default = diagnostics.regional_contribution(nsp, method="pearson", verbose=False)
+    explicit_contrib = diagnostics.regional_contribution(nsp, method="pearson", quadrant=False,
+                                                          verbose=False)
     for k in default:
         pd.testing.assert_frame_equal(default[k], explicit_contrib[k])
         assert default[k].to_numpy().dtype != object  # numeric, not quadrant labels
@@ -169,9 +169,8 @@ def test_full_workflow_default_is_contribution_not_quadrant(synthetic_nispace):
 def test_full_workflow_quadrant_opt_in(synthetic_nispace):
     nsp = synthetic_nispace
     nsp.colocalize(method="pearson", verbose=False)
-    nsp.regional_contribution(method="pearson", verbose=False)
 
-    quadrant = nsp.get_regional_contribution(method="pearson", quadrant=True)
+    quadrant = diagnostics.regional_contribution(nsp, method="pearson", quadrant=True, verbose=False)
     for k in quadrant:
         vals = set(np.unique(quadrant[k].to_numpy()))
         assert vals <= {"high_high", "low_low", "discordant"}
@@ -180,24 +179,24 @@ def test_full_workflow_quadrant_opt_in(synthetic_nispace):
 def test_regional_contribution_requires_prior_colocalize(synthetic_nispace):
     nsp = synthetic_nispace
     with pytest.raises(KeyError):
-        nsp.regional_contribution(method="pearson", verbose=False)
+        diagnostics.regional_contribution(nsp, method="pearson", verbose=False)
 
 
 def test_regional_contribution_rejects_unsupported_method(synthetic_nispace):
     nsp = synthetic_nispace
     nsp.colocalize(method="mlr", verbose=False)
     with pytest.raises(ValueError):
-        nsp.regional_contribution(method="mlr", verbose=False)
+        diagnostics.regional_contribution(nsp, method="mlr", verbose=False)
 
 
 def test_full_workflow_pooled_contribution(synthetic_nispace):
     nsp = synthetic_nispace
     nsp.colocalize(method="pearson", verbose=False)
-    nsp.regional_contribution(method="pearson", verbose=False)
 
-    unpooled = nsp.get_regional_contribution(method="pearson", pooled=False)
-    pooled_mean = nsp.get_regional_contribution(method="pearson", pooled="mean")
-    pooled_median = nsp.get_regional_contribution(method="pearson", pooled="median")
+    unpooled = diagnostics.regional_contribution(nsp, method="pearson", pooled=False, verbose=False)
+    pooled_mean = diagnostics.regional_contribution(nsp, method="pearson", pooled="mean", verbose=False)
+    pooled_median = diagnostics.regional_contribution(nsp, method="pearson", pooled="median",
+                                                       verbose=False)
 
     for k in unpooled:
         assert pooled_mean[k].shape[0] == 1
@@ -211,10 +210,10 @@ def test_full_workflow_pooled_contribution(synthetic_nispace):
 def test_full_workflow_pooled_quadrant_raises(synthetic_nispace):
     nsp = synthetic_nispace
     nsp.colocalize(method="pearson", verbose=False)
-    nsp.regional_contribution(method="pearson", verbose=False)
 
     with pytest.raises(ValueError):
-        nsp.get_regional_contribution(method="pearson", quadrant=True, pooled="mean")
+        diagnostics.regional_contribution(nsp, method="pearson", quadrant=True, pooled="mean",
+                                          verbose=False)
 
 
 def test_full_workflow_partialspearman_with_z_matches_standard_formula(rng):
@@ -236,9 +235,7 @@ def test_full_workflow_partialspearman_with_z_matches_standard_formula(rng):
                  n_proc=1, verbose=False, return_self=False)
     nsp.fit()
     nsp.colocalize(method="partialspearman", verbose=False)
-    nsp.regional_contribution(method="partialspearman", verbose=False)
-
-    contrib = nsp.get_regional_contribution(method="partialspearman")
+    contrib = diagnostics.regional_contribution(nsp, method="partialspearman", verbose=False)
     mean_contrib = contrib["x0"].iloc[0].mean()
 
     rx, ry, rz = rankdata(x), rankdata(y), rankdata(z)
@@ -281,10 +278,10 @@ def synthetic_nispace_xsea(rng):
 def test_full_workflow_xsea(synthetic_nispace_xsea):
     nsp = synthetic_nispace_xsea
     nsp.colocalize(method="pearson", xsea=True, xsea_aggregation_method="mean", verbose=False)
-    nsp.regional_contribution(method="pearson", xsea=True, verbose=False)
 
-    contrib = nsp.get_regional_contribution(method="pearson", xsea=True)
-    quadrant = nsp.get_regional_contribution(method="pearson", xsea=True, quadrant=True)
+    contrib = diagnostics.regional_contribution(nsp, method="pearson", xsea=True, verbose=False)
+    quadrant = diagnostics.regional_contribution(nsp, method="pearson", xsea=True, quadrant=True,
+                                                  verbose=False)
 
     assert set(contrib.keys()) == {"setA", "setB"}
     for k in contrib:

@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import nispace.diagnostics as diagnostics
 from nispace.core.colocalize import _get_colocalize_fun, _get_coloc_stats
 from nispace.core.region_influence import _get_region_influence_fun
 
@@ -172,8 +173,8 @@ def test_full_workflow_analytic_vs_bruteforce(synthetic_nispace, toy_regression,
     n_parcels = toy_regression[0].shape[1]
 
     nsp.colocalize(method=method, verbose=False)
-    res = nsp.regional_influence(method=method, verbose=False)
-    res_bf = nsp.regional_influence(method=method, engine="bruteforce", verbose=False)
+    res = diagnostics.regional_influence(nsp, method=method, verbose=False)
+    res_bf = diagnostics.regional_influence(nsp, method=method, engine="bruteforce", verbose=False)
 
     if isinstance(res, dict):
         assert set(res.keys()) == set(res_bf.keys())
@@ -193,29 +194,27 @@ def test_full_workflow_outlier_ground_truth(synthetic_nispace, toy_regression):
     _, _, _, outlier_idx = toy_regression
 
     nsp.colocalize(method="mlr", verbose=False)
-    nsp.regional_influence(method="mlr", verbose=False)
-    res = nsp.get_regional_influence(method="mlr")
+    res = diagnostics.regional_influence(nsp, method="mlr", verbose=False)
     argmax_col = res.abs().idxmax(axis=1)
     outlier_label = res.columns[outlier_idx]
     assert (argmax_col == outlier_label).all()
 
 
-def test_full_workflow_get_regional_influence_matches_stored(synthetic_nispace):
+def test_full_workflow_regional_influence_is_deterministic(synthetic_nispace):
     nsp = synthetic_nispace
     nsp.colocalize(method="mlr", verbose=False)
-    res = nsp.regional_influence(method="mlr", verbose=False)
-    got = nsp.get_regional_influence(method="mlr")
-    pd.testing.assert_frame_equal(res, got)
+    res = diagnostics.regional_influence(nsp, method="mlr", verbose=False)
+    res_again = diagnostics.regional_influence(nsp, method="mlr", verbose=False)
+    pd.testing.assert_frame_equal(res, res_again)
 
 
 def test_full_workflow_pooled(synthetic_nispace):
     nsp = synthetic_nispace
     nsp.colocalize(method="mlr", verbose=False)
-    nsp.regional_influence(method="mlr", verbose=False)
 
-    pooled_mean = nsp.get_regional_influence(method="mlr", pooled="mean")
-    pooled_median = nsp.get_regional_influence(method="mlr", pooled="median")
-    unpooled = nsp.get_regional_influence(method="mlr", pooled=False)
+    pooled_mean = diagnostics.regional_influence(nsp, method="mlr", pooled="mean", verbose=False)
+    pooled_median = diagnostics.regional_influence(nsp, method="mlr", pooled="median", verbose=False)
+    unpooled = diagnostics.regional_influence(nsp, method="mlr", pooled=False, verbose=False)
 
     assert pooled_mean.shape[0] == 1
     assert list(pooled_mean.index) == ["pooled"]
@@ -230,7 +229,7 @@ def test_full_workflow_bruteforce_only_method(synthetic_nispace):
     through the NiSpace class."""
     nsp = synthetic_nispace
     nsp.colocalize(method="pls", verbose=False)
-    res = nsp.regional_influence(method="pls", verbose=False)
+    res = diagnostics.regional_influence(nsp, method="pls", verbose=False)
     n_parcels = nsp._Y.shape[1]
     if isinstance(res, dict):
         for df in res.values():
@@ -244,7 +243,7 @@ def test_full_workflow_bruteforce_only_method(synthetic_nispace):
 def test_regional_influence_requires_prior_colocalize(synthetic_nispace):
     nsp = synthetic_nispace
     with pytest.raises(KeyError):
-        nsp.regional_influence(method="mlr", verbose=False)
+        diagnostics.regional_influence(nsp, method="mlr", verbose=False)
 
 
 # ---------------------------------------------------------------------------
@@ -280,8 +279,9 @@ def synthetic_nispace_xsea(rng):
 def test_full_workflow_xsea(synthetic_nispace_xsea):
     nsp = synthetic_nispace_xsea
     nsp.colocalize(method="pearson", xsea=True, xsea_aggregation_method="mean", verbose=False)
-    res = nsp.regional_influence(method="pearson", xsea=True, verbose=False)
-    res_bf = nsp.regional_influence(method="pearson", xsea=True, engine="bruteforce", verbose=False)
+    res = diagnostics.regional_influence(nsp, method="pearson", xsea=True, verbose=False)
+    res_bf = diagnostics.regional_influence(nsp, method="pearson", xsea=True, engine="bruteforce",
+                                            verbose=False)
 
     assert set(res.keys()) == {"setA", "setB"}
     for k in res:
@@ -363,11 +363,8 @@ def test_full_workflow_signed_vs_default_pearson(rng):
                  n_proc=1, verbose=False, return_self=False)
     nsp.fit()
     nsp.colocalize(method="pearson", verbose=False)
-    nsp.regional_influence(method="pearson", verbose=False)
-    nsp.regional_influence(method="pearson", signed=True, verbose=False)
-
-    default = nsp.get_regional_influence(method="pearson", signed=False)
-    signed = nsp.get_regional_influence(method="pearson", signed=True)
+    default = diagnostics.regional_influence(nsp, method="pearson", signed=False, verbose=False)
+    signed = diagnostics.regional_influence(nsp, method="pearson", signed=True, verbose=False)
 
     for k in default:
         assert not np.allclose(default[k].to_numpy(), signed[k].to_numpy())
@@ -377,9 +374,6 @@ def test_full_workflow_signed_vs_default_pearson(rng):
 def test_full_workflow_signed_is_noop_for_mlr(synthetic_nispace):
     nsp = synthetic_nispace
     nsp.colocalize(method="mlr", verbose=False)
-    nsp.regional_influence(method="mlr", verbose=False)
-    nsp.regional_influence(method="mlr", signed=True, verbose=False)
-
-    default = nsp.get_regional_influence(method="mlr", signed=False)
-    signed = nsp.get_regional_influence(method="mlr", signed=True)
+    default = diagnostics.regional_influence(nsp, method="mlr", signed=False, verbose=False)
+    signed = diagnostics.regional_influence(nsp, method="mlr", signed=True, verbose=False)
     np.testing.assert_allclose(default.to_numpy(), signed.to_numpy(), atol=1e-6)

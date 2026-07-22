@@ -1,7 +1,7 @@
 """Regional influence -- true leave-one-region-out sensitivity of a
 colocalization result, computed via two interchangeable engines.
 
-Definition (see NiSpace.regional_influence() docstring for the short
+Definition (see nispace.diagnostics.regional_influence() docstring for the short
 rationale): ``influence[y, i] = stat_full[y] - stat_loo_excluding_i[y]`` for
 the method's primary stat, unless ``signed=False`` (the default), in which
 case it's ``|stat_full[y]| - |stat_loo_excluding_i[y]|``.
@@ -192,8 +192,8 @@ def _get_region_influence_fun_bruteforce(y_colocalize_fun, stat, dtype=np.float3
                                          signed=False):
     """Build the per-Y-row brute-force regional-influence closure.
 
-    Reuses the already-built colocalization closure (self._colocs_fun[method]
-    in NiSpace.regional_influence()), rerunning it once per excluded region.
+    Reuses the already-built colocalization closure (nsp._colocs_fun[method]
+    in nispace.diagnostics.regional_influence()), rerunning it once per excluded region.
     Output shape is inferred generically from the shape of `stat` in the
     full-data result: scalar (joint-model methods: mlr/dominance/pls/pcr)
     -> (n_parcels,); vector (per-X/per-set methods) -> (n_x_or_sets, n_parcels).

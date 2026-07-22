@@ -25,5 +25,5 @@ The notebooks are available as downloadable Jupyter notebooks (links at the top 
    nb_introduction/intro12_nimare_integration.ipynb
    nb_introduction/intro13_paired_colocalization.ipynb
    nb_introduction/intro14_binary_colocalization.ipynb
-   nb_introduction/intro15_regional_influence.ipynb
+   nb_introduction/intro15_regional_diagnostics.ipynb
 
