@@ -603,3 +603,122 @@ def test_null_false_still_works_for_every_supported_method(rng):
                                                verbose=False)
         assert out["p"] is None and out["p_corr"] is None
         assert isinstance(out["stat"], (dict, pd.DataFrame))
+
+
+# ---------------------------------------------------------------------------
+# Gaussian-kernel searchlight (fwhm_mm): restricted forever to pearson/
+# spearman/partialpearson/partialspearman -- no window, every seed weights
+# ALL parcels by exp(-d**2/(2*sigma**2)); ground-truth invariant here is a
+# very wide fwhm_mm (weights -> ~uniform over the whole map) reproducing
+# plain colocalize()'s whole-brain result exactly, the kernel-mode analogue
+# of the k=n_parcels invariant used for the k/radius modes above.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("method", ["pearson", "spearman", "partialpearson", "partialspearman"])
+def test_gaussian_wide_fwhm_matches_plain_colocalize(rng, method):
+    n_parcels = 30
+    dist_mat = _index_dist_mat(n_parcels)
+    nsp = _make_nsp(rng, n_parcels=n_parcels, n_x=2, with_z=True)
+    glob = nsp.colocalize(method=method, verbose=False, force_dict=True, r_to_z=False)
+    glob_df = next(iter(glob.values()))
+
+    out = diagnostics.local_colocalization(nsp, fwhm_mm=1e6, dist_mat=dist_mat, null=False,
+                                           verbose=False)
+    assert out["settings"] == {"fwhm_mm": 1e6, "sigma_mm": pytest.approx(1e6 * (1 / 2.3548200450309493))}
+    for x_lab, df in out["stat"].items():
+        got = df.to_numpy()
+        want = glob_df[x_lab].to_numpy()[:, np.newaxis]
+        assert np.allclose(got, want, atol=1e-5)
+
+
+def test_gaussian_narrow_fwhm_differs_from_wide(rng):
+    n_parcels = 30
+    dist_mat = _index_dist_mat(n_parcels)
+    nsp = _make_nsp(rng, n_parcels=n_parcels, n_x=2, with_z=False)
+    nsp.colocalize(method="pearson", verbose=False)
+    narrow = diagnostics.local_colocalization(nsp, fwhm_mm=2.0, dist_mat=dist_mat, null=False,
+                                              verbose=False)["stat"]
+    wide = diagnostics.local_colocalization(nsp, fwhm_mm=1e6, dist_mat=dist_mat, null=False,
+                                            verbose=False)["stat"]
+    for x_lab in narrow:
+        assert not np.allclose(narrow[x_lab].to_numpy(), wide[x_lab].to_numpy())
+        # a narrow kernel gives a genuinely local (varying-by-seed) statistic, unlike
+        # the wide kernel's near-constant whole-brain value
+        assert narrow[x_lab].to_numpy().std() > wide[x_lab].to_numpy().std()
+
+
+def test_gaussian_rejects_unsupported_methods(rng):
+    n_parcels = 30
+    dist_mat = _index_dist_mat(n_parcels)
+    for method in ["mi", "slr", "mlr", "dominance", "pls", "pcr"]:
+        nsp = _make_nsp(rng, n_parcels=n_parcels, n_x=2, with_z=False)
+        nsp.colocalize(method=method, verbose=False)
+        with pytest.raises(ValueError):
+            diagnostics.local_colocalization(nsp, fwhm_mm=10.0, dist_mat=dist_mat, null=False,
+                                             verbose=False)
+
+
+def test_gaussian_mutually_exclusive_with_k_and_radius(synthetic_nispace):
+    nsp = synthetic_nispace
+    n_parcels = nsp._Y.shape[1]
+    dist_mat = _index_dist_mat(n_parcels)
+    nsp.colocalize(method="pearson", verbose=False)
+    with pytest.raises(ValueError):
+        diagnostics.local_colocalization(nsp, k=8, fwhm_mm=10.0, dist_mat=dist_mat, verbose=False)
+    with pytest.raises(ValueError):
+        diagnostics.local_colocalization(nsp, radius=5, fwhm_mm=10.0, dist_mat=dist_mat, verbose=False)
+    with pytest.raises(ValueError):
+        diagnostics.local_colocalization(nsp, dist_mat=dist_mat, verbose=False)
+
+
+def test_gaussian_rejects_xsea(rng):
+    n_parcels = 30
+    dist_mat = _index_dist_mat(n_parcels)
+    nsp = _make_nsp(rng, n_parcels=n_parcels, n_x=2, with_z=False)
+    nsp.colocalize(method="pearson", verbose=False)
+    with pytest.raises(NotImplementedError):
+        diagnostics.local_colocalization(nsp, fwhm_mm=10.0, dist_mat=dist_mat, xsea=True,
+                                         null=False, verbose=False)
+
+
+def test_gaussian_handles_nan(rng):
+    n_parcels = 30
+    dist_mat = _index_dist_mat(n_parcels)
+    nsp = _make_nsp(rng, n_parcels=n_parcels, n_x=2, with_z=False, with_nan=True)
+    nsp.colocalize(method="pearson", verbose=False)
+    out = diagnostics.local_colocalization(nsp, fwhm_mm=15.0, dist_mat=dist_mat, null=False,
+                                           verbose=False)
+    for x_lab, df in out["stat"].items():
+        arr = df.to_numpy()
+        assert np.isfinite(arr).all()
+
+
+@pytest.mark.parametrize("method", ["pearson", "spearman"])
+def test_gaussian_null_auto_detected_from_maps_permute(rng, method):
+    n_parcels = 30
+    dist_mat = _index_dist_mat(n_parcels)
+    nsp = _make_nsp(rng, n_parcels=n_parcels, n_x=2, with_z=False)
+    nsp.colocalize(method=method, verbose=False)
+    nsp.permute(what="maps", n_perm=100, maps_method="random", seed=0, verbose=False)
+    out = diagnostics.local_colocalization(nsp, fwhm_mm=15.0, dist_mat=dist_mat, null=True,
+                                           verbose=False)
+    assert out["mc_method"] == "step_maxT"
+    for x_lab in out["stat"]:
+        p, p_corr = out["p"][x_lab].to_numpy(), out["p_corr"][x_lab].to_numpy()
+        assert p.shape == out["stat"][x_lab].shape
+        assert ((p >= 0) & (p <= 1)).all()
+        assert ((p_corr >= 0) & (p_corr <= 1)).all()
+
+
+def test_gaussian_null_with_regress_z(rng):
+    n_parcels = 30
+    dist_mat = _index_dist_mat(n_parcels)
+    nsp = _make_nsp(rng, n_parcels=n_parcels, n_x=2, with_z=True)
+    nsp.colocalize(method="partialspearman", verbose=False)
+    nsp.permute(what="maps", n_perm=80, maps_method="random", seed=0, verbose=False)
+    out = diagnostics.local_colocalization(nsp, fwhm_mm=20.0, dist_mat=dist_mat, null=True,
+                                           verbose=False)
+    for x_lab in out["stat"]:
+        p = out["p"][x_lab].to_numpy()
+        assert np.isfinite(p).all()
+        assert ((p >= 0) & (p <= 1)).all()

@@ -431,6 +431,14 @@ def regional_contribution(nsp, method=None, X_reduction=None, Y_transform=None, 
 
 # LOCAL COLOCALIZATION (searchlight) ===============================================================
 
+# FWHM (mm) -> Gaussian sigma: sigma = fwhm / (2*sqrt(2*ln2))
+_FWHM_TO_SIGMA = 1.0 / (2.0 * np.sqrt(2.0 * np.log(2.0)))
+# Gaussian-kernel mode is restricted to these 4 methods forever (not planned to be
+# extended to mi/slr/mlr/dominance/pls/pcr): they're the only ones with a closed-form
+# weighted correlation. Reuses _CONTRIBUTION_METHODS (same set as the k/radius fast
+# null path) rather than redefining it.
+_LOCAL_GAUSSIAN_METHODS = _CONTRIBUTION_METHODS
+
 _LOCAL_UNSUPPORTED_METHODS = frozenset({"lasso", "ridge", "elasticnet"})
 _LOCAL_JOINT_METHODS = frozenset({"mlr", "dominance", "pls", "pcr"})
 # fast null path: pearson/spearman/partialpearson/partialspearman all reduce to a plain
@@ -470,6 +478,87 @@ def _batched_corr(A, B):
         den = np.sqrt((Ac ** 2).sum(axis=-1) * (Bc ** 2).sum(axis=-1))
         r = num / den
     return np.where(n_valid < 2, np.nan, r)
+
+
+def _weighted_batched_corr(A, B, w):
+    """Weighted Pearson correlation along the last axis, batched over any number of
+    leading (broadcastable) axes, for one or more sets of weights ``w`` with shape
+    ``(n_seeds, n_parcels)``. Companion to :func:`_batched_corr` for the Gaussian-kernel
+    searchlight mode (``local_colocalization(fwhm_mm=...)``): same pairwise NaN-masking
+    convention, but each (co)variance sum is weighted by ``w`` (renormalized over the
+    valid positions for that particular (A, B) pair -- NaN positions get 0 weight, not
+    dropped from ``w`` beforehand) instead of being a uniform average over a hard window.
+
+    Returns an array of shape ``broadcast(A, B).shape[:-1] + (n_seeds,)``. Used with
+    ``n_seeds=1`` (one row of ``w``) inside the per-seed null loop, and with
+    ``n_seeds=n_parcels`` for the single vectorized observed-statistic call.
+    """
+    A, B = np.broadcast_arrays(A, B)                        # (..., n_parcels)
+    mask = ~np.isnan(A) & ~np.isnan(B)                       # (..., n_parcels)
+    A0 = np.where(mask, A, 0.0)[..., np.newaxis, :]           # (..., 1, n_parcels)
+    B0 = np.where(mask, B, 0.0)[..., np.newaxis, :]
+    w = w * mask[..., np.newaxis, :]                          # (..., n_seeds, n_parcels)
+    w_sum = w.sum(axis=-1)                                     # (..., n_seeds)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        mA = (w * A0).sum(-1) / w_sum
+        mB = (w * B0).sum(-1) / w_sum
+        Ac = np.where(mask[..., np.newaxis, :], A[..., np.newaxis, :] - mA[..., np.newaxis], 0.0)
+        Bc = np.where(mask[..., np.newaxis, :], B[..., np.newaxis, :] - mB[..., np.newaxis], 0.0)
+        num = (w * Ac * Bc).sum(-1)
+        den = np.sqrt((w * Ac ** 2).sum(-1) * (w * Bc ** 2).sum(-1))
+        r = num / den
+    return np.where(w_sum <= 0, np.nan, r)
+
+
+def _local_gaussian_observed(W, X_arr_pre, Y_arr_pre):
+    """Observed statistic for the Gaussian-kernel searchlight mode -- one vectorized
+    :func:`_weighted_batched_corr` call across every seed at once. Unlike the k/radius
+    windowed modes, there is no per-window column subset here (every seed uses all
+    ``n_parcels``, that's the whole point of the kernel), so ``X_arr_pre``/``Y_arr_pre``
+    only need to be preprocessed once, globally -- exactly the same (rank-/Z-regressed)
+    arrays :meth:`NiSpace.colocalize` itself would have used for the whole-brain fit,
+    reused verbatim rather than recomputed per seed."""
+    return _weighted_batched_corr(
+        Y_arr_pre[:, np.newaxis, :],   # (n_Y, 1, n_parcels)
+        X_arr_pre[np.newaxis, :, :],   # (1, n_X, n_parcels)
+        W,                              # (n_parcels [seeds], n_parcels)
+    )  # -> (n_Y, n_X, n_parcels [seeds])
+
+
+def _local_null_gaussian_seed(w_seed, X_pre, Y_pre, null_pre, null_side):
+    """One seed's worth of null correlation for the Gaussian-kernel mode -- companion
+    to :func:`_local_null_fast_window`, but with no window slicing: ``X_pre``/``Y_pre``/
+    ``null_pre`` are already globally rank-/Z-regressed once outside this loop (there is
+    no per-window subset to rank locally when every seed uses all ``n_parcels``), so only
+    the per-seed kernel weight row changes what gets summed."""
+    w_seed = w_seed[np.newaxis, :]  # (1, n_parcels) -- _weighted_batched_corr's n_seeds axis
+    if null_side == "X":
+        out = _weighted_batched_corr(
+            null_pre[np.newaxis, :, :, :],          # (1, n_X_, n_perm, n_parcels)
+            Y_pre[:, np.newaxis, np.newaxis, :],     # (n_Y_, 1, 1, n_parcels)
+            w_seed,
+        )
+    else:
+        out = _weighted_batched_corr(
+            X_pre[np.newaxis, :, np.newaxis, :],     # (1, n_X_, 1, n_parcels)
+            null_pre[:, np.newaxis, :, :],            # (n_Y_, 1, n_perm, n_parcels)
+            w_seed,
+        )
+    return out[..., 0]  # drop the trailing n_seeds=1 axis
+
+
+def _local_null_gaussian(W, X_pre, Y_pre, null_pre, null_side, n_proc, verbose):
+    """Null recomputation for the Gaussian-kernel searchlight mode, parallelized across
+    seeds (``n_proc``) exactly like :func:`_local_null_fast` -- the only difference from
+    the k/radius fast path is that ``X_pre``/``Y_pre``/``null_pre`` are already globally
+    preprocessed once by the caller (no per-window ``_local_null_preprocess`` call)."""
+    n_parcels = W.shape[0]
+    results = Parallel(n_jobs=n_proc)(
+        delayed(_local_null_gaussian_seed)(W[j], X_pre, Y_pre, null_pre, null_side)
+        for j in tqdm(range(n_parcels), desc="Local colocalization null (gaussian kernel)",
+                     disable=not verbose, mininterval=1.0)
+    )
+    return np.stack(results, axis=-1)  # (n_Y_, n_X_, n_perm, n_parcels)
 
 
 def _local_null_preprocess(nb, X_arr, Y_arr, Z_full, null_data, null_side,
@@ -640,7 +729,7 @@ def _local_observed_window(nsp, nb, X, Y, Z_full, method, rank, regress_z, zy_ma
     return r_stat.to_numpy(), r_stat.columns
 
 
-def local_colocalization(nsp, k=None, radius=None, dist_mat=None,
+def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
                          method=None, X_reduction=None, Y_transform=None, xsea=None,
                          X=None, Y=None, Z=None,
                          null=None, mc_method="step_maxT", mc_alpha=0.05,
@@ -669,10 +758,27 @@ def local_colocalization(nsp, k=None, radius=None, dist_mat=None,
         A fitted NiSpace object that has already run ``colocalize()``.
     k : int, optional
         Number of nearest neighbors per region (including the region itself). Exactly
-        one of ``k``/``radius`` must be given.
+        one of ``k``/``radius``/``fwhm_mm`` must be given.
     radius : float, optional
         Distance threshold (same units as ``dist_mat``) for a region's neighborhood,
         as an alternative to a fixed ``k``.
+    fwhm_mm : float, optional
+        Alternative to ``k``/``radius``: a tapered Gaussian-kernel searchlight instead
+        of a hard window. Every region is weighted by ``exp(-d**2 / (2*sigma**2))``
+        (``sigma = fwhm_mm / 2.3548...``) based on distance from the seed region and
+        contributes to *every* seed's correlation -- there is no hard cutoff, so the
+        number of regions used is always the full parcellation (unlike ``k``/``radius``,
+        where it shrinks/grows the window). This does **not** mean the *effective*
+        degrees of freedom are constant across ``fwhm_mm`` values -- a narrow kernel
+        still concentrates weight on few regions, it's just not a hard cutoff; think of
+        ``fwhm_mm`` as a smoother, not a df-free, version of ``radius``. Restricted to
+        ``method in {"pearson", "spearman", "partialpearson", "partialspearman"}``
+        (raises ``ValueError`` otherwise) -- these are the only methods with a
+        closed-form weighted correlation; this restriction is permanent, not a
+        to-be-extended limitation. Not supported with ``xsea=True`` (raises
+        ``NotImplementedError``). No minimum-``k``-style guardrail is needed (unlike
+        the joint-model methods under ``k``/``radius``): these 4 methods always fit one
+        predictor at a time.
     dist_mat : array, optional
         Precomputed ``(n_parcels, n_parcels)`` distance matrix. Defaults to
         ``nsp._get_dist_mat(dist_mat_type="cv")`` -- the same combined-hemisphere
@@ -682,6 +788,7 @@ def local_colocalization(nsp, k=None, radius=None, dist_mat=None,
         ``lasso``/``ridge``/``elasticnet`` are not supported -- their spatial CV-fold
         split is sized to the full parcellation and would misalign against a
         region-window subset (same reason :func:`regional_influence` excludes them).
+        ``fwhm_mm`` further restricts this to 4 methods, see above.
     null : bool, optional
         Compute per-region p-values from the last ``permute()`` call's stored null.
         Defaults to auto-detect: True if a ``permute()`` result exists, False otherwise.
@@ -746,9 +853,10 @@ def local_colocalization(nsp, k=None, radius=None, dist_mat=None,
           ``None`` only when ``null=False`` (no permutation available).
         - ``"p_corr"`` : same shape as ``"stat"``, or None -- ``mc_method``-corrected
           p-values. ``None`` when ``null=False`` or ``mc_method=None``.
-        - ``"settings"`` : dict -- ``{"k": k}`` in k-NN mode, or ``{"radius": radius,
+        - ``"settings"`` : dict -- ``{"k": k}`` in k-NN mode, ``{"radius": radius,
           "n_neighbors_min": ..., "n_neighbors_median": ..., "n_neighbors_max": ...}``
-          in radius mode (window size varies by region there, unlike fixed-k).
+          in radius mode (window size varies by region there, unlike fixed-k), or
+          ``{"fwhm_mm": fwhm_mm, "sigma_mm": sigma_mm}`` in Gaussian-kernel mode.
     """
     verbose = set_log(lgr, nsp._verbose if verbose is None else verbose)
     lgr.info("*** diagnostics.local_colocalization() - Computing local colocalization. ***")
@@ -757,8 +865,9 @@ def local_colocalization(nsp, k=None, radius=None, dist_mat=None,
     n_proc = nsp._n_proc if n_proc is None else n_proc
     dtype = nsp._dtype if dtype is None else dtype
 
-    if (k is None) == (radius is None):
-        lgr.critical_raise("Specify exactly one of k or radius.", ValueError)
+    if sum(x is not None for x in (k, radius, fwhm_mm)) != 1:
+        lgr.critical_raise("Specify exactly one of k, radius, or fwhm_mm.", ValueError)
+    gaussian_mode = fwhm_mm is not None
 
     method, X_reduction, Y_transform, xsea = nsp._get_last(
         method=method,
@@ -773,11 +882,20 @@ def local_colocalization(nsp, k=None, radius=None, dist_mat=None,
         lgr.critical_raise(f"local_colocalization() does not support method '{method}' -- its "
                            "spatial CV-fold split is sized to the full parcellation and would "
                            "misalign against a region-window subset.", ValueError)
+    if gaussian_mode and method not in _LOCAL_GAUSSIAN_METHODS:
+        lgr.critical_raise(f"fwhm_mm is only supported for method in "
+                           f"{sorted(_LOCAL_GAUSSIAN_METHODS)} -- these are the only methods "
+                           "with a closed-form weighted correlation; this restriction is "
+                           "permanent, not planned to be extended. Use k= or radius= for "
+                           f"method='{method}'.", ValueError)
+    if gaussian_mode and xsea:
+        lgr.critical_raise("local_colocalization()'s fwhm_mm (Gaussian-kernel) mode does not "
+                           "support xsea=True.", NotImplementedError)
     if method not in nsp._colocs_fun or method not in nsp._coloc_kwargs_by_method:
         lgr.critical_raise(f"No stored colocalize() results for method '{method}'! "
                            "Did you run colocalize() with this method first?", KeyError)
 
-    X, Y, _, _, _, coloc_kwargs = _resolve_coloc_data(
+    X, Y, X_arr_pre, Y_arr_pre, _, coloc_kwargs = _resolve_coloc_data(
         nsp, method=method, X=X, Y=Y, Z=Z, X_reduction=X_reduction, Y_transform=Y_transform,
         xsea=xsea, zy_matched=False, dtype=dtype, verbose=verbose,
     )
@@ -787,7 +905,7 @@ def local_colocalization(nsp, k=None, radius=None, dist_mat=None,
     n_predictors = X.shape[0]
     is_joint = method in _LOCAL_JOINT_METHODS
 
-    ## distance matrix + neighbor windows
+    ## distance matrix + neighbor windows / Gaussian kernel weights
     if dist_mat is None:
         dist_mat = nsp._get_dist_mat(dist_mat_type="cv", n_proc=n_proc)
     dist_mat = np.asarray(dist_mat)
@@ -795,7 +913,11 @@ def local_colocalization(nsp, k=None, radius=None, dist_mat=None,
         lgr.critical_raise(f"dist_mat shape {dist_mat.shape} does not match the "
                            f"n_parcels={n_parcels} of the resolved X/Y data.", ValueError)
 
-    if k is not None:
+    if gaussian_mode:
+        sigma_mm = fwhm_mm * _FWHM_TO_SIGMA
+        W = np.exp(-(dist_mat ** 2) / (2.0 * sigma_mm ** 2)).astype(dtype)
+        settings = {"fwhm_mm": fwhm_mm, "sigma_mm": sigma_mm}
+    elif k is not None:
         if is_joint and k <= 2 * n_predictors:
             lgr.critical_raise(f"k={k} is too small for method '{method}' with {n_predictors} "
                                f"predictors -- need k > {2 * n_predictors} (2x predictors) for "
@@ -884,17 +1006,24 @@ def local_colocalization(nsp, k=None, radius=None, dist_mat=None,
     ## has pinned "nispace.api"'s own level -- see that helper's docstring), leaving a
     ## single clean tqdm bar.
     stat = _get_coloc_stats(method, drop_optional=True)[0]
-    with _silence_repeated_calls():
-        obs_results = [
-            _local_observed_window(nsp, windows[i], X, Y, Z_full, method, rank, regress_z,
-                                   zy_matched, stat)
-            for i in tqdm(range(n_parcels),
-                         desc=f"Local colocalization ({method})",
-                         disable=not verbose, mininterval=1.0)
-        ]
-    x_labels = obs_results[0][1]
+    if gaussian_mode:
+        # single vectorized call across all seeds at once -- no per-window colocalize()
+        # calls needed here (nothing to re-rank locally, see _local_gaussian_observed's
+        # docstring), so none of the observed-loop pickling-overhead concerns above apply
+        obs_arr = _local_gaussian_observed(W, X_arr_pre, Y_arr_pre)  # (n_Y, n_X, n_parcels)
+        x_labels = X.index
+    else:
+        with _silence_repeated_calls():
+            obs_results = [
+                _local_observed_window(nsp, windows[i], X, Y, Z_full, method, rank, regress_z,
+                                       zy_matched, stat)
+                for i in tqdm(range(n_parcels),
+                             desc=f"Local colocalization ({method})",
+                             disable=not verbose, mininterval=1.0)
+            ]
+        x_labels = obs_results[0][1]
+        obs_arr = np.stack([r[0] for r in obs_results], axis=-1)  # (n_Y, n_X_or_1, n_parcels)
     y_labels = Y.index
-    obs_arr = np.stack([r[0] for r in obs_results], axis=-1)  # (n_Y, n_X_or_1, n_parcels)
 
     result = {
         x_lab: pd.DataFrame(obs_arr[:, j, :], index=y_labels, columns=X.columns, dtype=dtype)
@@ -911,16 +1040,40 @@ def local_colocalization(nsp, k=None, radius=None, dist_mat=None,
         lgr.critical_raise(f"mc_method='{mc_method}' not supported; use 'step_maxT', 'maxT', "
                            "or None.", ValueError)
 
-    ## null: recompute the same windowed correlation for every precomputed null draw,
-    ## re-slicing the already-generated null maps rather than regenerating them per window.
+    ## null: recompute the same correlation for every precomputed null draw, re-slicing/
+    ## reweighting the already-generated null maps rather than regenerating them.
     ## Fast (batched, vectorized) path for pearson/spearman/partialpearson/partialspearman;
-    ## slow (per-draw closure reuse) path for mi/slr/mlr/dominance/pls/pcr -- see
-    ## _local_null_fast()/_local_null_slow() docstrings. Neither path calls nsp.colocalize()
-    ## (they reuse _rank_regress()/nsp._colocs_fun[method] directly), so plain _quiet() is
-    ## enough here -- no "nispace.api" logger involved, unlike the observed-stat loop above.
+    ## slow (per-draw closure reuse) path for mi/slr/mlr/dominance/pls/pcr; Gaussian-kernel
+    ## path for fwhm_mm mode (always one of the 4 fast-path methods, see the fwhm_mm
+    ## restriction above) -- see _local_null_fast()/_local_null_slow()/_local_null_gaussian()
+    ## docstrings. None of the three paths call nsp.colocalize() (they reuse
+    ## _rank_regress()/nsp._colocs_fun[method] directly), so plain _quiet() is enough here --
+    ## no "nispace.api" logger involved, unlike the observed-stat loop above (windowed modes).
     null_data = null_maps.data  # (n_null_maps, n_perm, n_parcels)
     with _quiet():
-        if method in _LOCAL_NULL_FAST_METHODS:
+        if gaussian_mode:
+            # global (not per-window) rank/Z-regression of the null draws -- matches
+            # X_arr_pre/Y_arr_pre's own global preprocessing above: there's no per-window
+            # subset to rank locally when every seed uses all n_parcels, so this happens
+            # once here rather than once per seed (cheaper than the k/radius fast path's
+            # equivalent, which repeats it per window)
+            regress_x = bool(regress_z) and "x" in regress_z
+            regress_y = bool(regress_z) and "y" in regress_z
+            Z_arr = None
+            if regress_z:
+                Z_arr = np.asarray(Z_full, dtype=dtype)
+                if rank:
+                    Z_arr = rank2d(Z_arr.T).T
+            null_list = list(null_data.transpose(1, 0, 2))  # n_perm arrays, (n_null_maps, n_parcels)
+            null_pre_list = _rank_regress(
+                arr=null_list, rank=rank, regress=(regress_x if null_side == "X" else regress_y),
+                z=Z_arr, zy_matched=zy_matched, n_proc=n_proc, verbose=False,
+            )
+            null_pre = np.stack(null_pre_list, axis=1)  # (n_null_maps, n_perm, n_parcels)
+            null_arr = _local_null_gaussian(
+                W, X_arr_pre, Y_arr_pre, null_pre, null_side, n_proc, verbose,
+            )
+        elif method in _LOCAL_NULL_FAST_METHODS:
             null_arr = _local_null_fast(
                 windows, X_arr, Y_arr, Z_full, null_data, null_side,
                 rank, regress_z, zy_matched, dtype, n_proc, verbose,
