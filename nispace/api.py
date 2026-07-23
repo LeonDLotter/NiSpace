@@ -43,11 +43,19 @@ def _cwr_null_p(obs, null):
     to avoid an exact-0 p (matches null_to_p's floor convention, stats/misc.py).
     Used for correlate_within_region()'s raw per-parcel p and, with the same floor,
     for get_within_region_correlations()'s maxT/step_maxT correction -- so
-    'corrected p >= raw p' holds by construction, not just approximately."""
+    'corrected p >= raw p' holds by construction, not just approximately.
+
+    A NaN obs (e.g. a parcel/subject that was entirely missing, so rho itself is
+    undefined) must produce a NaN p, not a fake "significant" one: `NaN >= x` is
+    always False in numpy, so the naive fraction would silently evaluate to 0.0
+    and get floor-clipped to `1/n_perm` -- an artificially tiny "significant"
+    p-value for a statistic that was never computed. Guarded explicitly here."""
     n_perm = null.shape[0]
-    p = (np.abs(null) >= np.abs(obs)[np.newaxis, :]).mean(axis=0)
+    with np.errstate(invalid="ignore"):
+        p = (np.abs(null) >= np.abs(obs)[np.newaxis, :]).mean(axis=0)
     floor = max(np.finfo(float).eps, 1.0 / n_perm)
-    return np.clip(p, floor, 1.0 - floor)
+    p = np.clip(p, floor, 1.0 - floor)
+    return np.where(np.isnan(obs), np.nan, p)
 
 
 _CWR_OMNIBUS_STATS = ("rho", "absrho", "rho2")
@@ -59,14 +67,19 @@ def _cwr_omnibus_aggregate(rho, omnibus_stat):
     Applied identically to the observed per-parcel rho (1D) and to each
     permutation's per-parcel null (2D, (n_perm, n_parcels)) so the two are
     directly comparable via _cwr_null_p -- for "absrho"/"rho2" that two-tailed
-    |.| comparison collapses to a one-tailed test since both are already >= 0."""
-    if omnibus_stat == "rho":
-        return np.mean(rho, axis=-1)
-    elif omnibus_stat == "absrho":
-        return np.mean(np.abs(rho), axis=-1)
-    elif omnibus_stat == "rho2":
-        return np.mean(rho ** 2, axis=-1)
-    else:
+    |.| comparison collapses to a one-tailed test since both are already >= 0.
+
+    Uses nanmean, not mean: a single entirely-missing parcel (rho == NaN for
+    that parcel, in every permutation too) should be excluded from the average,
+    not silently NaN out the whole omnibus statistic over one bad parcel."""
+    with np.errstate(invalid="ignore"):
+        if omnibus_stat == "rho":
+            return np.nanmean(rho, axis=-1)
+        elif omnibus_stat == "absrho":
+            return np.nanmean(np.abs(rho), axis=-1)
+        elif omnibus_stat == "rho2":
+            return np.nanmean(rho ** 2, axis=-1)
+    if omnibus_stat not in _CWR_OMNIBUS_STATS:
         lgr.critical_raise(
             f"'omnibus_stat' must be one of {_CWR_OMNIBUS_STATS}, got '{omnibus_stat}'.",
             ValueError
@@ -2075,22 +2088,39 @@ class NiSpace:
                     null_dist = null_entry["null_dist"]  # (n_perm, n_parcels)
                     obs_abs = np.abs(rho_df.values)[0]      # (n_parcels,)
                     null_abs = np.abs(null_dist)            # (n_perm, n_parcels)
-                    if mc_method == "maxT":
-                        null_max = null_abs.max(axis=1)     # (n_perm,)
-                        counts = np.mean(null_max[:, np.newaxis] >= obs_abs[np.newaxis, :], axis=0)
-                    else:  # step_maxT
-                        order = np.argsort(obs_abs)[::-1]
-                        obs_s = obs_abs[order]
-                        null_s = null_abs[:, order]
-                        null_rev_cummax = np.maximum.accumulate(null_s[:, ::-1], axis=1)[:, ::-1]
-                        p_s = np.maximum.accumulate(np.mean(null_rev_cummax >= obs_s[np.newaxis, :], axis=0))
-                        counts = np.empty_like(p_s)
-                        counts[order] = p_s
+                    # a parcel with no observed rho (entirely missing data) has no
+                    # defined statistic to correct -- exclude it from the maxT/
+                    # step_maxT family entirely (so it can't distort other parcels'
+                    # max-statistic null either) and give it NaN, not a fake p from
+                    # 'NaN >= x' silently evaluating to False everywhere
+                    valid = ~np.isnan(obs_abs)
+                    counts = np.full(obs_abs.shape, np.nan)
+                    if valid.any():
+                        obs_v = obs_abs[valid]
+                        null_v = null_abs[:, valid]
+                        if mc_method == "maxT":
+                            with np.errstate(invalid="ignore"):
+                                null_max = np.nanmax(null_v, axis=1)   # (n_perm,)
+                            counts_v = np.mean(null_max[:, np.newaxis] >= obs_v[np.newaxis, :], axis=0)
+                        else:  # step_maxT
+                            order = np.argsort(obs_v)[::-1]
+                            obs_s = obs_v[order]
+                            # NaN would poison np.maximum.accumulate's running max for every
+                            # step after it appears -- substitute -inf so a sporadic per-
+                            # permutation NaN (too few valid pairs in that one shuffle) can
+                            # never win the max, without breaking the accumulation
+                            null_s = np.where(np.isnan(null_v[:, order]), -np.inf, null_v[:, order])
+                            null_rev_cummax = np.maximum.accumulate(null_s[:, ::-1], axis=1)[:, ::-1]
+                            p_s = np.maximum.accumulate(np.mean(null_rev_cummax >= obs_s[np.newaxis, :], axis=0))
+                            counts_v = np.empty_like(p_s)
+                            counts_v[order] = p_s
+                        counts[valid] = counts_v
                     # same floor-clip convention as the raw per-parcel p (_cwr_null_p) so
                     # 'corrected >= raw' holds by construction, not just approximately
                     n_perm_used = null_entry["n_perm"]
                     floor = max(np.finfo(float).eps, 1.0 / n_perm_used)
-                    p_corr = np.clip(counts, floor, 1.0 - floor)
+                    with np.errstate(invalid="ignore"):
+                        p_corr = np.clip(counts, floor, 1.0 - floor)
                     p_corr_df = pd.DataFrame([p_corr], index=p_df.index, columns=p_df.columns,
                                              dtype=self._dtype)
 
@@ -2118,9 +2148,19 @@ class NiSpace:
                 else:
                     # alpha only affects the reject mask (not returned here, see
                     # get_within_region_correlations_omnibus discussion), not the
-                    # corrected p-values themselves for fdr_bh/bonferroni/holm
-                    p_corr_df, _ = mc_correction(p_df, alpha=0.05, method=mc_method,
-                                                 dtype=self._dtype)
+                    # corrected p-values themselves for fdr_bh/bonferroni/holm.
+                    # statsmodels.multipletests NaNs out EVERY output the moment a
+                    # single input p is NaN (a missing parcel), not just that
+                    # parcel's own -- mask out before calling it, reinsert after
+                    p_vals = p_df.values[0]
+                    nan_mask = np.isnan(p_vals)
+                    p_corr_vals = np.full(p_vals.shape, np.nan)
+                    if not nan_mask.all():
+                        p_corr_valid, _ = mc_correction(p_vals[~nan_mask], alpha=0.05,
+                                                        method=mc_method, dtype=self._dtype)
+                        p_corr_vals[~nan_mask] = p_corr_valid
+                    p_corr_df = pd.DataFrame([p_corr_vals], index=p_df.index, columns=p_df.columns,
+                                             dtype=self._dtype)
 
         out = {"stat_type": "rho", "mc_method": mc_method, "stat": rho_df, "p": p_df,
                "p_corr": p_corr_df}

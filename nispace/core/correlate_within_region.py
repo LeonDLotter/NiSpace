@@ -2,7 +2,7 @@ import numpy as np
 
 import logging
 lgr = logging.getLogger(__name__)
-from ..stats.coloc import pearson, rank2d
+from ..stats.coloc import pearson, rank1d, rank2d
 
 
 _CWR_METHODS = ("pearson", "spearman")
@@ -82,7 +82,7 @@ def _colwise_corr_vectorized(X, Y):
 def _colwise_corr_loop(X, Y):
     """NaN-aware fallback: per-parcel Pearson via the njit `pearson()` primitive.
 
-    X, Y : ndarray, shape (n_subjects, n_parcels)
+    X, Y : ndarray, shape (n_subjects, n_parcels), raw (unranked) values.
     """
     n_parcels = X.shape[1]
     rho = np.full(n_parcels, np.nan, dtype=np.float64)
@@ -92,6 +92,35 @@ def _colwise_corr_loop(X, Y):
         if mask.sum() < 2:
             continue
         rho[p] = pearson(np.ascontiguousarray(x[mask]), np.ascontiguousarray(y[mask]))
+    return rho
+
+
+def _colwise_spearman_loop(X, Y):
+    """NaN-aware fallback: per-parcel Spearman, masking incomplete pairs BEFORE ranking.
+
+    X, Y : ndarray, shape (n_subjects, n_parcels), raw (unranked) values.
+
+    Ranking each column's own non-NaN values in isolation (as the no-NaN fast path
+    does via `rank2d`) is only equivalent to masking-then-ranking when both sides
+    share the exact same NaN pattern. Otherwise, one side's column can carry extra
+    valid rows the other side lacks; ranking it over that larger universe and only
+    intersecting afterward leaves numeric gaps in the surviving ranks (removing an
+    element from a total order is not the same as re-ranking what remains), which
+    biases the correlation relative to `pandas`-style pairwise-deletion Spearman.
+    So here, unlike the no-NaN path, ranking must happen per parcel (and per
+    permutation for the null, since which rows are jointly valid can shift when Y
+    is subject-permuted) on the masked subset only.
+    """
+    n_parcels = X.shape[1]
+    rho = np.full(n_parcels, np.nan, dtype=np.float64)
+    for p in range(n_parcels):
+        x, y = X[:, p], Y[:, p]
+        mask = ~np.isnan(x) & ~np.isnan(y)
+        if mask.sum() < 2:
+            continue
+        xr = rank1d(np.ascontiguousarray(x[mask]))
+        yr = rank1d(np.ascontiguousarray(y[mask]))
+        rho[p] = pearson(xr, yr)
     return rho
 
 
@@ -132,14 +161,18 @@ def correlate_within_region_core(X, Y, method="pearson", n_perm=1000, seed=None)
 
     has_nan = np.isnan(X2).any() or np.isnan(Y2).any()
 
-    # ranking is per-column over the subject axis, so it commutes with row
-    # (subject) permutation -- safe to rank once, up front, before any shuffles
-    if method == "spearman":
+    # ranking is per-column over the subject axis, so it commutes with row (subject)
+    # permutation -- safe to rank once, up front, before any shuffles -- but ONLY
+    # when there's no missingness to mask around; with NaNs, ranking must happen
+    # after masking each parcel/permutation down to its jointly-valid subset (see
+    # `_colwise_spearman_loop`), not before, or the ranks are biased
+    if method == "spearman" and not has_nan:
         X2 = rank2d(X2)
         Y2 = rank2d(Y2)
 
     if has_nan:
-        rho = _colwise_corr_loop(X2, Y2)
+        corr_loop = _colwise_spearman_loop if method == "spearman" else _colwise_corr_loop
+        rho = corr_loop(X2, Y2)
     else:
         rho = _colwise_corr_vectorized(X2, Y2)
 
@@ -149,7 +182,7 @@ def correlate_within_region_core(X, Y, method="pearson", n_perm=1000, seed=None)
         sigma = np.argsort(rng.random((n_subjects, n_perm)), axis=0).T  # (n_perm, n_subjects)
         Y_perm = Y2[sigma]  # (n_perm, n_subjects, n_parcels)
         if has_nan:
-            null = np.stack([_colwise_corr_loop(X2, Y_perm[i]) for i in range(n_perm)], axis=0)
+            null = np.stack([corr_loop(X2, Y_perm[i]) for i in range(n_perm)], axis=0)
         else:
             null = _colwise_corr_vectorized(X2[np.newaxis, :, :], Y_perm)
 
