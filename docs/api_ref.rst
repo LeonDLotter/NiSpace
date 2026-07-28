@@ -65,6 +65,21 @@ API Reference
    simple_xsea
 
 
+.. _api_diagnostics:
+
+:mod:`nispace.diagnostics` – Regional diagnostics
+----------------------------------------------------
+.. currentmodule:: nispace.diagnostics
+
+.. autosummary::
+   :template: function.rst
+   :toctree: generated/
+
+   regional_influence
+   regional_contribution
+   local_colocalization
+
+
 .. _api_stats_coloc:
 
 :mod:`nispace.stats.coloc` – Colocalization statistics

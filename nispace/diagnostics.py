@@ -32,12 +32,13 @@ import logging
 lgr = logging.getLogger(__name__)
 
 from .core.colocalize import _get_coloc_stats, _rank_regress
+from .core.permute import _resolve_permute_mode_settings
 from .core.region_influence import _get_region_influence_fun, _sort_region_influence, _pool_region_influence
 from .core.region_contribution import (_get_region_contribution_fun, _sort_region_contribution,
                                        _CONTRIBUTION_METHODS)
 from .stats.coloc import rank2d
 from .stats.misc import maxT_correction, step_maxT_correction
-from .utils.utils import set_log, _quiet
+from .utils.utils import set_log, _quiet, print_arg_pairs
 
 
 @contextmanager
@@ -293,6 +294,9 @@ def regional_influence(nsp, method=None, stat=None, engine="auto", signed=False,
     if pooled:
         _infl = _pool_region_influence(_infl, "mean" if pooled is True else pooled)
 
+    lgr.info(f"Returning regional_influence results: \n"
+             f"{print_arg_pairs(method=method, stat=stat, engine=engine_used, signed=signed, xsea=xsea, X_reduction=X_reduction, Y_transform=Y_transform, pooled=pooled)}")
+
     if force_dict and not isinstance(_infl, dict):
         return {stat: _infl}
     return _infl
@@ -425,6 +429,9 @@ def regional_contribution(nsp, method=None, X_reduction=None, Y_transform=None, 
         pooled = False if quadrant else nsp._last_settings.get("pooled_p", False)
     if pooled:
         out = _pool_region_influence(out, "mean" if pooled is True else pooled)
+
+    lgr.info(f"Returning regional_contribution results: \n"
+             f"{print_arg_pairs(method=method, quadrant=quadrant, xsea=xsea, X_reduction=X_reduction, Y_transform=Y_transform, pooled=pooled)}")
 
     return out
 
@@ -729,10 +736,24 @@ def _local_observed_window(nsp, nb, X, Y, Z_full, method, rank, regress_z, zy_ma
     return r_stat.to_numpy(), r_stat.columns
 
 
+def _local_to_result_dict(arr, x_labels, y_labels, columns, dtype, is_joint):
+    """(n_Y, n_X_or_1, n_parcels) array -> dict of per-X-map DataFrames (or a single
+    DataFrame for joint methods) -- the shared result-shape convention for
+    :func:`local_colocalization`'s ``"stat"``/``"p"``/``"p_corr"`` outputs, used both
+    for the initial (unpooled) build and again after pooling collapses the Y axis."""
+    out = {
+        x_lab: pd.DataFrame(arr[:, j, :], index=y_labels, columns=columns, dtype=dtype)
+        for j, x_lab in enumerate(x_labels)
+    }
+    if is_joint and len(out) == 1:
+        return next(iter(out.values()))
+    return out
+
+
 def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
                          method=None, X_reduction=None, Y_transform=None, xsea=None,
                          X=None, Y=None, Z=None,
-                         null=None, mc_method="step_maxT", mc_alpha=0.05,
+                         null=None, pooled=None, mc_method="step_maxT", mc_alpha=0.05,
                          n_proc=None, verbose=None, dtype=None):
     """
     "Searchlight" local colocalization: restrict :meth:`NiSpace.colocalize` to each
@@ -816,6 +837,35 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
         ``permute(what="groups")``. Every other mode/combination (``"sets"``,
         ``"pairs"``, ``maps_which=["X","Y"]``, or any combined ``what=`` like
         ``["groups","maps"]``) raises ``NotImplementedError``.
+    pooled : {None, False, True, "mean", "median"}, default None
+        Only meaningful when a null is computed (ignored otherwise) and only ever
+        affects **p-values**, never the observed statistic itself -- ``"stat"`` always
+        keeps its full ``n_Y`` rows regardless of ``pooled`` (matching
+        :meth:`NiSpace.get_colocalizations`, which stays unpooled no matter what
+        ``pooled_p`` a later ``permute()`` call used -- ``permute()``'s own
+        ``_colocs_obs`` is a fresh array copy, never written back to the stored
+        result). When active, a *copy* of the observed statistic and every null draw
+        are pooled across the Y axis (mean/median) purely for the p comparison --
+        not a post-hoc average of already-computed per-Y-row p-values, mirroring
+        exactly how :meth:`NiSpace.permute`'s own ``pooled_p`` resolves p (see
+        ``core/permute.py``'s ``_resolve_permute_mode_settings``). ``None`` defaults
+        to whatever ``pooled_p`` was last resolved to elsewhere in the pipeline
+        (``nsp._last_settings["pooled_p"]``); ``True`` is treated as ``"mean"``. A
+        no-op when the Y axis only has one row to begin with (e.g. a single
+        ``transform_y()`` group-contrast map), same as ``permute()``.
+
+        For ``permute(what="groups")`` specifically, pooling is **not a free choice** --
+        it's always forced to ``"mean"`` (a group-label-shuffle null answers one
+        aggregate question; per-row nulls under it are either degenerate for paired
+        transforms, or meaningless for unpaired multi-row ones -- same rationale
+        ``permute()`` itself already enforces). Passing an incompatible ``pooled``
+        here with an auto-detected/explicit ``groups`` null logs a warning and is
+        overridden, exactly like passing an incompatible ``pooled_p`` to ``permute()``
+        would be. For ``permute(what="maps")`` nulls, ``pooled`` remains a free,
+        meaningful choice.
+
+        When active, ``"p"``/``"p_corr"`` (only) collapse from ``n_Y`` rows to a
+        single row indexed ``["mean"]``/``["median"]`` (see ``Returns`` below).
     mc_method : {"step_maxT", "maxT", None}, default "step_maxT"
         Multiple-comparisons correction across regions, applied separately per X map
         (not pooled across X maps) -- same convention as :func:`regional_influence`/
@@ -845,13 +895,20 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
         - ``"stat_type"`` : str -- the colocalization stat name (e.g. ``"rho"``, ``"r2"``).
         - ``"mc_method"`` : str or None -- the correction actually applied to ``"p_corr"``
           (``None`` if ``null=False``, or if ``mc_method=None`` was passed).
+        - ``"pooled"`` : {False, "mean", "median"} -- the ``pooled`` setting actually
+          applied to ``"p"``/``"p_corr"`` (always ``False`` when ``null=False``, or when
+          the Y axis had only one row to begin with). Never affects ``"stat"``.
         - ``"stat"`` : DataFrame or dict of DataFrame -- the local statistic, shape
-          (n_Y x n_parcels). A dict keyed by X-map label for per-predictor methods
+          (n_Y x n_parcels) **always**, regardless of ``pooled`` -- the observed
+          statistic is never pooled, only compared against a pooled null (see
+          ``pooled`` above). A dict keyed by X-map label for per-predictor methods
           (pearson/spearman/partialpearson/partialspearman/mi/slr), a single DataFrame
           for joint-model methods (mlr/dominance/pls/pcr).
-        - ``"p"`` : same shape as ``"stat"``, or None -- raw uncorrected p-values.
-          ``None`` only when ``null=False`` (no permutation available).
-        - ``"p_corr"`` : same shape as ``"stat"``, or None -- ``mc_method``-corrected
+        - ``"p"`` : same column/key shape as ``"stat"``, or None -- raw uncorrected
+          p-values, shape (n_Y x n_parcels), or (1 x n_parcels) indexed
+          ``["mean"]``/``["median"]`` when ``"pooled"`` is active. ``None`` only when
+          ``null=False`` (no permutation available).
+        - ``"p_corr"`` : same shape as ``"p"``, or None -- ``mc_method``-corrected
           p-values. ``None`` when ``null=False`` or ``mc_method=None``.
         - ``"settings"`` : dict -- ``{"k": k}`` in k-NN mode, ``{"radius": radius,
           "n_neighbors_min": ..., "n_neighbors_median": ..., "n_neighbors_max": ...}``
@@ -907,7 +964,18 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
 
     ## distance matrix + neighbor windows / Gaussian kernel weights
     if dist_mat is None:
-        dist_mat = nsp._get_dist_mat(dist_mat_type="cv", n_proc=n_proc)
+        # _quiet() here isn't just about noise: fetch_template(verbose=False), several
+        # calls deep inside _get_dist_mat() -> get_distance_matrix() -> ...
+        # (datasets.py/nulls.py), unconditionally calls set_log(lgr, False) -- and
+        # set_log() is a no-op ONLY while _quiet_ctx.active, otherwise it directly
+        # lowers the shared "nispace" ROOT logger to WARNING with nothing to ever
+        # restore it. Outside a _quiet() context (this call site, unguarded, is exactly
+        # that case) that permanently silences every lgr.info() call for the rest of the
+        # process -- including this function's own closing summary below -- not just a
+        # cosmetic nesting-noise concern. Matches _resolve_coloc_data()'s existing
+        # convention of wrapping nested NiSpace calls it doesn't own in _quiet().
+        with _quiet():
+            dist_mat = nsp._get_dist_mat(dist_mat_type="cv", n_proc=n_proc)
     dist_mat = np.asarray(dist_mat)
     if dist_mat.shape[0] != n_parcels or dist_mat.shape[1] != n_parcels:
         lgr.critical_raise(f"dist_mat shape {dist_mat.shape} does not match the "
@@ -984,6 +1052,22 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
         lgr.info(f"local_colocalization(): auto-picked up '{perm_mode}' null ({n_perm} perms, "
                 f"nulling {null_side}) from the last permute() call for p-values.")
 
+        # pooled resolution: same source of truth (and same forcing for what="groups") as
+        # permute() itself -- default picks up whatever pooled_p was last resolved to
+        # (nsp._last_settings["pooled_p"] already reflects permute()'s own forcing, but an
+        # explicit `pooled=` override here still needs to be checked against that forcing,
+        # exactly like passing an incompatible pooled_p straight to permute() would be)
+        if pooled is None:
+            pooled = nsp._last_settings.get("pooled_p", False)
+        pooled, mode_warning = _resolve_permute_mode_settings([perm_mode], pooled)
+        if mode_warning:
+            lgr.warning(mode_warning)
+        if pooled and pooled not in ("mean", "median"):
+            pooled = "mean"
+        n_y_rows = Y.shape[0]
+        if pooled and n_y_rows <= 1:
+            pooled = False
+
     X_arr = np.asarray(X, dtype=dtype)
     Y_arr = np.asarray(Y, dtype=dtype)
     # resolved verbatim from what colocalize() itself stored -- not re-derived, matching
@@ -1025,15 +1109,12 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
         obs_arr = np.stack([r[0] for r in obs_results], axis=-1)  # (n_Y, n_X_or_1, n_parcels)
     y_labels = Y.index
 
-    result = {
-        x_lab: pd.DataFrame(obs_arr[:, j, :], index=y_labels, columns=X.columns, dtype=dtype)
-        for j, x_lab in enumerate(x_labels)
-    }
-    if is_joint and len(result) == 1:
-        result = next(iter(result.values()))
+    result = _local_to_result_dict(obs_arr, x_labels, y_labels, X.columns, dtype, is_joint)
 
     if not null:
-        return {"stat_type": stat, "mc_method": None, "stat": result, "p": None,
+        lgr.info(f"Returning local_colocalization results: \n"
+                 f"{print_arg_pairs(method=method, **settings, null=False, xsea=xsea, X_reduction=X_reduction, Y_transform=Y_transform)}")
+        return {"stat_type": stat, "mc_method": None, "pooled": False, "stat": result, "p": None,
                "p_corr": None, "settings": settings}
 
     if mc_method not in ("step_maxT", "maxT", None):
@@ -1084,34 +1165,51 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
                 rank, regress_z, zy_matched, is_joint, dtype, n_proc, verbose,
             )
 
+    # pooled_p: pools the OBSERVED stat AND every null draw across the Y axis *before*
+    # comparing them for the p computation ONLY -- mirrors permute()'s own par_fun exactly
+    # (api.py:2622 shows _colocs_obs there is already a fresh numpy-array copy from
+    # get_colocalizations(), so pooling it in-place never touches what get_colocalizations()
+    # itself reports afterward). "stat" (obs_arr/result, built above) is therefore *never*
+    # touched here and always keeps its full n_Y rows, regardless of pooled -- only "p"/
+    # "p_corr" collapse to the pooled 1-row shape. Averaging already-computed per-Y-row
+    # p-values afterward would not be equivalent to this and would silently diverge from
+    # what get_p_values() reports for the same permute() call.
+    p_labels = y_labels
+    p_obs_arr = obs_arr
+    p_null_arr = null_arr
+    if pooled:
+        reducer = np.nanmedian if pooled == "median" else np.nanmean
+        p_obs_arr = reducer(obs_arr, axis=0, keepdims=True)
+        p_null_arr = reducer(null_arr, axis=0, keepdims=True)
+        p_labels = [pooled]
+
     # raw (uncorrected) p is always computed and returned -- mc_method only controls
     # whether a *second*, corrected p is additionally computed alongside it
     p_floor = max(np.finfo(float).eps, 1.0 / n_perm)
-    p_raw_arr = np.mean(np.abs(null_arr) >= np.abs(obs_arr[:, :, np.newaxis, :]), axis=2)
+    p_raw_arr = np.mean(np.abs(p_null_arr) >= np.abs(p_obs_arr[:, :, np.newaxis, :]), axis=2)
     p_raw_arr = np.clip(p_raw_arr, p_floor, 1.0 - p_floor)
 
-    p_raw_result = {
-        x_lab: pd.DataFrame(p_raw_arr[:, j, :], index=y_labels, columns=X.columns, dtype=dtype)
-        for j, x_lab in enumerate(x_labels)
-    }
-    if is_joint and len(p_raw_result) == 1:
-        p_raw_result = next(iter(p_raw_result.values()))
+    p_raw_result = _local_to_result_dict(p_raw_arr, x_labels, p_labels, X.columns, dtype, is_joint)
 
     p_corr_result = None
     if mc_method is not None:
         corr_fun = step_maxT_correction if mc_method == "step_maxT" else maxT_correction
         p_corr_result = {}
+        p_obs_result = _local_to_result_dict(p_obs_arr, x_labels, p_labels, X.columns, dtype, is_joint)
         for j, x_lab in enumerate(x_labels):
-            obs_df = result[x_lab] if isinstance(result, dict) else result
-            null_colocs = [{"rho": null_arr[:, j, p, :]} for p in range(n_perm)]
+            obs_df = p_obs_result[x_lab] if isinstance(p_obs_result, dict) else p_obs_result
+            null_colocs = [{"rho": p_null_arr[:, j, p, :]} for p in range(n_perm)]
             p_corr, _ = corr_fun(obs_df, null_colocs, stat="rho", tail="two",
                                  how="r", alpha=mc_alpha, dtype=dtype)
             p_corr_result[x_lab] = p_corr
         if is_joint and len(p_corr_result) == 1:
             p_corr_result = next(iter(p_corr_result.values()))
 
-    return {"stat_type": stat, "mc_method": mc_method, "stat": result,
-           "p": p_raw_result, "p_corr": p_corr_result, "settings": settings}
+    lgr.info(f"Returning local_colocalization results: \n"
+             f"{print_arg_pairs(method=method, **settings, null=perm_mode, mc_method=mc_method, pooled=pooled or False, xsea=xsea, X_reduction=X_reduction, Y_transform=Y_transform)}")
+
+    return {"stat_type": stat, "mc_method": mc_method, "pooled": pooled or False,
+           "stat": result, "p": p_raw_result, "p_corr": p_corr_result, "settings": settings}
 
 
 # SPATIAL CROSS-VALIDATION ==========================================================================

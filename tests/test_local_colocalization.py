@@ -4,10 +4,11 @@ permute() pathway (no separate group_local_colocalization() variant), and
 its per-region null/p-values.
 
 Return shape: always a single dict with fixed keys {"stat_type", "mc_method",
-"stat", "p", "p_corr", "settings"} -- matches NiSpace.get_within_region_
+"pooled", "stat", "p", "p_corr", "settings"} -- matches NiSpace.get_within_region_
 correlations()'s return convention. "p"/"p_corr"/"mc_method" are None when
 null=False; "p_corr" is also None when mc_method=None (raw p is always
-computed and returned whenever a null exists).
+computed and returned whenever a null exists). "pooled" is always False when
+null=False, or when the Y axis has only one row to begin with.
 
 Ground-truth invariant used throughout: a k=n_parcels window (the whole
 brain) must reproduce the plain colocalize() result exactly, since the
@@ -43,9 +44,10 @@ def test_return_shape_keys_always_present(synthetic_nispace):
     nsp.colocalize(method="pearson", verbose=False)
 
     out = diagnostics.local_colocalization(nsp, k=8, dist_mat=dist_mat, null=False, verbose=False)
-    assert set(out.keys()) == {"stat_type", "mc_method", "stat", "p", "p_corr", "settings"}
+    assert set(out.keys()) == {"stat_type", "mc_method", "pooled", "stat", "p", "p_corr", "settings"}
     assert out["stat_type"] == "rho"
     assert out["mc_method"] is None
+    assert out["pooled"] is False
     assert out["p"] is None
     assert out["p_corr"] is None
     assert out["settings"] == {"k": 8}
@@ -722,3 +724,168 @@ def test_gaussian_null_with_regress_z(rng):
         p = out["p"][x_lab].to_numpy()
         assert np.isfinite(p).all()
         assert ((p >= 0) & (p <= 1)).all()
+
+
+# ---------------------------------------------------------------------------
+# pooled: mirrors permute()'s own pooled_p -- pools observed stat AND every null
+# draw across the Y axis *before* computing p, not just an average of the final
+# per-Y-row p-values. For permute(what="groups") it's not a free choice: forced to
+# "mean" (per core/permute.py's _resolve_permute_mode_settings), same as permute()
+# itself forces it, even when a conflicting pooled= is passed explicitly. For
+# permute(what="maps") it remains a free choice, defaulting from
+# nsp._last_settings["pooled_p"].
+# ---------------------------------------------------------------------------
+
+def _make_groups_nsp(rng, n_parcels=30, n_x=2, n_per_group=8):
+    """Multi-row groups nsp via a *paired* transform ("elemdiff(a,b)", elementwise
+    a - b) -- unlike "hedges(a,b)" (single-row group-difference map), this keeps one
+    row per subject pair, the case _resolve_permute_mode_settings' docstring calls
+    out as "unpaired multi-row transforms don't carry subject-specific information"
+    (here: paired, but still multi-row) -- the only shape where forced pooling is
+    not a no-op."""
+    X = rng.normal(size=(n_x, n_parcels))
+    w = rng.normal(size=n_x)
+    signal = w @ X
+    Y_a = rng.normal(scale=1.0, size=(n_per_group, n_parcels))
+    Y_b = signal[np.newaxis, :] * 0.6 + rng.normal(scale=1.0, size=(n_per_group, n_parcels))
+    Y = np.vstack([Y_a, Y_b])
+    groups = np.array(["a"] * n_per_group + ["b"] * n_per_group)
+    # elemdiff(a,b) is a paired formula -- subjects gives the a<->b pairing (subject i
+    # in group a pairs with subject i in group b), required by permute_groups(paired=True)
+    subjects = np.array(list(range(n_per_group)) * 2)
+    y_labels = [f"suba{i}" for i in range(n_per_group)] + [f"subb{i}" for i in range(n_per_group)]
+    x_labels = [f"x{i}" for i in range(n_x)]
+    parcel_labels = [f"p{i}" for i in range(n_parcels)]
+
+    nsp = NiSpace(x=pd.DataFrame(X, index=x_labels, columns=parcel_labels),
+                 y=pd.DataFrame(Y, index=y_labels, columns=parcel_labels),
+                 z=None, parcellation=None, standardize=False,
+                 n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    nsp.transform_y("elemdiff(a,b)", groups=groups, subjects=subjects, verbose=False)
+    return nsp
+
+
+def test_pooled_forced_for_groups_null_by_default(rng):
+    n_parcels, n_per_group = 30, 8
+    dist_mat = _index_dist_mat(n_parcels)
+    nsp = _make_groups_nsp(rng, n_parcels=n_parcels, n_per_group=n_per_group)
+    assert nsp.get_y(verbose=False).shape[0] == n_per_group  # multi-row, the case that matters
+
+    nsp.colocalize(method="pearson", verbose=False)
+    nsp.permute(what="groups", n_perm=50, seed=0, verbose=False)
+    assert nsp._last_settings.get("pooled_p") == "mean"  # forced by permute() itself
+
+    out = diagnostics.local_colocalization(nsp, k=8, dist_mat=dist_mat, verbose=False)
+    assert out["pooled"] == "mean"
+    for x_lab in out["stat"]:
+        # "stat" (the observed statistic) is NEVER pooled -- only "p"/"p_corr" are.
+        # get_colocalizations() itself stays unpooled no matter what pooled_p a later
+        # permute() used (permute()'s _colocs_obs is a fresh array copy, api.py:2622,
+        # never written back to the stored result) -- local_colocalization()'s "stat"
+        # must match that invariant exactly.
+        assert out["stat"][x_lab].shape == (n_per_group, n_parcels)
+        assert out["p"][x_lab].shape == (1, n_parcels)
+        assert list(out["p"][x_lab].index) == ["mean"]
+
+
+def test_pooled_forced_for_groups_null_overrides_explicit_false(rng):
+    """An explicit pooled=False (or any non-forced value) must NOT be honored for a
+    groups null -- it's not a free choice, exactly like passing an incompatible
+    pooled_p straight to permute(what="groups") isn't."""
+    n_parcels, n_per_group = 30, 8
+    dist_mat = _index_dist_mat(n_parcels)
+    nsp = _make_groups_nsp(rng, n_parcels=n_parcels, n_per_group=n_per_group)
+    nsp.colocalize(method="pearson", verbose=False)
+    nsp.permute(what="groups", n_perm=50, seed=0, verbose=False)
+
+    out = diagnostics.local_colocalization(nsp, k=8, dist_mat=dist_mat, pooled=False,
+                                           verbose=False)
+    assert out["pooled"] == "mean"
+    for x_lab in out["stat"]:
+        assert out["stat"][x_lab].shape == (n_per_group, n_parcels)  # never pooled
+        assert out["p"][x_lab].shape == (1, n_parcels)
+
+
+def _make_multi_y_nsp(rng, n_parcels=30, n_x=1, n_y=10):
+    """Genuine multi-row Y (unlike _make_nsp's single-row toy_regression shape) --
+    needed to actually exercise pooled's reduction, since pooling n_Y==1 is always a
+    no-op."""
+    labels = [f"p{i}" for i in range(n_parcels)]
+    X = rng.normal(size=(n_x, n_parcels))
+    w = rng.normal(size=n_x)
+    signal = w @ X
+    Y = signal[np.newaxis, :] * 0.5 + rng.normal(scale=1.0, size=(n_y, n_parcels))
+    x_df = pd.DataFrame(X, index=[f"x{i}" for i in range(n_x)], columns=labels)
+    y_df = pd.DataFrame(Y, index=[f"y{i}" for i in range(n_y)], columns=labels)
+    nsp = NiSpace(x=x_df, y=y_df, z=None, parcellation=None, standardize=False,
+                 n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    return nsp
+
+
+def test_pooled_free_choice_for_maps_null(rng):
+    """permute(what="maps") does not force pooling -- it's a free, meaningful choice,
+    defaulting from nsp._last_settings["pooled_p"] but overridable per-call. The key
+    invariant checked here: "stat" NEVER changes shape (or values) with pooled -- only
+    "p"/"p_corr" do -- mirroring get_colocalizations() staying unpooled regardless of
+    what pooled_p a later permute() call used."""
+    n_parcels, n_x, n_y = 30, 1, 10
+    dist_mat = _index_dist_mat(n_parcels)
+    nsp = _make_multi_y_nsp(rng, n_parcels=n_parcels, n_x=n_x, n_y=n_y)
+    nsp.colocalize(method="pearson", verbose=False)
+    nsp.permute(what="maps", n_perm=50, maps_method="random", seed=0, verbose=False)
+
+    out_false = diagnostics.local_colocalization(nsp, k=8, dist_mat=dist_mat, pooled=False,
+                                                  verbose=False)
+    assert out_false["pooled"] is False
+    for x_lab in out_false["stat"]:
+        assert out_false["stat"][x_lab].shape == (n_y, n_parcels)
+        assert out_false["p"][x_lab].shape == (n_y, n_parcels)
+
+    out_mean = diagnostics.local_colocalization(nsp, k=8, dist_mat=dist_mat, pooled="mean",
+                                                 verbose=False)
+    assert out_mean["pooled"] == "mean"
+    for x_lab in out_mean["stat"]:
+        assert out_mean["stat"][x_lab].shape == (n_y, n_parcels)  # unchanged
+        assert out_mean["p"][x_lab].shape == (1, n_parcels)
+        assert list(out_mean["p"][x_lab].index) == ["mean"]
+
+    # "stat" must be bit-for-bit identical regardless of pooled -- pooling only ever
+    # touches a local copy used for the p comparison
+    for x_lab in out_false["stat"]:
+        pd.testing.assert_frame_equal(out_false["stat"][x_lab], out_mean["stat"][x_lab])
+
+
+def test_pooled_ignored_when_null_false(rng):
+    """pooled_p only ever matters for p-values -- with no null at all, it must have
+    zero effect on anything, for any value passed."""
+    n_parcels, n_x, n_y = 30, 1, 10
+    dist_mat = _index_dist_mat(n_parcels)
+    nsp = _make_multi_y_nsp(rng, n_parcels=n_parcels, n_x=n_x, n_y=n_y)
+    nsp.colocalize(method="pearson", verbose=False)
+
+    for pooled_arg in (False, True, "mean", "median"):
+        out = diagnostics.local_colocalization(nsp, k=8, dist_mat=dist_mat, null=False,
+                                               pooled=pooled_arg, verbose=False)
+        assert out["pooled"] is False
+        assert out["p"] is None and out["p_corr"] is None
+        for x_lab in out["stat"]:
+            assert out["stat"][x_lab].shape == (n_y, n_parcels)
+
+
+def test_pooled_noop_when_single_y_row(rng):
+    """pooled=True with only one Y row is a documented no-op (same as permute()'s own
+    convention) -- must not spuriously report "pooled": "mean" for a shape that never
+    actually changed."""
+    n_parcels = 30
+    dist_mat = _index_dist_mat(n_parcels)
+    nsp = _make_nsp(rng, n_parcels=n_parcels, n_x=2)
+    nsp.colocalize(method="pearson", verbose=False)
+    nsp.permute(what="maps", n_perm=50, maps_method="random", seed=0, verbose=False)
+
+    out = diagnostics.local_colocalization(nsp, k=8, dist_mat=dist_mat, pooled=True,
+                                           verbose=False)
+    assert out["pooled"] is False
+    for x_lab in out["stat"]:
+        assert out["stat"][x_lab].shape[0] == 1
