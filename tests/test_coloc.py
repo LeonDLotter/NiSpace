@@ -236,6 +236,60 @@ def test_pls_wrapper_matches_direct_sklearn_plsregression(regression_data):
     assert np.allclose(out["beta"], np.squeeze(reg.coef_.T))
 
 
+def _sklearn_pls_sign(nispace_weight, sklearn_x_weights_col0):
+    # PLS component sign is not guaranteed identical across independent
+    # implementations -- align via dominant-direction dot product rather than
+    # assume equality.
+    return 1.0 if np.dot(nispace_weight, sklearn_x_weights_col0) >= 0 else -1.0
+
+
+def test_fast_pls1_weight_matches_sklearn_x_weights(regression_data):
+    from sklearn.cross_decomposition import PLSRegression
+    X, y = regression_data
+    n_comp = 2
+    out = fast_pls1(X, y, n_components=n_comp)
+    reg = PLSRegression(n_components=n_comp).fit(X, y)
+    sk_w0 = reg.x_weights_[:, 0]
+    sign = _sklearn_pls_sign(out["weight"], sk_w0)
+    assert np.isclose(np.linalg.norm(out["weight"]), 1.0)
+    assert np.allclose(out["weight"], sign * sk_w0, atol=1e-6)
+
+
+def test_fast_pls1_score_r_matches_sklearn_x_scores(regression_data):
+    from sklearn.cross_decomposition import PLSRegression
+    X, y = regression_data
+    n_comp = 2
+    out = fast_pls1(X, y, n_components=n_comp)
+    reg = PLSRegression(n_components=n_comp).fit(X, y)
+    sk_w0 = reg.x_weights_[:, 0]
+    sign = _sklearn_pls_sign(out["weight"], sk_w0)
+    y_c = y - y.mean()
+    expected_r = np.corrcoef(sign * reg.x_scores_[:, 0], y_c)[0, 1]
+    assert np.isclose(out["score_r"], expected_r, atol=1e-6)
+
+
+def test_fast_pls1_score_r_squared_equals_r2_for_single_component(regression_data):
+    X, y = regression_data
+    out = fast_pls1(X, y, n_components=1)
+    assert np.isclose(out["score_r"] ** 2, out["r2"])
+
+
+def test_fast_pls1_score_r_squared_diverges_from_r2_for_multi_component(regression_data):
+    # NOT a bug: r2 reflects the full multi-component fit, score_r only component 1 --
+    # guards against this later being "fixed" into forced equality.
+    X, y = regression_data
+    out = fast_pls1(X, y, n_components=2)
+    assert not np.isclose(out["score_r"] ** 2, out["r2"])
+
+
+def test_fast_pls1_component1_invariant_to_n_components(regression_data):
+    X, y = regression_data
+    out1 = fast_pls1(X, y, n_components=1)
+    out2 = fast_pls1(X, y, n_components=2)
+    assert np.allclose(out1["weight"], out2["weight"])
+    assert np.isclose(out1["score_r"], out2["score_r"])
+
+
 # ── pcr vs independent sklearn PCA + LinearRegression pipeline ──────────────
 
 def test_pcr_matches_independent_sklearn_pipeline(regression_data):

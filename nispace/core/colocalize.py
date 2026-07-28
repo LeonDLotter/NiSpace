@@ -414,12 +414,16 @@ def _sort_colocs(method, y_colocs_list, n_X, n_Y, xsea=False,
     elif method == "pls":
         coloc_arrays["r2"] = arr_1d.copy()
         coloc_arrays["beta"] = arr_2d.copy()
+        coloc_arrays["score_r"] = arr_1d.copy()
+        coloc_arrays["weight"] = arr_2d.copy()
         # for i in range(pls_n_components):
         #     coloc_arrays[f"loadings_comp{i}"] = arr_1d.copy()
-        
+
         for y, prediction in enumerate(y_colocs_list):
             coloc_arrays["r2"][y] = prediction["r2"]
             coloc_arrays["beta"][y, :] = prediction["beta"]
+            coloc_arrays["score_r"][y] = prediction["score_r"]
+            coloc_arrays["weight"][y, :] = prediction["weight"]
             # for i in range(pls_n_components):
             #     coloc_arrays[f"loadings_comp{i}"][y] = prediction["loadings"][:, i]
 

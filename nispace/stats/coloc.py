@@ -805,6 +805,24 @@ def fast_pls1(
         Coefficient of determination.
     x_loadings : (n_features, n_components) ndarray
         Same meaning as ``PLSRegression.x_loadings_`` from scikit-learn.
+    score_r : float
+        Signed Pearson correlation between the first latent component's score
+        (``t1 = xc @ w1``, on centered/scaled data) and y. Unlike ``r2``
+        (always >= 0), this retains sign -- the significance-testing-appropriate
+        stat when directionality matters. Reflects component 1 only, regardless
+        of ``n_components``. ``score_r ** 2 == r2`` holds only when
+        ``n_components == 1`` (for ``n_components > 1``, ``r2`` reflects the
+        full multi-component fit while ``score_r`` reflects only component 1 --
+        expected divergence, not a bug).
+    weight : (n_features,) ndarray
+        Unit-norm PLS weight vector for component 1 (matches
+        ``PLSRegression.x_weights_[:, 0]``), i.e. the per-predictor "gene
+        weight" reported in imaging-transcriptomics PLS studies. Distinct from
+        ``beta`` (the back-transformed regression coefficient, which -- like
+        ``mlr``'s ``beta`` -- can be severely underpowered for significance
+        testing under multicollinear x, since correlated predictors share
+        credit for the same explained variance) and from ``x_loadings``/
+        ``loadings`` (used to reconstruct x from scores, not to compute them).
 
     References
     ----------
@@ -833,6 +851,17 @@ def fast_pls1(
     # sklearn-style loadings
     x_loadings = P_raw / t_norms
 
+    # component-1-only outputs, independent of n_components requested above.
+    # W[:, 0] as returned by _simpls1_loop is scaled so that t^T r == 1 (an internal
+    # deflation convenience, not a meaningful weight magnitude) -- renormalize to unit
+    # norm to match sklearn's `x_weights_` convention and the imaging-transcriptomics
+    # PLS-weight literature. t1 is computed from the pre-renormalization column, staying
+    # algebraically consistent with the SIMPLS loop's own scores (Pearson correlation is
+    # invariant to positive rescaling either way, so this choice doesn't affect score_r).
+    t1 = xc @ W[:, 0]
+    score_r = pearson(t1, yc)
+    weight = W[:, 0] / np.linalg.norm(W[:, 0])
+
     # coefficients in scaled space, back-transform
     inner = np.linalg.solve(P_raw.T @ W, Q) # (n_components,)
     coef_scaled = W @ inner # (p,)
@@ -847,4 +876,6 @@ def fast_pls1(
         "r2": r2,
         "beta": coef,
         "loadings": x_loadings,
+        "score_r": float(score_r),
+        "weight": weight,
     }

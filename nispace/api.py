@@ -1379,10 +1379,27 @@ class NiSpace:
             * ``"mi"`` -- mutual information
             * ``"slr"`` -- simple linear regression (one X predictor at a time)
             * ``"mlr"`` -- multiple linear regression (all X maps as joint
-              predictors)
+              predictors). ``r2`` is well-calibrated for significance testing
+              even under correlated predictors, but the per-predictor ``beta``
+              is not (see ``"pls"`` below for the same caveat) -- correlated
+              predictors share credit for the same explained variance, which
+              shrinks each individual ``beta`` and can make ``beta``-based
+              significance testing severely underpowered. Use ``beta`` for
+              descriptive/interpretive ranking only.
             * ``"dominance"`` -- dominance analysis (partitions R² across
               predictors)
-            * ``"pls"`` -- partial least squares regression
+            * ``"pls"`` -- partial least squares regression. Also returns
+              ``score_r`` (signed Pearson correlation between the component-1
+              latent score and Y -- unlike ``r2``, which is always >= 0, this
+              is the significance-testing-appropriate stat when directionality
+              matters) and ``weight`` (unit-norm component-1 PLS weight vector
+              per X predictor -- the "gene weight" reported in
+              imaging-transcriptomics PLS studies). Both reflect component 1
+              only, regardless of ``n_components``. Like ``mlr``'s ``beta``
+              (see below), ``weight`` is a per-predictor coefficient and can
+              be severely underpowered for significance testing under
+              multicollinear X -- prefer ``r2``/``score_r`` for significance,
+              ``beta``/``weight`` for descriptive/interpretive ranking only.
             * ``"pcr"`` -- principal component regression
             * ``"lasso"``, ``"ridge"``, ``"elasticnet"`` -- regularized
               regression with spatial (parcel-fold) cross-validation
