@@ -572,7 +572,21 @@ def pcr(x, y, adj_r2=True, n_components=np.inf, **kwargs):
     Returns
     -------
     out : dict
-        ``{"r2": rsq}`` -- the R2 of `y` regressed on the retained PCs.
+        ``r2`` -- the R2 of `y` regressed on the retained PCs.
+        ``score_r`` -- signed Pearson correlation between the first principal
+        component's scores and y. Unlike ``r2`` (always >= 0), this retains
+        sign. Reflects component 1 only, regardless of `n_components` --
+        PCA's component 1 is deterministic given `x` alone, so unlike PLS it
+        does not need a "same regardless of how many components were
+        requested" caveat. Sign uses a **median-vote convention**
+        (reporting-only -- does not affect any p-value, which depends on
+        magnitude alone): positive iff the *median* per-predictor Pearson
+        correlation with y is positive, i.e. "generally, high predictor
+        value corresponds to high y, and vice versa" -- rather than
+        sklearn's PCA default sign (an arbitrary largest-loading convention,
+        not meaningful here). Applied in place to component 1 of the PCA
+        transform itself (not just to `score_r`), so it stays consistent for
+        any future per-component/per-predictor `pcr` output.
 
     Notes
     -----
@@ -580,12 +594,34 @@ def pcr(x, y, adj_r2=True, n_components=np.inf, **kwargs):
     pre-masked, NaN-free `x`/`y`.
     """
     n_components = np.min([n_components, x.shape[1]]).astype(int)
-    
+
     x_pcs = PCA(n_components=n_components, **kwargs).fit_transform(x)
-    
+
+    # orient component 1 via the median-vote sign convention (see score_r above), in place on
+    # x_pcs itself rather than only in a local copy -- costs nothing (a per-column sign flip
+    # cannot change a joint OLS fit's R2) and keeps the reoriented component available for any
+    # future per-component/per-predictor pcr output, not just score_r below.
+    #
+    # Unlike PLS's component 1 (w1 ~ X'y, whose *unflipped* direction is provably always
+    # non-negatively correlated with y -- see _simpls1_loop), PCA's PC1 is fully Y-blind
+    # (chosen purely to maximize x's own variance): sklearn's raw PC1 sign has no guaranteed
+    # relationship to y at all, so "flip only if the vote is negative" is NOT safe here --
+    # verified by a mixed-sign regression test where that shortcut left score_r's sign
+    # disagreeing with the majority vote. Must instead explicitly compare PC1's own raw
+    # correlation with y against the desired sign and flip only on a mismatch.
+    xc = x - x.mean(axis=0)
+    yc = y - y.mean()
+    per_pred_r = (xc.T @ yc) / (np.sqrt((xc ** 2).sum(axis=0)) * np.sqrt((yc ** 2).sum()))
+    desired_sign = 1.0 if np.median(per_pred_r) >= 0.0 else -1.0
+    raw_sign = 1.0 if pearson(x_pcs[:, 0], y) >= 0.0 else -1.0
+    if raw_sign != desired_sign:
+        x_pcs[:, 0] *= -1.0
+
     rsq = r2(x_pcs, y, adj_r2=adj_r2)
-    
-    return {"r2": rsq}
+
+    score_r = float(pearson(x_pcs[:, 0], y))
+
+    return {"r2": rsq, "score_r": score_r}
 
 
 def elasticnet(x, y, cv=None, seed=None, **kwargs):
@@ -742,10 +778,27 @@ def _simpls1_loop(X_res, y_res, n_comp):
         # cross-covariance vector (instead of matrix when q == 1)
         s = X_res.T @ y_res # shape (p,)
         r = s / np.linalg.norm(s) # first left-singular vector
-        
-        # sklearn sign convention (svd_flip) 
-        if r[np.abs(r).argmax()] < 0.0: # largest‐abs entry must be +ve
-            r *= -1.0
+
+        if a == 0:
+            # Median-vote sign convention, reporting-only (doesn't affect any p-value, which
+            # depends on magnitude alone): orient the first, undeflated component so it's
+            # positive iff the MEDIAN per-predictor Pearson correlation with y is positive --
+            # i.e. "generally, high predictor value <-> high y". s[i] here is proportional (by
+            # one shared positive constant, since X_res/y_res are already centered+scaled to
+            # unit variance at this undeflated first iteration) to predictor i's own
+            # correlation with y, so sign(median(s)) already equals sign(median per-predictor
+            # correlation) directly -- no separate per-predictor correlation pass needed.
+            # Reproduces a plain majority-by-count vote whenever there's a clear majority (a
+            # median's sign among untied values equals the majority sign by count), but --
+            # unlike a pure count vote -- needs no separate tie-break rule near a 50/50 split
+            # (the median naturally uses the boundary values' own magnitude there) and is
+            # robust to a single outlier predictor (unlike a sum/mean-based vote).
+            if np.median(s) < 0.0:
+                r = -r
+        else:
+            # sklearn sign convention (svd_flip)
+            if r[np.abs(r).argmax()] < 0.0: # largest‐abs entry must be +ve
+                r *= -1.0
 
         t = X_res @ r
         norm_t = np.linalg.norm(t)
@@ -808,21 +861,31 @@ def fast_pls1(
     score_r : float
         Signed Pearson correlation between the first latent component's score
         (``t1 = xc @ w1``, on centered/scaled data) and y. Unlike ``r2``
-        (always >= 0), this retains sign -- the significance-testing-appropriate
-        stat when directionality matters. Reflects component 1 only, regardless
-        of ``n_components``. ``score_r ** 2 == r2`` holds only when
+        (always >= 0), this retains sign. Reflects component 1 only,
+        regardless of ``n_components``. ``score_r ** 2 == r2`` holds only when
         ``n_components == 1`` (for ``n_components > 1``, ``r2`` reflects the
         full multi-component fit while ``score_r`` reflects only component 1 --
         expected divergence, not a bug).
     weight : (n_features,) ndarray
-        Unit-norm PLS weight vector for component 1 (matches
-        ``PLSRegression.x_weights_[:, 0]``), i.e. the per-predictor "gene
-        weight" reported in imaging-transcriptomics PLS studies. Distinct from
-        ``beta`` (the back-transformed regression coefficient, which -- like
-        ``mlr``'s ``beta`` -- can be severely underpowered for significance
-        testing under multicollinear x, since correlated predictors share
-        credit for the same explained variance) and from ``x_loadings``/
-        ``loadings`` (used to reconstruct x from scores, not to compute them).
+        Unit-norm PLS weight vector for component 1, same magnitude as
+        ``PLSRegression.x_weights_[:, 0]`` from scikit-learn but re-oriented:
+        both ``weight`` and ``score_r`` use a **median-vote sign convention**
+        (reporting-only -- does not affect any p-value, which depends on
+        magnitude alone): positive iff the *median* per-predictor Pearson
+        correlation with y is positive, i.e. "generally, high predictor
+        value corresponds to high y, and vice versa" (the same
+        phenotype-anchored idea GSEA uses to label a gene set
+        "positively"/"negatively" enriched, rather than an internal
+        PCA/PLS solver convention). Reproduces a plain majority-by-count
+        vote whenever there is a clear majority, degrades gracefully (no
+        arbitrary tie-break needed) near a 50/50 split, and is robust to a
+        single outlier predictor (unlike a sum/mean-based vote). Distinct
+        from ``beta`` (the back-transformed regression coefficient, which --
+        like ``mlr``'s ``beta`` -- can be severely underpowered for
+        significance testing under multicollinear x, since correlated
+        predictors share credit for the same explained variance) and from
+        ``x_loadings``/``loadings`` (used to reconstruct x from scores, not
+        to compute them).
 
     References
     ----------
@@ -854,12 +917,14 @@ def fast_pls1(
     # component-1-only outputs, independent of n_components requested above.
     # W[:, 0] as returned by _simpls1_loop is scaled so that t^T r == 1 (an internal
     # deflation convenience, not a meaningful weight magnitude) -- renormalize to unit
-    # norm to match sklearn's `x_weights_` convention and the imaging-transcriptomics
-    # PLS-weight literature. t1 is computed from the pre-renormalization column, staying
-    # algebraically consistent with the SIMPLS loop's own scores (Pearson correlation is
-    # invariant to positive rescaling either way, so this choice doesn't affect score_r).
+    # norm to match sklearn's `x_weights_` magnitude and the imaging-transcriptomics
+    # PLS-weight literature. Sign (of both t1 and weight) was already fixed by
+    # _simpls1_loop's median-vote convention at component 1; t1 is computed from the
+    # pre-renormalization column, staying algebraically consistent with the SIMPLS loop's
+    # own scores (Pearson correlation is invariant to positive rescaling either way, so
+    # renormalizing weight doesn't affect score_r).
     t1 = xc @ W[:, 0]
-    score_r = pearson(t1, yc)
+    score_r = float(pearson(t1, yc))
     weight = W[:, 0] / np.linalg.norm(W[:, 0])
 
     # coefficients in scaled space, back-transform
@@ -876,6 +941,6 @@ def fast_pls1(
         "r2": r2,
         "beta": coef,
         "loadings": x_loadings,
-        "score_r": float(score_r),
+        "score_r": score_r,
         "weight": weight,
     }

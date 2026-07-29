@@ -236,36 +236,62 @@ def test_pls_wrapper_matches_direct_sklearn_plsregression(regression_data):
     assert np.allclose(out["beta"], np.squeeze(reg.coef_.T))
 
 
-def _sklearn_pls_sign(nispace_weight, sklearn_x_weights_col0):
-    # PLS component sign is not guaranteed identical across independent
-    # implementations -- align via dominant-direction dot product rather than
-    # assume equality.
-    return 1.0 if np.dot(nispace_weight, sklearn_x_weights_col0) >= 0 else -1.0
+def _align_sign(nispace_vector, reference_vector):
+    # nispace intentionally uses its own (Y-blind "module eigengene") sign
+    # convention, not sklearn's -- align via dominant-direction dot product
+    # rather than assume equality, here just to compare *magnitude*.
+    return 1.0 if np.dot(nispace_vector, reference_vector) >= 0 else -1.0
 
 
-def test_fast_pls1_weight_matches_sklearn_x_weights(regression_data):
+def test_fast_pls1_weight_matches_sklearn_x_weights_magnitude(regression_data):
     from sklearn.cross_decomposition import PLSRegression
     X, y = regression_data
     n_comp = 2
     out = fast_pls1(X, y, n_components=n_comp)
     reg = PLSRegression(n_components=n_comp).fit(X, y)
     sk_w0 = reg.x_weights_[:, 0]
-    sign = _sklearn_pls_sign(out["weight"], sk_w0)
+    sign = _align_sign(out["weight"], sk_w0)
     assert np.isclose(np.linalg.norm(out["weight"]), 1.0)
     assert np.allclose(out["weight"], sign * sk_w0, atol=1e-6)
 
 
-def test_fast_pls1_score_r_matches_sklearn_x_scores(regression_data):
-    from sklearn.cross_decomposition import PLSRegression
+def _median_vote_sign(X, y):
+    """Reference (test-independent) implementation of the median-vote sign convention:
+    positive iff the median per-predictor Pearson correlation with y is positive."""
+    r = np.array([np.corrcoef(X[:, i], y)[0, 1] for i in range(X.shape[1])])
+    return 1.0 if np.median(r) >= 0.0 else -1.0
+
+
+def test_fast_pls1_weight_and_score_r_use_median_vote_sign_convention(regression_data):
+    # component 1's score must be oriented so it's positive iff the median per-predictor
+    # correlation with y is positive -- regardless of sklearn's own (different, arbitrary)
+    # sign choice.
     X, y = regression_data
-    n_comp = 2
-    out = fast_pls1(X, y, n_components=n_comp)
-    reg = PLSRegression(n_components=n_comp).fit(X, y)
-    sk_w0 = reg.x_weights_[:, 0]
-    sign = _sklearn_pls_sign(out["weight"], sk_w0)
-    y_c = y - y.mean()
-    expected_r = np.corrcoef(sign * reg.x_scores_[:, 0], y_c)[0, 1]
-    assert np.isclose(out["score_r"], expected_r, atol=1e-6)
+    out = fast_pls1(X, y, n_components=2)
+    expected_sign = _median_vote_sign(X, y)
+    assert (out["score_r"] >= 0) == (expected_sign >= 0)
+    # score_r's sign must be consistent with weight (same underlying component)
+    xc = X - X.mean(axis=0)
+    xc /= xc.std(axis=0, ddof=1)
+    yc = y - y.mean()
+    t1 = xc @ out["weight"]
+    assert np.isclose(out["score_r"], np.corrcoef(t1, yc)[0, 1], atol=1e-6)
+
+
+def test_fast_pls1_score_r_sign_follows_majority_even_against_strongest_predictor(rng):
+    # A genuinely mixed-sign case: 3 predictors positively correlated with y, 2 more
+    # strongly negatively correlated -- majority (3/5) is positive, so the median-vote
+    # convention should report a positive score_r even though the single strongest
+    # individual predictor is negative (guards against silently reverting to a
+    # magnitude/sum-dominated convention, which could flip this case).
+    n = 200
+    y = rng.normal(size=n)
+    pos = [y * 0.15 + rng.normal(scale=1.0, size=n) for _ in range(3)]
+    neg = [-y * 0.6 + rng.normal(scale=1.0, size=n) for _ in range(2)]
+    X = np.column_stack(pos + neg)
+    out = fast_pls1(X, y, n_components=1)
+    assert _median_vote_sign(X, y) > 0.0  # sanity check on the constructed data itself
+    assert out["score_r"] > 0.0
 
 
 def test_fast_pls1_score_r_squared_equals_r2_for_single_component(regression_data):
@@ -301,6 +327,44 @@ def test_pcr_matches_independent_sklearn_pipeline(regression_data):
     lr = LinearRegression().fit(pcs, y)
     out = pcr(X, y, adj_r2=False, n_components=n_comp)
     assert np.isclose(out["r2"], lr.score(pcs, y))
+
+
+def test_pcr_score_r_squared_equals_unadjusted_r2_for_single_component(regression_data):
+    # score_r is always component-1-only; with n_components=1 and adj_r2=False, r2 IS
+    # the single-predictor R2, so score_r**2 == r2 exactly (same identity as pls).
+    X, y = regression_data
+    out = pcr(X, y, adj_r2=False, n_components=1)
+    assert np.isclose(out["score_r"] ** 2, out["r2"])
+
+
+def test_pcr_score_r_uses_median_vote_sign_convention(regression_data):
+    from sklearn.decomposition import PCA
+    X, y = regression_data
+    out = pcr(X, y, n_components=2)
+    pc1 = PCA(n_components=2).fit_transform(X)[:, 0]
+    sign = _median_vote_sign(X, y)
+    expected_r = np.corrcoef(sign * pc1, y)[0, 1]
+    assert np.isclose(out["score_r"], expected_r, atol=1e-6)
+
+
+def test_pcr_score_r_sign_follows_majority_even_against_strongest_predictor(rng):
+    # same mixed-sign construction as the pls version above: majority (3/5) positive should
+    # win even though the single strongest predictor is negative.
+    n = 200
+    y = rng.normal(size=n)
+    pos = [y * 0.15 + rng.normal(scale=1.0, size=n) for _ in range(3)]
+    neg = [-y * 0.6 + rng.normal(scale=1.0, size=n) for _ in range(2)]
+    X = np.column_stack(pos + neg)
+    out = pcr(X, y, n_components=1)
+    assert _median_vote_sign(X, y) > 0.0
+    assert out["score_r"] > 0.0
+
+
+def test_pcr_score_r_component1_invariant_to_n_components(regression_data):
+    X, y = regression_data
+    out1 = pcr(X, y, n_components=1)
+    out2 = pcr(X, y, n_components=2)
+    assert np.isclose(out1["score_r"], out2["score_r"])
 
 
 # ── lasso / ridge / elasticnet vs independently-constructed sklearn *CV ─────

@@ -1434,16 +1434,32 @@ class NiSpace:
             * ``"pls"`` -- partial least squares regression. Also returns
               ``score_r`` (signed Pearson correlation between the component-1
               latent score and Y -- unlike ``r2``, which is always >= 0, this
-              is the significance-testing-appropriate stat when directionality
-              matters) and ``weight`` (unit-norm component-1 PLS weight vector
-              per X predictor -- the "gene weight" reported in
-              imaging-transcriptomics PLS studies). Both reflect component 1
-              only, regardless of ``n_components``. Like ``mlr``'s ``beta``
-              (see below), ``weight`` is a per-predictor coefficient and can
-              be severely underpowered for significance testing under
-              multicollinear X -- prefer ``r2``/``score_r`` for significance,
-              ``beta``/``weight`` for descriptive/interpretive ranking only.
-            * ``"pcr"`` -- principal component regression
+              retains sign) and ``weight`` (unit-norm component-1 PLS weight
+              vector per X predictor -- the "gene weight" reported in
+              imaging-transcriptomics PLS studies), both reflecting component
+              1 only regardless of ``n_components``. Both use a **median-vote
+              sign convention** (reporting-only -- doesn't affect any
+              p-value, which depends on magnitude alone): positive iff the
+              *median* per-predictor correlation with Y is positive, i.e.
+              "generally, high X corresponds to high Y, and vice versa" (the
+              same phenotype-anchored idea GSEA uses to label a gene set
+              enriched "positively"/"negatively", rather than an internal
+              PCA/PLS solver convention), keeping ``score_r``'s sign
+              meaningful and comparable across different XSEA sets/fits. For
+              XSEA-style set testing, ``weight`` is nonetheless empirically
+              **anti-conservative** (unlike ``mlr``'s ``beta``, which is
+              conservative/underpowered) -- it behaves like an aggregated
+              per-predictor correlation, not a joint model coefficient, so it
+              inherits the naive intercorrelation-driven false-positive
+              inflation that ``r2``/``score_r`` avoid. Prefer ``r2``/
+              ``score_r`` for significance testing; ``beta``/``weight`` for
+              descriptive/interpretive ranking, or for non-XSEA per-map fits
+              where no set-level aggregation is involved.
+            * ``"pcr"`` -- principal component regression. Also returns
+              ``score_r`` (signed Pearson correlation between the first
+              principal component's scores and Y, same median-vote sign
+              convention as ``"pls"`` above), reflecting component 1 only
+              regardless of ``n_components``.
             * ``"lasso"``, ``"ridge"``, ``"elasticnet"`` -- regularized
               regression with spatial (parcel-fold) cross-validation
 
