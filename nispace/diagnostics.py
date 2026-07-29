@@ -37,7 +37,7 @@ from .core.region_influence import _get_region_influence_fun, _sort_region_influ
 from .core.region_contribution import (_get_region_contribution_fun, _sort_region_contribution,
                                        _CONTRIBUTION_METHODS)
 from .stats.coloc import rank2d
-from .stats.misc import maxT_correction, step_maxT_correction
+from .stats.misc import maxT_correction, step_maxT_correction, rho_to_z, z_to_rho
 from .utils.utils import set_log, _quiet, print_arg_pairs
 
 
@@ -179,6 +179,14 @@ def regional_influence(nsp, method=None, stat=None, engine="auto", signed=False,
     correlation methods -- positive means the region pulls the correlation toward
     +1, negative toward -1, regardless of the sign of the observed correlation
     itself (a region can oppose the overall trend and still pull toward +1).
+
+    For pearson/spearman/partialpearson/partialspearman, both the full-data and
+    LOO ``rho`` are Fisher-z-transformed (``numpy.arctanh``) before differencing
+    whenever the original ``colocalize()`` call for this method used
+    ``r_to_z=True`` (the default) -- so the reported delta is on the
+    variance-stabilized scale by default, not a raw-rho difference. This is not
+    a separate setting here; it always matches the stored ``colocalize()``
+    result's own ``r_to_z``.
 
     Parameters
     ----------
@@ -718,7 +726,16 @@ def _local_observed_window(nsp, nb, X, Y, Z_full, method, rank, regress_z, zy_ma
     on the inner ``colocalize()`` call is deliberate: parallelism is applied at the
     window level instead (via the caller's ``Parallel(n_jobs=n_proc)``), so nesting
     another ``n_proc``-way split inside each task would oversubscribe (n_proc workers
-    each spawning their own n_proc sub-workers)."""
+    each spawning their own n_proc sub-workers).
+
+    Always requests ``r_to_z=True`` from the inner ``colocalize()`` call (a no-op for
+    every method except pearson/spearman/partialpearson/partialspearman, see
+    ``core/colocalize.py``'s ``_get_colocalize_fun``) so the observed statistic and the
+    null draws (transformed the same way, see :func:`local_colocalization`) are always
+    computed and compared/pooled on the variance-stabilized Fisher-z scale internally,
+    regardless of the caller-facing ``r_to_z`` display setting -- that setting only
+    controls whether :func:`local_colocalization` converts the *returned* ``"stat"``
+    back to raw rho at the very end, never the internal null/pooling computation."""
     Z_sub = Z_full.iloc[:, nb] if Z_full is not None else None
     # rank/regress_z/zy_matched passed explicitly (not left to colocalize()'s own
     # defaults/_get_last fallback) -- otherwise this fresh per-window call could
@@ -730,7 +747,7 @@ def _local_observed_window(nsp, nb, X, Y, Z_full, method, rank, regress_z, zy_ma
     # not necessarily this method's own stored settings.
     r = nsp.colocalize(X=X.iloc[:, nb], Y=Y.iloc[:, nb], Z=Z_sub, method=method,
                        rank=rank, regress_z=regress_z, zy_matched=zy_matched,
-                       store=False, verbose=False, r_to_z=False, n_proc=1,
+                       store=False, verbose=False, r_to_z=True, n_proc=1,
                        force_dict=True)
     r_stat = r[stat]  # (n_Y, n_X_or_1)
     return r_stat.to_numpy(), r_stat.columns
@@ -753,7 +770,7 @@ def _local_to_result_dict(arr, x_labels, y_labels, columns, dtype, is_joint):
 def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
                          method=None, X_reduction=None, Y_transform=None, xsea=None,
                          X=None, Y=None, Z=None,
-                         null=None, pooled=None, mc_method="step_maxT", mc_alpha=0.05,
+                         null=None, pooled=None, r_to_z=None, mc_method="step_maxT", mc_alpha=0.05,
                          n_proc=None, verbose=None, dtype=None):
     """
     "Searchlight" local colocalization: restrict :meth:`NiSpace.colocalize` to each
@@ -866,6 +883,23 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
 
         When active, ``"p"``/``"p_corr"`` (only) collapse from ``n_Y`` rows to a
         single row indexed ``["mean"]``/``["median"]`` (see ``Returns`` below).
+    r_to_z : bool, optional
+        Whether the returned ``"stat"`` is Fisher-z-transformed (``numpy.arctanh``),
+        matching :meth:`NiSpace.colocalize`'s own ``r_to_z`` default. Only meaningful
+        for ``method in {"pearson", "spearman", "partialpearson", "partialspearman"}``
+        (the 4 methods whose stat is ``"rho"``) -- a no-op for every other method, same
+        as ``colocalize()`` itself. ``None`` (default) picks up whatever ``r_to_z`` the
+        *original* ``colocalize()`` call for this method used (from
+        ``nsp._coloc_kwargs_by_method``), so ``"stat"`` matches
+        :meth:`NiSpace.get_colocalizations`'s scale by default.
+
+        This setting only affects how ``"stat"`` is *expressed* -- the null comparison
+        and any ``pooled`` reduction (mean/median of the observed stat and every null
+        draw across the Y axis) always happen internally on the Fisher-z scale for
+        these 4 methods regardless of ``r_to_z``, since averaging/medianing raw
+        (bounded, non-additive) correlation coefficients is not statistically valid;
+        this mirrors how :meth:`NiSpace.permute`'s own ``pooled_p`` pools whatever
+        ``colocalize()`` already stored (which is Fisher-z by ``r_to_z=True`` default).
     mc_method : {"step_maxT", "maxT", None}, default "step_maxT"
         Multiple-comparisons correction across regions, applied separately per X map
         (not pooled across X maps) -- same convention as :func:`regional_influence`/
@@ -898,6 +932,8 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
         - ``"pooled"`` : {False, "mean", "median"} -- the ``pooled`` setting actually
           applied to ``"p"``/``"p_corr"`` (always ``False`` when ``null=False``, or when
           the Y axis had only one row to begin with). Never affects ``"stat"``.
+        - ``"r_to_z"`` : bool -- the ``r_to_z`` setting actually applied to ``"stat"``
+          (always ``False`` for methods where it doesn't apply, see ``r_to_z`` above).
         - ``"stat"`` : DataFrame or dict of DataFrame -- the local statistic, shape
           (n_Y x n_parcels) **always**, regardless of ``pooled`` -- the observed
           statistic is never pooled, only compared against a pooled null (see
@@ -961,6 +997,25 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
     n_parcels = X.shape[1]
     n_predictors = X.shape[0]
     is_joint = method in _LOCAL_JOINT_METHODS
+
+    # r_to_z: only meaningful for the 4 correlation-based methods (their stat is "rho",
+    # a bounded, non-additive scale that colocalize() Fisher-z-transforms by default --
+    # see core/colocalize.py's _get_colocalize_fun). No-op for every other method (mi/
+    # slr/mlr/dominance/pls/pcr never go through rho_to_z regardless of this flag, same
+    # as colocalize() itself). Default (None) mirrors whatever r_to_z the *original*
+    # colocalize() call for this method actually used (coloc_kwargs, same resolution
+    # regional_influence() already uses at coloc_kwargs.get("r_to_z", True)) -- so by
+    # default "stat" here is on the same scale as get_colocalizations()'s stored result.
+    # This only controls what "stat" is expressed as; the null comparison and any
+    # pooled_p reduction always happen internally on the Fisher-z scale for these 4
+    # methods regardless of this setting (mean/median of raw bounded rho across the Y
+    # axis is not a valid operation -- see the pooling comment below), then are
+    # converted to raw rho only at the very end if r_to_z resolves to False.
+    rho_based = method in _LOCAL_NULL_FAST_METHODS
+    if rho_based:
+        r_to_z = coloc_kwargs.get("r_to_z", True) if r_to_z is None else bool(r_to_z)
+    else:
+        r_to_z = False
 
     ## distance matrix + neighbor windows / Gaussian kernel weights
     if dist_mat is None:
@@ -1093,8 +1148,13 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
     if gaussian_mode:
         # single vectorized call across all seeds at once -- no per-window colocalize()
         # calls needed here (nothing to re-rank locally, see _local_gaussian_observed's
-        # docstring), so none of the observed-loop pickling-overhead concerns above apply
+        # docstring), so none of the observed-loop pickling-overhead concerns above apply.
+        # Gaussian mode is always one of the 4 rho-based methods (restricted above), so
+        # the Fisher-z transform is applied unconditionally here, same as the windowed
+        # path gets it unconditionally from _local_observed_window's inner colocalize()
+        # call -- see r_to_z resolution above for why this is unconditional internally.
         obs_arr = _local_gaussian_observed(W, X_arr_pre, Y_arr_pre)  # (n_Y, n_X, n_parcels)
+        obs_arr = rho_to_z(obs_arr)
         x_labels = X.index
     else:
         with _silence_repeated_calls():
@@ -1109,13 +1169,17 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
         obs_arr = np.stack([r[0] for r in obs_results], axis=-1)  # (n_Y, n_X_or_1, n_parcels)
     y_labels = Y.index
 
-    result = _local_to_result_dict(obs_arr, x_labels, y_labels, X.columns, dtype, is_joint)
+    # "stat" (the returned/displayed statistic) honors r_to_z; obs_arr itself stays on
+    # the Fisher-z scale (when rho_based) for every computation below it, see r_to_z
+    # resolution above.
+    stat_arr = z_to_rho(obs_arr) if (rho_based and not r_to_z) else obs_arr
+    result = _local_to_result_dict(stat_arr, x_labels, y_labels, X.columns, dtype, is_joint)
 
     if not null:
         lgr.info(f"Returning local_colocalization results: \n"
-                 f"{print_arg_pairs(method=method, **settings, null=False, xsea=xsea, X_reduction=X_reduction, Y_transform=Y_transform)}")
-        return {"stat_type": stat, "mc_method": None, "pooled": False, "stat": result, "p": None,
-               "p_corr": None, "settings": settings}
+                 f"{print_arg_pairs(method=method, **settings, null=False, r_to_z=r_to_z, xsea=xsea, X_reduction=X_reduction, Y_transform=Y_transform)}")
+        return {"stat_type": stat, "mc_method": None, "pooled": False, "r_to_z": r_to_z,
+               "stat": result, "p": None, "p_corr": None, "settings": settings}
 
     if mc_method not in ("step_maxT", "maxT", None):
         lgr.critical_raise(f"mc_method='{mc_method}' not supported; use 'step_maxT', 'maxT', "
@@ -1154,11 +1218,13 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
             null_arr = _local_null_gaussian(
                 W, X_arr_pre, Y_arr_pre, null_pre, null_side, n_proc, verbose,
             )
+            null_arr = rho_to_z(null_arr)  # gaussian mode is always rho-based, see above
         elif method in _LOCAL_NULL_FAST_METHODS:
             null_arr = _local_null_fast(
                 windows, X_arr, Y_arr, Z_full, null_data, null_side,
                 rank, regress_z, zy_matched, dtype, n_proc, verbose,
             )
+            null_arr = rho_to_z(null_arr)  # fast path only ever runs for rho-based methods
         else:
             null_arr = _local_null_slow(
                 nsp, method, windows, X_arr, Y_arr, Z_full, null_data, null_side,
@@ -1169,11 +1235,16 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
     # comparing them for the p computation ONLY -- mirrors permute()'s own par_fun exactly
     # (api.py:2622 shows _colocs_obs there is already a fresh numpy-array copy from
     # get_colocalizations(), so pooling it in-place never touches what get_colocalizations()
-    # itself reports afterward). "stat" (obs_arr/result, built above) is therefore *never*
-    # touched here and always keeps its full n_Y rows, regardless of pooled -- only "p"/
-    # "p_corr" collapse to the pooled 1-row shape. Averaging already-computed per-Y-row
-    # p-values afterward would not be equivalent to this and would silently diverge from
-    # what get_p_values() reports for the same permute() call.
+    # itself reports afterward). obs_arr/null_arr are already on the Fisher-z scale here
+    # for rho-based methods (unconditionally, see r_to_z resolution above) -- averaging/
+    # medianing raw bounded correlations across the Y axis would be invalid, so this
+    # pooling step is never done on raw rho regardless of the caller-facing r_to_z
+    # setting, which only affects "stat"/display (already applied above, decoupled from
+    # obs_arr itself). "stat" (result, built above from a separate stat_arr) is therefore
+    # *never* touched here and always keeps its full n_Y rows, regardless of pooled --
+    # only "p"/"p_corr" collapse to the pooled 1-row shape. Averaging already-computed
+    # per-Y-row p-values afterward would not be equivalent to this and would silently
+    # diverge from what get_p_values() reports for the same permute() call.
     p_labels = y_labels
     p_obs_arr = obs_arr
     p_null_arr = null_arr
@@ -1206,9 +1277,9 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
             p_corr_result = next(iter(p_corr_result.values()))
 
     lgr.info(f"Returning local_colocalization results: \n"
-             f"{print_arg_pairs(method=method, **settings, null=perm_mode, mc_method=mc_method, pooled=pooled or False, xsea=xsea, X_reduction=X_reduction, Y_transform=Y_transform)}")
+             f"{print_arg_pairs(method=method, **settings, null=perm_mode, mc_method=mc_method, pooled=pooled or False, r_to_z=r_to_z, xsea=xsea, X_reduction=X_reduction, Y_transform=Y_transform)}")
 
-    return {"stat_type": stat, "mc_method": mc_method, "pooled": pooled or False,
+    return {"stat_type": stat, "mc_method": mc_method, "pooled": pooled or False, "r_to_z": r_to_z,
            "stat": result, "p": p_raw_result, "p_corr": p_corr_result, "settings": settings}
 
 

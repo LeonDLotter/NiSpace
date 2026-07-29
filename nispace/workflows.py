@@ -860,6 +860,12 @@ def paired_colocalization(y,
         Aggregation used for the within-pair statistic: ``"mean"`` or
         ``"median"`` of the N diagonal entries. ``"auto"`` resolves to
         ``"mean"``. ``False`` is not supported and falls back to ``"mean"``.
+        For ``colocalization_method`` in {"pearson", "spearman",
+        "partialpearson", "partialspearman"}, the diagonal entries are always
+        aggregated on the Fisher-z scale -- if ``colocalize_kwargs`` overrides
+        ``r_to_z=False``, the values are transformed on the fly for this
+        aggregation step only (the underlying stored ``"rho"`` stays raw);
+        averaging raw correlation coefficients is never a valid choice here.
     plot : bool, default=True
         Whether to generate a plot after permutation, via ``nsp.plot(permute_what="pairs")``
         (relies on :meth:`NiSpace.plot`'s own ``kind="categorical"`` default — not
@@ -1041,7 +1047,10 @@ def correlate_within_region(x,
     fit_kwargs : dict, optional
         Extra keyword arguments for :meth:`NiSpace.fit`.
     correlate_kwargs : dict, optional
-        Extra keyword arguments for :meth:`NiSpace.correlate_within_region`.
+        Extra keyword arguments for :meth:`NiSpace.correlate_within_region`,
+        e.g. ``{"r_to_z": False}`` for raw (non-Fisher-z) correlations --
+        Fisher-z is the default there, to align with the rest of the toolbox
+        (:func:`colocalization`'s own default).
 
     Returns
     -------

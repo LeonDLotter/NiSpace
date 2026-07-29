@@ -44,10 +44,12 @@ def test_return_shape_keys_always_present(synthetic_nispace):
     nsp.colocalize(method="pearson", verbose=False)
 
     out = diagnostics.local_colocalization(nsp, k=8, dist_mat=dist_mat, null=False, verbose=False)
-    assert set(out.keys()) == {"stat_type", "mc_method", "pooled", "stat", "p", "p_corr", "settings"}
+    assert set(out.keys()) == {"stat_type", "mc_method", "pooled", "r_to_z", "stat", "p",
+                               "p_corr", "settings"}
     assert out["stat_type"] == "rho"
     assert out["mc_method"] is None
     assert out["pooled"] is False
+    assert out["r_to_z"] is True  # default matches colocalize()'s own r_to_z=True default
     assert out["p"] is None
     assert out["p_corr"] is None
     assert out["settings"] == {"k": 8}
@@ -138,7 +140,9 @@ def test_full_window_matches_plain_colocalize_pearson(synthetic_nispace):
     dist_mat = _index_dist_mat(n_parcels)
 
     nsp.colocalize(method="pearson", verbose=False)
-    global_r = nsp.colocalize(method="pearson", store=False, verbose=False, r_to_z=False)
+    # default r_to_z=True on both sides -> compare on the Fisher-z scale, matching
+    # local_colocalization()'s own default (see test_r_to_z_* below for the raw-rho case)
+    global_r = nsp.colocalize(method="pearson", store=False, verbose=False)
 
     res = diagnostics.local_colocalization(nsp, k=n_parcels, dist_mat=dist_mat,
                                            null=False, verbose=False)["stat"]
@@ -147,6 +151,47 @@ def test_full_window_matches_plain_colocalize_pearson(synthetic_nispace):
         np.testing.assert_allclose(res[x_lab].to_numpy(),
                                    np.full((1, n_parcels), global_r.loc["y0", x_lab]),
                                    atol=ATOL)
+
+
+def test_r_to_z_false_returns_raw_rho_matching_plain_colocalize(synthetic_nispace):
+    nsp = synthetic_nispace
+    n_parcels = nsp._Y.shape[1]
+    dist_mat = _index_dist_mat(n_parcels)
+
+    nsp.colocalize(method="pearson", verbose=False)
+    global_r_raw = nsp.colocalize(method="pearson", store=False, verbose=False, r_to_z=False)
+
+    out = diagnostics.local_colocalization(nsp, k=n_parcels, dist_mat=dist_mat,
+                                           null=False, r_to_z=False, verbose=False)
+    assert out["r_to_z"] is False
+    for x_lab in out["stat"]:
+        np.testing.assert_allclose(out["stat"][x_lab].to_numpy(),
+                                   np.full((1, n_parcels), global_r_raw.loc["y0", x_lab]),
+                                   atol=ATOL)
+
+
+def test_r_to_z_default_matches_original_colocalize_setting(synthetic_nispace):
+    """r_to_z=None (default) should follow whatever the *original* colocalize() call
+    used, not unconditionally True -- if that call used r_to_z=False, local_colocalization()
+    should report raw rho by default too."""
+    nsp = synthetic_nispace
+    n_parcels = nsp._Y.shape[1]
+    dist_mat = _index_dist_mat(n_parcels)
+
+    nsp.colocalize(method="pearson", r_to_z=False, verbose=False)
+    out = diagnostics.local_colocalization(nsp, k=8, dist_mat=dist_mat, null=False, verbose=False)
+    assert out["r_to_z"] is False
+
+
+def test_r_to_z_no_op_for_non_rho_method(synthetic_nispace):
+    nsp = synthetic_nispace
+    n_parcels = nsp._Y.shape[1]
+    dist_mat = _index_dist_mat(n_parcels)
+
+    nsp.colocalize(method="mlr", verbose=False)
+    out = diagnostics.local_colocalization(nsp, k=8, dist_mat=dist_mat, null=False,
+                                           r_to_z=True, verbose=False)
+    assert out["r_to_z"] is False
 
 
 def test_full_window_matches_plain_colocalize_mlr(synthetic_nispace):
@@ -855,6 +900,35 @@ def test_pooled_free_choice_for_maps_null(rng):
     # touches a local copy used for the p comparison
     for x_lab in out_false["stat"]:
         pd.testing.assert_frame_equal(out_false["stat"][x_lab], out_mean["stat"][x_lab])
+
+
+def test_full_window_pooled_p_matches_permute_pooled_p(rng):
+    """Ground-truth check that pooled_p is computed on the Fisher-z scale, not raw rho:
+    at k=n_parcels every window equals the whole-brain fit and reuses the exact same
+    stored null draws permute() itself used for its own pooled_p="mean" p-value, so the
+    two must match numerically -- this would fail if pooling were done on raw
+    (unconverted) rho instead of z, since permute()'s own pooled_p pools whatever
+    colocalize() stored, which is Fisher-z by its r_to_z=True default (see
+    project memory / local_colocalization()'s r_to_z docstring)."""
+    n_parcels, n_x, n_y = 20, 1, 10
+    dist_mat = _index_dist_mat(n_parcels)
+    nsp = _make_multi_y_nsp(rng, n_parcels=n_parcels, n_x=n_x, n_y=n_y)
+    nsp.colocalize(method="pearson", verbose=False)
+    nsp.permute(what="maps", n_perm=200, maps_method="random", seed=0, pooled_p="mean",
+               verbose=False)
+
+    ref_p = nsp.get_p_values(verbose=False)
+
+    out = diagnostics.local_colocalization(nsp, k=n_parcels, dist_mat=dist_mat, pooled="mean",
+                                           verbose=False)
+    assert out["pooled"] == "mean"
+    for x_lab in out["p"]:
+        # whole-brain window -> constant across parcels, and identical null draws/stat
+        # as permute() itself used -> must match its own pooled p exactly (up to the
+        # dtype/empirical-count differences already tolerated elsewhere in this file)
+        np.testing.assert_allclose(out["p"][x_lab].to_numpy()[0],
+                                   np.full(n_parcels, ref_p.loc["mean", x_lab]),
+                                   atol=ATOL)
 
 
 def test_pooled_ignored_when_null_false(rng):

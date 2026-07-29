@@ -45,15 +45,25 @@ def cwr_nsp(rng):
 
 def test_core_pearson_matches_scipy(rng):
     X, Y = make_cwr_data(rng)
-    rho, null = correlate_within_region_core(X, Y, method="pearson", n_perm=100, seed=1)
+    rho, null = correlate_within_region_core(X, Y, method="pearson", n_perm=100, seed=1,
+                                             r_to_z=False)
     ref = np.array([sps.pearsonr(X[:, p], Y[:, p])[0] for p in range(X.shape[1])])
     np.testing.assert_allclose(rho, ref, atol=1e-8)
     assert null.shape == (100, X.shape[1])
 
 
+def test_core_r_to_z_default_matches_manual_transform(rng):
+    X, Y = make_cwr_data(rng)
+    rho_z, null_z = correlate_within_region_core(X, Y, method="pearson", n_perm=50, seed=1)
+    rho_raw, null_raw = correlate_within_region_core(X, Y, method="pearson", n_perm=50, seed=1,
+                                                      r_to_z=False)
+    np.testing.assert_allclose(rho_z, np.arctanh(rho_raw), atol=1e-6)
+    np.testing.assert_allclose(null_z, np.arctanh(null_raw), atol=1e-6)
+
+
 def test_core_spearman_matches_scipy(rng):
     X, Y = make_cwr_data(rng)
-    rho, _ = correlate_within_region_core(X, Y, method="spearman", n_perm=0)
+    rho, _ = correlate_within_region_core(X, Y, method="spearman", n_perm=0, r_to_z=False)
     ref = np.array([sps.spearmanr(X[:, p], Y[:, p])[0] for p in range(X.shape[1])])
     np.testing.assert_allclose(rho, ref, atol=1e-8)
 
@@ -62,7 +72,8 @@ def test_core_nan_column_matches_scipy_after_masking(rng):
     X, Y = make_cwr_data(rng, n_subj=15, n_parcels=6)
     X[0, 2] = np.nan
     Y[3, 2] = np.nan
-    rho, null = correlate_within_region_core(X, Y, method="pearson", n_perm=20, seed=2)
+    rho, null = correlate_within_region_core(X, Y, method="pearson", n_perm=20, seed=2,
+                                             r_to_z=False)
     mask = ~np.isnan(X[:, 2]) & ~np.isnan(Y[:, 2])
     ref = sps.pearsonr(X[mask, 2], Y[mask, 2])[0]
     assert np.isclose(rho[2], ref, atol=1e-8)
@@ -82,7 +93,7 @@ def test_core_spearman_mismatched_nan_pattern_matches_pairwise_deletion(rng):
     Y[4, 2] = np.nan  # Y-only NaN, different subject, same parcel -> mismatched pattern
     Y[0, 0] = np.nan  # X has no NaN in parcel 0 at all -> tests the "one side clean" case too
 
-    rho, _ = correlate_within_region_core(X, Y, method="spearman", n_perm=0)
+    rho, _ = correlate_within_region_core(X, Y, method="spearman", n_perm=0, r_to_z=False)
     for p in range(n_parcels):
         mask = ~np.isnan(X[:, p]) & ~np.isnan(Y[:, p])
         ref = sps.spearmanr(X[mask, p], Y[mask, p])[0]
@@ -103,7 +114,8 @@ def test_core_1d_y_broadcast_matches_manual_loop(rng):
     X = rng.normal(size=(n_subj, n_parcels))
     yvec = rng.normal(size=n_subj)
     X[:, 3] = yvec * 2 + rng.normal(scale=0.1, size=n_subj)
-    rho, null = correlate_within_region_core(X, yvec, method="pearson", n_perm=50, seed=3)
+    rho, null = correlate_within_region_core(X, yvec, method="pearson", n_perm=50, seed=3,
+                                             r_to_z=False)
     ref = np.array([sps.pearsonr(X[:, p], yvec)[0] for p in range(n_parcels)])
     np.testing.assert_allclose(rho, ref, atol=1e-8)
     assert null.shape == (50, n_parcels)
@@ -165,10 +177,18 @@ def test_core_bad_method_raises(rng):
 
 def test_nsp_matches_scipy_full_map_vs_full_map(cwr_nsp):
     nsp, X, Y = cwr_nsp
-    nsp.correlate_within_region(method="pearson", n_perm=0)
+    nsp.correlate_within_region(method="pearson", n_perm=0, r_to_z=False)
     rho_df = nsp.get_within_region_correlations(mc_method=None)["stat"]
     ref = np.array([sps.pearsonr(X[:, p], Y[:, p])[0] for p in range(X.shape[1])])
     np.testing.assert_allclose(rho_df.values[0], ref, atol=1e-6)
+
+
+def test_nsp_r_to_z_default_is_true_and_matches_manual_transform(cwr_nsp):
+    nsp, X, Y = cwr_nsp
+    nsp.correlate_within_region(method="pearson", n_perm=0)  # r_to_z=True default
+    rho_z = nsp.get_within_region_correlations(mc_method=None)["stat"].values[0]
+    ref_raw = np.array([sps.pearsonr(X[:, p], Y[:, p])[0] for p in range(X.shape[1])])
+    np.testing.assert_allclose(rho_z, np.arctanh(ref_raw), atol=1e-5)
 
 
 def test_nsp_no_null_returns_none_p(cwr_nsp):
@@ -293,8 +313,11 @@ def test_nsp_missing_parcel_omnibus_excludes_missing_not_nan(cwr_nsp_missing_par
     out = cwr_nsp_missing_parcel.get_within_region_correlations_omnibus(omnibus_stat="absrho")
     assert not np.isnan(out["stat"])
     assert not np.isnan(out["p"])
-    rho = cwr_nsp_missing_parcel.get_within_region_correlations(mc_method=None)["stat"].values[0]
-    assert np.isclose(out["stat"], np.nanmean(np.abs(rho)))
+    # "stat" (per parcel) is Fisher-z by default (r_to_z=True) -- convert back to raw rho
+    # before comparing, since "absrho" operates on the correlation scale, not |z|
+    rho_z = cwr_nsp_missing_parcel.get_within_region_correlations(mc_method=None)["stat"].values[0]
+    rho_raw = np.tanh(rho_z)
+    assert np.isclose(out["stat"], np.nanmean(np.abs(rho_raw)))
 
 
 # ── NiSpace method: omnibus test ────────────────────────────────────────────
@@ -323,9 +346,45 @@ def test_nsp_omnibus_signal_is_significant_for_unsigned_stats(cwr_nsp, omnibus_s
 def test_nsp_omnibus_matches_manual_aggregate(cwr_nsp):
     nsp, X, Y = cwr_nsp
     nsp.correlate_within_region(method="pearson", n_perm=200, seed=1)
-    rho = nsp.get_within_region_correlations()["stat"].values[0]
+    rho_raw = np.tanh(nsp.get_within_region_correlations()["stat"].values[0])
     out = nsp.get_within_region_correlations_omnibus(omnibus_stat="absrho")
-    assert np.isclose(out["stat"], np.mean(np.abs(rho)))
+    assert np.isclose(out["stat"], np.mean(np.abs(rho_raw)))
+
+
+def test_nsp_omnibus_rho_uses_fisher_z_averaging_not_raw_mean(cwr_nsp):
+    """omnibus_stat="rho" must never be a raw arithmetic mean of bounded rho
+    values (downward-biased, especially with the fixture's one near-|1| signal
+    parcel among near-0 noise parcels) -- it must match Fisher-z-average-then-
+    back-transform, and must differ from the naive raw mean. Uses r_to_z=False
+    on the correlate_within_region() call so "stat" stays on the raw scale here,
+    for a direct/explicit comparison (correlate_within_region()'s own r_to_z
+    default is exercised separately, see test_nsp_r_to_z_default_is_true_*)."""
+    nsp, X, Y = cwr_nsp
+    nsp.correlate_within_region(method="pearson", n_perm=200, seed=1, r_to_z=False)
+    rho = nsp.get_within_region_correlations()["stat"].values[0]
+    out = nsp.get_within_region_correlations_omnibus(omnibus_stat="rho")
+
+    expected = np.tanh(np.nanmean(np.arctanh(rho)))
+    naive_raw_mean = np.nanmean(rho)
+
+    assert np.isclose(out["stat"], expected)
+    assert not np.isclose(out["stat"], naive_raw_mean, atol=1e-3)
+
+
+def test_nsp_omnibus_rho_matches_regardless_of_r_to_z(cwr_nsp):
+    """Same data/seed, only correlate_within_region()'s r_to_z differs --
+    get_within_region_correlations_omnibus(omnibus_stat="rho") must give an
+    identical result either way, since it normalizes back to raw rho internally
+    before its own Fisher-z averaging."""
+    nsp, X, Y = cwr_nsp
+    nsp.correlate_within_region(method="pearson", n_perm=200, seed=1, r_to_z=False)
+    out_raw = nsp.get_within_region_correlations_omnibus(omnibus_stat="rho")
+
+    nsp.correlate_within_region(method="pearson", n_perm=200, seed=1)  # r_to_z=True default
+    out_z = nsp.get_within_region_correlations_omnibus(omnibus_stat="rho")
+
+    assert np.isclose(out_raw["stat"], out_z["stat"], atol=1e-5)
+    assert np.isclose(out_raw["p"], out_z["p"])
 
 
 def test_nsp_omnibus_requires_null(cwr_nsp):
@@ -348,7 +407,7 @@ def test_nsp_1d_y_covariate_matches_manual_loop(cwr_nsp):
     nsp, X, Y = cwr_nsp
     rng = np.random.default_rng(7)
     yvec = pd.Series(rng.normal(size=X.shape[0]), index=[f"s{i}" for i in range(X.shape[0])])
-    nsp.correlate_within_region(Y=yvec, n_perm=0)
+    nsp.correlate_within_region(Y=yvec, n_perm=0, r_to_z=False)
     rho_df = nsp.get_within_region_correlations(mc_method=None)["stat"]
     ref = np.array([sps.pearsonr(X[:, p], yvec.values)[0] for p in range(X.shape[1])])
     np.testing.assert_allclose(rho_df.values[0], ref, atol=1e-6)

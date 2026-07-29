@@ -154,9 +154,11 @@ def rho_to_z(array, replace_1=1 - np.finfo(float).eps):
 def z_to_rho(array):
     """Inverse Fisher's z-transformation of correlation coefficients.
 
-    Plain numpy (no numba). Has no internal caller in NiSpace (``rho_to_z``
-    is used one-way in ``core/region_influence.py``/``core/colocalize.py``,
-    without inverting back); exercised directly by round-trip tests in
+    Plain numpy (no numba). Used in ``diagnostics.py``'s ``local_colocalization()``
+    to convert its internally Fisher-z-scale statistic back to raw rho for display
+    when ``r_to_z=False`` is requested, and in ``api.py``'s
+    ``_cwr_omnibus_aggregate()`` to report ``omnibus_stat="rho"`` as a correlation
+    after Fisher-z averaging; exercised directly by round-trip tests in
     ``tests/test_stats_misc.py``.
     """
     array = np.array(array)

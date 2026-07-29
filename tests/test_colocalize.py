@@ -14,6 +14,7 @@ import pandas as pd
 from scipy.stats import rankdata
 
 from nispace import NiSpace
+from nispace.core.colocalize import _get_colocalize_fun, _xsea_aggregate
 
 
 def test_rank_does_not_leak_across_methods(synthetic_nispace):
@@ -86,3 +87,85 @@ def test_partialspearman_ranks_z_too(rng):
     standard_partial_spearman = (rxy - rxz * ryz) / np.sqrt((1 - rxz**2) * (1 - ryz**2))
 
     np.testing.assert_allclose(got_rho, standard_partial_spearman, atol=1e-3)
+
+
+# ── XSEA gene-to-set aggregation must never average raw rho (2026-07-29) ──────
+#
+# NOTE: through the public NiSpace.colocalize() API this scenario cannot actually
+# arise -- colocalize() forces r_to_z=True (with a warning) whenever xsea=True and
+# method is pearson/spearman-family (see api.py's xsea-handling block), so
+# _get_colocalize_fun()/_xsea_aggregate() are never reached with xsea=True,
+# r_to_z=False for a real user. These tests call the low-level functions directly
+# (bypassing that guard) to verify the fix at its source, matching this file's
+# convention (test_regional_influence.py does the same for _get_colocalize_fun).
+
+def _make_xsea_gene_data(rng, n_genes=6, n_parcels=40, signal_r=0.9):
+    """One set of genes, each independently correlated with y at a known-ish
+    strength -- large enough |rho| that raw vs Fisher-z averaging visibly differ."""
+    y = rng.normal(size=n_parcels)
+    noise_scale = np.sqrt(1 - signal_r**2) / signal_r
+    X = np.stack([
+        y + rng.normal(scale=noise_scale, size=n_parcels) * (1 + 0.3 * i)
+        for i in range(n_genes)
+    ])
+    return X, y
+
+
+def test_xsea_live_path_mean_matches_fisher_z_average(rng):
+    """_get_colocalize_fun(xsea=True, xsea_method="mean", r_to_z=False)'s aggregated
+    per-set "rho" must equal tanh(mean(arctanh(per-gene rho))), not a raw mean."""
+    X, y = _make_xsea_gene_data(rng)
+
+    y_coloc_raw = _get_colocalize_fun(
+        "pearson", xsea=True, xsea_method="mean", r_to_z=False, dtype=np.float32,
+    )
+    out = y_coloc_raw({"setA": X}, y)
+    per_set_rho = float(out["rho"][0])
+
+    y_coloc_per_gene = _get_colocalize_fun("pearson", r_to_z=False, dtype=np.float32)
+    per_gene_rho = np.array([y_coloc_per_gene(X[[i]], y)["rho"][0] for i in range(X.shape[0])])
+    expected = np.tanh(np.mean(np.arctanh(per_gene_rho)))
+    naive_raw_mean = np.mean(per_gene_rho)
+
+    np.testing.assert_allclose(per_set_rho, expected, atol=1e-5)
+    assert not np.isclose(per_set_rho, naive_raw_mean, atol=1e-3)
+
+
+def test_xsea_live_path_mean_matches_regardless_of_r_to_z(rng):
+    """Same gene data, only r_to_z differs -- the aggregated per-set rho must be
+    identical (r_to_z=False forces the correction on the fly; r_to_z=True was
+    already correct, since per-gene rho is already Fisher-z before averaging)."""
+    X, y = _make_xsea_gene_data(rng)
+
+    y_coloc_raw = _get_colocalize_fun(
+        "pearson", xsea=True, xsea_method="mean", r_to_z=False, dtype=np.float32,
+    )
+    y_coloc_z = _get_colocalize_fun(
+        "pearson", xsea=True, xsea_method="mean", r_to_z=True, dtype=np.float32,
+    )
+    out_raw = y_coloc_raw({"setA": X}, y)["rho"][0]
+    out_z = np.tanh(y_coloc_z({"setA": X}, y)["rho"][0])  # r_to_z=True result is on the z scale
+
+    np.testing.assert_allclose(out_raw, out_z, atol=1e-5)
+
+
+def test_xsea_aggregate_rho_scale_matches_fisher_z_average(rng):
+    """_xsea_aggregate(xsea_method="mean", rho_scale=True) (the null-precompute fast
+    path's aggregator) must match the same Fisher-z-average-then-back-transform."""
+    per_gene_rho = rng.uniform(-0.9, 0.9, size=(1, 1, 6)).astype(np.float32)  # (n_Y, n_perm, set_size)
+
+    out = _xsea_aggregate(per_gene_rho, "mean", axis=-1, rho_scale=True)
+    expected = np.tanh(np.mean(np.arctanh(per_gene_rho), axis=-1))
+    naive_raw_mean = np.mean(per_gene_rho, axis=-1)
+
+    np.testing.assert_allclose(out, expected, atol=1e-5)
+    assert not np.allclose(out, naive_raw_mean, atol=1e-3)
+
+
+def test_xsea_aggregate_median_unaffected_by_rho_scale(rng):
+    """Order statistics commute exactly with a monotonic transform -- "median" must
+    give bit-identical results regardless of rho_scale."""
+    per_gene_rho = rng.uniform(-0.9, 0.9, size=(2, 3, 7)).astype(np.float32)
+    out_scaled = _xsea_aggregate(per_gene_rho, "median", axis=-1, rho_scale=True)
+    out_plain = _xsea_aggregate(per_gene_rho, "median", axis=-1, rho_scale=False)
+    np.testing.assert_allclose(out_scaled, out_plain, atol=1e-5)

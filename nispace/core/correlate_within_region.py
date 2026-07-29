@@ -3,6 +3,7 @@ import numpy as np
 import logging
 lgr = logging.getLogger(__name__)
 from ..stats.coloc import pearson, rank1d, rank2d
+from ..stats.misc import rho_to_z
 
 
 _CWR_METHODS = ("pearson", "spearman")
@@ -124,7 +125,7 @@ def _colwise_spearman_loop(X, Y):
     return rho
 
 
-def correlate_within_region_core(X, Y, method="pearson", n_perm=1000, seed=None):
+def correlate_within_region_core(X, Y, method="pearson", n_perm=1000, seed=None, r_to_z=True):
     """Per-parcel, across-subject correlation with a subject-label permutation null.
 
     For each parcel independently, correlates X's subject-level values against Y's
@@ -144,6 +145,15 @@ def correlate_within_region_core(X, Y, method="pearson", n_perm=1000, seed=None)
         Number of subject-label permutations for the null. 0/None skips the
         null entirely (rho only, no p-values).
     seed : int, optional
+    r_to_z : bool, default True
+        Fisher-z-transform (``numpy.arctanh``) both `rho` and `null` before
+        returning -- matches the rest of the toolbox's convention
+        (:meth:`NiSpace.colocalize`'s own ``r_to_z=True`` default), so a
+        correlation coefficient computed anywhere in NiSpace is on the same
+        scale unless explicitly requested otherwise. Applied identically to
+        `rho` and `null` (both or neither), so any downstream comparison
+        between them (p-values) is unaffected by this choice -- it only
+        changes the scale the *values themselves* are expressed on.
 
     Returns
     -------
@@ -185,5 +195,10 @@ def correlate_within_region_core(X, Y, method="pearson", n_perm=1000, seed=None)
             null = np.stack([corr_loop(X2, Y_perm[i]) for i in range(n_perm)], axis=0)
         else:
             null = _colwise_corr_vectorized(X2[np.newaxis, :, :], Y_perm)
+
+    if r_to_z:
+        rho = rho_to_z(rho)
+        if null is not None:
+            null = rho_to_z(null)
 
     return rho, null

@@ -135,6 +135,80 @@ def test_permute_maps_stores_retrievable_null_colocs(permuted_maps_nispace):
     assert len(nsp._nulls["_colocs"]) > 0
 
 
+def _make_multi_y_nsp(rng, n_parcels=25, n_x=1, n_y=8):
+    labels = [f"p{i}" for i in range(n_parcels)]
+    X = rng.normal(size=(n_x, n_parcels))
+    signal = rng.normal(size=n_x) @ X
+    Y = signal[np.newaxis, :] * 0.5 + rng.normal(scale=1.0, size=(n_y, n_parcels))
+    x_df = pd.DataFrame(X, index=[f"x{i}" for i in range(n_x)], columns=labels)
+    y_df = pd.DataFrame(Y, index=[f"y{i}" for i in range(n_y)], columns=labels)
+    nsp = NiSpace(x=x_df, y=y_df, z=None, parcellation=None, standardize=False,
+                 n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    return nsp
+
+
+def test_permute_pooled_p_never_averages_raw_rho():
+    """pooled_p="mean"/"median" must pool "rho" on the Fisher-z scale regardless of
+    colocalize()'s own r_to_z -- forced, not a free choice (see docstring). Ground
+    truth: identical X/Y/seed with r_to_z=False vs r_to_z=True (default) must give
+    IDENTICAL pooled p-values, since forcing Fisher-z before pooling makes both cases
+    operate on the same numbers internally regardless of what colocalize() stored."""
+    nsp_raw = _make_multi_y_nsp(np.random.default_rng(42))
+    nsp_raw.colocalize(method="pearson", r_to_z=False, verbose=False)
+    nsp_raw.permute(what="maps", maps_method="random", n_perm=300, seed=7,
+                    pooled_p="mean", verbose=False)
+    p_raw = nsp_raw.get_p_values(verbose=False)
+
+    nsp_z = _make_multi_y_nsp(np.random.default_rng(42))
+    nsp_z.colocalize(method="pearson", verbose=False)  # r_to_z=True default
+    nsp_z.permute(what="maps", maps_method="random", n_perm=300, seed=7,
+                  pooled_p="mean", verbose=False)
+    p_z = nsp_z.get_p_values(verbose=False)
+
+    # same underlying data/seed, only colocalize()'s r_to_z differs -- pooled p must
+    # be identical, since pooling is now forced onto the Fisher-z scale either way
+    np.testing.assert_allclose(p_raw.to_numpy(), p_z.to_numpy())
+
+    # and a sanity check that this isn't a trivial pass: for this data, naive raw
+    # averaging of the stored (raw, r_to_z=False) rho actually differs from the
+    # correct Fisher-z average -- i.e. the fix has real, measurable effect here
+    rho_raw = nsp_raw.get_colocalizations(verbose=False).to_numpy()
+    naive_raw_pool = np.nanmean(rho_raw, axis=0)
+    correct_z_pool = np.tanh(np.nanmean(np.arctanh(rho_raw), axis=0))
+    assert not np.allclose(naive_raw_pool, correct_z_pool, atol=1e-4)
+
+
+def _make_matched_pairs_nsp(rng, n_pairs=8, n_parcels=20):
+    X = rng.normal(size=(n_pairs, n_parcels))
+    Y = 0.6 * X + rng.normal(scale=0.5, size=(n_pairs, n_parcels))
+    parcel_labels = [f"parcel{i}" for i in range(n_parcels)]
+    pair_labels = [f"p{i}" for i in range(n_pairs)]
+    x_df = pd.DataFrame(X, index=pair_labels, columns=parcel_labels)
+    y_df = pd.DataFrame(Y, index=pair_labels, columns=parcel_labels)
+    nsp = NiSpace(x=x_df, y=y_df, parcellation=None, standardize=False,
+                 n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    return nsp
+
+
+def test_permute_pairs_pooling_never_averages_raw_rho():
+    """what="pairs" (SPICE) pools the N×N matrix diagonal across pairs -- same
+    forced-Fisher-z requirement as pooled_p above. Ground truth: r_to_z=False vs
+    r_to_z=True (default), same data/seed, must give an identical p-value."""
+    nsp_raw = _make_matched_pairs_nsp(np.random.default_rng(3))
+    nsp_raw.colocalize(method="pearson", r_to_z=False, verbose=False)
+    nsp_raw.permute(what="pairs", n_perm=2000, seed=11, verbose=False)
+    p_raw = nsp_raw.get_p_values(permute_what="pairs", verbose=False)
+
+    nsp_z = _make_matched_pairs_nsp(np.random.default_rng(3))
+    nsp_z.colocalize(method="pearson", verbose=False)  # r_to_z=True default
+    nsp_z.permute(what="pairs", n_perm=2000, seed=11, verbose=False)
+    p_z = nsp_z.get_p_values(permute_what="pairs", verbose=False)
+
+    np.testing.assert_allclose(p_raw.to_numpy(), p_z.to_numpy())
+
+
 def test_permute_without_colocalize_runs_it_automatically(synthetic_nispace):
     """permute() should auto-run colocalize() with a warning if it wasn't
     called yet, rather than raising."""

@@ -284,9 +284,29 @@ def _get_colocalize_fun(method,
     # return colocalization function for one y vector and multiple X arrays with
     # results aggregated based on xsea_method
     else:
+        # "mean"/"weightedmean" average per-gene values into a per-set score -- never
+        # valid on raw (bounded, non-additive) correlation coefficients (see
+        # rho_to_z's docstring / project memory "never average raw correlations").
+        # Gated on method here (not per-call on `stat`) because for these 4 methods
+        # every stat _y_colocalize ever produces is "rho" -- no other stat name is
+        # possible, so there's no risk of misapplying this to an unrelated stat.
+        # "median"/"absmedian" need no correction: order statistics commute exactly
+        # with any monotonic transform (arctanh is one), so z-then-median-then-back
+        # is mathematically identical to a raw median regardless. "absmean"/
+        # "weightedabsmean" are left as-is, matching
+        # get_within_region_correlations_omnibus()'s established precedent of only
+        # correcting the signed mean ("rho"), not the abs-magnitude variants.
+        _rho_needs_z_fix = (
+            method in ("pearson", "spearman", "partialpearson", "partialspearman")
+            and not r_to_z
+        )
         if xsea_method == "mean":
-            def aggr(arr):
-                return np.nanmean(arr)
+            if _rho_needs_z_fix:
+                def aggr(arr):
+                    return z_to_rho(np.nanmean(rho_to_z(arr)))
+            else:
+                def aggr(arr):
+                    return np.nanmean(arr)
         elif xsea_method == "median":
             def aggr(arr):
                 return np.nanmedian(arr)
@@ -297,8 +317,15 @@ def _get_colocalize_fun(method,
             def aggr(arr):
                 return np.nanmedian(np.abs(arr))
         elif xsea_method == "weightedmean":
-            def aggr(arr, weights):
-                return np.ma.average(np.ma.array(arr, mask=np.isnan(arr)), weights=weights, axis=0)
+            if _rho_needs_z_fix:
+                def aggr(arr, weights):
+                    arr_z = rho_to_z(arr)
+                    out_z = np.ma.average(np.ma.array(arr_z, mask=np.isnan(arr_z)),
+                                          weights=weights, axis=0)
+                    return z_to_rho(out_z)
+            else:
+                def aggr(arr, weights):
+                    return np.ma.average(np.ma.array(arr, mask=np.isnan(arr)), weights=weights, axis=0)
         elif xsea_method == "weightedabsmean":
             def aggr(arr, weights):
                 return np.ma.average(np.ma.array(np.abs(arr), mask=np.isnan(arr)), weights=weights, axis=0)
@@ -339,7 +366,7 @@ def _get_colocalize_fun(method,
         return _y_colocalize_xsea
 
 
-def _xsea_aggregate(arr, xsea_method, weights=None, axis=-1):
+def _xsea_aggregate(arr, xsea_method, weights=None, axis=-1, rho_scale=False):
     """Reduce per-gene stat values to a per-set statistic along `axis`.
 
     Same formulas as the aggregator closures built inside `_get_colocalize_fun`'s xsea
@@ -348,8 +375,23 @@ def _xsea_aggregate(arr, xsea_method, weights=None, axis=-1):
     per set/permutation. Used by the XSEA null-precompute fast paths in
     `NiSpace.permute()` (api.py), which replace the per-permutation `_y_colocalize_xsea`
     loop with vectorized array lookups but must reduce with identical aggregation math.
+
+    rho_scale : bool, default False
+        Pass True when `arr` holds raw (non-Fisher-z) pearson/spearman-type
+        correlation coefficients (i.e. the caller's method is one of the 4 rho-based
+        methods and colocalize()'s r_to_z was False) -- "mean"/"weightedmean" then
+        transform to the Fisher-z scale before averaging and back afterward (never a
+        raw average of bounded correlation coefficients; see
+        `_get_colocalize_fun`'s matching `aggr` closures and project memory "never
+        average raw correlations"). No-op for "median"/"absmedian" (order statistics
+        commute exactly with the monotonic Fisher-z transform, so the result is
+        identical either way) and for "absmean"/"weightedabsmean" (left as raw
+        magnitude averages, matching get_within_region_correlations_omnibus()'s
+        established precedent of only correcting the signed mean).
     """
     if xsea_method == "mean":
+        if rho_scale:
+            return z_to_rho(np.nanmean(rho_to_z(arr), axis=axis))
         return np.nanmean(arr, axis=axis)
     elif xsea_method == "median":
         return np.nanmedian(arr, axis=axis)
@@ -358,8 +400,10 @@ def _xsea_aggregate(arr, xsea_method, weights=None, axis=-1):
     elif xsea_method == "absmedian":
         return np.nanmedian(np.abs(arr), axis=axis)
     elif xsea_method == "weightedmean":
-        out = np.ma.average(np.ma.array(arr, mask=np.isnan(arr)), weights=weights, axis=axis)
-        return np.ma.filled(out, np.nan)
+        arr_in = rho_to_z(arr) if rho_scale else arr
+        out = np.ma.average(np.ma.array(arr_in, mask=np.isnan(arr_in)), weights=weights, axis=axis)
+        out = np.ma.filled(out, np.nan)
+        return z_to_rho(out) if rho_scale else out
     elif xsea_method == "weightedabsmean":
         out = np.ma.average(np.ma.array(np.abs(arr), mask=np.isnan(arr)), weights=weights, axis=axis)
         return np.ma.filled(out, np.nan)
