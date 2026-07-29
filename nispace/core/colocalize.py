@@ -7,7 +7,7 @@ import logging
 lgr = logging.getLogger(__name__)
 from ..utils.utils import nan_detector
 from ..stats.coloc import (pearson, mutualinfo, r2, mlr, dominance, fast_pls1, pcr, lasso, ridge, elasticnet, rank2d)
-from ..stats.misc import rho_to_z, residuals_nan
+from ..stats.misc import rho_to_z, z_to_rho, residuals_nan
 from .constants import _COLOC_METHODS, _COLOC_METHODS_DROPOPT, _COLOC_METHODS_PERM
 
 
@@ -473,10 +473,12 @@ def _sort_colocs(method, y_colocs_list, n_X, n_Y, xsea=False,
 
     elif method == "pcr":
         coloc_arrays["r2"] = arr_1d.copy()
-        
+        coloc_arrays["score_r"] = arr_1d.copy()
+
         for y, prediction in enumerate(y_colocs_list):
             coloc_arrays["r2"][y] = prediction["r2"]
-            
+            coloc_arrays["score_r"][y] = prediction["score_r"]
+
     # case regularized regression
     elif method in ["lasso", "ridge", "elasticnet"]:
         

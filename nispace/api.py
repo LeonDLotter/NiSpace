@@ -29,7 +29,7 @@ from .stats.coloc import beta, elasticnet, lasso, mlr, partialpearson, pearson, 
 from .stats.misc import (mc_correction, residuals_nan, zscore_df, permute_groups,
                           compute_meff, meff_sidak_correction,
                           maxT_correction, step_maxT_correction, _null_stats_to_array,
-                          null_to_p)
+                          null_to_p, rho_to_z, z_to_rho)
 from .stats.effectsize import rzscore_nan, zscore_nan
 from .cv import _get_dist_dep_splits, _get_rand_splits
 from .plotting import nice_stats_labels, brainplot
@@ -61,7 +61,7 @@ def _cwr_null_p(obs, null):
 _CWR_OMNIBUS_STATS = ("rho", "absrho", "rho2")
 
 
-def _cwr_omnibus_aggregate(rho, omnibus_stat):
+def _cwr_omnibus_aggregate(rho, omnibus_stat, already_z=False):
     """Aggregate per-parcel rho (last axis) into one number per row: signed mean
     ("rho"), mean absolute value ("absrho"), or mean squared value ("rho2").
     Applied identically to the observed per-parcel rho (1D) and to each
@@ -71,10 +71,30 @@ def _cwr_omnibus_aggregate(rho, omnibus_stat):
 
     Uses nanmean, not mean: a single entirely-missing parcel (rho == NaN for
     that parcel, in every permutation too) should be excluded from the average,
-    not silently NaN out the whole omnibus statistic over one bad parcel."""
+    not silently NaN out the whole omnibus statistic over one bad parcel.
+
+    already_z : bool, default False
+        Whether `rho` is already Fisher-z (correlate_within_region()'s own
+        r_to_z, default True as of the same convention colocalize() uses).
+        Normalized back to raw rho first (z_to_rho) so every branch below
+        always works from a known, consistent scale regardless of the
+        caller's r_to_z choice -- "absrho"/"rho2" must operate on the actual
+        correlation coefficient (|rho|/rho**2), not |z|/z**2, which would be
+        a different, not-directly-meaningful quantity.
+
+    "rho" never averages raw (bounded, non-additive) correlation coefficients
+    directly -- each parcel's rho is Fisher-z-transformed first, averaged on
+    that scale, then converted back to a correlation for interpretability
+    (standard meta-analytic combination; raw-r averaging is downward-biased in
+    magnitude, worse for parcels with larger |rho|). Applying the same
+    (monotonic, odd) round-trip to both the observed statistic and every null
+    draw leaves the permutation p-value from `_cwr_null_p` unchanged either
+    way -- this only fixes what the reported "rho" number itself means."""
+    if already_z:
+        rho = z_to_rho(rho)
     with np.errstate(invalid="ignore"):
         if omnibus_stat == "rho":
-            return np.nanmean(rho, axis=-1)
+            return z_to_rho(np.nanmean(rho_to_z(rho), axis=-1))
         elif omnibus_stat == "absrho":
             return np.nanmean(np.abs(rho), axis=-1)
         elif omnibus_stat == "rho2":
@@ -626,12 +646,35 @@ class NiSpace:
             _TPM_SHORTCUTS = {"gm", "wm", "csf", "veins", "arteries"}
             _z_list = [self._z] if isinstance(self._z, str) else (
                 list(self._z) if isinstance(self._z, list) else None)
+            _z_data_space = self._data_space[2]
             if _z_list is not None and all(
                     isinstance(s, str) and s.lower() in _TPM_SHORTCUTS for s in _z_list):
                 _z_list = [s.lower() for s in _z_list]
-                lgr.info(f"Fetching TPM reference map(s) for z: {_z_list}.")
-                self._z = fetch_reference("tpm", maps=_z_list, space=self._data_space[2],
-                                          print_references=False, verbose=verbose)
+                # integrated parcellation -> fetch the precomputed per-parcellation TPM table
+                # directly (faster, and already correctly background-treated -- safer than
+                # re-parcellating raw images under any background_value default/override).
+                # Only custom (non-integrated) parcellations fall back to raw TPM images,
+                # fetched in a fixed canonical volumetric space -- not '_data_space[2]', which
+                # describes user-supplied z data; there is none here, this is a fetched
+                # reference map -- and resampled by the normal parcellate_data() call below.
+                _parc_name = None
+                if isinstance(self._parc, Parcellation):
+                    _parc_name = ((self._parc._cx_name or "") + (self._parc._sc_name or "")
+                                  if self._parc._is_combined else self._parc._name)
+                _parc_integrated = _check_parcellation(_parc_name, raise_not_found=False) \
+                    if _parc_name else None
+                if _parc_integrated is not None:
+                    lgr.info(f"Fetching pre-parcellated TPM reference map(s) for z: {_z_list} "
+                             f"(parcellation: '{_parc_integrated}').")
+                    self._z = fetch_reference("tpm", maps=_z_list, parcellation=self._parc,
+                                              hemi=self._parc._selected_hemi, standardize_parcellated=False,
+                                              print_references=False, verbose=verbose)
+                else:
+                    lgr.info(f"Fetching TPM reference map(s) for z: {_z_list} "
+                             f"(space: '{_SPACE_DEFAULT_VOL}').")
+                    self._z = fetch_reference("tpm", maps=_z_list, space=_SPACE_DEFAULT_VOL,
+                                              print_references=False, verbose=verbose)
+                    _z_data_space = _SPACE_DEFAULT_VOL
                 if self._z_lab is None:
                     self._z_lab = _z_list
             _input_kwargs_z = _input_kwargs.copy()
@@ -640,7 +683,7 @@ class NiSpace:
             self._Z = parcellate_data(
                 self._z,
                 data_labels=self._z_lab,
-                data_space=self._data_space[2],
+                data_space=_z_data_space,
                 **_input_kwargs_z
             )
             lgr.info(f"Got 'z' data for {self._Z.shape[0]} x {self._Z.shape[1]} parcels.")
@@ -1493,6 +1536,15 @@ class NiSpace:
             X labels (or set names, if ``xsea``) as columns, Y labels as rows.
             A dict of ``{stat: DataFrame}`` is returned when the method produces
             more than one statistic (e.g. ``"mlr"``) or when ``force_dict=True``.
+            For ``method in {"pearson", "spearman", "partialpearson",
+            "partialspearman"}``, the ``"rho"`` stat is Fisher-z-transformed
+            (``numpy.arctanh``) by default (``r_to_z=True`` in ``**kwargs``) --
+            it is *not* a raw, bounded [-1, 1] correlation coefficient unless
+            ``r_to_z=False`` was passed. The key/column is always named
+            ``"rho"`` regardless of this setting, so the scale must be tracked
+            separately (e.g. via ``self._coloc_kwargs_by_method[method]
+            ["r_to_z"]``) -- every other stat (``"r2"``, ``"mi"``, ``"beta"``,
+            ...) is unaffected by ``r_to_z``.
         """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.colocalize() - Estimating X & Y colocalizations. ***")
@@ -1808,7 +1860,7 @@ class NiSpace:
 
     def correlate_within_region(self, X=None, Y=None, method="pearson",
                                 X_reduction=None, Y_transform=None,
-                                n_perm=1000, seed=None, store=True, verbose=None):
+                                n_perm=1000, seed=None, r_to_z=True, store=True, verbose=None):
         """
         Per-parcel, across-subject correlation between X and Y -- the transpose
         of :meth:`colocalize` (which correlates across parcels, within a
@@ -1878,6 +1930,17 @@ class NiSpace:
             skips the null (rho only, no p-values).
         seed : int, optional
             Defaults to the seed set at init (``NiSpace(seed=...)``).
+        r_to_z : bool, default True
+            Fisher-z-transform (``numpy.arctanh``) the returned/stored ``rho``
+            (and its null) -- **to align with the rest of the toolbox's
+            convention** (:meth:`colocalize`'s own ``r_to_z=True`` default):
+            a correlation coefficient computed anywhere in NiSpace is on the
+            same scale by default, whether or not it ever gets aggregated.
+            This does not change any p-value (the comparison is invariant to
+            this monotonic transform) -- it only changes the scale ``"stat"``
+            itself is expressed on. :meth:`get_within_region_correlations_omnibus`
+            transparently accounts for this scale when averaging across
+            parcels, regardless of what ``r_to_z`` was used here.
         store : bool, default True
             Store the result (accessible via :meth:`get_within_region_correlations`)
             and remember these settings as "last used".
@@ -1955,7 +2018,7 @@ class NiSpace:
         parcel_labels = x_columns if x_columns is not None else y_columns
 
         rho, null = correlate_within_region_core(x_arr, y_arr, method=method, n_perm=n_perm,
-                                                  seed=seed)
+                                                  seed=seed, r_to_z=r_to_z)
 
         if parcel_labels is None:
             parcel_labels = [f"parcel{i}" for i in range(len(rho))]
@@ -1972,6 +2035,7 @@ class NiSpace:
                     "null_dist": null,
                     "n_perm": n_perm,
                     "seed": seed,
+                    "r_to_z": r_to_z,
                 }
                 p = _cwr_null_p(rho, null)
                 self._p_corr_within[_key] = pd.DataFrame([p], index=[method],
@@ -2059,7 +2123,9 @@ class NiSpace:
             "p": DataFrame or None, "p_corr": DataFrame or None}``. ``"p"`` is
             ``None`` if :meth:`correlate_within_region` was run with
             ``n_perm=0``; ``"p_corr"`` is ``None`` unless ``mc_method`` is
-            given.
+            given. ``"stat"`` is on whatever scale that call's own ``r_to_z``
+            produced (Fisher-z by default, as of that method's own default) --
+            same key name (``"rho"``) either way, see :meth:`correlate_within_region`.
         """
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
@@ -2213,9 +2279,14 @@ class NiSpace:
         omnibus_stat : {"rho", "absrho", "rho2"}, default "absrho"
             How to aggregate the per-parcel ``rho`` values into one number.
 
-            - ``"rho"`` -- signed mean. Most powerful if you expect a
+            - ``"rho"`` -- signed mean, computed via Fisher-z averaging (each
+              parcel's rho is z-transformed, averaged, then converted back to
+              a correlation -- never a raw arithmetic mean of bounded rho
+              values, which is downward-biased for larger |rho|; standard
+              meta-analytic combination). Most powerful if you expect a
               consistent-direction relationship across parcels (mirrors
-              :meth:`paired_colocalization`'s ``pooled_p="mean"``), but a
+              :meth:`paired_colocalization`'s ``pooled_p="mean"``, which pools
+              on the same Fisher-z scale by default), but a
               sign-heterogeneous true effect (positive in some regions,
               negative in others) can cancel out and hide it.
             - ``"absrho"`` (default) -- mean absolute value. Robust to
@@ -2280,8 +2351,12 @@ class NiSpace:
                 KeyError
             )
 
-        stat_obs = _cwr_omnibus_aggregate(rho_df.values[0], omnibus_stat)
-        null_agg = _cwr_omnibus_aggregate(null_entry["null_dist"], omnibus_stat)
+        # rho_df/null_dist are already Fisher-z whenever correlate_within_region()'s own
+        # r_to_z was True (its default) -- _cwr_omnibus_aggregate normalizes back to raw
+        # rho internally either way, so this is correct regardless of that setting
+        _already_z = null_entry.get("r_to_z", True)
+        stat_obs = _cwr_omnibus_aggregate(rho_df.values[0], omnibus_stat, already_z=_already_z)
+        null_agg = _cwr_omnibus_aggregate(null_entry["null_dist"], omnibus_stat, already_z=_already_z)
         p = _cwr_null_p(np.array([stat_obs]), null_agg[:, np.newaxis])[0]
 
         out = {"stat_type": omnibus_stat, "stat": float(stat_obs), "p": float(p)}
@@ -2365,6 +2440,16 @@ class NiSpace:
             For ``what="pairs"``, within-pair coupling is always aggregated
             across pairs; ``"mean"`` and ``"median"`` are both valid and control
             the aggregation function; ``False`` falls back to ``"mean"``.
+            For a correlation-based ``method`` (``"pearson"``/``"spearman"``/
+            ``"partialpearson"``/``"partialspearman"``), this pooling always
+            averages/medians the ``"rho"`` values on the Fisher-z scale --
+            never raw, bounded correlation coefficients -- regardless of
+            whether :meth:`colocalize`'s own ``r_to_z`` was ``True`` (the
+            default; already Fisher-z, pooled as-is) or ``False`` (raw rho is
+            transformed on the fly for this pooling step only; the stored,
+            unpooled ``"rho"`` itself is unaffected and stays raw). This is
+            not a free choice -- averaging raw correlation coefficients is
+            never statistically valid, so there is no way to opt out of it.
         p_from_average_y_coloc : str or bool, optional
             Deprecated. Use ``pooled_p`` instead.
         n_proc : int, optional
@@ -2638,6 +2723,14 @@ class NiSpace:
             )
         _colocs_obs = {stat: np.array(df, dtype=dtype) for stat, df in _colocs_obs.items()}
 
+        # whether the stored "rho" (pearson/spearman/partial*) is already Fisher-z (the
+        # colocalize() call's own r_to_z, default True) -- needed below wherever "rho" gets
+        # pooled (mean/median) across Y maps or pairs: averaging *raw* bounded correlation
+        # coefficients is never valid, so pooling always forces the Fisher-z scale for
+        # "rho" regardless of r_to_z, applying rho_to_z() on the fly only when the stored
+        # value isn't already on that scale (r_to_z=False) -- never a double-transform.
+        _rho_already_z = self._coloc_kwargs_by_method.get(method, {}).get("r_to_z", True)
+
         ## pairs permutation (SPICE) — early return, bypasses null-map generation
         if what == ["pairs"]:
             # validation
@@ -2679,12 +2772,19 @@ class NiSpace:
             # get the N×N coloc matrix (first stat key)
             _stat = next(iter(_colocs_obs))
             _mat = _colocs_obs[_stat]   # (N, N) float32 array
+            # never average raw (bounded, non-additive) correlation coefficients: pool on
+            # the Fisher-z scale regardless of r_to_z, converting only if the stored "rho"
+            # isn't already on that scale -- see _rho_already_z above
+            _pool_as_z = _stat == "rho" and not _rho_already_z
+            if _pool_as_z:
+                _mat = rho_to_z(_mat)
             _N = _mat.shape[0]
             _agg = np.median if pooled_p == "median" else np.mean
             _observed = float(_agg(np.diag(_mat)))
             lgr.info(
                 f"Pairs permutation: N={_N}, observed within-pair {_stat} "
-                f"({pooled_p}) = {_observed:.4f}."
+                f"({pooled_p}) = {_observed:.4f}"
+                f"{' (Fisher-z scale)' if _pool_as_z else ''}."
             )
             # build null key for cache lookup
             _perm = "pairs"
@@ -2792,10 +2892,18 @@ class NiSpace:
         # row to begin with, e.g. a single group-difference map from Y_transform)
         if pooled_p and _n_y_rows > 1:
             for stat in _colocs_obs.keys():
+                _vals = _colocs_obs[stat]
+                # never average raw (bounded, non-additive) correlation coefficients --
+                # pool "rho" on the Fisher-z scale regardless of r_to_z (see
+                # _rho_already_z above); this pooled copy only ever feeds the p-value
+                # comparison below (_get_exact_p_values), never displayed/stored itself,
+                # so no back-transform is needed here
+                if stat == "rho" and not _rho_already_z:
+                    _vals = rho_to_z(_vals)
                 if pooled_p == "median":
-                    _colocs_obs[stat] = np.nanmedian(_colocs_obs[stat], axis=0)[np.newaxis, :]
+                    _colocs_obs[stat] = np.nanmedian(_vals, axis=0)[np.newaxis, :]
                 else:
-                    _colocs_obs[stat] = np.nanmean(_colocs_obs[stat], axis=0)[np.newaxis, :]
+                    _colocs_obs[stat] = np.nanmean(_vals, axis=0)[np.newaxis, :]
         
         ## prepare permuted data as prerequisite for null colocalization runs
         _X_null, _Y_null, _Z_null = None, None, None
@@ -3120,11 +3228,17 @@ class NiSpace:
             # average colocalization if requested (no-op when there is only one row)
             if pooled_p and _n_y_rows > 1:
                 for stat in null_colocs:
+                    _vals = null_colocs[stat]
+                    # same Fisher-z-before-pooling forcing as the observed side above --
+                    # must match it exactly, or obs/null end up compared on different
+                    # scales
+                    if stat == "rho" and not _rho_already_z:
+                        _vals = rho_to_z(_vals)
                     if pooled_p == "median":
-                        null_colocs[stat] = np.nanmedian(null_colocs[stat], axis=0)[np.newaxis, :]
+                        null_colocs[stat] = np.nanmedian(_vals, axis=0)[np.newaxis, :]
                     else:
-                        null_colocs[stat] = np.nanmean(null_colocs[stat], axis=0)[np.newaxis, :]
-            # return            
+                        null_colocs[stat] = np.nanmean(_vals, axis=0)[np.newaxis, :]
+            # return
             return null_colocs
         
         # xsea null aggregation fast path: for methods that score each gene independently
@@ -3176,7 +3290,10 @@ class NiSpace:
                     idx_matrix = np.stack([_X_null[i][set_name] for i in range(n_perm)])
                     gathered = stat_lookup[:, idx_matrix]  # (n_Y, n_perm, set_size)
                     w = X_weights[set_name] if weighted else None
-                    set_stats.append(_xsea_aggregate(gathered, xsea_method, weights=w, axis=-1))
+                    set_stats.append(_xsea_aggregate(
+                        gathered, xsea_method, weights=w, axis=-1,
+                        rho_scale=(stat_key == "rho" and not _rho_already_z),
+                    ))
                 full = np.stack(set_stats, axis=-1).astype(dtype)  # (n_Y, n_perm, n_sets)
 
             else:  # _fast_xsea_mapsY: X sets fixed (observed), Y is nulled per permutation
@@ -3198,13 +3315,28 @@ class NiSpace:
                 for set_name in set_names_fast:
                     gathered = stat_uniq[:, :, set_member_idx[set_name]]  # (n_Y, n_perm, set_size)
                     w = X_weights[set_name] if weighted else None
-                    set_stats.append(_xsea_aggregate(gathered, xsea_method, weights=w, axis=-1))
+                    set_stats.append(_xsea_aggregate(
+                        gathered, xsea_method, weights=w, axis=-1,
+                        rho_scale=(stat_key == "rho" and not _rho_already_z),
+                    ))
                 full = np.stack(set_stats, axis=-1).astype(dtype)  # (n_Y, n_perm, n_sets)
 
             # pooled_p reduction, matching par_fun's post-processing exactly (no-op if
             # pooled_p is falsy or there's only one Y row to begin with)
             if pooled_p and _n_y_rows > 1:
                 reducer = np.nanmedian if pooled_p == "median" else np.nanmean
+                # same Fisher-z-before-pooling forcing as the non-xsea pooled_p sites
+                # above -- "full" here is already the XSEA per-set aggregate (see
+                # _xsea_aggregate above, which now separately guarantees the
+                # gene-to-set aggregation step never averages raw rho either, via its
+                # own rho_scale= param). _xsea_aggregate's rho_scale handling always
+                # round-trips back to whatever scale "gathered" started on (raw when
+                # _rho_already_z is False, since it z-transforms-then-back; untouched
+                # when _rho_already_z is True, since rho_scale is then False and
+                # gathered was already z) -- so "full"'s scale still mirrors
+                # _rho_already_z exactly, same condition as every other pooled_p site
+                if stat_key == "rho" and not _rho_already_z:
+                    full = rho_to_z(full)
                 full = reducer(full, axis=0, keepdims=True).astype(dtype)
 
             _colocs_null = [{stat_key: full[:, i, :]} for i in range(n_perm)]
@@ -3539,7 +3671,12 @@ class NiSpace:
         scales. This is distinct from any z-scoring of the raw input data
         (``standardize=`` at init) -- it normalizes colocalization *output*
         against the null computed by :meth:`permute`, which must have been run
-        first.
+        first. Also distinct from :meth:`colocalize`'s own ``r_to_z`` (Fisher-z
+        transform of ``"rho"``, applied once, upstream, at colocalize()-time):
+        if that was active (the default), this function's null-relative
+        z-score is computed on the *already* Fisher-z ``"rho"`` values, not
+        raw correlations -- a "z-score of a z" for correlation-based methods,
+        not a Fisher-z itself.
 
         Parameters
         ----------
@@ -4456,7 +4593,10 @@ class NiSpace:
             A dict of ``{stat: DataFrame}`` if more than one ``stats`` entry is
             retrieved or ``force_dict=True``, otherwise a single DataFrame.
             If ``get_nulls=True``, a ``(colocalizations, nulls)`` tuple is
-            returned instead.
+            returned instead. See :meth:`colocalize`'s Returns section --
+            ``"rho"`` (pearson/spearman/partial*) is on the Fisher-z scale by
+            default (that call's ``r_to_z``, not re-resolved here), same key
+            name regardless of scale.
         """
         loglevel = lgr.getEffectiveLevel()
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
