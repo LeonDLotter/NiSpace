@@ -1744,7 +1744,7 @@
     },
     "grf": {
         "label": "GRF",
-        "description": "The NiSpace \"GRF\" dataset consists of Gaussian Random Field Maps (GRFs) generated with varying spatial smoothness. The parameter \"alpha\" controls the smoothness of the field and therefore the spatial autocorrelation of the resulting brain maps. The maps are mirrored across hemispheres exactly at MNI coordinate (0,0,0). There are 10,000 maps for alpha=0 (spatially unstructured, white noise) and 1,000 maps for each of the three smoothness levels (alpha=1, 2, 3). The code was adopted from Markello et al., 2021 and Burt et al., 2020.",
+        "description": "The NiSpace \"GRF\" dataset consists of Gaussian Random Field Maps (GRFs) generated with varying spatial smoothness. The parameter \"alpha\" controls the smoothness of the field and therefore the spatial autocorrelation of the resulting brain maps. The maps are mirrored across hemispheres exactly at MNI coordinate (0,0,0). There are 10,000 maps for each of the four smoothness levels (alpha=0, 1, 2, 3; alpha=0 being spatially unstructured white noise). The code was adopted from Markello et al., 2021 and Burt et al., 2020.",
         "default_collection": "ByAlpha",
         "cortex_only": false,
         "citations": [
@@ -1761,7 +1761,7 @@
             "All": {
                 "host": "github-nispace",
                 "remote": "reference/grf/collection-All.collect",
-                "description": "13000 Gaussian random fields (10k for smoothness level alpha 0; 1000 per smoothness level alpha 1, 2, 3)."
+                "description": "40000 Gaussian random fields (10k per smoothness level; alpha=0, 1, 2, 3)."
             },
             "Alpha0": {
                 "host": "github-nispace",
@@ -1771,7 +1771,7 @@
             "ByAlpha": {
                 "host": "github-nispace",
                 "remote": "reference/grf/collection-ByAlpha.collect",
-                "description": "All 13000 GRFs grouped by smoothness parameter (alpha)."
+                "description": "All 40000 GRFs grouped by smoothness parameter (alpha)."
             },
             "ByAlpha1000": {
                 "host": "github-nispace",
@@ -2133,6 +2133,44 @@
                     {
                         "ref": "Gandal et al., 2022",
                         "doi": "10.1038/s41586-022-05377-7"
+                    }
+                ]
+            },
+            "FMR1Targets": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-FMR1Targets.collect",
+                "description": "FMR1/FMRP-related gene sets, 3 evidence types encoded in the set name - FMR1Target (CLIP-seq binding targets), ASDEditMod (RNA-editing co-module linked to ASD diagnosis), FXSEditDiff (differential RNA editing in Fragile-X-spectrum patients). Naming - {EvidenceType}_{Context}_{Study}, e.g. FMR1Target_dNPC_Li2020. Note - NonNeuronal = HEK293 cells, MouseBrain = mouse not human; UCDavisFXTAS is premutation FXTAS, not full-mutation FXS.",
+                "citations": [
+                    {
+                        "ref": "Li et al., 2020",
+                        "doi": "10.1101/gr.251405.119"
+                    },
+                    {
+                        "ref": "Ascano et al., 2012",
+                        "doi": "10.1038/nature11737"
+                    },
+                    {
+                        "ref": "Darnell et al., 2011",
+                        "doi": "10.1016/j.cell.2011.06.013"
+                    },
+                    {
+                        "ref": "Maurin et al., 2018",
+                        "doi": "10.1093/nar/gky267"
+                    },
+                    {
+                        "ref": "Tran et al., 2019",
+                        "doi": "10.1038/s41593-018-0287-x"
+                    }
+                ]
+            },
+            "FXSEditDiffWeights": {
+                "host": "github-nispace",
+                "remote": "reference/magicc/collection-FXSEditDiffWeights.collect",
+                "description": "Same data as the two FXSEditDiff sets in FMR1Targets, with differential editing effect size as weights.",
+                "citations": [
+                    {
+                        "ref": "Tran et al., 2019",
+                        "doi": "10.1038/s41593-018-0287-x"
                     }
                 ]
             }
@@ -2808,6 +2846,44 @@
                     {
                         "ref": "Gandal et al., 2022",
                         "doi": "10.1038/s41586-022-05377-7"
+                    }
+                ]
+            },
+            "FMR1Targets": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/collection-FMR1Targets.collect",
+                "description": "FMR1/FMRP-related gene sets, 3 evidence types encoded in the set name - FMR1Target (CLIP-seq binding targets), ASDEditMod (RNA-editing co-module linked to ASD diagnosis), FXSEditDiff (differential RNA editing in Fragile-X-spectrum patients). Naming - {EvidenceType}_{Context}_{Study}, e.g. FMR1Target_dNPC_Li2020. Note - NonNeuronal = HEK293 cells, MouseBrain = mouse not human; UCDavisFXTAS is premutation FXTAS, not full-mutation FXS.",
+                "citations": [
+                    {
+                        "ref": "Li et al., 2020",
+                        "doi": "10.1101/gr.251405.119"
+                    },
+                    {
+                        "ref": "Ascano et al., 2012",
+                        "doi": "10.1038/nature11737"
+                    },
+                    {
+                        "ref": "Darnell et al., 2011",
+                        "doi": "10.1016/j.cell.2011.06.013"
+                    },
+                    {
+                        "ref": "Maurin et al., 2018",
+                        "doi": "10.1093/nar/gky267"
+                    },
+                    {
+                        "ref": "Tran et al., 2019",
+                        "doi": "10.1038/s41593-018-0287-x"
+                    }
+                ]
+            },
+            "FXSEditDiffWeights": {
+                "host": "github-nispace",
+                "remote": "reference/mrna/collection-FXSEditDiffWeights.collect",
+                "description": "Same data as the two FXSEditDiff sets in FMR1Targets, with differential editing effect size as weights.",
+                "citations": [
+                    {
+                        "ref": "Tran et al., 2019",
+                        "doi": "10.1038/s41593-018-0287-x"
                     }
                 ]
             }
