@@ -3,7 +3,6 @@ import numpy as np
 from numba import njit
 from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV
 from sklearn.cross_decomposition import PLSRegression
-from sklearn.decomposition import PCA
 from sklearn.feature_selection import mutual_info_regression
 from tqdm.auto import tqdm
 
@@ -282,6 +281,46 @@ def mutualinfo(x, y, n_neighbors=3, seed=None):
 
     
 @njit(cache=True, nogil=True)
+def _ols_beta_via_eigh(X, y):
+    """OLS coefficients `beta = pinv(X.T @ X) @ (X.T @ y)`, via `eigh` on the Gram matrix.
+
+    Shared by `mlr`/`r2`/`beta` (this module) and `residuals_nan`/`partial_residuals_nan`
+    (`stats/misc.py`) -- every numba-jitted OLS fit in NiSpace goes through this one function.
+    Uses `np.linalg.eigh`, not `np.linalg.pinv` (SVD-based): numba's SVD implementation can
+    intermittently fail to converge (`Internal algorithm failed to converge`) once `X`'s
+    columns approach or exceed its rows (`X.T @ X` singular/near-singular) -- observed in
+    practice once benchmark sweeps started testing that regime. `eigh` is mathematically
+    equivalent for this symmetric-PSD case (verified against `np.linalg.pinv` in tests), more
+    numerically robust (different, more stable LAPACK routine), and faster (benchmarked under
+    numba: ~1.3x at typical `n_predictors << n_obs` shapes, up to ~3x as columns approach
+    rows, with zero call-overhead from being factored out here -- verified separately).
+    Extracting this as a shared function costs nothing under numba: cross-`@njit` calls
+    compile directly, with no Python-level dispatch.
+
+    When `X`'s columns are rank-deficient relative to its rows, the returned `beta` is a
+    genuine minimum-norm solution (the underlying regression problem is ill-posed, not a
+    numerical artifact of this implementation) -- callers relying on `adj_r2`-style formulas
+    downstream should expect those to become mathematically degenerate in that regime too
+    (e.g. division by a term that hits zero or goes negative), by design of the formula itself.
+
+    Parameters
+    ----------
+    X : np.ndarray, shape (n_obs, n_cols)
+    y : np.ndarray, shape (n_obs,)
+
+    Returns
+    -------
+    beta : np.ndarray, shape (n_cols,)
+    """
+    XtX = X.T.dot(X)
+    Xty = X.T.dot(y)
+    eigvals, eigvecs = np.linalg.eigh(XtX)
+    cutoff = np.max(np.abs(eigvals)) * 1e-10
+    inv_eigvals = np.where(eigvals > cutoff, 1.0 / eigvals, 0.0).astype(X.dtype)
+    return eigvecs.dot(inv_eigvals * (eigvecs.T.dot(Xty)))
+
+
+@njit(cache=True, nogil=True)
 def mlr(x, y, adj_r2=True, intercept=True):
     """Multiple linear regression of predictor(s) `x` on target `y` (via pseudo-inverse).
 
@@ -311,13 +350,19 @@ def mlr(x, y, adj_r2=True, intercept=True):
     Used throughout `core/colocalize.py` (the `"mlr"` colocalization
     method and its per-predictor `"individual"` R2 drops) and
     `core/region_influence.py` (full-model R2 for regional influence).
+
+    Coefficients come from `_ols_beta_via_eigh` (see its docstring for why `eigh`, not
+    `pinv`). When `n_predictors >= n_obs`, the fit is genuinely rank-deficient, so `beta`/
+    `rsq` reflect a real minimum-norm solution -- `adj_r2` in particular becomes
+    mathematically degenerate there (division by `n_obs - n_x - 1`, which hits zero or goes
+    negative), by design of adjusted R2 itself, not a bug in this function.
     """
-    
+
     n_obs = x.shape[0]
     n_x = x.shape[1]
-    
+
     X = np.column_stack((np.ones(n_obs, dtype=x.dtype), x))
-    beta = np.linalg.pinv((X.T).dot(X)).dot(X.T.dot(y))
+    beta = _ols_beta_via_eigh(X, y)
     y_hat = np.dot(X, beta)
     ss_res = np.sum((y - y_hat)**2)       
     ss_tot = np.sum((y - np.mean(y))**2)   
@@ -358,13 +403,17 @@ def r2(x, y, adj_r2=True):
     Used by `core/colocalize.py`'s `"slr"` (single-predictor) colocalization
     method, its `"mlr"` method's per-predictor `"individual"` R2 drops, and
     by `dominance` (combinatorial R2 over predictor subsets).
+
+    Coefficients come from `_ols_beta_via_eigh` (see its docstring) -- called here, notably,
+    by `pcr()` for its retained-components joint-R2, where `n_predictors` (retained
+    components) can approach `n_obs`.
     """
-    
+
     n_obs = x.shape[0]
     n_x = x.shape[1]
-    
+
     X = np.column_stack((x, np.ones(n_obs, dtype=x.dtype)))
-    beta = np.linalg.pinv((X.T).dot(X)).dot(X.T.dot(y))
+    beta = _ols_beta_via_eigh(X, y)
     y_hat = np.dot(X, beta)
     ss_res = np.sum((y - y_hat)**2)       
     ss_tot = np.sum((y - np.mean(y))**2)   
@@ -402,10 +451,12 @@ def beta(x, y, intercept=True):
     Imported into `api.py`'s namespace; no direct call site found in
     `core/colocalize.py` (which uses `mlr` when both R2 and coefficients
     are needed) -- provided as a standalone coefficients-only utility.
+
+    Coefficients come from `_ols_beta_via_eigh` (see its docstring).
     """
 
     X = np.column_stack((np.ones(x.shape[0], dtype=x.dtype), x))
-    beta = np.linalg.pinv((X.T).dot(X)).dot(X.T.dot(y)).flatten()
+    beta = _ols_beta_via_eigh(X, y).flatten()
 
     if intercept==False:
         beta = beta[1:]
@@ -513,7 +564,7 @@ def dominance(x, y, adj_r2=False, verbose=False):
     return dom_stats
 
 
-def pls(x, y, n_components=np.inf, **kwargs):
+def pls(x, y, n_components=2, **kwargs):
     """Partial least squares regression of `x` on `y` via scikit-learn's NIPALS `PLSRegression`.
 
     Parameters
@@ -521,8 +572,12 @@ def pls(x, y, n_components=np.inf, **kwargs):
     x : np.ndarray, shape (n_obs, n_predictors)
         **Does not handle NaN** -- sklearn errors on NaN input; pre-mask.
     y : np.ndarray, shape (n_obs,) or (n_obs, 1)
-    n_components : int, default `np.inf`
-        Number of latent components; clipped to `n_predictors` if larger.
+    n_components : int, default 2
+        Number of latent components; clipped to `n_predictors` if larger. Kept small by default
+        -- `pls` overfits badly (both real and null draws saturate toward R2=1) once
+        `n_components` becomes a non-trivial fraction of `n_obs`, or once the predictor count
+        approaches/exceeds `n_obs`; see `docs/nb_benchmarks/bench4-1_set_resampling_fpr.ipynb`
+        for the full story.
     **kwargs
         Forwarded to `sklearn.cross_decomposition.PLSRegression`.
 
@@ -553,21 +608,83 @@ def pls(x, y, n_components=np.inf, **kwargs):
     return out
 
 
-def pcr(x, y, adj_r2=True, n_components=np.inf, **kwargs):
-    """Principal component regression: PCA-reduce `x`, then regress on `y` via `r2`.
+def _pca_via_eigh(x, n_components):
+    """Top-`n_components` PCA scores of `x`, via eigendecomposition of the (small) predictor
+    covariance matrix (`np.linalg.eigh`), not `sklearn.decomposition.PCA`'s SVD-based fit.
+
+    Shared by `pcr()` (this module) and `core/reduce_x.py`'s `method="pca"` path. Deliberate
+    choice, not an oversight: sklearn's PCA calls `scipy.linalg.svd` (LAPACK's `gesdd`
+    driver), which can intermittently fail to converge (`LinAlgError`) -- a known LAPACK
+    flakiness, notably on macOS's Accelerate BLAS backend, observed in practice during a
+    permutation-heavy benchmark run (thousands of PCA fits, no single bad predictor set to
+    blame). `eigh` uses a different, more robust LAPACK routine (symmetric eigensolver), and
+    is also cheaper here since `n_predictors` is typically << `n_obs` in NiSpace's use cases --
+    eigendecomposing the small `n_predictors x n_predictors` covariance matrix beats SVD-ing
+    the full `n_obs x n_predictors` one. Mathematically equivalent to SVD-based PCA (verified
+    against `sklearn.decomposition.PCA` in tests, up to floating-point precision and sign).
+
+    Component 1's sign is fixed to be non-negatively correlated with the mean of `x`'s own
+    (centered) columns -- the WGCNA "eigengene" convention: component 1 is typically the
+    consensus direction across columns, so this gives a reproducible, interpretable sign
+    ("this component increases when the average input column increases") instead of `eigh`'s
+    raw sign, which is an implementation detail of the underlying LAPACK routine and not
+    guaranteed stable across BLAS backends/platforms/versions. Harmless for `pcr()`, which
+    immediately overrides component 1's sign again with its own Y-anchored median-vote
+    convention regardless of what it receives; this is what protects `_pca_via_eigh`'s only
+    other caller, `core/reduce_x.py`'s `method="pca"` path, which has no such downstream
+    override and previously had no sign convention here at all. One caveat, same as any
+    mean-based convention: for a genuinely bipartite/antagonistic `x` (about half the columns
+    anti-correlated with the rest), the mean is a weak reference and the resulting sign can
+    feel arbitrary -- immaterial here (no p-value/calibration depends on it, unlike the
+    Y-anchored `score_r` case this was deliberately *not* used for, see project memory).
+    Components beyond the first keep `eigh`'s raw sign -- they are orthogonal to component 1
+    by construction, so there is no equivalent "overall mean" anchor for them.
 
     Parameters
     ----------
     x : np.ndarray, shape (n_obs, n_predictors)
-        **Does not handle NaN** -- sklearn errors on NaN input; pre-mask.
+        **Does not handle NaN** -- pre-mask.
+    n_components : int
+        Number of components to retain. Not clipped against `n_predictors` here -- callers
+        must pass a valid value (both current callers clip beforehand).
+
+    Returns
+    -------
+    x_pcs : np.ndarray, shape (n_obs, n_components)
+    """
+    xc = x - x.mean(axis=0)
+    cov = xc.T @ xc
+    eigvals, eigvecs = np.linalg.eigh(cov)  # ascending order, arbitrary per-component sign
+    order = np.argsort(eigvals)[::-1][:n_components]
+    x_pcs = xc @ eigvecs[:, order]
+
+    if x_pcs.shape[1] > 0:
+        x_mean = xc.mean(axis=1)
+        if pearson(x_pcs[:, 0], x_mean) < 0.0:
+            x_pcs[:, 0] *= -1.0
+
+    return x_pcs
+
+
+def pcr(x, y, adj_r2=True, n_components=2):
+    """Principal component regression: PCA-reduce `x`, then regress on `y` via `r2`.
+
+    PCA comes from `_pca_via_eigh` (see its docstring for why `eigh`, not sklearn's PCA).
+
+    Parameters
+    ----------
+    x : np.ndarray, shape (n_obs, n_predictors)
+        **Does not handle NaN** -- pre-mask.
     y : np.ndarray, shape (n_obs,)
     adj_r2 : bool, default True
         Use adjusted R2 in the underlying `r2` fit.
-    n_components : int, default `np.inf`
-        Number of principal components to retain; clipped to
-        `n_predictors` if larger.
-    **kwargs
-        Forwarded to `sklearn.decomposition.PCA`.
+    n_components : int, default 2
+        Number of principal components to retain; clipped to `n_predictors` if larger. Kept
+        small by default -- the adjusted-R2 correction's null-draw mean drifts well above 0
+        (i.e. under-corrects) once `n_components` approaches the real effective rank of a
+        resampled-with-reuse background pool; `n_components=1-2` stayed best-calibrated across
+        the full tested range, `n_components` scaled up with the parcellation was the wrong
+        intuition. See `docs/nb_benchmarks/bench4-1_set_resampling_fpr.ipynb` for the full story.
 
     Returns
     -------
@@ -595,21 +712,24 @@ def pcr(x, y, adj_r2=True, n_components=np.inf, **kwargs):
     """
     n_components = np.min([n_components, x.shape[1]]).astype(int)
 
-    x_pcs = PCA(n_components=n_components, **kwargs).fit_transform(x)
+    x_pcs = _pca_via_eigh(x, n_components)
 
     # orient component 1 via the median-vote sign convention (see score_r above), in place on
     # x_pcs itself rather than only in a local copy -- costs nothing (a per-column sign flip
     # cannot change a joint OLS fit's R2) and keeps the reoriented component available for any
-    # future per-component/per-predictor pcr output, not just score_r below.
+    # future per-component/per-predictor pcr output, not just score_r below. Every other
+    # retained component's sign stays whatever `eigh` returned (arbitrary but immaterial: OLS
+    # absorbs any per-column sign flip into the corresponding coefficient, so joint R2 is
+    # unaffected either way -- only component 1 has a reporting-facing `score_r`/sign contract).
     #
     # Unlike PLS's component 1 (w1 ~ X'y, whose *unflipped* direction is provably always
     # non-negatively correlated with y -- see _simpls1_loop), PCA's PC1 is fully Y-blind
-    # (chosen purely to maximize x's own variance): sklearn's raw PC1 sign has no guaranteed
-    # relationship to y at all, so "flip only if the vote is negative" is NOT safe here --
-    # verified by a mixed-sign regression test where that shortcut left score_r's sign
-    # disagreeing with the majority vote. Must instead explicitly compare PC1's own raw
-    # correlation with y against the desired sign and flip only on a mismatch.
-    xc = x - x.mean(axis=0)
+    # (chosen purely to maximize x's own variance): its raw sign has no guaranteed relationship
+    # to y at all, so "flip only if the vote is negative" is NOT safe here -- verified by a
+    # mixed-sign regression test where that shortcut left score_r's sign disagreeing with the
+    # majority vote. Must instead explicitly compare PC1's own raw correlation with y against
+    # the desired sign and flip only on a mismatch.
+    xc = x - x.mean(axis=0)  # cheap to recompute (O(n*p)); _pca_via_eigh's own xc is internal
     yc = y - y.mean()
     per_pred_r = (xc.T @ yc) / (np.sqrt((xc ** 2).sum(axis=0)) * np.sqrt((yc ** 2).sum()))
     desired_sign = 1.0 if np.median(per_pred_r) >= 0.0 else -1.0

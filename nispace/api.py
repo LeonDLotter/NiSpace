@@ -1542,7 +1542,7 @@ class NiSpace:
             ``adj_r2`` (bool, default True -- adjusted vs. raw R² for
             slr/mlr/dominance/pcr), ``mlr_individual`` (bool, default False --
             compute per-predictor unique-R² contributions for ``"mlr"``),
-            ``n_components`` (int, default 1 -- for ``"pls"``/``"pcr"``),
+            ``n_components`` (int, default 2 -- for ``"pls"``/``"pcr"``),
             ``n_neighbors`` (for ``"mi"``), and sklearn ``Lasso``/``Ridge``/
             ``ElasticNet`` keyword arguments for the regularized methods.
 
@@ -3122,6 +3122,10 @@ class NiSpace:
             set_sizes = [set_X.shape[0] for set_X in _X_obs_arr.values()]
             set_names = list(_X_obs_arr.keys())
             bg_size = sets_X_background.shape[0]
+            if method not in _COLOC_METHODS_UNIVARIATE and max(set_sizes) > _X_obs.shape[1]:
+                lgr.warning(f"Set size ({max(set_sizes)}) exceeds parcel count "
+                            f"({_X_obs.shape[1]}) -- 'sets' permutation calibration degrades "
+                            "here, even with dimensionality reduction methods.")
             # get permuted indices
             rng = np.random.default_rng(seed)
             _X_null = [
@@ -4650,7 +4654,8 @@ class NiSpace:
             if not force_dict and len(out) == 1:
                 out = out[stats[0]]
             lgr.info(f"Returning z-scored colocalizations.")
-            lgr.setLevel(loglevel)
+            if loglevel < 60:  # avoid permanently pinning the child logger if entered nested inside _quiet()
+                lgr.setLevel(loglevel)
             return out
 
         if stats is None:
@@ -4773,7 +4778,8 @@ class NiSpace:
         string = print_arg_pairs(method=method, xsea=xsea, X_reduction=X_reduction, 
                                  Y_transform=Y_transform)
         lgr.info(f"Returning colocalizations: \n{string}")
-        lgr.setLevel(loglevel)
+        if loglevel < 60:  # avoid permanently pinning the child logger if entered nested inside _quiet()
+            lgr.setLevel(loglevel)
         return (out, out_null) if get_nulls else out  
     
     # ----------------------------------------------------------------------------------------------

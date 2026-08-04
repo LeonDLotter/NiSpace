@@ -1,5 +1,5 @@
 import numpy as np
-from sklearn.decomposition import PCA, FastICA
+from sklearn.decomposition import FastICA
 try:
     from factor_analyzer import FactorAnalyzer
     _FACTOR_ANALYZER_AVAILABLE = True
@@ -8,7 +8,7 @@ except ImportError:
 
 import logging
 lgr = logging.getLogger(__name__)
-from ..stats.coloc import pearson
+from ..stats.coloc import pearson, _pca_via_eigh
 
 
 def _reduce_dimensions(data, method="pca", n_components=None, min_ev=None, 
@@ -25,8 +25,13 @@ def _reduce_dimensions(data, method="pca", n_components=None, min_ev=None,
     
     # case pca
     if method=="pca":
-        # run pca with all components
-        pcs = PCA(n_components=n_components).fit_transform(data)
+        # run pca with all components -- via _pca_via_eigh (eigh on the small predictor
+        # covariance matrix), not sklearn.decomposition.PCA (SVD-based, can intermittently
+        # fail to converge; see its docstring). Per-component sign is arbitrary either way
+        # (matches any eigendecomposition/SVD), so may differ from a previous sklearn-based
+        # run -- the subspace/explained variance is identical, only individual component
+        # signs may flip.
+        pcs = _pca_via_eigh(data, n_components)
         # ddof=0 on both sides: ratio is invariant to ddof choice as long as it
         # matches; pinned to population convention for consistency/clarity
         ev = np.var(pcs, axis=0, ddof=0) / np.sum(np.var(data, axis=0, ddof=0))

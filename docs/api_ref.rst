@@ -150,6 +150,7 @@ API Reference
    rho_to_z
    z_to_rho
    zscore_df
+   pca
    permute_groups
    null_to_p
    mc_correction

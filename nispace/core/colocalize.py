@@ -106,7 +106,7 @@ def _get_colocalize_fun(method,
                         xsea=False, xsea_method="mean",
                         r_to_z=True, r_equal_one="raise", adj_r2=True, mlr_individual=False, 
                         parcel_mask_regularized=None, parcel_tr_te_splits=None, parcel_train_pct=None, 
-                        n_components=1,
+                        n_components=2,
                         seed=None, verbose=False, dtype=np.float32, **kwargs):
    
     ## case pearson / spearman
@@ -240,10 +240,10 @@ def _get_colocalize_fun(method,
             
             _colocs = pcr(
                 x=X_T[parcel_mask, :], # atlases
-                y=y[parcel_mask], # subject   
+                y=y[parcel_mask], # subject
                 adj_r2=adj_r2,
                 n_components=n_components,
-                **kwargs
+                #**kwargs
             )
             
             return _colocs

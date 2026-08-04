@@ -9,6 +9,8 @@ from joblib import Parallel, delayed
 from scipy.stats import zscore, norm
 from statsmodels.stats.multitest import multipletests
 
+from .coloc import _ols_beta_via_eigh, _pca_via_eigh
+
 lgr = logging.getLogger(__name__)
 
 
@@ -72,6 +74,9 @@ def residuals_nan(x, y, decenter=False):
     :func:`nispace.stats.coloc.partialcorr` for the closed-form alternative
     that is *not* on this code path).
 
+    Coefficients come from :func:`nispace.stats.coloc._ols_beta_via_eigh` (``eigh`` on the
+    Gram matrix, not ``np.linalg.pinv`` -- see its docstring for why).
+
     Args:
         x (numpy.ndarray): shape (n_values, n_predictors)
         y (numpy.ndarray): shape (n_values, 1) or (n_values,)
@@ -84,9 +89,9 @@ def residuals_nan(x, y, decenter=False):
     nan_mask = np_any_axis1(np.isnan(np.column_stack((x, y))))
     x_ = x[~nan_mask]
     y_ = y[~nan_mask]
-    
+
     X = np.column_stack((x_, np.ones(x_.shape[0], dtype=x_.dtype)))
-    beta = np.linalg.pinv((X.T).dot(X)).dot(X.T.dot(y_))
+    beta = _ols_beta_via_eigh(X, y_)
     y_hat = np.dot(X, beta)
     resid_ = y_ - y_hat
 
@@ -115,6 +120,9 @@ def partial_residuals_nan(x_nuisance, x_protect, y):
     (protected OLS), where ``x_protect`` holds variables whose effect should
     be kept in ``y`` while ``x_nuisance`` is removed.
 
+    Coefficients come from :func:`nispace.stats.coloc._ols_beta_via_eigh` (``eigh`` on the
+    Gram matrix, not ``np.linalg.pinv`` -- see its docstring for why).
+
     Args:
         x_nuisance (numpy.ndarray): shape (n, p) — confounds to remove
         x_protect  (numpy.ndarray): shape (n, q) — variables to control for but keep
@@ -130,7 +138,7 @@ def partial_residuals_nan(x_nuisance, x_protect, y):
 
     X_full = np.column_stack((xn, xp, np.ones(xn.shape[0], dtype=xn.dtype)))
     n_nuisance = x_nuisance.shape[1]
-    beta = np.linalg.pinv((X_full.T).dot(X_full)).dot(X_full.T.dot(y_))
+    beta = _ols_beta_via_eigh(X_full, y_)
 
     resid = np.full(y.shape, np.nan, dtype=y.dtype)
     resid[~nan_mask] = y_ - xn.dot(beta[:n_nuisance])
@@ -236,8 +244,92 @@ def zscore_df(df, along="cols", force_df=True):
     # not defined
     else:
         raise TypeError(f"Input data type {type(df)} not defined!")
-    
+
     return df_stand
+
+
+def pca(data, n_components=None, standardize=False, return_ev=False):
+    """Principal component analysis (PCA) of a data matrix.
+
+    Reduces `data`'s columns to `n_components` orthogonal principal components, computed via
+    eigendecomposition of the (small) column covariance matrix
+    (:func:`nispace.stats.coloc._pca_via_eigh`) rather than SVD -- more numerically robust
+    (avoids a known LAPACK flakiness in SVD-based PCA under some BLAS backends) and, for the
+    typical "few columns, many rows" shape, faster. Component 1's sign is fixed to be
+    non-negatively correlated with the mean of the (centered) input columns -- a reproducible,
+    interpretable convention ("this component increases when the average input column
+    increases") instead of an arbitrary, LAPACK-dependent one; components beyond the first
+    keep their raw (arbitrary but deterministic-per-run) sign, since they are orthogonal to
+    component 1 by construction and have no equivalent "overall mean" to anchor to.
+
+    Args:
+        data (pandas.DataFrame or numpy.ndarray): shape (n_obs, n_features). Must be 2D, with
+            at least 2 rows and 1 column, and free of NaN.
+        n_components (int, optional): Number of components to retain. Defaults to
+            ``min(n_obs, n_features)`` (all components).
+        standardize (bool, optional): Z-score each column (population convention, ddof=0)
+            before running PCA -- i.e. run PCA on the correlation rather than covariance
+            structure, appropriate when columns are on different scales. Defaults to False.
+        return_ev (bool, optional): Also return each retained component's fraction of total
+            variance explained. Defaults to False.
+
+    Returns:
+        pandas.DataFrame or numpy.ndarray: shape (n_obs, n_components), matching `data`'s
+        input type. DataFrame output keeps `data`'s row index and uses "PC1", "PC2", ... as
+        column names; ndarray input gets an ndarray output.
+        numpy.ndarray: shape (n_components,), each retained component's fraction of total
+        variance explained. Only returned (as a second element, in a tuple) if
+        ``return_ev=True``.
+
+    Raises:
+        TypeError: if `data` is not a DataFrame or ndarray.
+        ValueError: if `data` is not 2D, has fewer than 2 rows or 1 column, contains NaN, or
+            `n_components` is out of range.
+    """
+    if isinstance(data, pd.DataFrame):
+        index = data.index
+        arr = data.to_numpy(dtype=float)
+    elif isinstance(data, np.ndarray):
+        arr = np.asarray(data, dtype=float)
+        index = None
+    else:
+        raise TypeError(f"Input data type {type(data)} not supported -- pass a pandas "
+                        "DataFrame or a numpy ndarray.")
+
+    if arr.ndim != 2:
+        raise ValueError(f"Input data must be 2D (n_obs, n_features), got shape {arr.shape}.")
+
+    n_obs, n_features = arr.shape
+    if n_obs < 2 or n_features < 1:
+        raise ValueError(f"Input data must have at least 2 rows and 1 column, got shape "
+                        f"{arr.shape}.")
+
+    if np.isnan(arr).any():
+        raise ValueError("Input data contains NaN -- pca() does not handle missing data; "
+                        "drop or impute NaN rows/columns first.")
+
+    max_components = min(n_obs, n_features)
+    if n_components is None:
+        n_components = max_components
+    elif not (1 <= n_components <= max_components):
+        raise ValueError(f"n_components={n_components} out of range -- must be between 1 "
+                        f"and min(n_obs={n_obs}, n_features={n_features})={max_components}.")
+
+    if standardize:
+        arr = zscore(arr, axis=0, ddof=0)
+
+    x_pcs = _pca_via_eigh(arr, n_components)
+
+    if return_ev:
+        ev = x_pcs.var(axis=0, ddof=0) / arr.var(axis=0, ddof=0).sum()
+
+    if index is not None:
+        out = pd.DataFrame(x_pcs, index=index,
+                           columns=[f"PC{i + 1}" for i in range(n_components)])
+    else:
+        out = x_pcs
+
+    return (out, ev) if return_ev else out
 
 
 def permute_groups(groups, strategy="shuffle", paired=False, subjects=None, n_perm=1,

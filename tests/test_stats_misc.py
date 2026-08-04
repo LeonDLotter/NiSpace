@@ -5,11 +5,15 @@
   statsmodels.OLS -- these back the actual "partialpearson"/"partialspearman"
   colocalize() code path and clean_y()'s "protect" covariate-regression mode,
   see nispace.stats.coloc.partialpearson's docstring)
+- pca (ground-truth checked against sklearn.decomposition.PCA)
 """
 
 import numpy as np
+import pandas as pd
 import pytest
-from nispace.stats.misc import null_to_p, rho_to_z, z_to_rho, residuals_nan, partial_residuals_nan
+from nispace.stats.misc import (
+    null_to_p, rho_to_z, z_to_rho, residuals_nan, partial_residuals_nan, pca,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -262,3 +266,99 @@ def test_partial_residuals_nan_with_nan_matches_statsmodels_on_complete_cases():
 
     assert np.isnan(result[4]) and np.isnan(result[15])
     np.testing.assert_allclose(result[mask], expected)
+
+
+# ---------------------------------------------------------------------------
+# pca
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def pca_data():
+    """(n_obs=50, n_features=8) random data, fixed seed."""
+    return np.random.default_rng(3).normal(size=(50, 8))
+
+
+def test_pca_ndarray_in_ndarray_out(pca_data):
+    out = pca(pca_data, n_components=3)
+    assert isinstance(out, np.ndarray)
+    assert out.shape == (50, 3)
+
+
+def test_pca_dataframe_in_dataframe_out(pca_data):
+    df = pd.DataFrame(pca_data, index=[f"obs{i}" for i in range(50)],
+                       columns=[f"feat{i}" for i in range(8)])
+    out = pca(df, n_components=3)
+    assert isinstance(out, pd.DataFrame)
+    assert out.shape == (50, 3)
+    assert list(out.columns) == ["PC1", "PC2", "PC3"]
+    assert (out.index == df.index).all()
+
+
+def test_pca_default_n_components_keeps_all(pca_data):
+    out = pca(pca_data)
+    assert out.shape == (50, 8)
+
+
+def test_pca_matches_sklearn_subspace_and_explained_variance(pca_data):
+    sklearn_decomposition = pytest.importorskip("sklearn.decomposition")
+    sk = sklearn_decomposition.PCA(n_components=4).fit(pca_data)
+
+    out, ev = pca(pca_data, n_components=4, return_ev=True)
+
+    np.testing.assert_allclose(ev, sk.explained_variance_ratio_, atol=1e-8)
+    # component 1 here is sign-fixed against the column mean (not sklearn's largest-loading
+    # convention), so align signs before comparing subspaces directly
+    for i in range(4):
+        sign = 1.0 if np.corrcoef(out[:, i], sk.transform(pca_data)[:, i])[0, 1] >= 0 else -1.0
+        np.testing.assert_allclose(out[:, i], sign * sk.transform(pca_data)[:, i], atol=1e-6)
+
+
+def test_pca_component1_nonnegatively_correlated_with_column_mean():
+    for seed in range(10):
+        x = np.random.default_rng(seed).normal(size=(60, 12))
+        out = pca(x, n_components=1)
+        col_mean = (x - x.mean(axis=0)).mean(axis=1)
+        r = np.corrcoef(out[:, 0], col_mean)[0, 1]
+        assert r >= -1e-9, f"seed {seed}: PC1 negatively correlated with column mean (r={r})"
+
+
+def test_pca_standardize_changes_result_when_scales_differ(pca_data):
+    x = pca_data.copy()
+    x[:, 0] *= 1000  # one column on a wildly different scale
+    out_std = pca(x, n_components=3, standardize=True)
+    out_raw = pca(x, n_components=3, standardize=False)
+    assert not np.allclose(np.abs(out_std), np.abs(out_raw))
+
+
+def test_pca_return_ev_sums_to_at_most_one(pca_data):
+    out, ev = pca(pca_data, return_ev=True)
+    assert ev.sum() <= 1.0 + 1e-8
+    assert (ev >= 0).all()
+
+
+def test_pca_rejects_unsupported_type():
+    with pytest.raises(TypeError, match="not supported"):
+        pca([[1, 2], [3, 4]])
+
+
+def test_pca_rejects_non_2d():
+    with pytest.raises(ValueError, match="2D"):
+        pca(np.array([1.0, 2.0, 3.0]))
+
+
+def test_pca_rejects_too_few_rows():
+    with pytest.raises(ValueError, match="at least 2 rows"):
+        pca(np.zeros((1, 5)))
+
+
+def test_pca_rejects_nan():
+    x = np.array([[1.0, 2.0], [np.nan, 4.0], [5.0, 6.0]])
+    with pytest.raises(ValueError, match="NaN"):
+        pca(x)
+
+
+def test_pca_rejects_n_components_out_of_range(pca_data):
+    with pytest.raises(ValueError, match="out of range"):
+        pca(pca_data, n_components=20)
+    with pytest.raises(ValueError, match="out of range"):
+        pca(pca_data, n_components=0)

@@ -18,6 +18,10 @@ docs/nb_examples/tutorial_data*
 docs/nb_examples/*.pkl*
 docs/nb_introduction/*.pkl*
 
+# exploratory benchmark notebooks documenting not-yet-validated fixes -- unignore once
+# the underlying method is actually validated and ready to be recommended/published
+docs/nb_benchmarks/bench4-3_set_resampling_real_x_fpr.ipynb
+
 ## OSX ################################
 
 # General

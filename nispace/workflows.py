@@ -1221,7 +1221,10 @@ def xsea(y,
         is run with ``how="between"`` before colocalization.
     colocalization_method : str or list, default=None
         Method(s) to use for colocalization. When ``None``, defaults to
-        ``"pearson"`` if ``binary_y=True``, otherwise ``"spearman"``.
+        ``"pearson"`` if ``binary_y=True``; otherwise ``"pcr"`` if ``permute_sets=True``
+        (better calibrated under set-membership permutation than ``"spearman"``, though still
+        not fully calibrated once set sizes approach or exceed the parcel count -- see
+        ``permute_sets`` below); otherwise ``"spearman"``.
     mc_method : str or list, default="meff"
         Multiple-comparisons correction method(s), forwarded to :meth:`NiSpace.correct_p`.
         An explicit ``"mc_method"`` key inside ``correct_p_kwargs`` overrides this entirely.
@@ -1236,7 +1239,11 @@ def xsea(y,
     permute_sets : bool, default=False
         If ``True``, switches the permutation null from ``what="maps"`` (permuting
         Y, the default) to ``what="sets"`` (X-set-membership permutation using
-        ``x_background`` as the pool of maps to reassign to sets).
+        ``x_background`` as the pool of maps to reassign to sets). Also switches the
+        ``colocalization_method`` dynamic default to ``"pcr"`` (see above). Set permutation is
+        known to inflate false positives for correlation-aggregation methods when set members
+        are correlated, worse for larger sets -- not recommended as a first choice; kept off by
+        default.
     pooled_p : str or bool, default=False
         How to aggregate across Y maps before computing p-values. Same semantics
         as in :func:`colocalization` (fully relevant here).
@@ -1301,7 +1308,7 @@ def xsea(y,
     if binary_y:
         init_kwargs.setdefault("binary_y", True)
     if colocalization_method is None:
-        colocalization_method = "pearson" if binary_y else "spearman"
+        colocalization_method = "pearson" if binary_y else ("pcr" if permute_sets else "spearman")
     fit_kwargs = {} if fit_kwargs is None else fit_kwargs
     clean_y_kwargs = {} if clean_y_kwargs is None else clean_y_kwargs
     colocalize_kwargs = {} if colocalize_kwargs is None else colocalize_kwargs
@@ -1773,7 +1780,7 @@ def nimare_xsea(y,
     if binary_y:
         init_kwargs.setdefault("binary_y", True)
     if colocalization_method is None:
-        colocalization_method = "pearson" if binary_y else "spearman"
+        colocalization_method = "pearson" if binary_y else ("pcr" if permute_sets else "spearman")
 
     fit_kwargs = {} if fit_kwargs is None else dict(fit_kwargs)
     fit_kwargs.setdefault("background_value", {"y": False})
