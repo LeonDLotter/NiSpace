@@ -238,7 +238,15 @@ def colocalization(y,
         function always permutes ``what="maps"`` (the ``binary_y`` restriction on
         ``permute(what="groups")`` only applies to :func:`group_colocalization`).
     n_perm : int, default=10000
-        Number of permutations for null distribution.
+        Number of permutations for null distribution. ``0`` (or ``None``) skips
+        permutation testing entirely: only the raw colocalizations are computed
+        (``nsp.get_colocalizations()``), and ``correct_p()``/``normalize_colocalizations()``
+        are also skipped. Mirrors :meth:`NiSpace.correlate_within_region`'s own
+        ``n_perm=0``/``None`` convention ("rho only, no p-values"). With
+        ``return_nispace_only=False`` (deprecated default), ``p_values``/``pc_values``
+        are ``None`` (or ``None``-valued dicts, matching the requested method(s)/
+        ``mc_method``(s)) in this case; calling ``nsp.get_p_values()`` afterward
+        raises ``ValueError``/``KeyError`` rather than computing anything.
     seed : int or None, default=None
         Random seed for reproducibility.
     n_proc : int, default=1
@@ -274,6 +282,8 @@ def colocalization(y,
         The NiSpace object containing all results (when ``return_nispace_only=True``).
     colocs, p_values, pc_values, nsp : tuple
         Deprecated. Returned when ``return_nispace_only=False`` (current default).
+        ``p_values``/``pc_values`` are ``None`` (or ``None``-valued, see ``n_perm``
+        above) when ``n_perm=0``.
     """
     verbose = set_log(lgr, verbose)
     # TODO (first non-dev release): remove p_from_average_y parameter
@@ -343,7 +353,7 @@ def colocalization(y,
         status["colocalize"] = True
         
     ## PERMUTE
-    if not status["permute"]:
+    if n_perm and not status["permute"]:
         for method in colocalization_method:
             permute_kwargs_curr = dict(
                 what="maps",
@@ -356,20 +366,25 @@ def colocalization(y,
             ) | permute_kwargs
             nsp.permute(**permute_kwargs_curr)
         permuted = nsp._get_last(perm=None)
-        status["permute"] = True  
-    
+        status["permute"] = True
+    else:
+        permuted = None
+        if not n_perm:
+            lgr.info("n_perm=0 (or None): skipping permutation testing. "
+                     "Only raw colocalizations are computed.")
+
     ## CORRECT
     # normalize mc_method to list; explicit override inside correct_p_kwargs takes precedence
     mc_methods = ([mc_method] if isinstance(mc_method, str) else list(mc_method))
     if "mc_method" in correct_p_kwargs:
         mc_methods = [correct_p_kwargs.pop("mc_method")]
-    if not status["correct_p"]:
+    if n_perm and not status["correct_p"]:
         for mc_m in mc_methods:
             nsp.correct_p(**{"mc_method": mc_m} | correct_p_kwargs)
         status["correct_p"] = True
 
     ## ZSCORE
-    if normalize_colocalizations:
+    if normalize_colocalizations and n_perm:
         try:
             nsp.normalize_colocalizations()
         except Exception as e:
@@ -387,13 +402,18 @@ def colocalization(y,
     ## RETURN
     colocs = {method: nsp.get_colocalizations(method)
               for method in colocalization_method}
-    p_values = {method: nsp.get_p_values(method, permuted)
-                for method in colocalization_method}
-    pc_values = {
-        mc_m: {method: nsp.get_p_values(method, permuted, mc_method=mc_m)
-               for method in colocalization_method}
-        for mc_m in mc_methods
-    }
+    if n_perm:
+        p_values = {method: nsp.get_p_values(method, permuted)
+                    for method in colocalization_method}
+        pc_values = {
+            mc_m: {method: nsp.get_p_values(method, permuted, mc_method=mc_m)
+                   for method in colocalization_method}
+            for mc_m in mc_methods
+        }
+    else:
+        p_values = {method: None for method in colocalization_method}
+        pc_values = {mc_m: {method: None for method in colocalization_method}
+                     for mc_m in mc_methods}
     if len(colocalization_method) == 1:
         k = colocalization_method[0]
         colocs, p_values = colocs[k], p_values[k]
@@ -535,7 +555,12 @@ def group_colocalization(y, design,
     plot : bool, default=True
         Whether to generate visualization plots.
     n_perm : int, default=10000
-        Number of permutations for null distribution.
+        Number of permutations for null distribution. ``0`` (or ``None``) skips
+        permutation testing entirely: only the raw group-comparison colocalizations
+        are computed, and ``correct_p()``/``normalize_colocalizations()`` are also
+        skipped. Mirrors :meth:`NiSpace.correlate_within_region`'s own ``n_perm=0``/
+        ``None`` convention. See :func:`colocalization` for the corresponding
+        ``return_nispace_only=False`` behavior.
     seed : int or None, default=None
         Random seed for reproducibility.
     n_proc : int, default=1
@@ -577,6 +602,8 @@ def group_colocalization(y, design,
         The NiSpace object containing all results (when ``return_nispace_only=True``).
     colocs, p_values, pc_values, nsp : tuple
         Deprecated. Returned when ``return_nispace_only=False`` (current default).
+        ``p_values``/``pc_values`` are ``None`` (or ``None``-valued, see ``n_perm``
+        above) when ``n_perm=0``.
     """
     verbose = set_log(lgr, verbose)
     # TODO (first non-dev release): remove p_from_average_y parameter
@@ -720,7 +747,7 @@ def group_colocalization(y, design,
         status["colocalize"] = True
         
     ## PERMUTE
-    if not status["permute"]:
+    if n_perm and not status["permute"]:
         for method in colocalization_method:
             permute_kwargs_curr = dict(
                 method=method,
@@ -734,19 +761,24 @@ def group_colocalization(y, design,
             ) | permute_kwargs | {"what": "groups"}
             nsp.permute(**permute_kwargs_curr)
         permute_what = "groups"
-        status["permute"] = True  
-    
+        status["permute"] = True
+    else:
+        permute_what = None
+        if not n_perm:
+            lgr.info("n_perm=0 (or None): skipping permutation testing. "
+                     "Only raw colocalizations are computed.")
+
     ## CORRECT
     mc_methods = ([mc_method] if isinstance(mc_method, str) else list(mc_method))
     if "mc_method" in correct_p_kwargs:
         mc_methods = [correct_p_kwargs.pop("mc_method")]
-    if not status["correct_p"]:
+    if n_perm and not status["correct_p"]:
         for mc_m in mc_methods:
             nsp.correct_p(**{"mc_method": mc_m, "verbose": verbose} | correct_p_kwargs)
         status["correct_p"] = True
 
     ## ZSCORE
-    if normalize_colocalizations:
+    if normalize_colocalizations and n_perm:
         try:
             nsp.normalize_colocalizations()
         except Exception as e:
@@ -766,14 +798,19 @@ def group_colocalization(y, design,
     ## RETURN
     colocs = {method: nsp.get_colocalizations(method, Y_transform=comparison_method)
               for method in colocalization_method}
-    p_values = {method: nsp.get_p_values(method, permute_what, Y_transform=comparison_method)
-                for method in colocalization_method}
-    pc_values = {
-        mc_m: {method: nsp.get_p_values(method, permute_what, Y_transform=comparison_method,
-                                        mc_method=mc_m)
-               for method in colocalization_method}
-        for mc_m in mc_methods
-    }
+    if n_perm:
+        p_values = {method: nsp.get_p_values(method, permute_what, Y_transform=comparison_method)
+                    for method in colocalization_method}
+        pc_values = {
+            mc_m: {method: nsp.get_p_values(method, permute_what, Y_transform=comparison_method,
+                                            mc_method=mc_m)
+                   for method in colocalization_method}
+            for mc_m in mc_methods
+        }
+    else:
+        p_values = {method: None for method in colocalization_method}
+        pc_values = {mc_m: {method: None for method in colocalization_method}
+                     for mc_m in mc_methods}
     if len(colocalization_method) == 1:
         k = colocalization_method[0]
         colocs, p_values = colocs[k], p_values[k]
@@ -871,7 +908,11 @@ def paired_colocalization(y,
         (relies on :meth:`NiSpace.plot`'s own ``kind="categorical"`` default — not
         passed explicitly here).
     n_perm : int, default=10000
-        Number of subject-label permutations for the null distribution.
+        Number of subject-label permutations for the null distribution. ``0`` (or
+        ``None``) skips permutation testing entirely: only the raw N×N colocalization
+        matrix is computed (via ``nsp.get_colocalizations()``); ``nsp.get_p_values()``
+        is not available afterward. Mirrors :meth:`NiSpace.correlate_within_region`'s
+        own ``n_perm=0``/``None`` convention.
     seed : int or None
         Random seed for reproducibility.
     n_proc : int, default=1
@@ -937,7 +978,7 @@ def paired_colocalization(y,
         status["colocalize"] = True
 
     ## PERMUTE (SPICE — operates on the precomputed N×N matrix, no re-colocalization)
-    if not status["permute"]:
+    if n_perm and not status["permute"]:
         for method in colocalization_method:
             permute_kwargs_curr = dict(
                 what="pairs",
@@ -948,13 +989,16 @@ def paired_colocalization(y,
             ) | permute_kwargs
             nsp.permute(**permute_kwargs_curr)
         status["permute"] = True
+    elif not n_perm:
+        lgr.info("n_perm=0 (or None): skipping permutation testing. "
+                 "Only the raw colocalization matrix is computed.")
 
     ## VIZ
     if plot:
         for method in colocalization_method:
             plot_kwargs_curr = dict(
                 method=method,
-                permute_what="pairs",
+                permute_what="pairs" if n_perm else None,
             ) | plot_kwargs
             nsp.plot(**plot_kwargs_curr)
 

@@ -176,6 +176,68 @@ def test_workflow_base_prefit_nispace_object_no_unbound_error(prefit_nispace):
     assert isinstance(out, NiSpace)
 
 
+def test_colocalization_n_perm_zero_skips_permutation(prefit_nispace):
+    out = colocalization(
+        y=None, nispace_object=prefit_nispace,
+        colocalization_method="pearson",
+        n_perm=0, plot=False, verbose=False,
+        return_nispace_only=True,
+    )
+    assert isinstance(out, NiSpace)
+    coloc = out.get_colocalizations(method="pearson", verbose=False)
+    assert coloc.shape[0] > 0
+    with pytest.raises(ValueError, match="perm"):
+        out.get_p_values(verbose=False)
+
+
+def test_colocalization_n_perm_zero_matches_n_perm_positive_coloc_values(prefit_nispace):
+    """The n_perm=0 skip must not perturb the observed statistic itself --
+    same seed/method, only permutation differs."""
+    out_skip = colocalization(
+        y=None, nispace_object=prefit_nispace, colocalization_method="pearson",
+        n_perm=0, seed=1, plot=False, verbose=False, return_nispace_only=True,
+    )
+    out_full = colocalization(
+        y=None, nispace_object=prefit_nispace, colocalization_method="pearson",
+        permute_kwargs={"maps_method": "random"},
+        n_perm=200, seed=1, plot=False, verbose=False, return_nispace_only=True,
+    )
+    pd.testing.assert_frame_equal(
+        out_skip.get_colocalizations(method="pearson", verbose=False),
+        out_full.get_colocalizations(method="pearson", verbose=False),
+    )
+
+
+def test_colocalization_n_perm_zero_plot_true_does_not_crash(prefit_nispace):
+    """Exercises the api.py _last_settings["perm"] fix indirectly, via plot()'s
+    own graceful-degradation branch."""
+    out = colocalization(
+        y=None, nispace_object=prefit_nispace, colocalization_method="pearson",
+        n_perm=0, plot=True, verbose=False, return_nispace_only=True,
+    )
+    assert isinstance(out, NiSpace)
+
+
+def test_colocalization_n_perm_zero_deprecated_tuple_return_p_values_none(prefit_nispace):
+    colocs, p_values, pc_values, nsp = colocalization(
+        y=None, nispace_object=prefit_nispace, colocalization_method="pearson",
+        n_perm=0, plot=False, verbose=False,
+    )
+    assert p_values is None
+    assert pc_values is None
+    assert colocs is not None
+
+
+@pytest.mark.parametrize("n_perm", [0, None])
+def test_colocalization_n_perm_zero_or_none_are_equivalent(prefit_nispace, n_perm):
+    out = colocalization(
+        y=None, nispace_object=prefit_nispace, colocalization_method="pearson",
+        n_perm=n_perm, plot=False, verbose=False, return_nispace_only=True,
+    )
+    with pytest.raises(ValueError, match="perm"):
+        out.get_p_values(verbose=False)
+
+
 # ── group_colocalization() ───────────────────────────────────────────────
 
 def test_group_colocalization_unpaired_end_to_end(prefit_nispace_groups):
@@ -214,6 +276,40 @@ def test_group_colocalization_design_length_mismatch_raises(prefit_nispace_group
         )
 
 
+def test_group_colocalization_n_perm_zero_skips_permutation(prefit_nispace_groups):
+    nsp, groups = prefit_nispace_groups
+    out = group_colocalization(
+        y=list(range(len(groups))), design=groups, nispace_object=nsp,
+        colocalization_method="pearson", n_perm=0, plot=False, verbose=False,
+        return_nispace_only=True,
+    )
+    coloc = out.get_colocalizations(verbose=False)
+    assert list(coloc.index) == ["hedges"]
+    with pytest.raises(ValueError, match="perm"):
+        out.get_p_values(verbose=False)
+
+
+def test_group_colocalization_n_perm_zero_plot_true_does_not_crash(prefit_nispace_groups):
+    nsp, groups = prefit_nispace_groups
+    out = group_colocalization(
+        y=list(range(len(groups))), design=groups, nispace_object=nsp,
+        colocalization_method="pearson", n_perm=0, plot=True, verbose=False,
+        return_nispace_only=True,
+    )
+    assert isinstance(out, NiSpace)
+
+
+def test_group_colocalization_n_perm_zero_deprecated_tuple_return_p_values_none(prefit_nispace_groups):
+    nsp, groups = prefit_nispace_groups
+    colocs, p_values, pc_values, out = group_colocalization(
+        y=list(range(len(groups))), design=groups, nispace_object=nsp,
+        colocalization_method="pearson", n_perm=0, plot=False, verbose=False,
+    )
+    assert p_values is None
+    assert pc_values is None
+    assert colocs is not None
+
+
 # ── paired_colocalization() (SPICE) ──────────────────────────────────────
 
 def test_paired_colocalization_end_to_end(prefit_nispace_matched_pairs):
@@ -225,6 +321,34 @@ def test_paired_colocalization_end_to_end(prefit_nispace_matched_pairs):
     p = out.get_p_values()
     assert p.shape == (1, 1)
     assert 0 <= p.to_numpy().item() <= 1
+
+
+def test_paired_colocalization_n_perm_zero_skips_permutation_bare_call(prefit_nispace_matched_pairs):
+    out = paired_colocalization(
+        y=None, x=None, nispace_object=prefit_nispace_matched_pairs,
+        colocalization_method="pearson", n_perm=0, plot=False, verbose=False,
+    )
+    coloc = out.get_colocalizations(verbose=False)
+    assert coloc.shape[0] > 0
+    with pytest.raises(ValueError, match="perm"):
+        out.get_p_values(verbose=False)
+
+
+def test_paired_colocalization_n_perm_zero_skips_permutation_explicit_permute_what(prefit_nispace_matched_pairs):
+    out = paired_colocalization(
+        y=None, x=None, nispace_object=prefit_nispace_matched_pairs,
+        colocalization_method="pearson", n_perm=0, plot=False, verbose=False,
+    )
+    with pytest.raises(KeyError, match="Did you run NiSpace.permute"):
+        out.get_p_values(permute_what="pairs", verbose=False)
+
+
+def test_paired_colocalization_n_perm_zero_plot_true_does_not_crash(prefit_nispace_matched_pairs):
+    out = paired_colocalization(
+        y=None, x=None, nispace_object=prefit_nispace_matched_pairs,
+        colocalization_method="pearson", n_perm=0, plot=True, verbose=False,
+    )
+    assert isinstance(out, NiSpace)
 
 
 # ── correlate_within_region() ────────────────────────────────────────────

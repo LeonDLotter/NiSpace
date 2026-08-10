@@ -438,6 +438,7 @@ class NiSpace:
             "rank": False,
             "zy_matched": False,
             "regress_z": None,
+            "perm": None,
             "mc_method": None,
             "z_method": "robust",
             "pooled_p": False,

@@ -111,6 +111,36 @@ def test_get_colocalizations_unknown_method_raises_keyerror(synthetic_nispace):
         nsp.get_colocalizations(method="spearman", verbose=False)
 
 
+# ── get_p_values()/get_normalized_colocalizations() before any permute() ────
+# Regression tests for the `_last_settings["perm"]` landmine: before "perm" was
+# added as a default key, calling these with no permutation ever run raised a
+# bare, uninformative Exception from NiSpace._get_last() ("Last setting for
+# 'perm' not found. Available: [...]") instead of a specific, catchable one.
+
+def test_get_p_values_before_any_permute_raises_valueerror(synthetic_nispace):
+    nsp = synthetic_nispace
+    nsp.colocalize(method="pearson", verbose=False)
+    with pytest.raises(ValueError, match="perm"):
+        nsp.get_p_values(verbose=False)
+
+
+def test_get_normalized_colocalizations_before_any_permute_raises_valueerror(synthetic_nispace):
+    nsp = synthetic_nispace
+    nsp.colocalize(method="pearson", verbose=False)
+    with pytest.raises(ValueError, match="perm"):
+        nsp.get_normalized_colocalizations(verbose=False)
+
+
+def test_get_p_values_explicit_permute_what_before_permute_raises_keyerror(synthetic_nispace):
+    """Distinct from the bare-call case above: with a concrete permute_what,
+    _check_permute()'s own clean KeyError path fires (the bare-None case fails
+    earlier, inside _get_df_string, with a generic ValueError instead)."""
+    nsp = synthetic_nispace
+    nsp.colocalize(method="pearson", verbose=False)
+    with pytest.raises(KeyError, match="Did you run NiSpace.permute"):
+        nsp.get_p_values(permute_what="xmaps", verbose=False)
+
+
 # ── permute(): what="maps" (distance-matrix-free "random" null) ─────────────
 
 @pytest.fixture
