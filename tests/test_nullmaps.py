@@ -252,3 +252,64 @@ def test_astype_returns_new_nullmaps_with_correct_dtype():
     nm64 = nm.astype(np.float64)
     assert nm64.dtype == np.float64
     assert nm.dtype == np.float32  # original unchanged
+
+
+# ---------------------------------------------------------------------------
+# warn_large: derived transforms (astype/standardize/subset) must not re-warn
+# ---------------------------------------------------------------------------
+#
+# Regression: astype()/standardize()/subset() each build a fresh NullMaps
+# internally but originally didn't forward warn_large -- so a caller building
+# many small NullMaps with warn_large=False (e.g. row-batched generation,
+# core/permute.py's _iter_null_map_batches) would still get the >1GB warning
+# re-triggered on every single .standardize() call, once per batch. Fixed by
+# hardcoding warn_large=False on all three (a transform of an
+# already-constructed object shouldn't re-litigate a warning that already
+# fired -- or was deliberately suppressed -- at the original construction).
+
+import logging
+from nispace.core.nullmaps import _NULLMAPS_WARN_BYTES
+
+
+def _make_large(warn_large=True):
+    # a (n_maps, n_perm, n_parcels) float32 array just over the 1GB threshold
+    n_parcels = 50
+    n_perm = 50
+    n_maps = _NULLMAPS_WARN_BYTES // (n_perm * n_parcels * 4) + 10
+    rng = np.random.default_rng(0)
+    data = rng.standard_normal((n_maps, n_perm, n_parcels)).astype(np.float32)
+    labels = [f"map{i}" for i in range(n_maps)]
+    return NullMaps(data, labels, warn_large=warn_large)
+
+
+def test_construction_warns_when_large(caplog):
+    with caplog.at_level(logging.WARNING):
+        _make_large(warn_large=True)
+    assert "GB in memory" in caplog.text
+
+
+def test_construction_silent_when_warn_large_false(caplog):
+    with caplog.at_level(logging.WARNING):
+        _make_large(warn_large=False)
+    assert "GB in memory" not in caplog.text
+
+
+def test_astype_does_not_rewarn(caplog):
+    nm = _make_large(warn_large=False)
+    with caplog.at_level(logging.WARNING):
+        nm.astype(np.float32)
+    assert "GB in memory" not in caplog.text
+
+
+def test_standardize_does_not_rewarn(caplog):
+    nm = _make_large(warn_large=False)
+    with caplog.at_level(logging.WARNING):
+        nm.standardize()
+    assert "GB in memory" not in caplog.text
+
+
+def test_subset_does_not_rewarn(caplog):
+    nm = _make_large(warn_large=False)
+    with caplog.at_level(logging.WARNING):
+        nm.subset(nm.labels[:5])
+    assert "GB in memory" not in caplog.text

@@ -1099,6 +1099,16 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
                                "or pass null=False for the observed local statistic alone.",
                                NotImplementedError)
         if null_maps is None:
+            _fp_info = nsp._nulls.get("maps_null_fastpath_info")
+            if _fp_info is not None:
+                lgr.critical_raise(
+                    f"local_colocalization()'s null requires the full null-map cube, but the "
+                    f"last permute() call used the map-batched fast path for "
+                    f"'{_fp_info['XY']}' maps (n={_fp_info['n_rows']} > "
+                    f"maps_batch_size={_fp_info['batch_size']}), which does not cache it. "
+                    "Re-run permute(..., maps_batch_size=False) (or a size >= n_rows) if you "
+                    "need local_colocalization(null=True) for this data.",
+                    KeyError)
             lgr.critical_raise(f"Expected a stored null for permutation mode '{perm_mode}' but "
                                "found none on this NiSpace object.", KeyError)
         target_labels = list(X.index if null_side == "X" else Y.index)

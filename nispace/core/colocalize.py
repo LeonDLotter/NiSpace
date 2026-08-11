@@ -85,6 +85,80 @@ def _rank_regress(arr, rank, regress, z=None, zy_matched=False, n_proc=1, verbos
     return arr_out   
 
 
+_DOMINANCE_MAX_PREDICTORS_DEFAULT = 20
+
+
+def _check_predictor_count(method, n_predictors, n_obs,
+                           dominance_max_predictors=_DOMINANCE_MAX_PREDICTORS_DEFAULT):
+    """
+    Warn/error about statistically-dangerous or computationally-infeasible predictor
+    counts for the multivariate colocalization methods (X used as one joint predictor
+    block, all rows fit together -- ``mlr``/``dominance``/``pcr``/``pls``). This is
+    independent of any memory concern and independent of call size (n_perm etc.) -- it
+    fires once against the observed data, since the underlying statistical/computational
+    problem doesn't change across permutations, only the shuffled values do.
+
+    - ``mlr``/``dominance`` (OLS-based): rank-deficient once ``n_predictors >= n_obs``
+      -- ``adj_r2`` becomes mathematically degenerate (can hit zero, go negative, or be
+      arbitrarily large; see :func:`~nispace.stats.coloc.mlr`'s own docstring). Warns,
+      doesn't block -- the fit is still numerically computable, just uninterpretable.
+    - ``dominance`` additionally fits ``2**n_predictors - 1`` models -- computationally
+      infeasible past ``dominance_max_predictors`` (default 20, i.e. up to ~1M models;
+      2**25+ is the clearly-infeasible extreme). Hard error above that cutoff.
+    - ``pcr``: dense-eigendecomposes an ``(n_predictors, n_predictors)`` covariance
+      matrix per Y-row per permutation -- O(p^2) memory / O(p^3) compute, independent of
+      ``n_obs``. Warns above a fixed threshold (500).
+    - ``pls``: lighter warning mirroring its own docstring's overfitting caveat near
+      ``n_predictors ~ n_obs`` (component-based, not as fragile as OLS, but not immune).
+    - ``lasso``/``ridge``/``elasticnet``: no guard -- regularized, designed for
+      ``n_predictors >> n_obs``.
+    """
+    if method == "dominance":
+        if n_predictors > dominance_max_predictors:
+            lgr.critical_raise(
+                f"colocalize(method='dominance'): {n_predictors} predictors requires "
+                f"2**{n_predictors}-1 ({2 ** n_predictors - 1:,}) models -- "
+                "computationally infeasible. Reduce predictor count (e.g. via "
+                "X_reduction) or use 'mlr'/'pcr'/a regularized method instead. Override "
+                "via dominance_max_predictors= if you have verified this is intentional "
+                "(strongly discouraged above ~25).",
+                ValueError,
+            )
+        if n_predictors >= n_obs:
+            lgr.warning(
+                f"colocalize(method='dominance'): {n_predictors} predictor(s) >= {n_obs} "
+                "usable parcel(s) -- the underlying OLS subset fits are rank-deficient; "
+                "R2/adj_r2 become mathematically degenerate. Consider X_reduction, a "
+                "regularized method ('pls'/'lasso'/'ridge'/'elasticnet'), or reducing "
+                "predictor count."
+            )
+    elif method == "mlr":
+        if n_predictors >= n_obs:
+            lgr.warning(
+                f"colocalize(method='mlr'): {n_predictors} predictor(s) >= {n_obs} usable "
+                "parcel(s) -- the OLS fit is rank-deficient; adj_r2 becomes "
+                "mathematically degenerate (can hit zero, go negative, or be arbitrarily "
+                "large). Consider X_reduction, a regularized method "
+                "('pls'/'lasso'/'ridge'/'elasticnet'), or reducing predictor count."
+            )
+    elif method == "pcr":
+        if n_predictors > 500:
+            lgr.warning(
+                f"colocalize(method='pcr'): {n_predictors} predictors -- PCA's O(p^2) "
+                "memory / O(p^3) compute cost (p=n_predictors) may be substantial, "
+                "especially since this repeats per Y-row per permutation. Consider "
+                "X_reduction."
+            )
+    elif method == "pls":
+        if n_predictors >= n_obs:
+            lgr.warning(
+                f"colocalize(method='pls'): {n_predictors} predictor(s) >= {n_obs} usable "
+                "parcel(s) -- pls can overfit badly (both real and null draws saturate "
+                "toward R2=1) once predictor count approaches/exceeds n_obs. Consider "
+                "fewer n_components or X_reduction."
+            )
+
+
 def _get_coloc_stats(method, permuted_only=False, drop_optional=False):
     
     if method in _COLOC_METHODS:

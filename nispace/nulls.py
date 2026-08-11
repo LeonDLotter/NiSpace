@@ -14,10 +14,10 @@ from tqdm.auto import tqdm
 
 _SurfPair = namedtuple("_SurfPair", ["L", "R"])
 
-# import MoranRandomization function, copied from brainspace, as our default null model
-# brainspace was removed as an dependency because it installs vtk, which is a large 3d rendering
-# library that NiSpace does not use. 
-from ._brainspace_moran import MoranRandomization
+# import Moran spectral randomization functions, copied from brainspace, as our default null
+# model. brainspace was removed as an dependency because it installs vtk, which is a large 3d
+# rendering library that NiSpace does not use.
+from ._brainspace_moran import moran_randomization, compute_mem
     
 # brainsmash is optional dependency. Moran
 try:
@@ -466,19 +466,53 @@ def _build_variogram_w(data_1d, dist_mat, n_bins=20, kernel="exponential", nugge
     return np.maximum(W, 0.0)
 
 
-def nulls_moran(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
+def _moran_fit_1_over_d(dist_mat, n_components=15, spectrum="nonzero", tol=1e-6):
+    """Fit Moran eigenvectors (mem, mev) from a standard 1/d spatial weight matrix.
+
+    Geometry-only -- depends solely on `dist_mat`, never on any map's values -- so this is
+    safe to compute once and reuse across every row that shares the same NaN mask (see
+    `generate_null_maps`'s pre-`Parallel` fit-sharing pass for plain `"moran"`, which is the
+    only caller that reuses a single result across multiple rows). `nulls_moran`'s own
+    per-row fallback path (no precomputed fit available, e.g. a row with a unique mask) also
+    calls this helper, so there is exactly one 1/d-weight-matrix implementation to keep in
+    sync, instead of two copies that could silently drift apart.
+
+    Parameters
+    ----------
+    dist_mat : np.ndarray
+        Already NaN-mask-subset distance matrix (`dist_mat[np.ix_(mask, mask)]`). Mutated
+        in place (diagonal fill + elementwise inverse) -- pass a copy if the caller still
+        needs the original untouched.
+    """
+    np.fill_diagonal(dist_mat, 1)
+    dist_mat **= -1
+    return compute_mem(dist_mat, spectrum=spectrum, tol=tol, n_components=n_components)
+
+
+def nulls_moran(data_1d, dist_mat, n_nulls=1000, seed=None, _precomputed_mem=None, **kwargs):
     """Moran Spectral Randomization (MSR) surrogate maps (Wagner & Dray 2015).
 
-    Generates surrogates via BrainSpace's ``MoranRandomization``, using a spatial weight
-    matrix ``W`` built from ``dist_mat`` (standard 1/d weights by default, or a
-    variogram-fitted covariance kernel if ``fit_variogram=True``, falling back to 1/d if the
-    map's own Moran's I is below ``variogram_threshold``). Notable ``**kwargs``:
-    ``procedure`` (default ``"singleton"``), ``joint``, ``n_components`` (default 15),
-    ``fit_variogram``, ``variogram_n_bins``/``variogram_kernel``/``variogram_nugget``/``variogram_threshold``.
+    Generates surrogates via ``compute_mem``/``moran_randomization`` (bundled BrainSpace MSR
+    implementation, `_brainspace_moran.py`), using a spatial weight matrix ``W`` built from
+    ``dist_mat`` (standard 1/d weights by default, or a variogram-fitted covariance kernel if
+    ``fit_variogram=True``, falling back to 1/d if the map's own Moran's I is below
+    ``variogram_threshold``). Notable ``**kwargs``: ``procedure`` (default ``"singleton"``),
+    ``joint``, ``n_components`` (default 15), ``fit_variogram``,
+    ``variogram_n_bins``/``variogram_kernel``/``variogram_nugget``/``variogram_threshold``.
     :cite:`wagner2015` (original MSR method); :cite:`vos_de_wael2020` (BrainSpace implementation).
 
     Intended to be called through :func:`generate_null_maps`, which handles NaN masking,
     hemisphere splitting, and parallelization across maps — not meant to be called directly.
+
+    Parameters
+    ----------
+    _precomputed_mem : tuple of (mem, mev), optional
+        Internal use only. When given, skips fitting the (geometry-only, data-independent)
+        Moran eigenvectors from ``dist_mat`` and reuses this precomputed ``(mem, mev)``
+        instead -- set by :func:`generate_null_maps`'s mask-grouped fit-sharing pass for the
+        plain ``"moran"`` method. Never used for ``fit_variogram=True``/``"variomoran"``,
+        where the weight matrix genuinely depends on this row's own values and cannot be
+        shared across rows.
     """
     data_1d = np.array(data_1d).flatten()
     # results array with shape (n_nulls, n_parcels)
@@ -506,6 +540,14 @@ def nulls_moran(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
             lgr.debug("Moran's I=%.3f < threshold=%.3f; falling back to 1/d W",
                       morans_i, variogram_threshold)
             fit_variogram = False
+    # procedure='singleton', n_components=15: GRF benchmark shows no single K is optimal
+    # across all SA levels. K=15 is a reasonable default for singleton (calibrated at alpha=1–2,
+    # marginally anti-conservative at alpha=3). Override via maps_procedure / maps_n_components kwargs.
+    procedure = kwargs.pop("procedure", "singleton")
+    joint = kwargs.pop("joint", True)
+    n_components = kwargs.pop("n_components", 15)
+    spectrum = kwargs.pop("spectrum", "nonzero")
+    tol = kwargs.pop("tol", 1e-6)
     if fit_variogram:
         # W[i,j] = C(d[i,j]) fitted to the map's own SA scale.
         # MEMs are the KL eigenbasis of the map → larger effective K for smooth maps
@@ -514,22 +556,22 @@ def nulls_moran(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
                                n_bins=variogram_n_bins,
                                kernel=variogram_kernel,
                                nugget=variogram_nugget)
+        mem, mev = compute_mem(W, spectrum=spectrum, tol=tol, n_components=n_components)
+    elif _precomputed_mem is not None:
+        # geometry-only fit already computed once outside the per-row loop and shared across
+        # every row that shares this NaN mask -- see generate_null_maps.
+        mem, mev = _precomputed_mem
+        assert mem.shape[0] == mask.sum(), (
+            f"_precomputed_mem shape {mem.shape} does not match this row's masked length "
+            f"({mask.sum()}) -- mask-group/row mismatch, this should never happen."
+        )
     else:
-        np.fill_diagonal(dist_mat, 1)
-        dist_mat **= -1
-        W = dist_mat
+        mem, mev = _moran_fit_1_over_d(dist_mat, n_components=n_components,
+                                       spectrum=spectrum, tol=tol)
     # null maps
-    # procedure='singleton', n_components=15: GRF benchmark shows no single K is optimal
-    # across all SA levels. K=15 is a reasonable default for singleton (calibrated at alpha=1–2,
-    # marginally anti-conservative at alpha=3). Override via maps_procedure / maps_n_components kwargs.
-    null_data[:, mask] = MoranRandomization(
-        procedure=kwargs.pop("procedure", "singleton"),
-        joint=kwargs.pop("joint", True),
-        n_components=kwargs.pop("n_components", 15),
-        seed=seed,
-        n_nulls=n_nulls,
-        **kwargs
-    ).fit(W).randomize(data_1d)
+    null_data[:, mask] = moran_randomization(
+        data_1d, mem, mev, n_nulls=n_nulls, procedure=procedure, joint=joint, seed=seed
+    )
     # return
     return null_data.astype(data_1d.dtype)
 
@@ -1493,6 +1535,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
                        dtype=float,
                        n_proc=1, seed=None, verbose=True,
                        return_dict=False,
+                       warn_large_nullmaps=True,
                        **kwargs):
     """Generate spatially-constrained (or fully random) null maps for one or more parcellated inputs.
 
@@ -1605,6 +1648,11 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
         Deprecated. If True, returns a plain ``{label: null_array}`` dict instead of a
         :class:`~nispace.core.nullmaps.NullMaps` object. The returned ``NullMaps`` already
         supports dict-like access, so there is no remaining reason to use this.
+    warn_large_nullmaps : bool, default=True
+        Forwarded to :class:`~nispace.core.nullmaps.NullMaps` as ``warn_large`` -- set False
+        by row-batched generation, where each batch's array is deliberately small and the
+        per-batch ">1GB, consider memmap_path" advice would be both wrong and repeated once
+        per batch.
     **kwargs
         Forwarded to the underlying null-generating function for distance-based methods —
         e.g. ``fit_variogram``, ``procedure``, ``joint``, ``n_components`` for
@@ -1769,7 +1817,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
                 parc_idc_lh=parc_idc_lh, parc_idc_rh=parc_idc_rh, parc_idc_sc=None,
                 lr_mirror_dist_mat=lr_mirror_dist_mat, split_hemi=split_hemi,
                 parc_name=parc_name, dtype=dtype, n_proc=n_proc, seed=seed,
-                verbose=verbose, **kwargs)
+                verbose=verbose, warn_large_nullmaps=warn_large_nullmaps, **kwargs)
             # cx_nulls: (n_maps, n_perm, n_parcels) — sc positions are NaN
             merged = cx_nulls.data.copy()
         else:
@@ -1787,7 +1835,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
                 dist_mat=_dist_mat_cx, n_nulls=n_nulls, centroids=centroids,
                 split_hemi=None, parc_idc_lh=None, parc_idc_rh=None,
                 parc_name=parc_name, dtype=dtype, n_proc=n_proc, seed=seed,
-                verbose=verbose, **kwargs)
+                verbose=verbose, warn_large_nullmaps=warn_large_nullmaps, **kwargs)
             # cx_nulls: (n_maps, n_perm, n_cx)
             merged = np.full((n_data, n_nulls, data.shape[1]), np.nan, dtype=dtype)
             merged[:, :, parc_idc_cx] = cx_nulls.data
@@ -1806,12 +1854,13 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
             parc_space=parc_space_sc,
             dist_mat=_dist_mat_sc, n_nulls=n_nulls, centroids=centroids,
             parc_name=parc_name, dtype=dtype, n_proc=n_proc, seed=seed,
-            verbose=verbose, **kwargs)
+            verbose=verbose, warn_large_nullmaps=warn_large_nullmaps, **kwargs)
         # sc_nulls: (n_maps, n_perm, n_sc)
         merged[:, :, parc_idc_sc] = sc_nulls.data
 
         return NullMaps(merged, data_labs, dtype=dtype,
-                        null_method=(cx_method, sc_method), null_type="spatial"), result_mat
+                        null_method=(cx_method, sc_method), null_type="spatial",
+                        warn_large=warn_large_nullmaps), result_mat
 
     ## SINGLE METHOD PATH
     method = cx_method  # unwrap from parse result
@@ -1929,7 +1978,8 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
 
         # stack: (n_maps, n_perm, n_parcels) — always 3-D even for n_maps=1
         nulls = NullMaps(np.stack(_null_list), data_labs, dtype=dtype,
-                         null_method=method, null_type="spatial")
+                         null_method=method, null_type="spatial",
+                         warn_large=warn_large_nullmaps)
 
         lgr.info("Null data generation finished.")
         # TODO (first non-dev release): remove return_dict parameter
@@ -2111,7 +2161,7 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
         )
     else:
         split_by_idc = (np.arange(data.shape[1]),) # whole-brain (default)
-        
+
     # check if indices are missing
     missing_idc = np.setdiff1d(np.arange(data.shape[1]), np.concatenate(split_by_idc))
     if len(missing_idc) == data.shape[1]:
@@ -2181,22 +2231,62 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
                 data[i, :] = _symmetrize_nans(data[i, :], [parc_idc_lh, parc_idc_rh])
                 
     # define function to generate null data
-    def par_fun(data_1d, seed):
+    def par_fun(data_1d, seed, moran_fit_row=None):
         null_data = np.full((n_nulls, len(data_1d)), np.nan)
-        for idc, dist in zip(split_by_idc, dist_mat_split):
+        for b, (idc, dist) in enumerate(zip(split_by_idc, dist_mat_split)):
             data_1d_sel = data_1d[idc]
             if np.isnan(data_1d_sel).all():
                 null_data[:, idc] = np.nan
             else:
+                extra_kwargs = {}
+                if moran_fit_row is not None and moran_fit_row[b] is not None:
+                    extra_kwargs["_precomputed_mem"] = moran_fit_row[b]
                 null_data[:, idc] = null_fun(data_1d=data_1d_sel, dist_mat=dist,
-                                             n_nulls=n_nulls, seed=seed, **kwargs)
+                                             n_nulls=n_nulls, seed=seed,
+                                             **extra_kwargs, **kwargs)
         return null_data
+
+    # moran fit-once: the geometry-only, data-independent part of Moran Spectral
+    # Randomization (MoranRandomization.fit(W), an O(n_parcels^3) eigendecomposition) does
+    # not depend on any row's values -- only on that row's NaN mask (which selects the
+    # dist_mat block it's fit against). Calling it once per row (n_data times) is correct
+    # but hugely redundant whenever many rows share the same mask (e.g. full-transcriptome
+    # gene expression X with a shared/no NaN pattern across genes). Fit once per unique
+    # mask here (in the parent process, before Parallel dispatch) and pass each row's
+    # matching (mem, mev) into its par_fun call -- nulls_moran uses it instead of
+    # re-fitting. Excluded for fit_variogram=True ("variomoran"/nulls_variomoran, or
+    # method="moran" with an explicit fit_variogram=True override): there, W is fit to
+    # each row's own values and genuinely cannot be shared across rows.
+    moran_fit_per_row = None
+    if null_fun is nulls_moran and not kwargs.get("fit_variogram", False):
+        _moran_n_components = kwargs.get("n_components", 15)
+        _moran_spectrum = kwargs.get("spectrum", "nonzero")
+        _moran_tol = kwargs.get("tol", 1e-6)
+        moran_fit_per_row = [[None] * len(split_by_idc) for _ in range(n_data)]
+        for b, (idc, dist) in enumerate(zip(split_by_idc, dist_mat_split)):
+            fit_cache = {}
+            for i in range(n_data):
+                row = data[i, idc]
+                if np.isnan(row).all():
+                    continue  # par_fun short-circuits this row/block -- no fit needed
+                mask = _get_null_data_mask(row, dist)
+                key = mask.tobytes()
+                if key not in fit_cache:
+                    # np.ix_ fancy indexing always copies -- safe to mutate in place
+                    fit_cache[key] = _moran_fit_1_over_d(
+                        dist[np.ix_(mask, mask)], n_components=_moran_n_components,
+                        spectrum=_moran_spectrum, tol=_moran_tol
+                    )
+                moran_fit_per_row[i][b] = fit_cache[key]
+            lgr.info(f"Moran fit-once (regional block {b + 1}/{len(split_by_idc)}): "
+                     f"{len(fit_cache)} unique NaN-mask group(s) among {n_data} row(s).")
 
     # run null data generation
     if seed is None:
         seed = np.random.randint(0, 2**32 - 1)
     null_list = Parallel(n_jobs=n_proc)(
-        delayed(par_fun)(data[i, :], seed + i)
+        delayed(par_fun)(data[i, :], seed + i,
+                         moran_fit_per_row[i] if moran_fit_per_row is not None else None)
         for i in tqdm(
             range(n_data),
             desc=f"{null_fun.__name__.split('_')[1].capitalize()} null maps ({n_proc} proc)",
@@ -2205,7 +2295,8 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
     )
     # stack: (n_maps, n_perm, n_parcels) — always 3-D even for n_maps=1
     nulls = NullMaps(np.stack(null_list).astype(dtype), data_labs, dtype=dtype,
-                     null_method=method, null_type="spatial")
+                     null_method=method, null_type="spatial",
+                     warn_large=warn_large_nullmaps)
 
     ## return
     lgr.info("Null data generation finished.")

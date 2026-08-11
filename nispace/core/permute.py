@@ -21,15 +21,19 @@ def _null_method_key(m):
     return str(m)
 
 
-def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing=True, standardize=True,
-                   n_perm=1000, null_method="moran",
-                   dist_mat=None, spin_mat=None, parc=None, centroids=False, parc_resample=2,
-                   lr_mirror_dist_mat=False, split_hemi=None,
-                   parc_name=None,
-                   memmap_path=None,
-                   permute_which=None,
-                   seed=None, n_proc=-1, dtype=np.float32, verbose=True, **kwargs):
+def _null_maps_cache_hit(data_obs, nispace_nulls, null_maps=None, use_existing=True,
+                         n_perm=1000, null_method="moran", permute_which=None,
+                         dtype=np.float32):
+    """
+    Resolve whether a usable ``NullMaps`` (custom-provided, via ``null_maps=``, or cached on
+    ``nispace_nulls["maps_null"]``) already covers this generation request -- same labels
+    (subset of ``data_obs.index``), ``n_perm``, ``null_method``, and ``permute_which`` side.
 
+    Returns the validated/subsetted/dtype-cast ``NullMaps`` on a hit, or ``None`` if fresh
+    generation is required. Pure predicate, extracted unchanged from ``_get_null_maps``'s
+    original inline cache-check logic so the same check can also be reused by ``permute()``'s
+    map-batching decision (a genuine full cache hit always wins over batched generation).
+    """
     # case null maps given
     _custom = False
     null_method_stored = None
@@ -86,6 +90,24 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing=True, s
     if null_maps is not None:
         if null_maps.dtype != np.dtype(dtype):
             null_maps = null_maps.astype(dtype)
+
+    return null_maps
+
+
+def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing=True, standardize=True,
+                   n_perm=1000, null_method="moran",
+                   dist_mat=None, spin_mat=None, parc=None, centroids=False, parc_resample=2,
+                   lr_mirror_dist_mat=False, split_hemi=None,
+                   parc_name=None,
+                   memmap_path=None,
+                   permute_which=None,
+                   warn_large_nullmaps=True,
+                   seed=None, n_proc=-1, dtype=np.float32, verbose=True, **kwargs):
+
+    null_maps = _null_maps_cache_hit(
+        data_obs, nispace_nulls, null_maps=null_maps, use_existing=use_existing,
+        n_perm=n_perm, null_method=null_method, permute_which=permute_which, dtype=dtype,
+    )
 
     # case null maps not given & not existing
     if null_maps is None:
@@ -188,6 +210,7 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing=True, s
             n_proc=n_proc,
             seed=seed,
             verbose=verbose,
+            warn_large_nullmaps=warn_large_nullmaps,
             **kwargs
         )
 
@@ -208,7 +231,98 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing=True, s
     return null_maps, new_spin_mat
 
 
-def _get_exact_p_values(method, colocs_obs, colocs_null, 
+# ── map-batched null-map generation (memory-bounded fast path) ────────────────────────────
+#
+# Generating null maps for ALL rows of a large X/Y (e.g. a full-transcriptome ~12000-gene
+# matrix) at once materializes a (n_maps, n_perm, n_parcels) array that can reach tens of GB
+# and OOM on a normal machine (nulls.py's Parallel-collect-then-np.stack pattern briefly
+# doubles that). For colocalization methods that consume permuted rows independently (every
+# method when the Y side is permuted; univariate methods -- pearson/spearman/etc. -- when the
+# X side is permuted), the null maps never need to exist for more than one map-batch at a
+# time: generate a batch, reduce it to the final colocalization statistic, discard, repeat.
+# See NiSpace.permute()'s new fast-path branches (api.py) for where this is consumed.
+
+_MAPS_BATCH_TARGET_BYTES = 2_000_000_000  # ~2 GB working-set ceiling per batch (pre-doubling)
+_MAPS_BATCH_MIN_ROWS = 50                 # floor: avoid pathologically tiny batches
+
+
+def _resolve_maps_batch_size(n_data, n_perm, n_parcels, dtype, requested):
+    """
+    Resolve ``maps_batch_size`` into a concrete map-batch size, or ``None`` (disabled).
+
+    Parameters
+    ----------
+    n_data : int
+        Number of rows (maps) that would be permuted.
+    n_perm, n_parcels : int
+        Only used for the adaptive (``requested=None``) case.
+    dtype : dtype-like
+    requested : None, int, False, or 0
+        ``None`` -> adaptive, sized from a target per-batch memory ceiling.
+        Positive ``int`` -> used directly (clipped to ``n_data``).
+        ``False`` or ``0`` -> batching disabled (hard opt-out).
+
+    Returns
+    -------
+    int or None
+        Resolved batch size (always ``<= n_data``), or ``None`` if batching is disabled.
+        The caller decides whether to actually batch by checking ``n_data > result`` --
+        a resolved size equal to ``n_data`` (e.g. when ``n_data`` is small) means "one
+        batch covering everything," i.e. a no-op relative to the unbatched path.
+    """
+    if requested is False or requested == 0:
+        return None
+    if requested is not None:
+        return max(1, min(int(requested), n_data))
+    itemsize = np.dtype(dtype).itemsize
+    denom = max(1, n_perm * n_parcels * itemsize * 2)  # *2: Parallel-list + np.stack overlap
+    target_rows = max(_MAPS_BATCH_MIN_ROWS, _MAPS_BATCH_TARGET_BYTES // denom)
+    return min(n_data, int(target_rows))
+
+
+def _iter_null_map_batches(data_obs, batch_size, seed_base, nispace_nulls, standardize,
+                           n_perm, dist_mat, parc, permute_which, dtype, n_proc, verbose,
+                           **maps_kwargs):
+    """
+    Yield ``(row_start, row_end, batch_null_maps)`` for successive contiguous row-ranges of
+    ``data_obs``, each generated via :func:`_get_null_maps` with a per-batch seed offset.
+
+    Seeding invariant (critical for bit-identical output vs. the unbatched path): row ``i``
+    of a single unbatched ``generate_null_maps(seed=seed_base, ...)`` call is internally
+    seeded ``seed_base + i`` (nulls.py). Calling ``_get_null_maps`` here with
+    ``seed=seed_base + row_start`` per batch reproduces that exactly -- local row 0 of a
+    batch starting at global row ``row_start`` receives ``seed_base + row_start + 0``,
+    identical to what row ``row_start`` would receive from one unbatched call.
+    ``seed_base`` must already be a concrete int (not ``None``) -- resolve it once, before
+    iterating, exactly as ``generate_null_maps`` itself resolves a ``None`` seed once via
+    ``np.random.randint`` -- never let this generator or ``_get_null_maps`` re-resolve it
+    per batch, which would silently decorrelate batches from the unbatched reference.
+
+    Caching is intentionally bypassed for every batch (``use_existing=False, null_maps=None``)
+    -- each batch is generated fresh and never cached on ``nispace_nulls``; the whole point
+    of batching is to avoid ever holding a full-size ``NullMaps`` in memory.
+
+    Each batch's ``NullMaps`` is built with ``warn_large_nullmaps=False``: the per-batch array
+    is deliberately kept small by ``batch_size``, so the generic ">1GB, consider memmap_path"
+    warning would otherwise fire on every single batch -- noisy, and actively wrong advice
+    here, since batching and memmap are alternative (not complementary) memory strategies.
+    """
+    n_data = data_obs.shape[0]
+    row_start = 0
+    while row_start < n_data:
+        row_end = min(row_start + batch_size, n_data)
+        batch_df = data_obs.iloc[row_start:row_end]
+        batch_null_maps, _ = _get_null_maps(
+            data_obs=batch_df, nispace_nulls=nispace_nulls, null_maps=None, use_existing=False,
+            standardize=standardize, n_perm=n_perm, dist_mat=dist_mat, parc=parc,
+            permute_which=permute_which, seed=seed_base + row_start, n_proc=n_proc,
+            dtype=dtype, verbose=verbose, warn_large_nullmaps=False, **maps_kwargs,
+        )
+        yield row_start, row_end, batch_null_maps
+        row_start = row_end
+
+
+def _get_exact_p_values(method, colocs_obs, colocs_null,
                         xsea_aggr=None, p_tails=None, 
                         verbose=True, dtype=np.float32):
     verbose = set_log(lgr, verbose)

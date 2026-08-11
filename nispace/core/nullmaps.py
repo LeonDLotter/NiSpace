@@ -63,6 +63,7 @@ class NullMaps:
         null_type: str = "spatial",
         null_which=None,
         memmap_path=None,
+        warn_large: bool = True,
     ):
         """
         Construct a NullMaps directly from a 3-D array.
@@ -87,6 +88,12 @@ class NullMaps:
         memmap_path : str, Path, or True, optional
             If given, immediately memory-map the array to this path via
             :meth:`to_memmap` (``True`` uses an auto-created temp file).
+        warn_large : bool, default True
+            Whether to log the >1GB-in-memory warning below. Set False by callers that
+            already bound memory another way (e.g. row-batched generation, where each
+            batch's array is deliberately small and short-lived, so the warning's
+            "consider memmap_path" advice would be both wrong and repeated once per
+            batch).
 
         Raises
         ------
@@ -122,7 +129,7 @@ class NullMaps:
         self.null_type = null_type
         self.null_which = null_which  # "X" | "Y" | None — identifies which maps these nulls are for
 
-        if not isinstance(data, np.memmap) and data.nbytes > _NULLMAPS_WARN_BYTES:
+        if warn_large and not isinstance(data, np.memmap) and data.nbytes > _NULLMAPS_WARN_BYTES:
             lgr.warning(
                 f"NullMaps is {data.nbytes / 1e9:.1f} GB in memory. "
                 f"Consider passing memmap_path=True or a file path to reduce RAM usage."
@@ -296,6 +303,9 @@ class NullMaps:
             null_method=self.null_method,
             null_type=self.null_type,
             null_which=self.null_which,
+            warn_large=False,  # derived from an already-constructed NullMaps -- the
+                               # >1GB warning (or its deliberate suppression) already
+                               # happened once, at the original construction
         )
 
     def standardize(self) -> "NullMaps":
@@ -322,6 +332,7 @@ class NullMaps:
             null_method=self.null_method,
             null_type=self.null_type,
             null_which=self.null_which,
+            warn_large=False,  # see astype()
         )
 
     def subset(self, labels) -> "NullMaps":
@@ -333,6 +344,7 @@ class NullMaps:
             null_method=self.null_method,
             null_type=self.null_type,
             null_which=self.null_which,
+            warn_large=False,  # see astype() -- a subset is never larger than its source
         )
 
     @classmethod

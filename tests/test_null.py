@@ -17,7 +17,9 @@ from nispace.nulls import (
     nulls_burt2018, nulls_burt2020,
     _BRAINSMASH_AVAILABLE,
     generate_null_maps,
+    _moran_fit_1_over_d,
 )
+import nispace.nulls as nulls_module
 from nispace._brainspace_moran import compute_mem, moran_randomization
 
 requires_brainsmash = pytest.mark.skipif(
@@ -430,3 +432,191 @@ def test_generate_null_maps_none_parc_none_distmat_raises_clearly(rng):
             n_nulls=5,
             verbose=False,
         )
+
+
+# ---------------------------------------------------------------------------
+# moran fit-once: sharing the geometry-only fit(W) across many rows
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def many_rows_dist_mat(rng):
+    """40-point 2D Euclidean distance matrix, large enough to exercise multi-row sharing."""
+    pts = rng.uniform(0, 100, size=(40, 2))
+    return cdist(pts, pts).astype(np.float64)
+
+
+@pytest.fixture
+def many_rows_data_homogeneous(rng, many_rows_dist_mat):
+    """30 rows sharing the exact same (no-NaN) mask."""
+    n_parcels = many_rows_dist_mat.shape[0]
+    return rng.standard_normal((30, n_parcels)).astype(np.float32)
+
+
+@pytest.fixture
+def many_rows_data_heterogeneous(many_rows_data_homogeneous):
+    """Same as the homogeneous fixture, but with 3 distinct NaN-mask groups injected."""
+    data = many_rows_data_homogeneous.copy()
+    # group A: rows 3 and 10 share one NaN pattern
+    data[3, [1, 2]] = np.nan
+    data[10, [1, 2]] = np.nan
+    # group B: row 15 has a different NaN pattern
+    data[15, 7] = np.nan
+    # remaining 27 rows: the original (no-NaN) mask
+    return data
+
+
+def _spy_call_count(monkeypatch, target_module, name):
+    """Wrap `target_module.name` to count calls, returning a mutable {"n": int} counter."""
+    orig = getattr(target_module, name)
+    counter = {"n": 0}
+
+    def wrapped(*args, **kwargs):
+        counter["n"] += 1
+        return orig(*args, **kwargs)
+
+    monkeypatch.setattr(target_module, name, wrapped)
+    return counter
+
+
+def test_moran_fit_1_over_d_matches_nulls_moran_internal_construction(
+        many_rows_dist_mat, many_rows_data_homogeneous):
+    # _moran_fit_1_over_d must reproduce exactly nulls_moran's own (pre-refactor) inline
+    # 1/d weight-matrix construction + compute_mem call.
+    row = many_rows_data_homogeneous[0]
+    dm = many_rows_dist_mat.copy()
+    mem_helper, mev_helper = _moran_fit_1_over_d(dm.copy())
+
+    dm2 = many_rows_dist_mat.copy()
+    np.fill_diagonal(dm2, 1)
+    dm2 **= -1
+    mem_ref, mev_ref = compute_mem(dm2, spectrum="nonzero", tol=1e-6, n_components=15)
+
+    np.testing.assert_array_equal(mem_helper, mem_ref)
+    np.testing.assert_array_equal(mev_helper, mev_ref)
+
+
+def test_nulls_moran_precomputed_mem_matches_internal_fit(
+        many_rows_dist_mat, many_rows_data_homogeneous):
+    # Passing a precomputed (mem, mev) must give bit-identical output to nulls_moran fitting
+    # it internally, for the same row/seed.
+    row = many_rows_data_homogeneous[0]
+    # no NaNs in `row` and no all-inf rows in `many_rows_dist_mat` -> mask is all-True,
+    # so fitting on the full (unmasked) matrix matches what nulls_moran fits internally
+    mem, mev = _moran_fit_1_over_d(many_rows_dist_mat.copy())
+
+    a = nulls_moran(row, many_rows_dist_mat.copy(), n_nulls=30, seed=42)
+    b = nulls_moran(row, many_rows_dist_mat.copy(), n_nulls=30, seed=42,
+                     _precomputed_mem=(mem, mev))
+    np.testing.assert_array_equal(a, b)
+
+
+def test_generate_null_maps_moran_fits_once_across_homogeneous_rows(
+        monkeypatch, many_rows_dist_mat, many_rows_data_homogeneous):
+    counter = _spy_call_count(monkeypatch, nulls_module, "compute_mem")
+    nulls, _ = generate_null_maps(
+        method="moran", data=many_rows_data_homogeneous, parcellation=None,
+        dist_mat=many_rows_dist_mat.copy(), parc_space="mni152",
+        n_nulls=20, seed=0, n_proc=1, verbose=False,
+    )
+    n_rows = many_rows_data_homogeneous.shape[0]
+    assert nulls.shape == (n_rows, 20, many_rows_dist_mat.shape[0])
+    # all rows share the same (no-NaN) mask -> exactly one fit, not one per row
+    assert counter["n"] == 1
+
+
+def test_generate_null_maps_moran_matches_old_per_row_behavior(
+        many_rows_dist_mat, many_rows_data_homogeneous):
+    # "old vs. new" equivalence: the fit-once path inside generate_null_maps must produce,
+    # for every row, exactly what a direct per-row nulls_moran(..., seed=seed_base+i) call
+    # (today's unshared path, still reachable and unmodified) produces.
+    seed_base = 777
+    n_nulls = 25
+    nulls, _ = generate_null_maps(
+        method="moran", data=many_rows_data_homogeneous, parcellation=None,
+        dist_mat=many_rows_dist_mat.copy(), parc_space="mni152",
+        n_nulls=n_nulls, seed=seed_base, n_proc=1, verbose=False,
+    )
+    for i in range(many_rows_data_homogeneous.shape[0]):
+        ref = nulls_moran(many_rows_data_homogeneous[i], many_rows_dist_mat.copy(),
+                           n_nulls=n_nulls, seed=seed_base + i)
+        np.testing.assert_array_equal(nulls.data[i], ref)
+
+
+def test_generate_null_maps_moran_heterogeneous_nan_masks_still_correct(
+        monkeypatch, many_rows_dist_mat, many_rows_data_heterogeneous):
+    counter = _spy_call_count(monkeypatch, nulls_module, "compute_mem")
+    seed_base = 321
+    n_nulls = 20
+    nulls, _ = generate_null_maps(
+        method="moran", data=many_rows_data_heterogeneous, parcellation=None,
+        dist_mat=many_rows_dist_mat.copy(), parc_space="mni152",
+        n_nulls=n_nulls, seed=seed_base, n_proc=1, verbose=False,
+    )
+    # 3 distinct NaN-mask groups (rows {3,10}, row {15}, the rest) -> exactly 3 fits, not
+    # 1 (wrongly sharing across incompatible masks) and not 30 (no sharing at all)
+    assert counter["n"] == 3
+    for i in range(many_rows_data_heterogeneous.shape[0]):
+        ref = nulls_moran(many_rows_data_heterogeneous[i], many_rows_dist_mat.copy(),
+                           n_nulls=n_nulls, seed=seed_base + i)
+        np.testing.assert_array_equal(nulls.data[i], ref, err_msg=f"row {i} mismatch")
+
+
+def test_generate_null_maps_moran_fit_variogram_bypasses_sharing(
+        monkeypatch, many_rows_dist_mat, many_rows_data_homogeneous):
+    # fit_variogram=True (variomoran's mechanism): W depends on each row's own values and
+    # must never be shared across rows -- the optimization must be a complete no-op here.
+    counter = _spy_call_count(monkeypatch, nulls_module, "compute_mem")
+    seed_base = 55
+    n_nulls = 15
+    nulls, _ = generate_null_maps(
+        method="moran", data=many_rows_data_homogeneous, parcellation=None,
+        dist_mat=many_rows_dist_mat.copy(), parc_space="mni152",
+        n_nulls=n_nulls, seed=seed_base, n_proc=1, verbose=False,
+        fit_variogram=True,
+    )
+    n_rows = many_rows_data_homogeneous.shape[0]
+    assert counter["n"] == n_rows  # one fit per row, sharing disabled
+    for i in range(n_rows):
+        ref = nulls_moran(many_rows_data_homogeneous[i], many_rows_dist_mat.copy(),
+                           n_nulls=n_nulls, seed=seed_base + i, fit_variogram=True)
+        np.testing.assert_array_equal(nulls.data[i], ref)
+
+
+def test_generate_null_maps_moran_n_proc_gt_1_matches_n_proc_1(
+        many_rows_dist_mat, many_rows_data_heterogeneous):
+    seed_base = 909
+    n_nulls = 15
+    n1, _ = generate_null_maps(
+        method="moran", data=many_rows_data_heterogeneous, parcellation=None,
+        dist_mat=many_rows_dist_mat.copy(), parc_space="mni152",
+        n_nulls=n_nulls, seed=seed_base, n_proc=1, verbose=False,
+    )
+    n2, _ = generate_null_maps(
+        method="moran", data=many_rows_data_heterogeneous, parcellation=None,
+        dist_mat=many_rows_dist_mat.copy(), parc_space="mni152",
+        n_nulls=n_nulls, seed=seed_base, n_proc=2, verbose=False,
+    )
+    np.testing.assert_array_equal(n1.data, n2.data)
+
+
+@pytest.mark.parametrize("method", ["random", "moran"])
+def test_generate_null_maps_seed_plus_i_multirow(
+        method, many_rows_dist_mat, many_rows_data_homogeneous):
+    # Documents/locks the seed+i invariant that row-batched generation (permute()'s
+    # maps_batch_size) depends on: row i of a multi-row generate_null_maps(seed=S) call
+    # must equal a standalone single-row call for that same row with seed=S+i.
+    seed_base = 100
+    n_nulls = 10
+    data = many_rows_data_homogeneous[:5]
+    nulls, _ = generate_null_maps(
+        method=method, data=data, parcellation=None,
+        dist_mat=many_rows_dist_mat.copy(), parc_space="mni152",
+        n_nulls=n_nulls, seed=seed_base, n_proc=1, verbose=False,
+    )
+    for i in range(5):
+        single, _ = generate_null_maps(
+            method=method, data=data[i:i + 1], parcellation=None,
+            dist_mat=many_rows_dist_mat.copy(), parc_space="mni152",
+            n_nulls=n_nulls, seed=seed_base + i, n_proc=1, verbose=False,
+        )
+        np.testing.assert_array_equal(nulls.data[i], single.data[0])

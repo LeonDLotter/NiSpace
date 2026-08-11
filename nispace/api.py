@@ -15,12 +15,14 @@ from .io import parcellate_data, to_pickle, from_pickle
 from .core.parcellation import Parcellation
 from .core.reduce_x import _reduce_dimensions
 from .core.transform_y import _dummy_code_groups, _num_code_subjects, _get_transform_fun
-from .core.colocalize import _get_colocalize_fun, _sort_colocs, _get_coloc_stats, _rank_regress, _xsea_aggregate
+from .core.colocalize import (_get_colocalize_fun, _sort_colocs, _get_coloc_stats, _rank_regress,
+                              _xsea_aggregate, _check_predictor_count, _DOMINANCE_MAX_PREDICTORS_DEFAULT)
 from .core.correlate_within_region import correlate_within_region_core, _CWR_METHODS
 from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_method,
                                _EMPIRICAL_MC_METHODS, _resolve_permute_combo,
-                               _resolve_permute_mode_settings)
-from .core.nullmaps import NullMaps
+                               _resolve_permute_mode_settings, _null_maps_cache_hit,
+                               _resolve_maps_batch_size, _iter_null_map_batches)
+from .core.nullmaps import NullMaps, _NULLMAPS_WARN_BYTES
 from .core.plot import _plot_categorical
 from .core.constants import _COLOC_METHODS, _SPACE_DEFAULT_VOL, _COLOC_METHODS_UNIVARIATE
 from .datasets import fetch_parcellation, fetch_reference, _check_parcellation
@@ -59,6 +61,17 @@ def _cwr_null_p(obs, null):
 
 
 _CWR_OMNIBUS_STATS = ("rho", "absrho", "rho2")
+
+# thresholds for the "you're permuting the much larger side" efficiency nudge in
+# permute() -- null-map cost scales with the PERMUTED side's row count, not the
+# other side's, so e.g. permuting 12000 X genes while Y has 3 maps is far more
+# expensive than permuting Y instead (a spatial null only needs to preserve the
+# permuted side's own autocorrelation structure, so either side is a legitimate
+# choice for a plain pairwise spatial correlation test). Only fires for a large,
+# practically-meaningful imbalance -- not every case where one side has a few more
+# maps than the other.
+_MAPS_IMBALANCE_WARN_MIN_ROWS = 100
+_MAPS_IMBALANCE_WARN_RATIO = 5
 
 
 def _cwr_omnibus_aggregate(rho, omnibus_stat, already_z=False):
@@ -244,7 +257,17 @@ class NiSpace:
                  parcellation_dist_mat: Union[np.ndarray, pd.DataFrame] = None,
                  parcellation_spin_mat: np.ndarray = None,
                  load_dist_mat: bool = True,
-                 load_spin_mat: bool = True,
+                 # False by default: spin-rotation files are large (e.g. ~5GB per
+                 # hemisphere, decompressed, for a 1000-parcel cortical atlas) and
+                 # Parcellation.from_nispace_library() loads them EAGERLY (for every
+                 # available space) when this is True -- unlike dist_mat, there's no
+                 # cheap lazy-spec path here. Only spin-test null methods
+                 # (cornblath/alexander_bloch/vasa/hungarian/baum) need this at all;
+                 # permute() fetches it lazily on demand (Parcellation.get_spin_mat(),
+                 # itself lazy per-space) when one of those is actually requested, so
+                 # eager loading here is wasted for the common (non-spin) case. Set
+                 # True explicitly if you want it pre-loaded at fit() time.
+                 load_spin_mat: bool = False,
                  resampling_target: Literal["data", "parcellation"] = "data",
                  n_proc: int = 1,
                  seed: int = None,
@@ -563,9 +586,21 @@ class NiSpace:
                     self._parc_dist_mat["null_maps"] = dm
                     if not isinstance(dm, tuple):
                         self._parc_dist_mat["cv"] = dm
-                    if self._parc_spin_mat is None:
-                        _cx_space = _ns_result[0][0] if isinstance(_ns_result[0], tuple) else _ns_result[0]
-                        self._parc_spin_mat = parc_obj.get_spin_mat(space=_cx_space)
+                    # NOTE: spin_mat is intentionally NOT eagerly resolved here (unlike
+                    # dist_mat above). Spin-rotation files are large (e.g. ~5GB per
+                    # hemisphere, decompressed, for a 1000-parcel cortical atlas) and only
+                    # matter for spin-test null methods (cornblath/alexander_bloch/vasa/
+                    # hungarian/baum) -- the vast majority of calls (moran/burt/random/
+                    # variogram null methods, or no permute() call at all) never touch it.
+                    # `permute()` already fetches it lazily, on demand, only when a spin
+                    # method is actually requested (see the `_cx_m in _SPIN_METHODS` gate
+                    # further down) -- `self._parc_spin_mat` falls back to
+                    # `self._parc.get_spin_mat(...)` there, which itself only resolves the
+                    # underlying file on first access (Parcellation._ensure_spin_mat_loaded).
+                    # Eagerly calling `parc_obj.get_spin_mat(...)` here used to force that
+                    # resolution unconditionally at fit() time, even for calls that never
+                    # use it -- found via a real ~25GB memory report for a moran/random-only
+                    # workflow that just happened to use an integrated parcellation.
 
             # custom parcellation (string file path not matched as integrated)
             if not isinstance(self._parc, Parcellation):
@@ -1401,6 +1436,7 @@ class NiSpace:
                    store=True, n_proc=None, seed=None, verbose=None,
                    dist_mat_kwargs=None,
                    force_dict=False,
+                   dominance_max_predictors=_DOMINANCE_MAX_PREDICTORS_DEFAULT,
                    **kwargs):
         """
         Compute colocalization statistics between each X map (or set, if XSEA is
@@ -1525,6 +1561,11 @@ class NiSpace:
         force_dict : bool, default False
             Always return a dict even when the method produces a single
             statistic (e.g. ``"pearson"``'s ``rho``).
+        dominance_max_predictors : int, default 20
+            Hard cutoff for ``method="dominance"``: it fits ``2**n_predictors - 1``
+            models, which becomes computationally infeasible past a modest predictor
+            count. Raises ``ValueError`` above this cutoff; override if you have
+            verified a larger run is intentional (strongly discouraged above ~25).
         **kwargs
             ``groups``, ``subjects`` : optional
                 Forwarded to :meth:`transform_y` if ``Y_transform`` needs to be
@@ -1743,14 +1784,26 @@ class NiSpace:
             )
             # Y
             Y_arr = _rank_regress(
-                arr=Y_arr, 
-                rank=rank, 
-                regress="y" in regress_z, 
-                z=Z_arr, 
-                zy_matched=zy_matched, 
+                arr=Y_arr,
+                rank=rank,
+                regress="y" in regress_z,
+                z=Z_arr,
+                zy_matched=zy_matched,
                 verbose=verbose
             )
-            
+
+        ## guard against statistically-degenerate/computationally-infeasible predictor
+        # counts for the multivariate methods -- independent of rank/regress_z above,
+        # checked once against the observed (post-reduction) shapes since it's a
+        # property of n_predictors vs. n_obs, not of any specific permutation
+        if method in ("mlr", "dominance", "pcr", "pls"):
+            _n_predictors_check = (max(a.shape[0] for a in X_arr.values())
+                                   if isinstance(X_arr, dict) else X_arr.shape[0])
+            _check_predictor_count(
+                method, _n_predictors_check, int(self._no_nan.sum()),
+                dominance_max_predictors=dominance_max_predictors,
+            )
+
         ## special case regularized regression: we need euclidean distance matrices
         parcel_tr_te_splits, parcel_train_pct = None, None
         if (method in ["lasso", "ridge", "elasticnet"]):
@@ -2388,7 +2441,8 @@ class NiSpace:
 
     def permute(self, what, method=None, X_reduction=None, Y_transform=None, xsea=None,
                 n_perm=10000,
-                maps_which="X", maps_nulls=None, maps_method=None, dist_mat=None,
+                maps_which="X", maps_nulls=None, maps_method=None, maps_batch_size=None,
+                dist_mat=None,
                 sets_X_background=None,
                 p_tails=None, pooled_p="auto", p_from_average_y_coloc=None,
                 n_proc=None, seed=None, store=True, verbose=None, force_dict=False,
@@ -2434,6 +2488,26 @@ class NiSpace:
             ``"moran"`` / ``"msr"``, ``"variomoran"`` / ``"variomsr"``,
             ``"cornblath"`` / ``"spin"`` (surface only), ``"alexander_bloch"``,
             ``"burt2018"``, ``"burt2020"``, ``"random"``.
+        maps_batch_size : int, False, or None, optional
+            Bounds peak memory for large ``maps_which`` sides (e.g. a
+            full-transcriptome X with thousands of gene rows) by generating and
+            reducing null maps in map-batches instead of materializing the full
+            ``(n_maps, n_perm, n_parcels)`` null-map cube at once. Only applies
+            when the permuted side is consumed row-independently by ``method``
+            -- always true for the Y side, and true for the X side only for
+            univariate methods (``pearson``/``spearman``/``partialpearson``/
+            ``partialspearman``/``mi``/``slr``). Multivariate X (``mlr``/
+            ``dominance``/``pls``/``pcr``/``lasso``/``ridge``/``elasticnet``)
+            cannot be map-batched (all X rows are fit jointly per permutation)
+            and always uses the normal path regardless of this setting.
+            ``None`` (default) -- adaptive, sized from a target per-batch
+            memory ceiling; a no-op when the permuted side already fits under
+            it (e.g. the common case of a handful of maps).
+            ``int`` -- explicit map-batch size.
+            ``False`` -- disable batching entirely (always use the normal
+            path); needed if you require :meth:`local_colocalization`'s
+            ``null=True`` afterward, since the batched path does not cache a
+            full null-map cube (a warning is logged when this matters).
         dist_mat : array-like of shape (n_parcels, n_parcels), optional
             Pre-computed geodesic distance matrix. Generated from the
             parcellation if not provided (and required by the null method).
@@ -2924,13 +2998,82 @@ class NiSpace:
         
         ## prepare permuted data as prerequisite for null colocalization runs
         _X_null, _Y_null, _Z_null = None, None, None
-        
+        _maps_fastpath_axes = {}  # XY -> {"data_obs", "standardize_nulls", "batch_size"}
+
         # case permute X/Y brain maps
         if "maps" in what:
+            # efficiency nudge: permuting a much smaller "other side" instead would be
+            # far cheaper (see _MAPS_IMBALANCE_WARN_* comment above). Only meaningful
+            # when a single side is permuted -- maps_which=["X","Y"] has no "other
+            # side" to switch to.
+            _n_x_obs, _n_y_obs = len(_X_obs), len(_Y_obs)
+            if (maps_which == ["X"] and _n_x_obs > _MAPS_IMBALANCE_WARN_MIN_ROWS
+                    and _n_x_obs > _MAPS_IMBALANCE_WARN_RATIO * max(_n_y_obs, 1)):
+                lgr.warning(
+                    f"Permuting 'X' ({_n_x_obs} maps) while 'Y' has far fewer "
+                    f"({_n_y_obs} maps) -- null-map cost scales with the permuted "
+                    "side's row count, not the other side's. If permuting Y instead "
+                    "is scientifically equivalent for your design, "
+                    "permute(maps_which='Y') would be far cheaper here."
+                )
+            elif (maps_which == ["Y"] and _n_y_obs > _MAPS_IMBALANCE_WARN_MIN_ROWS
+                    and _n_y_obs > _MAPS_IMBALANCE_WARN_RATIO * max(_n_x_obs, 1)):
+                lgr.warning(
+                    f"Permuting 'Y' ({_n_y_obs} maps) while 'X' has far fewer "
+                    f"({_n_x_obs} maps) -- null-map cost scales with the permuted "
+                    "side's row count, not the other side's. If permuting X instead "
+                    "is scientifically equivalent for your design, "
+                    "permute(maps_which='X') would be far cheaper here."
+                )
+
+            def _generate_normal_null_maps(XY, data_obs, standardize_nulls):
+                # unchanged "normal" (non-batched) null-map generation for one axis --
+                # factored out so the main loop and the double-batching fallback (below)
+                # share exactly the same logic instead of two copies that could drift.
+                nonlocal maps_nulls, dist_mat, _X_null, _Y_null
+                _maps_nulls, new_spin_mat = _get_null_maps(
+                    data_obs=data_obs,
+                    dist_mat=dist_mat,
+                    parc=self._parc,
+                    standardize=standardize_nulls,
+                    n_perm=n_perm,
+                    seed=seed,
+                    n_proc=n_proc,
+                    dtype=dtype,
+                    verbose=verbose,
+                    permute_which=XY,
+                    **maps_kwargs
+                )
+                maps_nulls = _maps_nulls
+                # tag null maps with X/Y identity and store
+                maps_nulls.null_which = XY
+                self._nulls["maps_null"] = maps_nulls
+                self._nulls.pop("maps_null_fastpath_info", None)
+                # promote newly generated spin matrix to instance attribute for reuse
+                if new_spin_mat is not None and self._parc_spin_mat is None:
+                    self._parc_spin_mat = new_spin_mat
+
+                # sort null map data into lists of length n_perm, each element being one
+                # permuted array of observed values
+                lgr.debug("Sorting null map data into arrays.")
+                if XY == "X":
+                    _X_null = maps_nulls.perm_list(dtype=self._dtype)
+                    # case: xsea requested: re-sort into a list of dicts of set-wise arrays
+                    if isinstance(_X_obs_arr, dict):
+                        idc_set = np.array(_X_obs.index.get_level_values("set"))
+                        # _inverse_idx_X maps original (set, gene) row positions to rows in
+                        # the deduplicated null array generated above -- genes shared across
+                        # sets are gathered from the same underlying null draw
+                        _X_null = [{set_name: null[_inverse_idx_X[idc_set == set_name], :]
+                                    for set_name in _X_obs_arr.keys()}
+                                   for null in _X_null]
+                elif XY == "Y":
+                    _Y_null = maps_nulls.perm_list(dtype=self._dtype)
+
             # iterate map datasets to permute
             for XY in maps_which:
                 lgr.info(f"Generating permuted {XY} maps.")
-                
+
                 # if no null maps & no distance matrix given, generate distance matrix
                 # Skip for: pure spin; split+spin where sc dist_mat comes from parc.get_sc_dist_mat()
                 _cx_m_check, _sc_m_check = _parse_null_method(maps_kwargs["null_method"])
@@ -2951,9 +3094,9 @@ class NiSpace:
                     or (_cx_m_check in _DISTMAT_FREE_METHODS
                         and _sc_m_check in _DISTMAT_FREE_METHODS | {None})
                 )
-                if maps_nulls is None and dist_mat is None and not _skip_distmat:
+                if maps_kwargs["null_maps"] is None and dist_mat is None and not _skip_distmat:
                     dist_mat = self._get_dist_mat(**dist_mat_kwargs)
-                
+
                 # get null maps, will not generate new maps if already existing and use of
                 # existing is requested
                 if XY=="X":
@@ -2976,45 +3119,89 @@ class NiSpace:
                     else:
                         data_obs = _Y_obs
                     standardize_nulls = True if "y" in self._zscore else False
-                maps_nulls, new_spin_mat = _get_null_maps(
-                    data_obs=data_obs,
-                    dist_mat=dist_mat,
-                    parc=self._parc,
-                    #parc_kwargs=self._parc_info,
-                    #standardize=False,
-                    standardize=standardize_nulls,
-                    n_perm=n_perm,
-                    seed=seed,
-                    n_proc=n_proc,
-                    dtype=dtype,
-                    verbose=verbose,
-                    permute_which=XY,
-                    **maps_kwargs
+
+                # map-batched fast path: only for the side(s)/method combos where a
+                # permuted row is consumed independently downstream (see maps_batch_size
+                # docstring) -- otherwise, and whenever a cache hit or custom maps_nulls
+                # already cover this call, fall straight through to normal generation.
+                _axis_ok = (XY == "Y") or (XY == "X" and method in _COLOC_METHODS_UNIVARIATE)
+                _resolved_bs = None
+                _cache_hit_found = False
+                if maps_kwargs["null_maps"] is None:
+                    _cache_hit = _null_maps_cache_hit(
+                        data_obs, self._nulls, null_maps=None,
+                        use_existing=maps_kwargs.get("use_existing", True),
+                        n_perm=n_perm, null_method=maps_kwargs["null_method"],
+                        permute_which=XY, dtype=dtype,
+                    )
+                    _cache_hit_found = _cache_hit is not None
+                    if _axis_ok and not _cache_hit_found:
+                        _resolved_bs = _resolve_maps_batch_size(
+                            data_obs.shape[0], n_perm, data_obs.shape[1], dtype, maps_batch_size
+                        )
+                if (_resolved_bs is not None) and (data_obs.shape[0] > _resolved_bs):
+                    _maps_fastpath_axes[XY] = {
+                        "data_obs": data_obs,
+                        "standardize_nulls": standardize_nulls,
+                        "batch_size": _resolved_bs,
+                    }
+                    continue
+
+                # about to fall through to normal (non-batched) generation for this axis --
+                # e.g. a method/axis that can't be map-batched at all (X + multivariate:
+                # all X rows are fit jointly per permutation, a hard mathematical
+                # constraint, not an implementation gap), or batching explicitly disabled
+                # via maps_batch_size=False. Warn up front, BEFORE any allocation happens,
+                # if the resulting cube would be large -- NullMaps.__init__'s own >1GB
+                # warning only fires AFTER the array already exists, too late to act on for
+                # a genuinely prohibitive size. Skipped when a cache hit or custom
+                # maps_nulls will be reused instead (no new allocation happens there).
+                if maps_kwargs["null_maps"] is None and not _cache_hit_found:
+                    _est_bytes = data_obs.shape[0] * n_perm * data_obs.shape[1] * np.dtype(dtype).itemsize
+                    if _est_bytes > _NULLMAPS_WARN_BYTES:
+                        if not _axis_ok:
+                            _reason = (f"Method '{method}' fits X jointly and can't be "
+                                      "batched.")
+                        elif maps_batch_size is False:
+                            _reason = "Batching disabled via maps_batch_size=False."
+                        else:
+                            _reason = "Too few rows to batch usefully."
+                        lgr.warning(
+                            f"Generating null maps for '{XY}' without map-batching "
+                            f"(n={data_obs.shape[0]}, n_perm={n_perm}, "
+                            f"n_parcels={data_obs.shape[1]}): full null-map cube "
+                            f"~{_est_bytes / 1e9:.1f} GB. {_reason}"
+                        )
+
+                _generate_normal_null_maps(XY, data_obs, standardize_nulls)
+
+            # double-batching guard: if more than one axis independently qualified for the
+            # map-batched fast path in the same call (maps_which=["X","Y"] with both sides
+            # large), fall back to the normal path for both -- a genuinely different,
+            # nested batching design would be needed to bound memory on both axes at once,
+            # not a small extension of the single-axis design here.
+            if len(_maps_fastpath_axes) > 1:
+                lgr.warning(
+                    f"Map-batched fast path qualified for both maps_which sides "
+                    f"({list(_maps_fastpath_axes.keys())}) in the same permute() call -- "
+                    "not supported simultaneously. Falling back to normal (non-batched) "
+                    "null-map generation for both; memory will scale with the larger side."
                 )
-
-                # tag null maps with X/Y identity and store
-                maps_nulls.null_which = XY
-                self._nulls["maps_null"] = maps_nulls
-                # promote newly generated spin matrix to instance attribute for reuse
-                if new_spin_mat is not None and self._parc_spin_mat is None:
-                    self._parc_spin_mat = new_spin_mat
-
-                # sort null map data into lists of length n_perm, each element being one
-                # permuted array of observed values
-                lgr.debug("Sorting null map data into arrays.")
-                if XY=="X":
-                    _X_null = maps_nulls.perm_list(dtype=self._dtype)
-                    # case: xsea requested: re-sort into a list of dicts of set-wise arrays
-                    if isinstance(_X_obs_arr, dict):
-                        idc_set = np.array(_X_obs.index.get_level_values("set"))
-                        # _inverse_idx_X maps original (set, gene) row positions to rows in
-                        # the deduplicated null array generated above -- genes shared across
-                        # sets are gathered from the same underlying null draw
-                        _X_null = [{set_name: null[_inverse_idx_X[idc_set == set_name], :]
-                                    for set_name in _X_obs_arr.keys()}
-                                   for null in _X_null]
-                elif XY=="Y":
-                    _Y_null = maps_nulls.perm_list(dtype=self._dtype)
+                for XY, spec in _maps_fastpath_axes.items():
+                    _generate_normal_null_maps(XY, spec["data_obs"], spec["standardize_nulls"])
+                _maps_fastpath_axes = {}
+            elif not _maps_fastpath_axes:
+                # no fast path used this call -- make sure a marker from an earlier
+                # fast-pathed permute() call on this instance can't be mistaken for
+                # covering this one
+                self._nulls.pop("maps_null_fastpath_info", None)
+            else:
+                (_fp_XY, _fp_spec), = _maps_fastpath_axes.items()
+                self._nulls["maps_null"] = None
+                self._nulls["maps_null_fastpath_info"] = {
+                    "XY": _fp_XY, "n_rows": _fp_spec["data_obs"].shape[0],
+                    "batch_size": _fp_spec["batch_size"],
+                }
             
         # case permute Y groups
         if ("groups" in what) and Y_transform:
@@ -3210,7 +3397,10 @@ class NiSpace:
             )
         
         ## check what permuted dataframes we have, if we dont have them, copy observed data (!)
-        if (not _X_null) & (not _Y_null) & (not _Z_null):
+        # (a map-batched fast path axis deliberately leaves _X_null/_Y_null at None -- its
+        # permuted data was generated, just not materialized into these lists -- so it must
+        # not trip this guard)
+        if (not _X_null) & (not _Y_null) & (not _Z_null) & (not _maps_fastpath_axes):
             lgr.critical_raise("No permuted data generated. Supported permutations ('what') are: "
                                "'maps', 'groups', and 'sets'.",
                                ValueError)
@@ -3361,6 +3551,204 @@ class NiSpace:
                 full = reducer(full, axis=0, keepdims=True).astype(dtype)
 
             _colocs_null = [{stat_key: full[:, i, :]} for i in range(n_perm)]
+
+        # map-batched fast path: generate null maps in map-batches (see
+        # maps_batch_size docstring), reducing each batch to its colocalization
+        # contribution immediately instead of ever materializing the full
+        # (n_maps, n_perm, n_parcels) null-map cube. Handles both xsea and non-xsea;
+        # for X, only reachable when method is univariate (enforced when
+        # _maps_fastpath_axes was built, above).
+        elif _maps_fastpath_axes:
+            (_fp_XY, _fp_spec), = _maps_fastpath_axes.items()
+            _fp_seed_base = seed if seed is not None else np.random.randint(0, 2**32 - 1)
+            _fp_maps_kwargs = {k: v for k, v in maps_kwargs.items()
+                                if k not in ("nispace_nulls", "use_existing", "null_maps")}
+            # pre-flight size estimate, logged before any generation work starts: the full
+            # (n_rows, n_perm, n_parcels) null-map cube this call is avoiding, and the
+            # bounded per-batch footprint it's using instead
+            _fp_n_rows = _fp_spec["data_obs"].shape[0]
+            _fp_n_parcels = _fp_spec["data_obs"].shape[1]
+            _fp_bs = _fp_spec["batch_size"]
+            _fp_itemsize = np.dtype(dtype).itemsize
+            _fp_full_gb = _fp_n_rows * n_perm * _fp_n_parcels * _fp_itemsize / 1e9
+            _fp_batch_gb = _fp_bs * n_perm * _fp_n_parcels * _fp_itemsize / 1e9
+            _fp_n_batches = -(-_fp_n_rows // _fp_bs)
+            lgr.info(
+                f"Map-batched null colocalization for '{_fp_XY}' (n={_fp_n_rows}, "
+                f"n_perm={n_perm}, n_parcels={_fp_n_parcels}): full null-map cube would be "
+                f"~{_fp_full_gb:.1f} GB; using {_fp_n_batches} batch(es) of size {_fp_bs} "
+                f"(~{_fp_batch_gb:.1f} GB peak per batch)."
+            )
+
+            if _fp_XY == "Y":
+                n_x_fastpath = len(_X_null[0]) if xsea else _X_null[0].shape[0]
+                n_y_total = _fp_spec["data_obs"].shape[0]
+                null_colocs_list_per_perm = [[None] * n_y_total for _ in range(n_perm)]
+                n_batches_est = -(-n_y_total // _fp_spec["batch_size"])
+
+                # NOTE: each task below must receive only its OWN permutation's slice
+                # (Y_batch_i, X_for_perm), never the full batch_perm_list -- passing the
+                # whole per-batch list (up to the full ~batch-size*n_perm*n_parcels array)
+                # into a `delayed()` call means joblib re-serializes/ships it to a worker
+                # on every one of the n_perm dispatches, not once. This was a real bug
+                # (found via real usage: a job that ran in 20s unbatched took so long
+                # batched that loky workers were killed for excessive memory/timeouts) --
+                # slicing here, in the parent process, exactly mirrors how the old
+                # unbatched path passes only `_X_null[i], _Y_null[i]` per task.
+                def _y_fastpath_perm_fun(Y_batch_i, X_for_perm):
+                    return [
+                        _y_colocalize(X_for_perm, Y_batch_i[j, :], X_weights)
+                        for j in range(Y_batch_i.shape[0])
+                    ]
+
+                for _b, (row_start, row_end, batch_nm) in enumerate(_iter_null_map_batches(
+                    data_obs=_fp_spec["data_obs"], batch_size=_fp_spec["batch_size"],
+                    seed_base=_fp_seed_base, nispace_nulls=self._nulls,
+                    standardize=_fp_spec["standardize_nulls"], n_perm=n_perm,
+                    dist_mat=dist_mat, parc=self._parc, permute_which="Y", dtype=dtype,
+                    n_proc=n_proc, verbose=verbose, **_fp_maps_kwargs,
+                )):
+                    lgr.info(f"Starting batch {_b + 1}/{n_batches_est} (Y rows {row_start}-{row_end}).")
+                    batch_perm_list = batch_nm.perm_list(dtype=self._dtype)
+                    if rank or regress_z:
+                        # only slice Z if it will actually be read (zy_matched's z[i]
+                        # indexing, gated on regress="y"/"x" in _rank_regress below) --
+                        # _Z_obs_arr can be a 0-d array (np.array(None)) when no Z was
+                        # ever provided, so its .shape must not be touched otherwise
+                        z_batch = _Z_obs_arr
+                        if (zy_matched and regress_z and _Z_obs_arr.ndim > 0
+                                and _Z_obs_arr.shape[0] > 1):
+                            z_batch = _Z_obs_arr[row_start:row_end]
+                        batch_perm_list = _rank_regress(
+                            arr=batch_perm_list, rank=rank, regress="y" in regress_z,
+                            z=z_batch, zy_matched=zy_matched, verbose=False, n_proc=n_proc,
+                        )
+                    batch_results = Parallel(n_jobs=n_proc)(
+                        delayed(_y_fastpath_perm_fun)(
+                            batch_perm_list[i],
+                            _xsea_perm_data(i) if xsea else _X_null[i],
+                        )
+                        for i in tqdm(
+                            range(n_perm),
+                            desc=f"Null colocalizations ({method}, {n_proc} proc)",
+                            disable=not verbose,
+                        )
+                    )
+                    for i, results_for_i in enumerate(batch_results):
+                        for j, res in enumerate(results_for_i):
+                            null_colocs_list_per_perm[i][row_start + j] = res
+
+                _colocs_null = []
+                for i in range(n_perm):
+                    null_colocs = _sort_colocs(
+                        method=method, xsea=xsea, y_colocs_list=null_colocs_list_per_perm[i],
+                        n_X=n_x_fastpath, n_Y=n_y_total, return_df=False, dtype=dtype,
+                    )
+                    if pooled_p and _n_y_rows > 1:
+                        for stat in null_colocs:
+                            _vals = null_colocs[stat]
+                            if stat == "rho" and not _rho_already_z:
+                                _vals = rho_to_z(_vals)
+                            if pooled_p == "median":
+                                null_colocs[stat] = np.nanmedian(_vals, axis=0)[np.newaxis, :]
+                            else:
+                                null_colocs[stat] = np.nanmean(_vals, axis=0)[np.newaxis, :]
+                    _colocs_null.append(null_colocs)
+
+            else:  # _fp_XY == "X" -- only reachable for method in _COLOC_METHODS_UNIVARIATE
+                n_x_total = _fp_spec["data_obs"].shape[0]
+                if xsea:
+                    set_names_fast = list(_X_obs_arr.keys())
+                    xsea_method = self._xsea_aggregation_method
+                    weighted = "weighted" in xsea_method
+                    idc_set = np.array(_X_obs.index.get_level_values("set"))
+                    # _fp_spec["data_obs"] is the deduped-unique-gene frame set up when
+                    # this axis's data_obs was first assembled (XY=="X" branch above);
+                    # re-derive the same (set,gene) -> unique-row mapping
+                    _, _inverse_idx_fastpath = dedupe_rows(_X_obs.values)
+                    set_member_idx = {name: _inverse_idx_fastpath[idc_set == name]
+                                      for name in set_names_fast}
+                    _plain_kwargs = {k: v for k, v in self._coloc_kwargs_by_method[method].items()
+                                      if k not in ("rank", "regress_z", "zy_matched")}
+                    _plain_kwargs["xsea"] = False
+                    _y_colocalize_fastpath = _get_colocalize_fun(
+                        method=method, seed=seed, verbose=False, dtype=dtype, **_plain_kwargs
+                    )
+                else:
+                    _y_colocalize_fastpath = _y_colocalize
+
+                n_y_rows_fastpath = _Y_null[0].shape[0]
+                stat_key = None
+                stat_full = None
+                n_batches_est = -(-n_x_total // _fp_spec["batch_size"])
+
+                # see the analogous NOTE in the Y-branch above: pass only this task's own
+                # slice (X_batch_i, Y_null_i), never the full batch_perm_list -- that was
+                # the actual cause of the reported "massive" slowdown, not batching itself.
+                def _x_fastpath_perm_fun(X_batch_i, Y_null_i):
+                    return [
+                        _y_colocalize_fastpath(X_batch_i, Y_null_i[i_y, :])
+                        for i_y in range(n_y_rows_fastpath)
+                    ]
+
+                for _b, (row_start, row_end, batch_nm) in enumerate(_iter_null_map_batches(
+                    data_obs=_fp_spec["data_obs"], batch_size=_fp_spec["batch_size"],
+                    seed_base=_fp_seed_base, nispace_nulls=self._nulls,
+                    standardize=_fp_spec["standardize_nulls"], n_perm=n_perm,
+                    dist_mat=dist_mat, parc=self._parc, permute_which="X", dtype=dtype,
+                    n_proc=n_proc, verbose=verbose, **_fp_maps_kwargs,
+                )):
+                    lgr.info(f"Starting batch {_b + 1}/{n_batches_est} (X rows {row_start}-{row_end}).")
+                    batch_perm_list = batch_nm.perm_list(dtype=self._dtype)
+                    if rank or regress_z:
+                        # only slice Z if it will actually be read (zy_matched's z[i]
+                        # indexing, gated on regress="y"/"x" in _rank_regress below) --
+                        # _Z_obs_arr can be a 0-d array (np.array(None)) when no Z was
+                        # ever provided, so its .shape must not be touched otherwise
+                        z_batch = _Z_obs_arr
+                        if (zy_matched and regress_z and _Z_obs_arr.ndim > 0
+                                and _Z_obs_arr.shape[0] > 1):
+                            z_batch = _Z_obs_arr[row_start:row_end]
+                        batch_perm_list = _rank_regress(
+                            arr=batch_perm_list, rank=rank, regress="x" in regress_z,
+                            z=z_batch, zy_matched=zy_matched, verbose=False, n_proc=n_proc,
+                        )
+                    batch_results = Parallel(n_jobs=n_proc)(
+                        delayed(_x_fastpath_perm_fun)(batch_perm_list[i], _Y_null[i])
+                        for i in tqdm(
+                            range(n_perm),
+                            desc=f"Null colocalizations ({method}, {n_proc} proc)",
+                            disable=not verbose,
+                        )
+                    )
+                    for i, results_for_i in enumerate(batch_results):
+                        for i_y, res in enumerate(results_for_i):
+                            if stat_key is None:
+                                stat_key = next(iter(res))
+                                stat_full = np.zeros((n_y_rows_fastpath, n_perm, n_x_total),
+                                                     dtype=dtype)
+                            stat_full[i_y, i, row_start:row_end] = res[stat_key]
+
+                if xsea:
+                    set_stats = []
+                    for set_name in set_names_fast:
+                        gathered = stat_full[:, :, set_member_idx[set_name]]
+                        w = X_weights[set_name] if weighted else None
+                        set_stats.append(_xsea_aggregate(
+                            gathered, xsea_method, weights=w, axis=-1,
+                            rho_scale=(stat_key == "rho" and not _rho_already_z),
+                        ))
+                    full = np.stack(set_stats, axis=-1).astype(dtype)
+                else:
+                    full = stat_full
+
+                if pooled_p and _n_y_rows > 1:
+                    reducer = np.nanmedian if pooled_p == "median" else np.nanmean
+                    if stat_key == "rho" and not _rho_already_z:
+                        full = rho_to_z(full)
+                    full = reducer(full, axis=0, keepdims=True).astype(dtype)
+
+                _colocs_null = [{stat_key: full[:, i, :]} for i in range(n_perm)]
 
         # run in parallel
         elif not xsea:
