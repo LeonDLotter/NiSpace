@@ -35,8 +35,8 @@ from .stats.misc import (mc_correction, residuals_nan, zscore_df, permute_groups
 from .stats.effectsize import rzscore_nan, zscore_nan
 from .cv import _get_dist_dep_splits, _get_rand_splits
 from .plotting import nice_stats_labels, brainplot
-from .utils.utils import (set_log, _quiet, fill_nan, _get_df_string, _lower_strip_ws, mean_by_set_df,
-                          get_column_names, lower, print_arg_pairs,
+from .utils.utils import (set_log, _quiet, _verbose_scope, fill_nan, _get_df_string, _lower_strip_ws,
+                          mean_by_set_df, get_column_names, lower, print_arg_pairs,
                           _parse_df_string, _parse_bool, dedupe_rows)
 
 
@@ -1517,13 +1517,17 @@ class NiSpace:
             ``method`` (``"pearson"``/``"spearman"``), this requires Fisher-z
             transformed correlations -- ``r_to_z=False`` in ``**kwargs`` is
             overridden to ``True`` with a warning.
-        xsea_aggregation_method : str, default "mean"
+        xsea_aggregation_method : str or None, default "mean"
             How to aggregate per-set colocalization statistics across a set's
             members when ``xsea`` is active: ``"mean"``, ``"median"``,
             ``"absmean"``, ``"absmedian"``, ``"weightedmean"``, or
             ``"weightedabsmean"`` (the weighted variants require a ``"weight"``
             MultiIndex level on X; fall back to unweighted with a warning if
-            missing).
+            missing). If ``None``, auto-selects ``"weightedmean"`` when X has a
+            ``"weight"`` MultiIndex level, otherwise ``"mean"`` (logged via an
+            info message). If an explicit non-``None``, non-weighted method is
+            given while X does have a ``"weight"`` level, a warning notes the
+            available weights are unused.
         regress_z : bool, default True
             Regress Z out of X and/or Y before colocalizing (requires Z to have
             been provided at :meth:`fit`; a no-op otherwise). Forced on for
@@ -1683,6 +1687,16 @@ class NiSpace:
             if "set" not in X.index.names:
                 lgr.critical_raise("XSEA requires X data to have a MultiIndex with a 'set' level!",
                                    ValueError)
+            if xsea_aggregation_method is None:
+                has_weight = "weight" in X.index.names
+                xsea_aggregation_method = "weightedmean" if has_weight else "mean"
+                lgr.info(f"xsea_aggregation_method=None: X data "
+                         f"{'has' if has_weight else 'does not have'} a 'weight' MultiIndex "
+                         f"level -- auto-selecting '{xsea_aggregation_method}'.")
+            elif "weighted" not in xsea_aggregation_method and "weight" in X.index.names:
+                lgr.warning("X data has a 'weight' MultiIndex level, but xsea_aggregation_method="
+                            f"'{xsea_aggregation_method}' does not use it! Consider 'weightedmean' "
+                            "or 'weightedabsmean' to make use of the weights.")
             if "weighted" in xsea_aggregation_method and "weight" not in X.index.names:
                 lgr.warning("Weighted XSEA requires X data to have a MultiIndex with a 'weight' level! "
                             "Will not use weights.")
@@ -1692,10 +1706,16 @@ class NiSpace:
             if "weighted" in xsea_aggregation_method:
                 X_weights = {set_name: np.array(set_X.index.get_level_values("weight"), dtype=self._dtype) 
                              for set_name, set_X in X.groupby(level="set", sort=False)}
+            set_size_min = X.index.get_level_values('set').value_counts().min()
             lgr.info(f"Using {len(X_arr)} sets with between "
-                     f"{X.index.get_level_values('set').value_counts().min()} and "
+                     f"{set_size_min} and "
                      f"{X.index.get_level_values('set').value_counts().max()} samples. "
                      f"Aggregating within-set colocalizations with: {xsea_aggregation_method}.")
+            if set_size_min == 1:
+                lgr.warning("At least one set has only 1 member -- its 'aggregated' XSEA statistic "
+                            "is just that single map's raw colocalization, not a meaningful enrichment "
+                            "score. Consider filtering sets by size (e.g. via 'set_size_range' in "
+                            "fetch_reference()).")
             if ("spearman" in method or "pearson" in method):
                 if "r_to_z" in kwargs:
                     if kwargs["r_to_z"] is False:
@@ -2023,107 +2043,104 @@ class NiSpace:
             ``self`` if ``self._return_self`` (default), else the observed
             per-parcel correlation as a one-row DataFrame.
         """
-        loglevel = lgr.getEffectiveLevel()
-        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
-        lgr.info("*** NiSpace.correlate_within_region() - per-parcel, across-subject correlation. ***")
+        with _verbose_scope(self._verbose if verbose is None else verbose) as verbose:
+            lgr.info("*** NiSpace.correlate_within_region() - per-parcel, across-subject correlation. ***")
 
-        self._check_fit()
-        seed = seed if seed is not None else self._seed
+            self._check_fit()
+            seed = seed if seed is not None else self._seed
 
-        if method not in _CWR_METHODS:
-            lgr.critical_raise(f"'method' must be one of {_CWR_METHODS}, got '{method}'!",
-                               ValueError)
+            if method not in _CWR_METHODS:
+                lgr.critical_raise(f"'method' must be one of {_CWR_METHODS}, got '{method}'!",
+                                   ValueError)
 
-        # resolve X: explicit override, or the object's stored X
-        if X is None:
-            if "x" in self._zscore:
-                lgr.warning(
-                    "X was Z-standardized (standardize='...x...'), which z-scores each map "
-                    "across parcels -- correlate_within_region() correlates across maps/"
-                    "subjects instead, so this rescales each one differently before that "
-                    "comparison and distorts the result. Consider NiSpace(standardize=...) "
-                    "without 'x', or pass a raw X= override here."
-                )
-            with _quiet():
-                X_df = self.get_x(X_reduction=X_reduction)
-            x_arr, x_index, x_columns = X_df.values, X_df.index, X_df.columns
-        else:
-            x_arr = np.asarray(X.values if isinstance(X, (pd.Series, pd.DataFrame)) else X,
-                               dtype=float)
-            x_index = X.index if isinstance(X, (pd.Series, pd.DataFrame)) else None
-            x_columns = X.columns if isinstance(X, pd.DataFrame) else None
-
-        # resolve Y: explicit override, or the object's stored Y
-        if Y is None:
-            if "y" in self._zscore:
-                lgr.warning(
-                    "Y was Z-standardized (standardize='...y...'), which z-scores each map "
-                    "across parcels -- correlate_within_region() correlates across maps/"
-                    "subjects instead, so this rescales each one differently before that "
-                    "comparison and distorts the result. Consider NiSpace(standardize=...) "
-                    "without 'y', or pass a raw Y= override here."
-                )
-            with _quiet():
-                Y_df = self.get_y(Y_transform=Y_transform)
-            y_arr, y_index, y_columns = Y_df.values, Y_df.index, Y_df.columns
-        else:
-            y_arr = np.asarray(Y.values if isinstance(Y, (pd.Series, pd.DataFrame)) else Y,
-                               dtype=float)
-            y_index = Y.index if isinstance(Y, (pd.Series, pd.DataFrame)) else None
-            y_columns = Y.columns if isinstance(Y, pd.DataFrame) else None
-
-        # subject/map alignment: index-based when available, else positional (with a warning)
-        if x_arr.shape[0] != y_arr.shape[0]:
-            lgr.critical_raise(f"X has {x_arr.shape[0]} subjects/maps, Y has {y_arr.shape[0]} "
-                               "-- counts must match.",
-                               ValueError)
-        if x_index is not None and y_index is not None:
-            if list(x_index) != list(y_index):
-                lgr.warning("X and Y subject/map labels do not match. Pairing is done "
-                            "positionally (same row order assumed for X and Y).")
-        else:
-            lgr.warning("X and/or Y has no subject/map index; assuming positional order "
-                        "matches (same row order for X and Y).")
-
-        parcel_labels = x_columns if x_columns is not None else y_columns
-
-        rho, null = correlate_within_region_core(x_arr, y_arr, method=method, n_perm=n_perm,
-                                                  seed=seed, r_to_z=r_to_z)
-
-        if parcel_labels is None:
-            parcel_labels = [f"parcel{i}" for i in range(len(rho))]
-        _rho_df = pd.DataFrame([rho], index=[method], columns=parcel_labels, dtype=self._dtype)
-
-        if store:
-            X_reduction, Y_transform = self._get_last(X_reduction=X_reduction,
-                                                       Y_transform=Y_transform)
-            _key = _get_df_string("corrwithin", xdimred=X_reduction, ytrans=Y_transform,
-                                  method=method)
-            self._corr_within[_key] = _rho_df
-            if null is not None:
-                self._nulls.setdefault("corr_within", {})[_key] = {
-                    "null_dist": null,
-                    "n_perm": n_perm,
-                    "seed": seed,
-                    "r_to_z": r_to_z,
-                }
-                p = _cwr_null_p(rho, null)
-                self._p_corr_within[_key] = pd.DataFrame([p], index=[method],
-                                                         columns=parcel_labels, dtype=self._dtype)
+            # resolve X: explicit override, or the object's stored X
+            if X is None:
+                if "x" in self._zscore:
+                    lgr.warning(
+                        "X was Z-standardized (standardize='...x...'), which z-scores each map "
+                        "across parcels -- correlate_within_region() correlates across maps/"
+                        "subjects instead, so this rescales each one differently before that "
+                        "comparison and distorts the result. Consider NiSpace(standardize=...) "
+                        "without 'x', or pass a raw X= override here."
+                    )
+                with _quiet():
+                    X_df = self.get_x(X_reduction=X_reduction)
+                x_arr, x_index, x_columns = X_df.values, X_df.index, X_df.columns
             else:
-                # avoid stale p/null from a prior call under the same key (same
-                # xdimred/ytrans/method) contaminating a fresh n_perm=0 result
-                self._p_corr_within.pop(_key, None)
-                self._nulls.get("corr_within", {}).pop(_key, None)
-            self._set_last(cwr_method=method, X_reduction=X_reduction, Y_transform=Y_transform)
+                x_arr = np.asarray(X.values if isinstance(X, (pd.Series, pd.DataFrame)) else X,
+                                   dtype=float)
+                x_index = X.index if isinstance(X, (pd.Series, pd.DataFrame)) else None
+                x_columns = X.columns if isinstance(X, pd.DataFrame) else None
 
-            lgr.setLevel(loglevel)
-            if self._return_self:
-                return self
+            # resolve Y: explicit override, or the object's stored Y
+            if Y is None:
+                if "y" in self._zscore:
+                    lgr.warning(
+                        "Y was Z-standardized (standardize='...y...'), which z-scores each map "
+                        "across parcels -- correlate_within_region() correlates across maps/"
+                        "subjects instead, so this rescales each one differently before that "
+                        "comparison and distorts the result. Consider NiSpace(standardize=...) "
+                        "without 'y', or pass a raw Y= override here."
+                    )
+                with _quiet():
+                    Y_df = self.get_y(Y_transform=Y_transform)
+                y_arr, y_index, y_columns = Y_df.values, Y_df.index, Y_df.columns
+            else:
+                y_arr = np.asarray(Y.values if isinstance(Y, (pd.Series, pd.DataFrame)) else Y,
+                                   dtype=float)
+                y_index = Y.index if isinstance(Y, (pd.Series, pd.DataFrame)) else None
+                y_columns = Y.columns if isinstance(Y, pd.DataFrame) else None
+
+            # subject/map alignment: index-based when available, else positional (with a warning)
+            if x_arr.shape[0] != y_arr.shape[0]:
+                lgr.critical_raise(f"X has {x_arr.shape[0]} subjects/maps, Y has {y_arr.shape[0]} "
+                                   "-- counts must match.",
+                                   ValueError)
+            if x_index is not None and y_index is not None:
+                if list(x_index) != list(y_index):
+                    lgr.warning("X and Y subject/map labels do not match. Pairing is done "
+                                "positionally (same row order assumed for X and Y).")
+            else:
+                lgr.warning("X and/or Y has no subject/map index; assuming positional order "
+                            "matches (same row order for X and Y).")
+
+            parcel_labels = x_columns if x_columns is not None else y_columns
+
+            rho, null = correlate_within_region_core(x_arr, y_arr, method=method, n_perm=n_perm,
+                                                      seed=seed, r_to_z=r_to_z)
+
+            if parcel_labels is None:
+                parcel_labels = [f"parcel{i}" for i in range(len(rho))]
+            _rho_df = pd.DataFrame([rho], index=[method], columns=parcel_labels, dtype=self._dtype)
+
+            if store:
+                X_reduction, Y_transform = self._get_last(X_reduction=X_reduction,
+                                                           Y_transform=Y_transform)
+                _key = _get_df_string("corrwithin", xdimred=X_reduction, ytrans=Y_transform,
+                                      method=method)
+                self._corr_within[_key] = _rho_df
+                if null is not None:
+                    self._nulls.setdefault("corr_within", {})[_key] = {
+                        "null_dist": null,
+                        "n_perm": n_perm,
+                        "seed": seed,
+                        "r_to_z": r_to_z,
+                    }
+                    p = _cwr_null_p(rho, null)
+                    self._p_corr_within[_key] = pd.DataFrame([p], index=[method],
+                                                             columns=parcel_labels, dtype=self._dtype)
+                else:
+                    # avoid stale p/null from a prior call under the same key (same
+                    # xdimred/ytrans/method) contaminating a fresh n_perm=0 result
+                    self._p_corr_within.pop(_key, None)
+                    self._nulls.get("corr_within", {}).pop(_key, None)
+                self._set_last(cwr_method=method, X_reduction=X_reduction, Y_transform=Y_transform)
+
+                if self._return_self:
+                    return self
+                return _rho_df
+
             return _rho_df
-
-        lgr.setLevel(loglevel)
-        return _rho_df
 
     # ----------------------------------------------------------------------------------------------
 
@@ -2197,132 +2214,130 @@ class NiSpace:
             produced (Fisher-z by default, as of that method's own default) --
             same key name (``"rho"``) either way, see :meth:`correlate_within_region`.
         """
-        loglevel = lgr.getEffectiveLevel()
-        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
+        with _verbose_scope(self._verbose if verbose is None else verbose) as verbose:
 
-        cwr_method, X_reduction, Y_transform = self._get_last(
-            cwr_method=method, X_reduction=X_reduction, Y_transform=Y_transform
-        )
-        _key = _get_df_string("corrwithin", xdimred=X_reduction, ytrans=Y_transform,
-                              method=cwr_method)
-
-        try:
-            rho_df = self._corr_within[_key]
-        except KeyError:
-            available = "\n".join(list(self._corr_within.keys()))
-            lgr.critical_raise(
-                f"No correlate_within_region result for method='{cwr_method}', "
-                f"X_reduction='{X_reduction}', Y_transform='{Y_transform}'. Did you run "
-                f"NiSpace.correlate_within_region()? Available:\n{available}",
-                KeyError
+            cwr_method, X_reduction, Y_transform = self._get_last(
+                cwr_method=method, X_reduction=X_reduction, Y_transform=Y_transform
             )
+            _key = _get_df_string("corrwithin", xdimred=X_reduction, ytrans=Y_transform,
+                                  method=cwr_method)
 
-        has_p = _key in self._p_corr_within
-        if mc_method is not None and not has_p:
-            lgr.critical_raise(
-                f"No p-values stored for '{_key}' -- 'mc_method' requires n_perm > 0 to "
-                "have been used in correlate_within_region().",
-                KeyError
-            )
+            try:
+                rho_df = self._corr_within[_key]
+            except KeyError:
+                available = "\n".join(list(self._corr_within.keys()))
+                lgr.critical_raise(
+                    f"No correlate_within_region result for method='{cwr_method}', "
+                    f"X_reduction='{X_reduction}', Y_transform='{Y_transform}'. Did you run "
+                    f"NiSpace.correlate_within_region()? Available:\n{available}",
+                    KeyError
+                )
 
-        p_df, p_corr_df = None, None
-        if has_p:
-            p_df = self._p_corr_within[_key]
+            has_p = _key in self._p_corr_within
+            if mc_method is not None and not has_p:
+                lgr.critical_raise(
+                    f"No p-values stored for '{_key}' -- 'mc_method' requires n_perm > 0 to "
+                    "have been used in correlate_within_region().",
+                    KeyError
+                )
 
-            if mc_method is not None:
-                if mc_method in ("maxT", "step_maxT"):
-                    null_entry = self._nulls.get("corr_within", {}).get(_key)
-                    if null_entry is None:
+            p_df, p_corr_df = None, None
+            if has_p:
+                p_df = self._p_corr_within[_key]
+
+                if mc_method is not None:
+                    if mc_method in ("maxT", "step_maxT"):
+                        null_entry = self._nulls.get("corr_within", {}).get(_key)
+                        if null_entry is None:
+                            lgr.critical_raise(
+                                f"No null distribution stored for '{_key}' -- maxT/step_maxT "
+                                "correction requires n_perm > 0 in correlate_within_region().",
+                                KeyError
+                            )
+                        null_dist = null_entry["null_dist"]  # (n_perm, n_parcels)
+                        obs_abs = np.abs(rho_df.values)[0]      # (n_parcels,)
+                        null_abs = np.abs(null_dist)            # (n_perm, n_parcels)
+                        # a parcel with no observed rho (entirely missing data) has no
+                        # defined statistic to correct -- exclude it from the maxT/
+                        # step_maxT family entirely (so it can't distort other parcels'
+                        # max-statistic null either) and give it NaN, not a fake p from
+                        # 'NaN >= x' silently evaluating to False everywhere
+                        valid = ~np.isnan(obs_abs)
+                        counts = np.full(obs_abs.shape, np.nan)
+                        if valid.any():
+                            obs_v = obs_abs[valid]
+                            null_v = null_abs[:, valid]
+                            if mc_method == "maxT":
+                                with np.errstate(invalid="ignore"):
+                                    null_max = np.nanmax(null_v, axis=1)   # (n_perm,)
+                                counts_v = np.mean(null_max[:, np.newaxis] >= obs_v[np.newaxis, :], axis=0)
+                            else:  # step_maxT
+                                order = np.argsort(obs_v)[::-1]
+                                obs_s = obs_v[order]
+                                # NaN would poison np.maximum.accumulate's running max for every
+                                # step after it appears -- substitute -inf so a sporadic per-
+                                # permutation NaN (too few valid pairs in that one shuffle) can
+                                # never win the max, without breaking the accumulation
+                                null_s = np.where(np.isnan(null_v[:, order]), -np.inf, null_v[:, order])
+                                null_rev_cummax = np.maximum.accumulate(null_s[:, ::-1], axis=1)[:, ::-1]
+                                p_s = np.maximum.accumulate(np.mean(null_rev_cummax >= obs_s[np.newaxis, :], axis=0))
+                                counts_v = np.empty_like(p_s)
+                                counts_v[order] = p_s
+                            counts[valid] = counts_v
+                        # same floor-clip convention as the raw per-parcel p (_cwr_null_p) so
+                        # 'corrected >= raw' holds by construction, not just approximately
+                        n_perm_used = null_entry["n_perm"]
+                        floor = max(np.finfo(float).eps, 1.0 / n_perm_used)
+                        with np.errstate(invalid="ignore"):
+                            p_corr = np.clip(counts, floor, 1.0 - floor)
+                        p_corr_df = pd.DataFrame([p_corr], index=p_df.index, columns=p_df.columns,
+                                                 dtype=self._dtype)
+
+                    elif mc_method == "meff":
+                        # Deliberately unsupported here, not just unimplemented: with
+                        # n_subjects typically far fewer than n_parcels, the parcel-parcel
+                        # correlation matrix meff needs is rank-deficient (rank capped at
+                        # n_subjects-1 regardless of orientation), so meff badly
+                        # underestimates true effective dimensionality and gives an
+                        # anti-conservative (too liberal) correction -- confirmed empirically
+                        # across n_subjects=10-100 in bench5-1_region_correlation_fpr.ipynb
+                        # (FWER 11-55% at nominal alpha=0.05, never converging to nominal in
+                        # that range). 'maxT'/'step_maxT' have the same n_perm>0 prerequisite
+                        # and are proven well-calibrated -- use those instead.
                         lgr.critical_raise(
-                            f"No null distribution stored for '{_key}' -- maxT/step_maxT "
-                            "correction requires n_perm > 0 in correlate_within_region().",
-                            KeyError
+                            "'meff' correction is not supported for correlate_within_region() -- "
+                            "it is anti-conservative (too liberal) whenever n_subjects is far "
+                            "fewer than n_parcels, which is the typical regime for this method. "
+                            "Use 'maxT' or 'step_maxT' instead (same n_perm>0 prerequisite, "
+                            "proven well-calibrated across n_subjects=10-100 -- see "
+                            "bench5-1_region_correlation_fpr.ipynb).",
+                            ValueError
                         )
-                    null_dist = null_entry["null_dist"]  # (n_perm, n_parcels)
-                    obs_abs = np.abs(rho_df.values)[0]      # (n_parcels,)
-                    null_abs = np.abs(null_dist)            # (n_perm, n_parcels)
-                    # a parcel with no observed rho (entirely missing data) has no
-                    # defined statistic to correct -- exclude it from the maxT/
-                    # step_maxT family entirely (so it can't distort other parcels'
-                    # max-statistic null either) and give it NaN, not a fake p from
-                    # 'NaN >= x' silently evaluating to False everywhere
-                    valid = ~np.isnan(obs_abs)
-                    counts = np.full(obs_abs.shape, np.nan)
-                    if valid.any():
-                        obs_v = obs_abs[valid]
-                        null_v = null_abs[:, valid]
-                        if mc_method == "maxT":
-                            with np.errstate(invalid="ignore"):
-                                null_max = np.nanmax(null_v, axis=1)   # (n_perm,)
-                            counts_v = np.mean(null_max[:, np.newaxis] >= obs_v[np.newaxis, :], axis=0)
-                        else:  # step_maxT
-                            order = np.argsort(obs_v)[::-1]
-                            obs_s = obs_v[order]
-                            # NaN would poison np.maximum.accumulate's running max for every
-                            # step after it appears -- substitute -inf so a sporadic per-
-                            # permutation NaN (too few valid pairs in that one shuffle) can
-                            # never win the max, without breaking the accumulation
-                            null_s = np.where(np.isnan(null_v[:, order]), -np.inf, null_v[:, order])
-                            null_rev_cummax = np.maximum.accumulate(null_s[:, ::-1], axis=1)[:, ::-1]
-                            p_s = np.maximum.accumulate(np.mean(null_rev_cummax >= obs_s[np.newaxis, :], axis=0))
-                            counts_v = np.empty_like(p_s)
-                            counts_v[order] = p_s
-                        counts[valid] = counts_v
-                    # same floor-clip convention as the raw per-parcel p (_cwr_null_p) so
-                    # 'corrected >= raw' holds by construction, not just approximately
-                    n_perm_used = null_entry["n_perm"]
-                    floor = max(np.finfo(float).eps, 1.0 / n_perm_used)
-                    with np.errstate(invalid="ignore"):
-                        p_corr = np.clip(counts, floor, 1.0 - floor)
-                    p_corr_df = pd.DataFrame([p_corr], index=p_df.index, columns=p_df.columns,
-                                             dtype=self._dtype)
 
-                elif mc_method == "meff":
-                    # Deliberately unsupported here, not just unimplemented: with
-                    # n_subjects typically far fewer than n_parcels, the parcel-parcel
-                    # correlation matrix meff needs is rank-deficient (rank capped at
-                    # n_subjects-1 regardless of orientation), so meff badly
-                    # underestimates true effective dimensionality and gives an
-                    # anti-conservative (too liberal) correction -- confirmed empirically
-                    # across n_subjects=10-100 in bench5-1_region_correlation_fpr.ipynb
-                    # (FWER 11-55% at nominal alpha=0.05, never converging to nominal in
-                    # that range). 'maxT'/'step_maxT' have the same n_perm>0 prerequisite
-                    # and are proven well-calibrated -- use those instead.
-                    lgr.critical_raise(
-                        "'meff' correction is not supported for correlate_within_region() -- "
-                        "it is anti-conservative (too liberal) whenever n_subjects is far "
-                        "fewer than n_parcels, which is the typical regime for this method. "
-                        "Use 'maxT' or 'step_maxT' instead (same n_perm>0 prerequisite, "
-                        "proven well-calibrated across n_subjects=10-100 -- see "
-                        "bench5-1_region_correlation_fpr.ipynb).",
-                        ValueError
-                    )
+                    else:
+                        # alpha only affects the reject mask (not returned here, see
+                        # get_within_region_correlations_omnibus discussion), not the
+                        # corrected p-values themselves for fdr_bh/bonferroni/holm.
+                        # statsmodels.multipletests NaNs out EVERY output the moment a
+                        # single input p is NaN (a missing parcel), not just that
+                        # parcel's own -- mask out before calling it, reinsert after
+                        p_vals = p_df.values[0]
+                        nan_mask = np.isnan(p_vals)
+                        p_corr_vals = np.full(p_vals.shape, np.nan)
+                        if not nan_mask.all():
+                            p_corr_valid, _ = mc_correction(p_vals[~nan_mask], alpha=0.05,
+                                                            method=mc_method, dtype=self._dtype)
+                            p_corr_vals[~nan_mask] = p_corr_valid
+                        p_corr_df = pd.DataFrame([p_corr_vals], index=p_df.index, columns=p_df.columns,
+                                                 dtype=self._dtype)
 
-                else:
-                    # alpha only affects the reject mask (not returned here, see
-                    # get_within_region_correlations_omnibus discussion), not the
-                    # corrected p-values themselves for fdr_bh/bonferroni/holm.
-                    # statsmodels.multipletests NaNs out EVERY output the moment a
-                    # single input p is NaN (a missing parcel), not just that
-                    # parcel's own -- mask out before calling it, reinsert after
-                    p_vals = p_df.values[0]
-                    nan_mask = np.isnan(p_vals)
-                    p_corr_vals = np.full(p_vals.shape, np.nan)
-                    if not nan_mask.all():
-                        p_corr_valid, _ = mc_correction(p_vals[~nan_mask], alpha=0.05,
-                                                        method=mc_method, dtype=self._dtype)
-                        p_corr_vals[~nan_mask] = p_corr_valid
-                    p_corr_df = pd.DataFrame([p_corr_vals], index=p_df.index, columns=p_df.columns,
-                                             dtype=self._dtype)
+            out = {"stat_type": "rho", "mc_method": mc_method, "stat": rho_df, "p": p_df,
+                   "p_corr": p_corr_df}
 
-        out = {"stat_type": "rho", "mc_method": mc_method, "stat": rho_df, "p": p_df,
-               "p_corr": p_corr_df}
+            lgr.info(f"Returning correlate_within_region results: \n"
+                     f"{print_arg_pairs(method=cwr_method, X_reduction=X_reduction, Y_transform=Y_transform, mc_method=mc_method)}")
 
-        lgr.info(f"Returning correlate_within_region results: \n"
-                 f"{print_arg_pairs(method=cwr_method, X_reduction=X_reduction, Y_transform=Y_transform, mc_method=mc_method)}")
-        lgr.setLevel(loglevel)
-
-        return out
+            return out
 
     # ----------------------------------------------------------------------------------------------
 
@@ -2387,55 +2402,53 @@ class NiSpace:
             with ``n_perm=0`` (no null to test the omnibus statistic
             against).
         """
-        loglevel = lgr.getEffectiveLevel()
-        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
+        with _verbose_scope(self._verbose if verbose is None else verbose) as verbose:
 
-        if omnibus_stat not in _CWR_OMNIBUS_STATS:
-            lgr.critical_raise(
-                f"'omnibus_stat' must be one of {_CWR_OMNIBUS_STATS}, got '{omnibus_stat}'.",
-                ValueError
+            if omnibus_stat not in _CWR_OMNIBUS_STATS:
+                lgr.critical_raise(
+                    f"'omnibus_stat' must be one of {_CWR_OMNIBUS_STATS}, got '{omnibus_stat}'.",
+                    ValueError
+                )
+
+            cwr_method, X_reduction, Y_transform = self._get_last(
+                cwr_method=method, X_reduction=X_reduction, Y_transform=Y_transform
             )
+            _key = _get_df_string("corrwithin", xdimred=X_reduction, ytrans=Y_transform,
+                                  method=cwr_method)
 
-        cwr_method, X_reduction, Y_transform = self._get_last(
-            cwr_method=method, X_reduction=X_reduction, Y_transform=Y_transform
-        )
-        _key = _get_df_string("corrwithin", xdimred=X_reduction, ytrans=Y_transform,
-                              method=cwr_method)
+            try:
+                rho_df = self._corr_within[_key]
+            except KeyError:
+                available = "\n".join(list(self._corr_within.keys()))
+                lgr.critical_raise(
+                    f"No correlate_within_region result for method='{cwr_method}', "
+                    f"X_reduction='{X_reduction}', Y_transform='{Y_transform}'. Did you run "
+                    f"NiSpace.correlate_within_region()? Available:\n{available}",
+                    KeyError
+                )
 
-        try:
-            rho_df = self._corr_within[_key]
-        except KeyError:
-            available = "\n".join(list(self._corr_within.keys()))
-            lgr.critical_raise(
-                f"No correlate_within_region result for method='{cwr_method}', "
-                f"X_reduction='{X_reduction}', Y_transform='{Y_transform}'. Did you run "
-                f"NiSpace.correlate_within_region()? Available:\n{available}",
-                KeyError
-            )
+            null_entry = self._nulls.get("corr_within", {}).get(_key)
+            if null_entry is None:
+                lgr.critical_raise(
+                    f"No null distribution stored for '{_key}' -- the omnibus test requires "
+                    "n_perm > 0 in correlate_within_region().",
+                    KeyError
+                )
 
-        null_entry = self._nulls.get("corr_within", {}).get(_key)
-        if null_entry is None:
-            lgr.critical_raise(
-                f"No null distribution stored for '{_key}' -- the omnibus test requires "
-                "n_perm > 0 in correlate_within_region().",
-                KeyError
-            )
+            # rho_df/null_dist are already Fisher-z whenever correlate_within_region()'s own
+            # r_to_z was True (its default) -- _cwr_omnibus_aggregate normalizes back to raw
+            # rho internally either way, so this is correct regardless of that setting
+            _already_z = null_entry.get("r_to_z", True)
+            stat_obs = _cwr_omnibus_aggregate(rho_df.values[0], omnibus_stat, already_z=_already_z)
+            null_agg = _cwr_omnibus_aggregate(null_entry["null_dist"], omnibus_stat, already_z=_already_z)
+            p = _cwr_null_p(np.array([stat_obs]), null_agg[:, np.newaxis])[0]
 
-        # rho_df/null_dist are already Fisher-z whenever correlate_within_region()'s own
-        # r_to_z was True (its default) -- _cwr_omnibus_aggregate normalizes back to raw
-        # rho internally either way, so this is correct regardless of that setting
-        _already_z = null_entry.get("r_to_z", True)
-        stat_obs = _cwr_omnibus_aggregate(rho_df.values[0], omnibus_stat, already_z=_already_z)
-        null_agg = _cwr_omnibus_aggregate(null_entry["null_dist"], omnibus_stat, already_z=_already_z)
-        p = _cwr_null_p(np.array([stat_obs]), null_agg[:, np.newaxis])[0]
+            out = {"stat_type": omnibus_stat, "stat": float(stat_obs), "p": float(p)}
 
-        out = {"stat_type": omnibus_stat, "stat": float(stat_obs), "p": float(p)}
+            lgr.info(f"Returning correlate_within_region omnibus test: \n"
+                     f"{print_arg_pairs(method=cwr_method, X_reduction=X_reduction, Y_transform=Y_transform, omnibus_stat=omnibus_stat)}")
 
-        lgr.info(f"Returning correlate_within_region omnibus test: \n"
-                 f"{print_arg_pairs(method=cwr_method, X_reduction=X_reduction, Y_transform=Y_transform, omnibus_stat=omnibus_stat)}")
-        lgr.setLevel(loglevel)
-
-        return out
+            return out
 
     # PERMUTE ======================================================================================
 
@@ -3513,14 +3526,33 @@ class NiSpace:
                 set_member_idx = {name: inverse_idx[idc_set == name] for name in set_names_fast}
 
                 n_y_rows_null = _Y_null[0].shape[0]
-                stat_uniq = np.zeros((n_y_rows_null, n_perm, X_unique.shape[0]), dtype=dtype)
-                for i in tqdm(range(n_perm), desc=f"Null colocalizations ({method}, precomputed)",
-                              disable=not verbose):
-                    for i_y in range(n_y_rows_null):
-                        res = _y_colocalize_plain(X_unique, _Y_null[i][i_y, :])
-                        if stat_key is None:
-                            stat_key = next(iter(res))
-                        stat_uniq[i_y, i] = res[stat_key]
+
+                # was a bare serial "for i in range(n_perm)" loop (no Parallel(n_jobs=n_proc))
+                # -- the same missing-parallelism bug found and fixed elsewhere in this file
+                # (map-batched fast path), just not yet ported to this XSEA fast path. Each
+                # task takes only its own Y permutation slice plus the shared X_unique array
+                # (constant across all n_perm tasks -- unlike the batch_perm_list bug fixed
+                # elsewhere, this is a single bare ndarray, not a list of n_perm sub-arrays,
+                # so it does not carry the same per-task re-serialization risk).
+                def _mapsY_fastpath_perm_fun(Y_i, X_unique_arr):
+                    out = np.zeros((Y_i.shape[0], X_unique_arr.shape[0]), dtype=dtype)
+                    _sk = None
+                    for i_y in range(Y_i.shape[0]):
+                        res = _y_colocalize_plain(X_unique_arr, Y_i[i_y, :])
+                        if _sk is None:
+                            _sk = next(iter(res))
+                        out[i_y] = res[_sk]
+                    return out, _sk
+
+                _mapsY_perm_results = Parallel(n_jobs=n_proc)(
+                    delayed(_mapsY_fastpath_perm_fun)(_Y_null[i], X_unique)
+                    for i in tqdm(
+                        range(n_perm), desc=f"Null colocalizations ({method}, precomputed)",
+                        disable=not verbose,
+                    )
+                )
+                stat_uniq = np.stack([r[0] for r in _mapsY_perm_results], axis=1)
+                stat_key = _mapsY_perm_results[0][1]
 
                 set_stats = []
                 for set_name in set_names_fast:
@@ -4569,7 +4601,9 @@ class NiSpace:
                             sv = colocalizations_dict[stat].mean(axis=0)
                             _ascending = False
                         else:
-                            _pd = ((pc_dict or {}).get(stat) or (p_dict or {}).get(stat))
+                            _pd = (pc_dict or {}).get(stat)
+                            if _pd is None:
+                                _pd = (p_dict or {}).get(stat)
                             if _pd is None:
                                 # auto-fetch using same logic as values="p"
                                 _mc = mc_method.replace("_", "").replace("-", "") if mc_method else None
@@ -4820,33 +4854,30 @@ class NiSpace:
         -------
         pandas.DataFrame or pandas.Series
         """
-        loglevel = lgr.getEffectiveLevel()
-        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
+        with _verbose_scope(self._verbose if verbose is None else verbose) as verbose:
+            X_reduction = self._get_last(X_reduction=X_reduction)
+            if X_reduction is False:
+                out = self._X
+            else:
+                try:
+                    out = self._X_dimred[_get_df_string("xdimred", xdimred=X_reduction)]
+                except KeyError:
+                    available = "\n".join(list(self._X_dimred.keys()))
+                    lgr.critical_raise(f"No X dataframe for dimensionality reduction '{X_reduction}' "
+                                       f"found! Available: {available}",
+                                       KeyError)
 
-        X_reduction = self._get_last(X_reduction=X_reduction)
-        if X_reduction is False:
-            out = self._X
-        else:
-            try:
-                out = self._X_dimred[_get_df_string("xdimred", xdimred=X_reduction)]
-            except KeyError:
-                available = "\n".join(list(self._X_dimred.keys()))
-                lgr.critical_raise(f"No X dataframe for dimensionality reduction '{X_reduction}' "
-                                   f"found! Available: {available}",
-                                   KeyError)
+            if maps is not None:
+                keep = _match_maps(out.index, maps)
+                if not keep:
+                    lgr.critical_raise(f"No maps matching {maps!r} found in X index.", ValueError)
+                out = out.iloc[keep]
 
-        if maps is not None:
-            keep = _match_maps(out.index, maps)
-            if not keep:
-                lgr.critical_raise(f"No maps matching {maps!r} found in X index.", ValueError)
-            out = out.iloc[keep]
+            if squeeze and len(out) == 1:
+                out = out.squeeze()
 
-        if squeeze and len(out) == 1:
-            out = out.squeeze()
-
-        lgr.info(f"Returning X dataframe: \n{print_arg_pairs(X_reduction=X_reduction)}")
-        lgr.setLevel(loglevel)
-        return out.copy() if copy else out
+            lgr.info(f"Returning X dataframe: \n{print_arg_pairs(X_reduction=X_reduction)}")
+            return out.copy() if copy else out
     
     # ----------------------------------------------------------------------------------------------
     
@@ -4877,33 +4908,30 @@ class NiSpace:
         -------
         pandas.DataFrame or pandas.Series
         """
-        loglevel = lgr.getEffectiveLevel()
-        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
+        with _verbose_scope(self._verbose if verbose is None else verbose) as verbose:
+            Y_transform = self._get_last(Y_transform=Y_transform)
+            if Y_transform is False:
+                out = self._Y
+            else:
+                try:
+                    out = self._Y_trans[_get_df_string("ytrans", ytrans=Y_transform)]
+                except KeyError:
+                    available = "\n".join([k.replace("ytrans-", "") for k in self._Y_trans.keys()])
+                    lgr.critical_raise(f"No Y dataframe for transform '{Y_transform}' found! "
+                                       f"Available: {available}",
+                                       KeyError)
 
-        Y_transform = self._get_last(Y_transform=Y_transform)
-        if Y_transform is False:
-            out = self._Y
-        else:
-            try:
-                out = self._Y_trans[_get_df_string("ytrans", ytrans=Y_transform)]
-            except KeyError:
-                available = "\n".join([k.replace("ytrans-", "") for k in self._Y_trans.keys()])
-                lgr.critical_raise(f"No Y dataframe for transform '{Y_transform}' found! "
-                                   f"Available: {available}",
-                                   KeyError)
+            if maps is not None:
+                keep = _match_maps(out.index, maps)
+                if not keep:
+                    lgr.critical_raise(f"No maps matching {maps!r} found in Y index.", ValueError)
+                out = out.iloc[keep]
 
-        if maps is not None:
-            keep = _match_maps(out.index, maps)
-            if not keep:
-                lgr.critical_raise(f"No maps matching {maps!r} found in Y index.", ValueError)
-            out = out.iloc[keep]
+            if squeeze and len(out) == 1:
+                out = out.squeeze()
 
-        if squeeze and len(out) == 1:
-            out = out.squeeze()
-
-        lgr.info(f"Returning Y dataframe: \n{print_arg_pairs(Y_transform=Y_transform)}")
-        lgr.setLevel(loglevel)
-        return out.copy() if copy else out
+            lgr.info(f"Returning Y dataframe: \n{print_arg_pairs(Y_transform=Y_transform)}")
+            return out.copy() if copy else out
     
     # ----------------------------------------------------------------------------------------------
          
@@ -4932,17 +4960,14 @@ class NiSpace:
         ValueError
             If no Z data was ever provided.
         """
-        loglevel = lgr.getEffectiveLevel()
-        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
-        
-        out = self._Z
-        if out is None:
-            lgr.critical_raise("No Z dataframe found!",
-                               ValueError)
-            
-        lgr.info("Returning Z dataframe.")
-        lgr.setLevel(loglevel)
-        return out.copy() if copy else out  
+        with _verbose_scope(self._verbose if verbose is None else verbose) as verbose:
+            out = self._Z
+            if out is None:
+                lgr.critical_raise("No Z dataframe found!",
+                                   ValueError)
+
+            lgr.info("Returning Z dataframe.")
+            return out.copy() if copy else out
     
     # ----------------------------------------------------------------------------------------------
    
@@ -5007,169 +5032,164 @@ class NiSpace:
             default (that call's ``r_to_z``, not re-resolved here), same key
             name regardless of scale.
         """
-        loglevel = lgr.getEffectiveLevel()
-        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
+        with _verbose_scope(self._verbose if verbose is None else verbose) as verbose:
 
-        method, X_reduction, Y_transform, xsea = self._get_last(
-            method=method,
-            X_reduction=X_reduction,
-            Y_transform=Y_transform,
-            xsea=xsea,
-        )
+            method, X_reduction, Y_transform, xsea = self._get_last(
+                method=method,
+                X_reduction=X_reduction,
+                Y_transform=Y_transform,
+                xsea=xsea,
+            )
 
-        if normalized:
-            perm, pooled_p = self._get_last(perm=perm, pooled_p=pooled_p)
+            if normalized:
+                perm, pooled_p = self._get_last(perm=perm, pooled_p=pooled_p)
+                if stats is None:
+                    stats = _get_coloc_stats(method, permuted_only=True)
+                elif isinstance(stats, str):
+                    stats = [stats]
+                else:
+                    stats = list(stats).copy()
+                out = dict()
+                for stat in stats:
+                    z_str = _get_df_string(
+                        "z",
+                        xdimred=X_reduction, ytrans=Y_transform,
+                        method=method, stat=stat,
+                        xsea=xsea, perm=perm, pooled_p=pooled_p,
+                    )
+                    if z_str not in self._z_colocs:
+                        lgr.critical_raise(
+                            f"Normalized colocalizations for '{z_str}' not found. "
+                            "Run normalize_colocalizations() first.",
+                            KeyError
+                        )
+                    out[stat] = self._z_colocs[z_str].copy()
+                if not force_dict and len(out) == 1:
+                    out = out[stats[0]]
+                lgr.info(f"Returning z-scored colocalizations.")
+                return out
+
             if stats is None:
-                stats = _get_coloc_stats(method, permuted_only=True)
+                stats = _get_coloc_stats(method)
             elif isinstance(stats, str):
                 stats = [stats]
             else:
                 stats = list(stats).copy()
+
+            coloc_keys = list(self._colocs.keys())
+
             out = dict()
             for stat in stats:
-                z_str = _get_df_string(
-                    "z",
-                    xdimred=X_reduction, ytrans=Y_transform,
-                    method=method, stat=stat,
-                    xsea=xsea, perm=perm, pooled_p=pooled_p,
+                coloc_str = _get_df_string(
+                    "coloc",
+                    xdimred=X_reduction,
+                    ytrans=Y_transform,
+                    method=method,
+                    stat=stat,
+                    xsea=xsea
                 )
-                if z_str not in self._z_colocs:
-                    lgr.critical_raise(
-                        f"Normalized colocalizations for '{z_str}' not found. "
-                        "Run normalize_colocalizations() first.",
-                        KeyError
-                    )
-                out[stat] = self._z_colocs[z_str].copy()
-            if not force_dict and len(out) == 1:
-                out = out[stats[0]]
-            lgr.info(f"Returning z-scored colocalizations.")
-            if loglevel < 60:  # avoid permanently pinning the child logger if entered nested inside _quiet()
-                lgr.setLevel(loglevel)
-            return out
-
-        if stats is None:
-            stats = _get_coloc_stats(method)
-        elif isinstance(stats, str):
-            stats = [stats]
-        else:
-            stats = list(stats).copy()
-
-        coloc_keys = list(self._colocs.keys())
-
-        out = dict()
-        for stat in stats:
-            coloc_str = _get_df_string(
-                "coloc",
-                xdimred=X_reduction,
-                ytrans=Y_transform,
-                method=method,
-                stat=stat,
-                xsea=xsea
-            )
-            if coloc_str not in coloc_keys:
-                if method=="mlr" and \
-                    any([f"stat-{s}" not in coloc_str for s in ["individual", "intercept"]]):
-                    stats.remove(stat)
-                    continue
-                else:
-                    available = "\n".join(coloc_keys)
-                    lgr.critical_raise(f"Colocalizations for '{coloc_str}' not found! "
-                                       f"Available: {available}",
-                                       KeyError)
-            out[stat] = self._colocs[coloc_str].copy() if copy else self._colocs[coloc_str]
+                if coloc_str not in coloc_keys:
+                    if method=="mlr" and \
+                        any([f"stat-{s}" not in coloc_str for s in ["individual", "intercept"]]):
+                        stats.remove(stat)
+                        continue
+                    else:
+                        available = "\n".join(coloc_keys)
+                        lgr.critical_raise(f"Colocalizations for '{coloc_str}' not found! "
+                                           f"Available: {available}",
+                                           KeyError)
+                out[stat] = self._colocs[coloc_str].copy() if copy else self._colocs[coloc_str]
         
-        if get_nulls and nulls_permute_what is None:
-            lgr.error("If 'get_nulls' is True, 'nulls_permute_what' must not be None!")
-            get_nulls = False
+            if get_nulls and nulls_permute_what is None:
+                lgr.error("If 'get_nulls' is True, 'nulls_permute_what' must not be None!")
+                get_nulls = False
 
-        if get_nulls:
-            if nulls_permute_what not in ["groups", "groupsxmaps", "groupssets",
-                                          "xmaps", "ymaps", "xymaps", "ymapssets",
-                                          "sets", "pairs"]:
-                lgr.critical_raise("If 'get_nulls' is True, 'nulls_permute_what' must be one of "
-                                   "{'groups', '{x|y|xy}maps', 'sets', 'pairs'}!",
-                                   ValueError)
-            pooled_p = self._get_last(pooled_p=pooled_p)
-            out_null = None
+            if get_nulls:
+                if nulls_permute_what not in ["groups", "groupsxmaps", "groupssets",
+                                              "xmaps", "ymaps", "xymaps", "ymapssets",
+                                              "sets", "pairs"]:
+                    lgr.critical_raise("If 'get_nulls' is True, 'nulls_permute_what' must be one of "
+                                       "{'groups', '{x|y|xy}maps', 'sets', 'pairs'}!",
+                                       ValueError)
+                pooled_p = self._get_last(pooled_p=pooled_p)
+                out_null = None
 
-            # pairs permutation: null stored as flat array in self._nulls["pairs_null"]
-            if nulls_permute_what == "pairs":
-                null_str = _get_df_string(
-                    "null",
-                    xdimred=X_reduction,
-                    ytrans=Y_transform,
-                    method=method,
-                    xsea=xsea,
-                    perm="pairs",
-                    pooled_p=pooled_p,
-                )
-                _pairs_cache = self._nulls.get("pairs_null", {}).get(null_str)
-                if _pairs_cache is None:
-                    lgr.error(
-                        f"Pairs null distribution for '{null_str}' not found. "
-                        "Run permute(what='pairs') first."
+                # pairs permutation: null stored as flat array in self._nulls["pairs_null"]
+                if nulls_permute_what == "pairs":
+                    null_str = _get_df_string(
+                        "null",
+                        xdimred=X_reduction,
+                        ytrans=Y_transform,
+                        method=method,
+                        xsea=xsea,
+                        perm="pairs",
+                        pooled_p=pooled_p,
                     )
+                    _pairs_cache = self._nulls.get("pairs_null", {}).get(null_str)
+                    if _pairs_cache is None:
+                        lgr.error(
+                            f"Pairs null distribution for '{null_str}' not found. "
+                            "Run permute(what='pairs') first."
+                        )
+                    else:
+                        _null_dist = _pairs_cache["null_dist"]   # (n_perm,)
+                        out_null = {
+                            stat: {"within_pair": _null_dist[np.newaxis, :]}
+                            for stat in stats
+                        }
+
                 else:
-                    _null_dist = _pairs_cache["null_dist"]   # (n_perm,)
-                    out_null = {
-                        stat: {"within_pair": _null_dist[np.newaxis, :]}
-                        for stat in stats
-                    }
+                    null_str = _get_df_string(
+                        "null",
+                        xdimred=X_reduction,
+                        ytrans=Y_transform,
+                        method=method,
+                        xsea=xsea,
+                        perm=nulls_permute_what,
+                        pooled_p=pooled_p,
+                    )
+                    if null_str not in self._nulls["_colocs"].keys():
+                        available = "\n".join(list(self._nulls["_colocs"].keys()))
+                        lgr.error(f"Null colocalizations for '{null_str}' not found! Available: {available}")
+                    else:
+                        nulls = self._nulls["_colocs"][null_str].copy()
 
-            else:
-                null_str = _get_df_string(
-                    "null",
-                    xdimred=X_reduction,
-                    ytrans=Y_transform,
-                    method=method,
-                    xsea=xsea,
-                    perm=nulls_permute_what,
-                    pooled_p=pooled_p,
-                )
-                if null_str not in self._nulls["_colocs"].keys():
-                    available = "\n".join(list(self._nulls["_colocs"].keys()))
-                    lgr.error(f"Null colocalizations for '{null_str}' not found! Available: {available}")
-                else:
-                    nulls = self._nulls["_colocs"][null_str].copy()
+                        out_null = dict()
+                        n_nulls = len(nulls)
+                        with _quiet():
+                            idx = self.get_p_values(method, nulls_permute_what, _COLOC_METHODS[method][0],
+                                                    xsea,
+                                                    pooled_p=pooled_p,
+                                                    X_reduction=X_reduction,
+                                                    Y_transform=Y_transform).index
+                        for stat in stats:
 
-                    out_null = dict()
-                    n_nulls = len(nulls)
-                    with _quiet():
-                        idx = self.get_p_values(method, nulls_permute_what, _COLOC_METHODS[method][0],
-                                                xsea,
-                                                pooled_p=pooled_p,
-                                                X_reduction=X_reduction,
-                                                Y_transform=Y_transform).index
-                    for stat in stats:
-
-                        if out[stat].shape[1] == 1:
-                            out_null[stat] = pd.DataFrame(
-                                {i: nulls[i][stat][:, 0] for i in range(n_nulls)},
-                                index=idx
-                            )
-
-                        else:
-                            out_null[stat] = dict()
-                            for i_x, x in enumerate(out[stat].columns):
-                                out_null[stat][x] = pd.DataFrame(
-                                    {i: nulls[i][stat][:, i_x] for i in range(n_nulls)},
+                            if out[stat].shape[1] == 1:
+                                out_null[stat] = pd.DataFrame(
+                                    {i: nulls[i][stat][:, 0] for i in range(n_nulls)},
                                     index=idx
                                 )
+
+                            else:
+                                out_null[stat] = dict()
+                                for i_x, x in enumerate(out[stat].columns):
+                                    out_null[stat][x] = pd.DataFrame(
+                                        {i: nulls[i][stat][:, i_x] for i in range(n_nulls)},
+                                        index=idx
+                                    )
                 
-        # force return as dict if requested
-        if not force_dict:
-            if len(out)==1:
-                out = out[stats[0]]
+            # force return as dict if requested
+            if not force_dict:
+                if len(out)==1:
+                    out = out[stats[0]]
                 
-                if "out_null" in locals():
-                    out_null = out_null[stats[0]]
+                    if "out_null" in locals():
+                        out_null = out_null[stats[0]]
         
-        string = print_arg_pairs(method=method, xsea=xsea, X_reduction=X_reduction, 
-                                 Y_transform=Y_transform)
-        lgr.info(f"Returning colocalizations: \n{string}")
-        if loglevel < 60:  # avoid permanently pinning the child logger if entered nested inside _quiet()
-            lgr.setLevel(loglevel)
-        return (out, out_null) if get_nulls else out  
+            string = print_arg_pairs(method=method, xsea=xsea, X_reduction=X_reduction, 
+                                     Y_transform=Y_transform)
+            lgr.info(f"Returning colocalizations: \n{string}")
+            return (out, out_null) if get_nulls else out  
     
     # ----------------------------------------------------------------------------------------------
     
@@ -5222,62 +5242,60 @@ class NiSpace:
             If the requested combination was never computed (e.g.
             :meth:`permute` was never run).
         """
-        loglevel = lgr.getEffectiveLevel()
-        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
+        with _verbose_scope(self._verbose if verbose is None else verbose) as verbose:
 
-        method, X_reduction, Y_transform, xsea, permute_what, pooled_p = self._get_last(
-            method=method,
-            X_reduction=X_reduction,
-            Y_transform=Y_transform,
-            xsea=xsea,
-            perm=permute_what,
-            pooled_p=pooled_p,
-        )
-        
-        if mc_method is not None:
-            mc_method = _get_correct_mc_method(mc_method).replace("-", "").replace("_", "")
-
-        self._check_permute(method, permute_what, mc_method, xsea, stats, X_reduction, Y_transform,
-                            pooled_p=pooled_p)
-
-        if stats is None:
-            stats = _get_coloc_stats(method, permuted_only=True)
-        elif isinstance(stats, str):
-            stats = [stats]
-        
-        out = dict()
-        for stat in stats:
-            p_str = _get_df_string(
-                "p",
-                xdimred=X_reduction,
-                ytrans=Y_transform,
+            method, X_reduction, Y_transform, xsea, permute_what, pooled_p = self._get_last(
                 method=method,
-                stat=stat,
+                X_reduction=X_reduction,
+                Y_transform=Y_transform,
                 xsea=xsea,
                 perm=permute_what,
                 pooled_p=pooled_p,
-                mc=mc_method,
             )
-            if p_str not in self._p_colocs.keys():
-                if "coloc-mlr_stat-individual" in p_str:
-                    continue
-                else:
-                    available = "\n".join(list(self._p_colocs.keys()))
-                lgr.critical_raise(f"Colocalization p values for '{p_str}' not found. "
-                                   f"Available: {available}",
-                                   KeyError)
-            out[stat] = self._p_colocs[p_str].copy() if copy else self._p_colocs[p_str]
-                
-        if not force_dict:
-            if len(out)==1:
-                out = out[list(out.keys())[0]]
         
-        string = print_arg_pairs(method=method, permute_what=permute_what, xsea=xsea,
-                                 mc_method=mc_method,
-                                 X_reduction=X_reduction, Y_transform=Y_transform)
-        lgr.info(f"Returning p values: \n{string}")
-        lgr.setLevel(loglevel)
-        return out
+            if mc_method is not None:
+                mc_method = _get_correct_mc_method(mc_method).replace("-", "").replace("_", "")
+
+            self._check_permute(method, permute_what, mc_method, xsea, stats, X_reduction, Y_transform,
+                                pooled_p=pooled_p)
+
+            if stats is None:
+                stats = _get_coloc_stats(method, permuted_only=True)
+            elif isinstance(stats, str):
+                stats = [stats]
+        
+            out = dict()
+            for stat in stats:
+                p_str = _get_df_string(
+                    "p",
+                    xdimred=X_reduction,
+                    ytrans=Y_transform,
+                    method=method,
+                    stat=stat,
+                    xsea=xsea,
+                    perm=permute_what,
+                    pooled_p=pooled_p,
+                    mc=mc_method,
+                )
+                if p_str not in self._p_colocs.keys():
+                    if "coloc-mlr_stat-individual" in p_str:
+                        continue
+                    else:
+                        available = "\n".join(list(self._p_colocs.keys()))
+                    lgr.critical_raise(f"Colocalization p values for '{p_str}' not found. "
+                                       f"Available: {available}",
+                                       KeyError)
+                out[stat] = self._p_colocs[p_str].copy() if copy else self._p_colocs[p_str]
+                
+            if not force_dict:
+                if len(out)==1:
+                    out = out[list(out.keys())[0]]
+        
+            string = print_arg_pairs(method=method, permute_what=permute_what, xsea=xsea,
+                                     mc_method=mc_method,
+                                     X_reduction=X_reduction, Y_transform=Y_transform)
+            lgr.info(f"Returning p values: \n{string}")
+            return out
 
     # ----------------------------------------------------------------------------------------------
 
@@ -5350,20 +5368,17 @@ class NiSpace:
             after reloading. Call those methods before saving if you intend to drop nulls.
         verbose : bool, optional
         """
-        loglevel = lgr.getEffectiveLevel()
-        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
-        
-        # remove nulls (very large depending on number of permutations) if requested
-        self_save = self.copy()
-        if not save_nulls:
-            self_save._nulls = {
-                "_colocs": {}
-            }
+        with _verbose_scope(self._verbose if verbose is None else verbose) as verbose:
+            # remove nulls (very large depending on number of permutations) if requested
+            self_save = self.copy()
+            if not save_nulls:
+                self_save._nulls = {
+                    "_colocs": {}
+                }
 
-        # save
-        to_pickle(self_save, filepath, use_dill=True)
-        lgr.debug(f"Saved NiSpace object to {filepath}.")  
-        lgr.setLevel(loglevel)
+            # save
+            to_pickle(self_save, filepath, use_dill=True)
+            lgr.debug(f"Saved NiSpace object to {filepath}.")
 
     # ----------------------------------------------------------------------------------------------
 
@@ -5389,15 +5404,11 @@ class NiSpace:
         NiSpace
             The duplicated object.
         """
-        loglevel = lgr.getEffectiveLevel()
-        try:
-            set_log(lgr, verbose)
+        with _verbose_scope(verbose):
             if deep==True:
                 return copy.deepcopy(self)
             else:
                 return copy.copy(self)
-        finally:
-            lgr.setLevel(loglevel)
             
     # ----------------------------------------------------------------------------------------------
 
@@ -5418,39 +5429,37 @@ class NiSpace:
         nispace_object : NiSpace
             The loaded NiSpace object.
         """
-        loglevel = lgr.getEffectiveLevel()
-        verbose = set_log(lgr, verbose)
+        with _verbose_scope(verbose) as verbose:
 
-        # load
-        nispace_object = from_pickle(filepath, use_dill=True)
-        lgr.debug(f"Loaded NiSpace object from {filepath}.")
+            # load
+            nispace_object = from_pickle(filepath, use_dill=True)
+            lgr.debug(f"Loaded NiSpace object from {filepath}.")
 
-        # migrate legacy null map storage (pre-NullMaps refactor)
-        _mn = nispace_object._nulls.get("maps_null")
-        if isinstance(_mn, dict):
-            lgr.info("Migrating legacy null maps dict to NullMaps.")
-            method = nispace_object._nulls.pop("maps_null_method", None)
-            nispace_object._nulls["maps_null"] = NullMaps.from_dict(_mn, null_method=method)
-        elif isinstance(_mn, NullMaps) and _mn.null_method is None:
-            # intermediate pickle: NullMaps present but null_method not yet an attribute
-            nispace_object._nulls["maps_null"].null_method = \
-                nispace_object._nulls.pop("maps_null_method", None)
-        # clean up keys superseded by NullMaps attributes
-        nispace_object._nulls.pop("maps_null_which", None)  # now NullMaps.null_which
-        nispace_object._nulls.pop("maps_spin", None)        # now _parc_spin_mat
+            # migrate legacy null map storage (pre-NullMaps refactor)
+            _mn = nispace_object._nulls.get("maps_null")
+            if isinstance(_mn, dict):
+                lgr.info("Migrating legacy null maps dict to NullMaps.")
+                method = nispace_object._nulls.pop("maps_null_method", None)
+                nispace_object._nulls["maps_null"] = NullMaps.from_dict(_mn, null_method=method)
+            elif isinstance(_mn, NullMaps) and _mn.null_method is None:
+                # intermediate pickle: NullMaps present but null_method not yet an attribute
+                nispace_object._nulls["maps_null"].null_method = \
+                    nispace_object._nulls.pop("maps_null_method", None)
+            # clean up keys superseded by NullMaps attributes
+            nispace_object._nulls.pop("maps_null_which", None)  # now NullMaps.null_which
+            nispace_object._nulls.pop("maps_spin", None)        # now _parc_spin_mat
 
-        # backfill storage dicts added in later versions -- pickle restores __dict__
-        # directly and bypasses __init__, so an object pickled before one of these was
-        # introduced would otherwise be missing it entirely (AttributeError on first use)
-        for attr, default in [
-            ("_coloc_kwargs_by_method", {}),
-        ]:
-            if not hasattr(nispace_object, attr):
-                setattr(nispace_object, attr, default)
+            # backfill storage dicts added in later versions -- pickle restores __dict__
+            # directly and bypasses __init__, so an object pickled before one of these was
+            # introduced would otherwise be missing it entirely (AttributeError on first use)
+            for attr, default in [
+                ("_coloc_kwargs_by_method", {}),
+            ]:
+                if not hasattr(nispace_object, attr):
+                    setattr(nispace_object, attr, default)
 
-        # return
-        lgr.setLevel(loglevel)
-        return nispace_object
+            # return
+            return nispace_object
 
 
     # PRIVATE METHODS ==============================================================================
@@ -5561,51 +5570,49 @@ class NiSpace:
         
     def _get_dist_mat(self, dist_mat_type, centroids=False, parc_resample=2,
                       n_proc=None, store=True, verbose=None, force_generate=False):
-        loglevel = lgr.getEffectiveLevel()
-        verbose = set_log(lgr, self._verbose if verbose is None else verbose)
+        with _verbose_scope(self._verbose if verbose is None else verbose) as verbose:
 
-        if self._parc is None:
-            lgr.critical_raise(
-                "Distance matrix computation requires a parcellation. "
-                "Provide one via NiSpace(parcellation=...).",
-                ValueError,
-            )
+            if self._parc is None:
+                lgr.critical_raise(
+                    "Distance matrix computation requires a parcellation. "
+                    "Provide one via NiSpace(parcellation=...).",
+                    ValueError,
+                )
 
-        if dist_mat_type not in ["cv", "null_maps"]:
-            lgr.critical_raise(f"dist_mat_type = '{dist_mat_type}' not defined",
-                               ValueError)
+            if dist_mat_type not in ["cv", "null_maps"]:
+                lgr.critical_raise(f"dist_mat_type = '{dist_mat_type}' not defined",
+                                   ValueError)
         
-        dist_mat_dict = self._parc_dist_mat
-        generate_dist_mat = True
-        if not force_generate and dist_mat_type in dist_mat_dict:
-            dist_mat = dist_mat_dict[dist_mat_type]
-            if dist_mat is not None:
-                generate_dist_mat = False
+            dist_mat_dict = self._parc_dist_mat
+            generate_dist_mat = True
+            if not force_generate and dist_mat_type in dist_mat_dict:
+                dist_mat = dist_mat_dict[dist_mat_type]
+                if dist_mat is not None:
+                    generate_dist_mat = False
             
-        if generate_dist_mat:
-            _ns_result = self._parc.get_null_space()
-            # for combined parcellations get_null_space returns nested tuple — use sc (MNI) space
-            null_space = _ns_result[1][0] if isinstance(_ns_result[0], tuple) else _ns_result[0]
-            # ensure the null space is loaded and its derived attrs (hemi, idc, …) are computed
-            self._parc._ensure_image_loaded(null_space)
-            if null_space not in self._parc._hemi_dict:
-                self._parc._fit_space(null_space)
-            dist_mat = get_distance_matrix(
-                parc=self._parc.get_image(null_space),
-                parc_space=null_space,
-                parc_hemi=self._parc.get_hemi(null_space),
-                parc_resample=parc_resample,
-                centroids=centroids,
-                surf_euclidean=True if dist_mat_type=="cv" else False,
-                n_proc=self._n_proc if not n_proc else n_proc,
-                verbose=verbose
-            )
+            if generate_dist_mat:
+                _ns_result = self._parc.get_null_space()
+                # for combined parcellations get_null_space returns nested tuple — use sc (MNI) space
+                null_space = _ns_result[1][0] if isinstance(_ns_result[0], tuple) else _ns_result[0]
+                # ensure the null space is loaded and its derived attrs (hemi, idc, …) are computed
+                self._parc._ensure_image_loaded(null_space)
+                if null_space not in self._parc._hemi_dict:
+                    self._parc._fit_space(null_space)
+                dist_mat = get_distance_matrix(
+                    parc=self._parc.get_image(null_space),
+                    parc_space=null_space,
+                    parc_hemi=self._parc.get_hemi(null_space),
+                    parc_resample=parc_resample,
+                    centroids=centroids,
+                    surf_euclidean=True if dist_mat_type=="cv" else False,
+                    n_proc=self._n_proc if not n_proc else n_proc,
+                    verbose=verbose
+                )
         
-        if store:
-            self._parc_dist_mat[dist_mat_type] = dist_mat
-            
-        lgr.setLevel(loglevel)
-        return dist_mat
+            if store:
+                self._parc_dist_mat[dist_mat_type] = dist_mat
+
+            return dist_mat
     
     # ----------------------------------------------------------------------------------------------
     

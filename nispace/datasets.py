@@ -1179,9 +1179,22 @@ def _print_references(dataset: str, meta: pd.DataFrame = None, collection_name: 
     if meta is not None and "map_info" in cfg:
         _print_map_citation_table(meta, cfg["map_info"])
 
-    # 4. Collection-level citations (mrna / magicc gene sets)
+    # 4. Collection-level description + citations (mrna / magicc gene sets)
     if collection_name and collection_name in cfg.get("collection", {}):
-        for c in cfg["collection"][collection_name].get("citations", []):
+        coll_cfg = cfg["collection"][collection_name]
+        if "description" in coll_cfg:
+            prefix = f"  [{collection_name}] "
+            indent = " " * len(prefix)
+            paragraphs = coll_cfg["description"].split("\n\n")
+            print("\n\n".join(
+                textwrap.fill(
+                    p.replace("\n", " "), width=100, break_long_words=False,
+                    initial_indent=prefix if i == 0 else indent,
+                    subsequent_indent=indent,
+                )
+                for i, p in enumerate(paragraphs)
+            ))
+        for c in coll_cfg.get("citations", []):
             print(f"  [{collection_name}] {c['ref']}  https://doi.org/{c['doi']}")
     
     

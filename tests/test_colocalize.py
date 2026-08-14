@@ -169,3 +169,27 @@ def test_xsea_aggregate_median_unaffected_by_rho_scale(rng):
     out_scaled = _xsea_aggregate(per_gene_rho, "median", axis=-1, rho_scale=True)
     out_plain = _xsea_aggregate(per_gene_rho, "median", axis=-1, rho_scale=False)
     np.testing.assert_allclose(out_scaled, out_plain, atol=1e-5)
+
+
+def test_xsea_weighted_aggregation_handles_scalar_float_stats(rng):
+    # regression: found via a real crash (AttributeError: 'float' object has no
+    # attribute 'ndim') in _y_colocalize_xsea's weighted-aggregation branch
+    # (core/colocalize.py). Root cause: it checked `_colocs_xsea[0][stat].ndim == 0`
+    # to detect "nothing to aggregate, one value per set" stats -- but not every
+    # colocalization method returns those as a 0-d ndarray. mlr's "r2" is a plain
+    # Python float (confirmed directly: _get_colocalize_fun("mlr")(X, y)["r2"] has no
+    # .ndim attribute at all), which crashed immediately. Only reachable for
+    # multivariate methods (mlr/dominance/pls/pcr/lasso/ridge/elasticnet) + weighted
+    # XSEA aggregation, since univariate methods + xsea now go through the vectorized
+    # _xsea_aggregate fast paths instead of this per-permutation closure. Fixed by
+    # using np.ndim(...) (works uniformly on floats/np.float64/ndarrays) instead of
+    # the .ndim attribute.
+    X, y = _make_xsea_gene_data(rng, n_genes=6, n_parcels=20)
+    weights = {"setA": np.ones(6, dtype=np.float32)}
+
+    y_coloc = _get_colocalize_fun("mlr", xsea=True, xsea_method="weightedmean",
+                                  dtype=np.float32)
+    out = y_coloc({"setA": X}, y, weights)  # must not raise AttributeError
+    assert "r2" in out
+    assert np.ndim(out["r2"]) >= 1  # aggregated to one value per set (1 set here)
+    assert np.isfinite(out["r2"][0])

@@ -111,6 +111,98 @@ def test_get_colocalizations_unknown_method_raises_keyerror(synthetic_nispace):
         nsp.get_colocalizations(method="spearman", verbose=False)
 
 
+# ── colocalize(): XSEA xsea_aggregation_method=None auto-selection + warning ─
+
+@pytest.fixture
+def nsp_xsea_weighted(rng):
+    """X with 'set'/'gene'/'weight' MultiIndex levels, single Y map -- for
+    xsea_aggregation_method=None auto-selection / weight-usage warning tests."""
+    n_parcels = 20
+    idx = pd.MultiIndex.from_tuples(
+        [("setA", "g0", 1.0), ("setA", "g1", 3.0), ("setB", "g2", 1.0), ("setB", "g3", 2.0)],
+        names=["set", "gene", "weight"],
+    )
+    X = rng.normal(size=(4, n_parcels))
+    parcel_labels = [f"parcel{i}" for i in range(n_parcels)]
+    x_df = pd.DataFrame(X, index=idx, columns=parcel_labels)
+    y = X[0] + rng.normal(scale=0.2, size=n_parcels)
+    y_df = pd.DataFrame(y[None, :], index=["y0"], columns=parcel_labels)
+    nsp = NiSpace(x=x_df, y=y_df, parcellation=None, standardize=False,
+                  n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    return nsp
+
+
+@pytest.fixture
+def nsp_xsea_unweighted(rng):
+    """X with a 'set'/'gene' MultiIndex (no 'weight' level)."""
+    n_parcels = 20
+    idx = pd.MultiIndex.from_tuples(
+        [("setA", "g0"), ("setA", "g1"), ("setB", "g2"), ("setB", "g3")],
+        names=["set", "gene"],
+    )
+    X = rng.normal(size=(4, n_parcels))
+    parcel_labels = [f"parcel{i}" for i in range(n_parcels)]
+    x_df = pd.DataFrame(X, index=idx, columns=parcel_labels)
+    y = X[0] + rng.normal(scale=0.2, size=n_parcels)
+    y_df = pd.DataFrame(y[None, :], index=["y0"], columns=parcel_labels)
+    nsp = NiSpace(x=x_df, y=y_df, parcellation=None, standardize=False,
+                  n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    return nsp
+
+
+def test_colocalize_xsea_default_mean_warns_when_weight_unused(nsp_xsea_weighted, caplog):
+    nsp = nsp_xsea_weighted
+    with caplog.at_level("WARNING"):
+        nsp.colocalize(method="pearson", xsea=True, r_to_z=False, verbose=False)
+    assert nsp._xsea_aggregation_method == "mean"
+    assert any("does not use it" in r.message for r in caplog.records)
+
+
+def test_colocalize_xsea_none_autoselects_weightedmean(nsp_xsea_weighted, caplog):
+    nsp = nsp_xsea_weighted
+    with caplog.at_level("INFO"):
+        nsp.colocalize(method="pearson", xsea=True, xsea_aggregation_method=None,
+                        r_to_z=False, verbose=True)
+    assert nsp._xsea_aggregation_method == "weightedmean"
+    assert any("auto-selecting" in r.message for r in caplog.records)
+    assert not any("does not use it" in r.message for r in caplog.records)
+
+
+def test_colocalize_xsea_none_autoselects_mean_when_no_weight(nsp_xsea_unweighted, caplog):
+    nsp = nsp_xsea_unweighted
+    with caplog.at_level("INFO"):
+        nsp.colocalize(method="pearson", xsea=True, xsea_aggregation_method=None,
+                        r_to_z=False, verbose=True)
+    assert nsp._xsea_aggregation_method == "mean"
+    assert any("auto-selecting" in r.message for r in caplog.records)
+    assert not any("does not use it" in r.message for r in caplog.records)
+
+
+def test_colocalize_xsea_explicit_weighted_without_weight_still_warns_and_strips(
+    nsp_xsea_unweighted, caplog
+):
+    nsp = nsp_xsea_unweighted
+    with caplog.at_level("WARNING"):
+        nsp.colocalize(method="pearson", xsea=True, xsea_aggregation_method="weightedmean",
+                        r_to_z=False, verbose=False)
+    assert nsp._xsea_aggregation_method == "mean"
+    assert any("Weighted XSEA requires" in r.message for r in caplog.records)
+
+
+def test_colocalize_xsea_explicit_weighted_with_weight_present_no_warning(
+    nsp_xsea_weighted, caplog
+):
+    nsp = nsp_xsea_weighted
+    with caplog.at_level("WARNING"):
+        nsp.colocalize(method="pearson", xsea=True, xsea_aggregation_method="weightedmean",
+                        r_to_z=False, verbose=False)
+    assert nsp._xsea_aggregation_method == "weightedmean"
+    assert not any("does not use it" in r.message for r in caplog.records)
+    assert not any("Weighted XSEA requires" in r.message for r in caplog.records)
+
+
 # ── get_p_values()/get_normalized_colocalizations() before any permute() ────
 # Regression tests for the `_last_settings["perm"]` landmine: before "perm" was
 # added as a default key, calling these with no permutation ever run raised a

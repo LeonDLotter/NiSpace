@@ -429,8 +429,11 @@ def _get_colocalize_fun(method,
                 # get aggregated metrics per set
                 _colocs = {}
                 for stat in _colocs_xsea[0].keys():
-                    # nothing to aggregate (mostly r2 -> 1 value per set)
-                    if _colocs_xsea[0][stat].ndim == 0:
+                    # nothing to aggregate (mostly r2 -> 1 value per set). Some methods
+                    # (e.g. mlr's scalar stats) return a plain Python float here rather
+                    # than a 0-d ndarray -- np.ndim() (not the .ndim attribute) handles
+                    # both uniformly.
+                    if np.ndim(_colocs_xsea[0][stat]) == 0:
                         _colocs[stat] = np.array([c[stat] for c in _colocs_xsea], dtype=dtype)
                     # weighted aggregation
                     else:

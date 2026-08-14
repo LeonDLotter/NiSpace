@@ -102,7 +102,8 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
                     standardize_parcellated=False,
                     parcellation=parc_integrated,
                     hemi=parcellation_hemi,
-                    verbose=verbose
+                    verbose=verbose,
+                    **({"set_size_range": (2, None)} if x_collection is not None else {})
                 ) | fetch_x_kwargs
                 x = fetch_reference(**fetch_x_kwargs)
                 if isinstance(x, tuple):
@@ -1196,7 +1197,7 @@ def xsea(y,
          colocalization_method=None,
          mc_method="meff",
          normalize_colocalizations=True,
-         xsea_aggregation_method="mean",
+         xsea_aggregation_method=None,
          permute_sets=False,
          pooled_p=False,
          p_from_average_y=None,  # TODO (first non-dev release): remove
@@ -1275,11 +1276,15 @@ def xsea(y,
     normalize_colocalizations : bool, default=True
         Whether to call :meth:`NiSpace.normalize_colocalizations` after correction.
         Failures are caught and logged as a warning rather than raised.
-    xsea_aggregation_method : str, default="mean"
+    xsea_aggregation_method : str or None, default=None
         How to aggregate individual X maps within each set before colocalization.
         One of ``"mean"``, ``"median"``, ``"absmean"``, ``"absmedian"``,
         ``"weightedmean"``, ``"weightedabsmean"`` (weighted variants require a
-        ``"weight"`` MultiIndex level on X). See :meth:`NiSpace.colocalize`.
+        ``"weight"`` MultiIndex level on X). When ``None`` (the default here),
+        :meth:`NiSpace.colocalize` auto-selects ``"weightedmean"`` if the fetched
+        X data has a ``"weight"`` MultiIndex level, otherwise ``"mean"`` -- pass
+        an explicit value to opt out of this auto-selection. See
+        :meth:`NiSpace.colocalize`.
     permute_sets : bool, default=False
         If ``True``, switches the permutation null from ``what="maps"`` (permuting
         Y, the default) to ``what="sets"`` (X-set-membership permutation using
@@ -1312,7 +1317,9 @@ def xsea(y,
     nispace_object : NiSpace or None, default=None
         Optional pre-initialized NiSpace object to use.
     fetch_x_kwargs : dict, optional
-        Additional arguments for fetching X data.
+        Additional arguments for fetching X data. Since 'x' resolves to a set-grouped
+        collection here, defaults to ``set_size_range=(2, None)`` (pass a different value
+        here to override).
     init_kwargs : dict, optional
         Additional arguments for NiSpace initialization.
     fit_kwargs : dict, optional
@@ -1430,7 +1437,7 @@ def group_xsea(y, design,
                comparison_method=None,
                mc_method="meff",
                normalize_colocalizations=True,
-               xsea_aggregation_method="mean",
+               xsea_aggregation_method=None,
                pooled_p=False,
                paired=False,
                plot_design_between=True,
@@ -1502,12 +1509,14 @@ def group_xsea(y, design,
         Multiple-comparisons correction method(s), forwarded to :meth:`NiSpace.correct_p`.
     normalize_colocalizations : bool, default=True
         Whether to call :meth:`NiSpace.normalize_colocalizations` after correction.
-    xsea_aggregation_method : str, default="mean"
+    xsea_aggregation_method : str or None, default=None
         How to aggregate individual X maps within each set before colocalization.
         One of ``"mean"``, ``"median"``, ``"absmean"``, ``"absmedian"``,
-        ``"weightedmean"``, ``"weightedabsmean"``. This is the only parameter this
-        function adds beyond :func:`group_colocalization`'s own signature, injected
-        into ``colocalize_kwargs`` together with ``xsea=True``.
+        ``"weightedmean"``, ``"weightedabsmean"``. When ``None`` (the default here),
+        :meth:`NiSpace.colocalize` auto-selects ``"weightedmean"`` if the fetched X
+        data has a ``"weight"`` MultiIndex level, otherwise ``"mean"``. This is the
+        only parameter this function adds beyond :func:`group_colocalization`'s own
+        signature, injected into ``colocalize_kwargs`` together with ``xsea=True``.
     pooled_p : str or bool, default=False
         Present for signature symmetry, but not a free choice: group-label
         permutation always forces ``pooled_p="mean"``, same as
@@ -1534,7 +1543,9 @@ def group_xsea(y, design,
     nispace_object : NiSpace or None, default=None
         Optional pre-initialized NiSpace object to use.
     fetch_x_kwargs : dict, optional
-        Additional arguments for fetching X data.
+        Additional arguments for fetching X data. Since 'x' resolves to a set-grouped
+        collection here, defaults to ``set_size_range=(2, None)`` (pass a different value
+        here to override).
     init_kwargs : dict, optional
         Additional arguments for NiSpace initialization.
     fit_kwargs : dict, optional
@@ -1757,7 +1768,7 @@ def nimare_xsea(y,
                 colocalization_method=None,
                 mc_method="meff",
                 normalize_colocalizations=True,
-                xsea_aggregation_method="mean",
+                xsea_aggregation_method=None,
                 permute_sets=False,
                 pooled_p=False,
                 plot=True,
@@ -1950,7 +1961,7 @@ def simple_xsea(y, x="mRNA", z=None, x_collection=None, x_background=None,
                 parcellation_labels=None, parcellation_hemi=["L", "R"],
                 y_covariates=None, colocalization_method="spearman",
                 mc_method="meff", normalize_colocalizations=True,
-                xsea_aggregation_method="mean", permute_sets=False,
+                xsea_aggregation_method=None, permute_sets=False,
                 p_from_average_y=False, plot=True, combat=False,
                 n_perm=10000, seed=None, n_proc=1, verbose=True,
                 nispace_object=None, fetch_x_kwargs=None, init_kwargs=None,

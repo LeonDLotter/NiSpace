@@ -607,6 +607,39 @@ def test_permute_maps_xsea_x_batched_matches_unbatched(rng):
     np.testing.assert_allclose(pb.values, pu.values)
 
 
+def test_permute_maps_xsea_mapsy_fastpath_parallelizes_correctly(rng):
+    # regression: the _fast_xsea_mapsY branch (xsea + maps_which=["Y"], univariate
+    # method) had a bare serial "for i in range(n_perm)" null-colocalization loop --
+    # no Parallel(n_jobs=n_proc) at all, the same missing-parallelism bug found and
+    # fixed elsewhere in this file (map-batched fast path) but never ported here.
+    # There's no independent serial baseline to compare against post-fix, so this
+    # locks in n_proc-invariance (bit-identical output regardless of n_proc) as the
+    # correctness check, matching the style used for the moran fit-once n_proc tests.
+    n_parcels = 12
+    parcel_labels = [f"p{i}" for i in range(n_parcels)]
+    gene_names = [f"gene{i}" for i in range(10)]
+    gene_vals = {g: rng.normal(size=n_parcels) for g in gene_names}
+    tuples = ([("setA", g) for g in gene_names[:6]]
+              + [("setB", g) for g in gene_names[3:10]])  # overlaps setA
+    idx = pd.MultiIndex.from_tuples(tuples, names=["set", "gene"])
+    X = np.stack([gene_vals[g] for _, g in tuples])
+    x_xsea = pd.DataFrame(X, index=idx, columns=parcel_labels)
+    y_df = pd.DataFrame(rng.normal(size=(4, n_parcels)), index=["y0", "y1", "y2", "y3"],
+                        columns=parcel_labels)
+
+    results = {}
+    for n_proc in [1, 2]:
+        nsp = NiSpace(x=x_xsea, y=y_df, z=None, parcellation=None, standardize=False,
+                      n_proc=n_proc, verbose=False, return_self=False)
+        nsp.fit()
+        nsp.colocalize("pearson", xsea=True, verbose=False)
+        p = nsp.permute(what="maps", maps_which="Y", maps_method="random", n_perm=25,
+                        seed=42, pooled_p=False, n_proc=n_proc, verbose=False)
+        results[n_proc] = p.values
+
+    np.testing.assert_allclose(results[1], results[2])
+
+
 def test_permute_maps_x_multivariate_falls_back_to_normal_path(fastpath_x_frames):
     # "guard only" scope decision: X + multivariate method must never use the
     # row-batched fast path (cannot be batched -- all X rows fit jointly per

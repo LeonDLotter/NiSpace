@@ -18,6 +18,11 @@ default (see ``addopts`` in pyproject.toml) and must be run explicitly:
 ``pytest -m integration``.
 """
 
+import matplotlib
+matplotlib.use("Agg")  # headless: must be set before pyplot is imported anywhere,
+                        # so plot=True tests don't pop real windows (interactive
+                        # backends, e.g. macosx, are the default outside CI)
+
 import numpy as np
 import pandas as pd
 import pytest

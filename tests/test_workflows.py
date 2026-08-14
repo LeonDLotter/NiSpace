@@ -82,6 +82,28 @@ def prefit_nispace_xsea(rng):
 
 
 @pytest.fixture
+def prefit_nispace_xsea_weighted(rng):
+    """Weighted variant of prefit_nispace_xsea: X has a "weight" MultiIndex
+    level too -- for xsea_aggregation_method=None auto-selection tests."""
+    n_parcels = 20
+    genes_a, genes_b = 4, 6
+    parcel_labels = [f"parcel{i}" for i in range(n_parcels)]
+    idx = pd.MultiIndex.from_tuples(
+        [("setA", f"geneA{i}", 1.0 + i) for i in range(genes_a)]
+        + [("setB", f"geneB{i}", 1.0 + i) for i in range(genes_b)],
+        names=["set", "gene", "weight"],
+    )
+    X = rng.normal(size=(genes_a + genes_b, n_parcels))
+    x_df = pd.DataFrame(X, index=idx, columns=parcel_labels)
+    y = 0.7 * X[0] + rng.normal(scale=0.3, size=n_parcels)
+    y_df = pd.DataFrame(y[np.newaxis, :], index=["y0"], columns=parcel_labels)
+    nsp = NiSpace(x=x_df, y=y_df, parcellation=None, standardize=False,
+                  n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    return nsp
+
+
+@pytest.fixture
 def prefit_nispace_groups(rng):
     """2 X maps, individual-subject Y (16 subjects, 2 groups of 8, group b
     genuinely shifted) -- for group_colocalization()/group_xsea() (unpaired)."""
@@ -462,6 +484,31 @@ def test_xsea_end_to_end(prefit_nispace_xsea):
     assert ((p.to_numpy() >= 0) & (p.to_numpy() <= 1)).all()
 
 
+def test_xsea_default_none_autoselects_weightedmean(prefit_nispace_xsea_weighted, caplog):
+    with caplog.at_level("INFO"):
+        out = xsea(
+            y=None, x=None, nispace_object=prefit_nispace_xsea_weighted,
+            colocalization_method="pearson",
+            colocalize_kwargs={"verbose": True},
+            permute_kwargs={"maps_method": "random"},
+            n_perm=50, seed=1, plot=False, verbose=True,
+            return_nispace_only=True,
+        )
+    assert out._xsea_aggregation_method == "weightedmean"
+    assert any("auto-selecting" in r.message for r in caplog.records)
+
+
+def test_xsea_explicit_xsea_aggregation_method_overrides_auto_default(prefit_nispace_xsea_weighted):
+    out = xsea(
+        y=None, x=None, nispace_object=prefit_nispace_xsea_weighted,
+        colocalization_method="pearson", xsea_aggregation_method="mean",
+        permute_kwargs={"maps_method": "random"},
+        n_perm=50, seed=1, plot=False, verbose=False,
+        return_nispace_only=True,
+    )
+    assert out._xsea_aggregation_method == "mean"
+
+
 # ── group_xsea() ──────────────────────────────────────────────────────────
 
 def test_group_xsea_end_to_end(rng):
@@ -491,6 +538,34 @@ def test_group_xsea_end_to_end(rng):
     )
     coloc = out.get_colocalizations()
     assert set(coloc.columns) == {"setA", "setB"}
+
+
+def test_group_xsea_default_none_autoselects_weightedmean(rng):
+    n_parcels = 20
+    genes_a, genes_b, n_per_group = 4, 6, 8
+    parcel_labels = [f"parcel{i}" for i in range(n_parcels)]
+    idx = pd.MultiIndex.from_tuples(
+        [("setA", f"geneA{i}", 1.0 + i) for i in range(genes_a)]
+        + [("setB", f"geneB{i}", 1.0 + i) for i in range(genes_b)],
+        names=["set", "gene", "weight"],
+    )
+    X = rng.normal(size=(genes_a + genes_b, n_parcels))
+    Y_a = rng.normal(size=(n_per_group, n_parcels))
+    Y_b = Y_a + rng.normal(scale=0.3, size=(n_per_group, n_parcels)) + 1.0
+    Y = np.vstack([Y_a, Y_b])
+    groups = np.array(["a"] * n_per_group + ["b"] * n_per_group)
+    x_df = pd.DataFrame(X, index=idx, columns=parcel_labels)
+    y_df = pd.DataFrame(Y, index=[f"y{i}" for i in range(2 * n_per_group)], columns=parcel_labels)
+    nsp = NiSpace(x=x_df, y=y_df, parcellation=None, standardize=False,
+                  n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+
+    out = group_xsea(
+        y=list(range(2 * n_per_group)), design=groups, nispace_object=nsp,
+        colocalization_method="pearson", n_perm=200, seed=1, plot=False, verbose=False,
+        return_nispace_only=True,
+    )
+    assert out._xsea_aggregation_method == "weightedmean"
 
 
 # ── nimare_colocalization() ───────────────────────────────────────────────

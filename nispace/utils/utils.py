@@ -101,6 +101,38 @@ def _quiet():
     finally:
         root.setLevel(old)
         _quiet_ctx.active = False
+
+
+@contextmanager
+def _verbose_scope(verbose):
+    """Temporarily set the shared "nispace" root logger's level for a call's
+    `verbose` argument, restoring the previous root level on exit (no-op while
+    nested inside a :func:`_quiet` block, same as `set_log`).
+
+    Unlike hand-rolled `loglevel = lgr.getEffectiveLevel()` / `lgr.setLevel(loglevel)`
+    call-site patterns, this never touches the specific module-level logger (`lgr`)
+    passed at call sites -- only the shared root, matching `set_log`'s own contract.
+    Manipulating a child logger's own level instead permanently pins it, breaking
+    inheritance from the root for the rest of the process (this was a real bug).
+
+    Parameters
+    ----------
+    verbose : bool, int, or None
+        Forwarded to `set_log` (root-only target; `lgr` argument is irrelevant).
+
+    Yields
+    ------
+    bool
+        Whether INFO-level messages are (now) enabled -- same as `set_log`'s
+        return value, so callers can do ``with _verbose_scope(verbose) as verbose:``.
+    """
+    root = logging.getLogger("nispace")
+    old = root.level
+    is_active = set_log(root, verbose)
+    try:
+        yield is_active
+    finally:
+        root.setLevel(old)
     
 
 def _rm_ext(path, ext=[".txt", ".csv", ".nii", ".gii", ".gz"]):
