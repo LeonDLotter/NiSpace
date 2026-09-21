@@ -17,8 +17,8 @@ from .utils.utils_datasets import get_file
 from .io import read_json, write_json, load_img, load_distmat, load_spinmat, load_labels
 from .nulls import _img_density_for_neuromaps
 
-# Set the default nispace data directory environment variable
-os.environ['NISPACE_DATA_DIR'] = str(Path.home() / "nispace-data")
+# Set the default nispace data directory environment variable (without overriding a user-set value)
+os.environ.setdefault('NISPACE_DATA_DIR', str(Path.home() / "nispace-data"))
 
 datalib_dir =Path(__file__).parent / "datalib"
 reference_lib = read_json(datalib_dir / "reference.json")
