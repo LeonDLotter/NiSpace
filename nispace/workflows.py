@@ -1688,7 +1688,9 @@ def nimare_colocalization(y,
         permutation. See :class:`~nispace.NiSpace` for details.
     nimare_nulls : dict or None, default=None
         Coordinate-sampling null maps from
-        :func:`~nispace.helpers.null_maps_from_nimare`. When provided, sets
+        :func:`~nispace.helpers.null_maps_from_nimare` (uniform or, with its
+        ``reporting_baseline`` argument, literature-weighted coordinate
+        sampling). When provided, sets
         ``maps_nulls=nimare_nulls`` and ``maps_which="Y"`` in ``permute_kwargs``
         so Y is permuted with the NiMARE null distribution. Explicit entries in
         ``permute_kwargs`` take precedence.
@@ -1808,8 +1810,10 @@ def nimare_xsea(y,
         Set ``True`` for binary or fractional cluster-coverage Y maps.
     nimare_nulls : dict or None, default=None
         Coordinate-sampling null maps from
-        :func:`~nispace.helpers.null_maps_from_nimare`. When provided, sets
-        ``maps_nulls=nimare_nulls`` in ``permute_kwargs``.
+        :func:`~nispace.helpers.null_maps_from_nimare` (uniform or, with its
+        ``reporting_baseline`` argument, literature-weighted coordinate
+        sampling). When provided, sets ``maps_nulls=nimare_nulls`` in
+        ``permute_kwargs``.
 
     Returns
     -------

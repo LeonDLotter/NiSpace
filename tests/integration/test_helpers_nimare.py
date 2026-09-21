@@ -80,3 +80,99 @@ def test_null_maps_from_nimare_binary_cluster_mode(ale_result, ale_corrected_res
     assert arr.shape == (5, 100)
     # binary cluster-coverage nulls must stay within [0, 1]
     assert (arr >= 0).all() and (arr <= 1).all()
+
+
+# ---------------------------------------------------------------------------
+# Reporting-baseline null (fetches the 'mabaseline' Neurosynth map over the network)
+# ---------------------------------------------------------------------------
+
+def test_null_maps_from_nimare_reporting_baseline_continuous(ale_result):
+    nulls = null_maps_from_nimare(
+        ale_result, parcellation="Yan100", reporting_baseline="neurosynth",
+        n_perm=5, seed=0, n_proc=1, validate=False, verbose=False,
+    )
+    assert nulls["stat"].shape == (5, 100)
+    assert np.isfinite(nulls["stat"]).all()
+
+
+def test_null_maps_from_nimare_reporting_baseline_binary(ale_result, ale_corrected_result):
+    nulls = null_maps_from_nimare(
+        ale_result, parcellation="Yan100", corrected_result=ale_corrected_result,
+        reporting_baseline="neurosynth",
+        n_perm=5, seed=0, n_proc=1, validate=False, verbose=False,
+    )
+    arr = next(iter(nulls.values()))
+    assert arr.shape == (5, 100)
+    assert (arr >= 0).all() and (arr <= 1).all()
+
+
+def test_reporting_baseline_concentrated_in_one_parcel_drives_nulls(ale_result):
+    # all baseline mass in one parcel -> that parcel must carry the highest mean null ALE
+    import nibabel as nib
+    from nilearn.image import resample_img
+    from nispace.datasets import fetch_parcellation
+
+    mask_img = ale_result.estimator.masker.mask_img
+    parc = fetch_parcellation("Yan100", return_parcellation_only=True, verbose=False)
+    mni_spaces = [s for s in parc.spaces if "mni" in s.lower()]
+    space = next((s for s in mni_spaces if "lin6" in s.lower()), mni_spaces[0])
+    parc_arr = resample_img(
+        parc.get_image(space), target_affine=mask_img.affine, target_shape=mask_img.shape,
+        interpolation="nearest", force_resample=True, copy_header=True,
+    ).get_fdata()
+    labels = np.trim_zeros(np.unique(parc_arr))  # same order as the null-map columns
+    in_mask = mask_img.get_fdata() != 0
+    target_idx = int(np.argmax([((parc_arr == lab) & in_mask).sum() for lab in labels]))
+    baseline = ((parc_arr == labels[target_idx]) & in_mask).astype(np.float32)
+
+    nulls = null_maps_from_nimare(
+        ale_result, parcellation=parc,
+        reporting_baseline=nib.Nifti1Image(baseline, mask_img.affine),
+        n_perm=5, seed=0, n_proc=1, validate=False, verbose=False,
+    )
+    assert int(np.argmax(nulls["stat"].mean(axis=0))) == target_idx
+
+
+@pytest.fixture(scope="module")
+def scale_result():
+    # small mask keeps SCALE's voxel-wise null computation fast
+    import nibabel as nib
+    from nimare.meta.cbma.ale import SCALE
+    from nimare.utils import get_template
+
+    tpl = get_template("mni152_2mm", mask="brain")
+    small = np.zeros(tpl.shape, dtype=np.uint8)
+    small[40:50, 50:60, 35:45] = 1
+    small[tpl.get_fdata() == 0] = 0
+    dset = Dataset(
+        os.path.join(get_resource_path(), "nidm_pain_dset.json"),
+        mask=nib.Nifti1Image(small, tpl.affine),
+    )
+    xyz = dset.coordinates[["x", "y", "z"]].values
+    return SCALE(xyz=xyz, n_iters=5, n_cores=1).fit(dset)
+
+
+def test_scale_result_rejects_non_stat_outcome_map(scale_result):
+    with pytest.raises(ValueError, match="SCALE"):
+        null_maps_from_nimare(
+            scale_result, parcellation="Yan100", outcome_map="z",
+            n_perm=2, seed=0, n_proc=1, validate=False, verbose=False,
+        )
+
+
+def test_scale_result_rejects_binary_mode(scale_result, ale_corrected_result):
+    with pytest.raises(NotImplementedError, match="SCALE"):
+        null_maps_from_nimare(
+            scale_result, parcellation="Yan100", corrected_result=ale_corrected_result,
+            n_perm=2, seed=0, n_proc=1, validate=False, verbose=False,
+        )
+
+
+def test_scale_result_uniform_null_warns(scale_result, caplog):
+    with caplog.at_level("WARNING"):
+        nulls = null_maps_from_nimare(
+            scale_result, parcellation="Yan100",
+            n_perm=2, seed=0, n_proc=1, validate=False, verbose=False,
+        )
+    assert any("SCALE" in r.message for r in caplog.records)
+    assert nulls["stat"].shape == (2, 100)

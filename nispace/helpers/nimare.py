@@ -1,6 +1,7 @@
 """NiMARE integration helpers."""
 
 import logging
+from pathlib import Path
 
 import nibabel as nib
 import numpy as np
@@ -101,10 +102,143 @@ def _run_one_perm(
     return parc_map
 
 
+def _sample_null_idx(n_vox, n_coords, n_perm, rng, weights=None):
+    """Draw null-focus voxel indices of shape (n_coords, n_perm).
+
+    weights=None is the uniform draw (the exact RNG call used before
+    reporting baselines existed, so seeded results are unchanged). Otherwise
+    each focus lands on voxel v with probability weights[v], as in the
+    probabilistic SCALE/SALE null.
+    """
+    if weights is None:
+        return rng.integers(n_vox, size=(n_coords, n_perm))
+    if len(weights) != n_vox:
+        raise ValueError(
+            f"Got {len(weights)} reporting-baseline weights for {n_vox} mask voxels."
+        )
+    return rng.choice(n_vox, size=(n_coords, n_perm), p=weights)
+
+
+def _fetch_reporting_baseline(query, verbose=True):
+    """Fetch a map of the 'mabaseline' reference dataset by (sub)string query.
+
+    The query must match exactly one map ID; this is checked against the
+    datalib before any download. The map is returned in 'MNIOriginal' space,
+    i.e., the unmodified source image.
+    """
+    from ..datasets import fetch_reference, reference_lib
+
+    available = list(reference_lib.get("mabaseline", {}).get("map", {}).keys())
+    matches = [m for m in available if query.lower() in m.lower()]
+    if len(matches) != 1:
+        raise ValueError(
+            f"reporting_baseline='{query}' matched {len(matches)} maps of the "
+            f"'mabaseline' reference dataset {matches}, but must match exactly one. "
+            f"Available: {available}. Alternatively, pass a NIfTI image or file path."
+        )
+    map_id = matches[0]
+    lgr.info(
+        f"Using reporting baseline '{map_id}' ('MNIOriginal' space) from the "
+        "'mabaseline' reference dataset."
+    )
+    fps = fetch_reference(
+        "mabaseline", maps=map_id, space="MNIOriginal",
+        print_references=verbose, verbose=verbose,
+    )
+    return nib.load(fps[0])
+
+
+def _resolve_reporting_baseline(reporting_baseline, mask_img, verbose=True):
+    """Turn a reporting-baseline specification into null sampling weights.
+
+    Returns None for reporting_baseline=None (uniform sampling). Otherwise
+    returns a float64 vector with one weight per mask voxel, summing to 1 and
+    ordered like np.vstack(np.where(mask_arr)).T -- the candidate null
+    coordinates in null_maps_from_nimare(). Normalization within the
+    estimator's mask is the only transformation applied to the values.
+    """
+    if reporting_baseline is None:
+        return None
+
+    mask_arr = np.asarray(mask_img.get_fdata())
+
+    if isinstance(reporting_baseline, (str, Path)):
+        if Path(reporting_baseline).is_file():
+            lgr.info(f"Loading reporting baseline from file: {reporting_baseline}")
+            baseline = nib.load(reporting_baseline)
+        else:
+            baseline = _fetch_reporting_baseline(str(reporting_baseline), verbose=verbose)
+    elif isinstance(reporting_baseline, nib.spatialimages.SpatialImage):
+        baseline = reporting_baseline
+    elif isinstance(reporting_baseline, np.ndarray):
+        if reporting_baseline.shape != mask_arr.shape:
+            raise ValueError(
+                f"reporting_baseline array has shape {reporting_baseline.shape}, but the "
+                f"estimator's mask has shape {mask_arr.shape}. Arrays must be on the mask "
+                "grid; pass a NIfTI image to resample automatically."
+            )
+        baseline = None
+        arr = np.asarray(reporting_baseline, dtype=np.float64)
+    else:
+        raise TypeError(
+            "reporting_baseline must be None, a 'mabaseline' map query (str), a file "
+            f"path, a NIfTI image, or a numpy array. Got: {type(reporting_baseline)}"
+        )
+
+    if baseline is not None:
+        if len(baseline.shape) == 4 and baseline.shape[3] == 1:
+            from nilearn.image import index_img
+            baseline = index_img(baseline, 0)
+        elif len(baseline.shape) != 3:
+            raise ValueError(
+                f"reporting_baseline image must be 3D, got shape {baseline.shape}."
+            )
+        if (baseline.shape != mask_img.shape
+                or not np.allclose(baseline.affine, mask_img.affine)):
+            # linear, not "continuous" (cubic spline): a convex combination of
+            # non-negative values cannot become negative
+            from nilearn.image import resample_img
+            lgr.info("Resampling reporting baseline to the estimator's mask grid (linear).")
+            baseline = resample_img(
+                baseline,
+                target_affine=mask_img.affine,
+                target_shape=mask_img.shape,
+                interpolation="linear",
+                force_resample=True,
+                copy_header=True,
+            )
+        arr = np.asarray(baseline.get_fdata(), dtype=np.float64)
+
+    # same mask definition and C-order as np.where(mask_arr) in the caller
+    w = arr[mask_arr != 0]
+    n_nan = int(np.isnan(w).sum())
+    if n_nan:
+        lgr.warning(f"{n_nan} mask voxels have NaN reporting-baseline values; treated as 0.")
+        w = np.nan_to_num(w, nan=0.0)
+    if (w < 0).any():
+        raise ValueError(
+            f"reporting_baseline has negative values within the mask (min={w.min():.4g}); "
+            "it must be a non-negative density."
+        )
+    total = w.sum()
+    if not np.isfinite(total) or total <= 0:
+        raise ValueError(
+            f"reporting_baseline sums to {total} within the estimator's mask; it must "
+            "have a positive, finite sum."
+        )
+    n_zero = int((w == 0).sum())
+    if n_zero:
+        lgr.info(
+            f"{n_zero} of {w.size} mask voxels have zero reporting-baseline weight; "
+            "no null foci will be placed there."
+        )
+    return w / total
+
+
 def _validate_null_maps(
     null_arr, max_stats, result, outcome_map,
     parc_arr, parc_idc, voxel_thresh_z, nimare_cluster_extent,
-    cluster_stat, alpha, observed_map,
+    cluster_stat, alpha, observed_map, baseline_used=False,
 ):
     """Log validation metrics comparing our null distribution to NiMARE's own outputs.
 
@@ -116,6 +250,10 @@ def _validate_null_maps(
     Continuous mode: computes empirical parcel-level p-values from null_arr and
     correlates (Spearman) against NiMARE's parametric voxelwise p-map parcellated
     with the same scheme.
+
+    With baseline_used=True, NiMARE's outputs still assume a uniform null, so the
+    metrics are reported as the effect of the reporting baseline rather than as
+    agreement checks.
     """
     _bg = np.array([], dtype=np.float64)
 
@@ -135,10 +273,17 @@ def _validate_null_maps(
         )
         if nimare_cluster_extent is not None and nimare_cluster_extent > 0:
             ratio = our_thresh / nimare_cluster_extent
-            lgr.info(
-                f"  Ratio (ours / NiMARE): {ratio:.3f}  "
-                "(should be ~1.0 for large n_perm; deviations are sampling noise)"
-            )
+            if baseline_used:
+                lgr.info(
+                    f"  Base-rate inflation factor (ours / NiMARE's uniform-null threshold): "
+                    f"{ratio:.3f}  (> 1: chance convergence is higher under the reporting "
+                    "baseline; ~1: the baseline barely matters for this dataset)"
+                )
+            else:
+                lgr.info(
+                    f"  Ratio (ours / NiMARE): {ratio:.3f}  "
+                    "(should be ~1.0 for large n_perm; deviations are sampling noise)"
+                )
 
         # Re-derive cluster map with our threshold and compare to observed_map.
         if observed_map is not None:
@@ -168,10 +313,18 @@ def _validate_null_maps(
             if mask.sum() > 1:
                 from scipy.stats import pearsonr
                 r, _ = pearsonr(our_cluster_parc[mask], obs_user_parc[mask])
-                lgr.info(
-                    f"  Re-derived cluster map vs observed_map: r={r:.4f}  "
-                    "(should be ~1.0; low r → threshold mismatch or wrong cluster_stat)"
-                )
+                if baseline_used:
+                    lgr.info(
+                        f"  Re-derived cluster map vs observed_map: r={r:.4f}  "
+                        "(expected < 1 under a reporting baseline: the lower r, the more of "
+                        "the observed cluster map would not survive a baseline-referenced "
+                        "extent threshold)"
+                    )
+                else:
+                    lgr.info(
+                        f"  Re-derived cluster map vs observed_map: r={r:.4f}  "
+                        "(should be ~1.0; low r → threshold mismatch or wrong cluster_stat)"
+                    )
 
     else:
         # ---- continuous mode ----
@@ -199,16 +352,23 @@ def _validate_null_maps(
                 f"  Empirical p (our null) vs NiMARE parametric p-map: "
                 f"Spearman r={r:.3f}  (p={pval:.4f})"
             )
-            lgr.info(
-                "  Note: NiMARE p is voxelwise-approximate; ours is parcel-level "
-                "Monte Carlo — perfect agreement is not expected, but r should be high."
-            )
+            if baseline_used:
+                lgr.info(
+                    "  Note: NiMARE's p-map assumes a uniform null, ours a reporting "
+                    "baseline — lower agreement than under a uniform null is expected."
+                )
+            else:
+                lgr.info(
+                    "  Note: NiMARE p is voxelwise-approximate; ours is parcel-level "
+                    "Monte Carlo — perfect agreement is not expected, but r should be high."
+                )
 
 
 def null_maps_from_nimare(
     result,
     parcellation,
     corrected_result=None,
+    reporting_baseline=None,
     voxel_thresh=0.001,
     outcome_map="stat",
     cluster_stat="size",
@@ -225,11 +385,14 @@ def null_maps_from_nimare(
     """Generate parcellated null maps from a fitted NiMARE MetaResult.
 
     Re-implements NiMARE's MonteCarlo FWE coordinate-sampling loop: for each
-    permutation, study coordinates are drawn uniformly at random from the brain
-    mask, a full ALE map is computed, and the result is parcellated. This
-    produces null maps under the same generative model NiMARE uses for its own
-    FWE correction, making them the principled null for colocalization of
-    meta-analytic maps.
+    permutation, study coordinates are drawn at random from the brain mask, a
+    full ALE map is computed, and the result is parcellated. By default,
+    coordinates are drawn uniformly, which produces null maps under the same
+    generative model NiMARE uses for its own FWE correction. With
+    *reporting_baseline*, coordinates are instead drawn in proportion to how
+    often each location is reported across the literature (the SCALE/SALE null
+    :cite:`langner2014,magielse2025`), so that colocalization is tested beyond
+    what any meta-analysis would show.
 
     Two modes are supported:
 
@@ -265,6 +428,34 @@ def null_maps_from_nimare(
         :func:`nimare_fwe_thresholds` and applied to each null ALE map. Only
         ``method="montecarlo"`` is supported. Default: ``None`` (continuous
         mode).
+    reporting_baseline : None, str, path, NIfTI image, or ndarray, optional
+        Spatial prior for the null coordinates. Some regions are reported far
+        more often than others across neuroimaging studies, regardless of the
+        topic, and ALE maps inherit this "reporting baseline". A uniform null
+        ignores it, so colocalization with anything resembling the baseline can
+        appear significant for every meta-analysis. With a reporting baseline,
+        each null coordinate is drawn with probability proportional to the
+        baseline value at that voxel, i.e., the null hypothesis becomes "the
+        foci are a random draw from the literature at large" and the test asks
+        whether colocalization is *specific* to the analyzed topic
+        :cite:`langner2014,magielse2025`. Applies to both modes.
+
+        * ``None`` (default): uniform sampling within the estimator's mask.
+        * ``str``: a map of NiSpace's ``"mabaseline"`` reference dataset,
+          matched by substring (must match exactly one map), fetched in its
+          original space. ``"neurosynth"``: density of all foci in the
+          Neurosynth database :cite:`yarkoni2011`, as computed for C-SALE
+          :cite:`magielse2025`. A string that is an existing file path is
+          loaded as a NIfTI image instead.
+        * NIfTI image or file path: any non-negative voxel-wise map, e.g., a
+          baseline computed from another database. Resampled (linearly) to the
+          estimator's mask grid if needed.
+        * ndarray: a non-negative array on the estimator's mask grid
+          (``result.estimator.masker.mask_img``).
+
+        Values are only normalized to sum to 1 within the estimator's mask;
+        NaN is treated as 0 and voxels with zero weight never receive null foci.
+        Consider reporting results under both nulls.
     voxel_thresh : float, optional
         Uncorrected voxel-level p-value for the cluster-defining threshold
         (CDT) used when *corrected_result* is provided. Must match the
@@ -324,6 +515,12 @@ def null_maps_from_nimare(
         * **Continuous mode**: computes empirical parcel-level p-values from
           the null array and correlates (Spearman) against NiMARE's parametric
           voxelwise p-map parcellated with the same scheme.
+
+        With *reporting_baseline*, NiMARE's outputs still assume a uniform
+        null, so agreement is not expected: in cluster mode, the threshold
+        ratio is reported as a *base-rate inflation factor* (how much larger
+        clusters become by chance under the baseline; ~1 means the baseline
+        barely matters for this dataset).
     seed : int or None, optional
         Random seed for reproducibility. Default: None.
     n_proc : int, optional
@@ -355,7 +552,24 @@ def null_maps_from_nimare(
     means). Null maps therefore have a lower value range (typically 0–0.05–0.1)
     than the observed map: random coordinates produce many small scattered
     clusters while real coordinates converge into one focused cluster. This
-    contrast is the signal the permutation test exploits.
+    contrast is the signal the permutation test exploits. With a
+    *reporting_baseline*, null coordinates concentrate in frequently reported
+    regions, so null clusters become larger and more frequent there. The
+    observed Y, however, still carries NiMARE's uniform-null FWE extent
+    threshold, which is more lenient than a baseline-referenced one would be.
+    The marginal clusters it retains tend to lie in frequently reported
+    regions, so binary-mode results can remain slightly anticonservative for
+    reference maps resembling the baseline.
+
+    **Reporting baseline and SCALE.** NiMARE's :class:`~nimare.meta.cbma.ale.SCALE`
+    (and GPU implementations deriving from it) already tests against a
+    reporting-baseline null, and its ``"z"``/``"logp"`` maps are baseline-corrected.
+    For SCALE results, only ``outcome_map="stat"`` (plain ALE values) is
+    accepted, because the null maps generated here are ALE values too. The
+    SCALE estimator's own null coordinates (``estimator.xyz``) are not reused;
+    pass *reporting_baseline* to match it. Binary cluster mode is not
+    supported for SCALE results. Alternatively, a SCALE z-map can be used as
+    Y with NiSpace's standard spatial nulls.
 
     Relies on the private NiMARE methods ``_compute_summarystat`` and
     ``_summarystat_to_p`` (or ``_ale_to_p`` for older versions). Requires
@@ -393,6 +607,15 @@ def null_maps_from_nimare(
         )
         nsp.permute("maps", maps_which="Y", maps_nulls=null_maps, n_perm=1000)
         p = nsp.get_p_values()
+
+    **Reporting-baseline null** (same as above, testing topic-specificity)::
+
+        null_maps_baseline = null_maps_from_nimare(
+            result, nsp._parc,
+            reporting_baseline="neurosynth",
+            map_label="pain_ale",
+            n_perm=1000,
+        )
 
     **Binary cluster workflow** (FWE cluster map binarized as Y)::
 
@@ -465,6 +688,41 @@ def null_maps_from_nimare(
             f"outcome_map='{outcome_map}' not found in result.maps. "
             f"Available: {available}"
         )
+
+    # --- SCALE estimators (incl. subclasses, e.g., GPU implementations) ---
+    try:
+        from nimare.meta.cbma.ale import SCALE as _SCALE
+    except ImportError:
+        _SCALE = None
+    if _SCALE is not None and isinstance(est, _SCALE):
+        if outcome_map != "stat":
+            raise ValueError(
+                f"outcome_map='{outcome_map}' is not supported for SCALE results: SCALE's "
+                "z/logp maps are already reporting-baseline corrected, while the null maps "
+                "generated here are ALE values. Use outcome_map='stat' (plain ALE values) "
+                "as Y, or use the SCALE z-map as Y with NiSpace's standard spatial nulls."
+            )
+        if corrected_result is not None:
+            raise NotImplementedError(
+                "Binary cluster mode is not supported for SCALE results."
+            )
+        if reporting_baseline is None:
+            lgr.warning(
+                "result comes from a SCALE estimator, whose null samples foci from the "
+                "estimator's own coordinates (estimator.xyz), but the null maps generated "
+                "here will use uniform sampling. Pass reporting_baseline=... (e.g., "
+                "'neurosynth') for a reporting-baseline null."
+            )
+        else:
+            lgr.info(
+                "result comes from a SCALE estimator; null maps use the given "
+                "reporting_baseline, not the estimator's own coordinates (estimator.xyz)."
+            )
+
+    # --- reporting baseline -> null sampling weights over mask voxels (None = uniform) ---
+    baseline_weights = _resolve_reporting_baseline(
+        reporting_baseline, est.masker.mask_img, verbose=verbose
+    )
 
     # --- derive cluster thresholds from corrected result (binary cluster mode) ---
     if corrected_result is not None:
@@ -580,7 +838,9 @@ def null_maps_from_nimare(
     null_ijk = np.vstack(np.where(mask_arr)).T              # (n_mask_voxels, 3)
     n_coords = est.inputs_["coordinates"].shape[0]
     rng = np.random.default_rng(seed)
-    rand_idx = rng.integers(null_ijk.shape[0], size=(n_coords, n_perm))
+    rand_idx = _sample_null_idx(
+        null_ijk.shape[0], n_coords, n_perm, rng, weights=baseline_weights
+    )
     rand_ijk = null_ijk[rand_idx, :]                        # (n_coords, n_perm, 3)
     rand_xyz = vox2mm(rand_ijk, est.masker.mask_img.affine)  # (n_coords, n_perm, 3)
     iter_xyzs = np.split(rand_xyz, rand_xyz.shape[1], axis=1)  # list of (n_coords, 1, 3)
@@ -588,9 +848,10 @@ def null_maps_from_nimare(
     iter_df = est.inputs_["coordinates"].copy()
 
     mode = "binary cluster" if _voxel_thresh_z is not None else "continuous"
+    sampling = "uniform" if baseline_weights is None else "reporting-baseline-weighted"
     lgr.info(
         f"Generating {n_perm} {mode} null maps from NiMARE {type(est).__name__} "
-        f"estimator (n_proc={n_proc})."
+        f"estimator ({sampling} coordinate sampling, n_proc={n_proc})."
     )
     if _voxel_thresh_z is not None:
         lgr.info(
@@ -658,7 +919,7 @@ def null_maps_from_nimare(
             null_arr, max_stats, result, outcome_map,
             parc_arr_precomp, parc_idc_precomp,
             _voxel_thresh_z, _min_cluster_extent, cluster_stat, alpha,
-            observed_map,
+            observed_map, baseline_used=baseline_weights is not None,
         )
 
     return {label: null_arr}
