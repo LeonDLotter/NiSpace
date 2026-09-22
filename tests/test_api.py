@@ -7,7 +7,8 @@ Covers: colocalize()/get_x()/get_y()/get_z() basics and error paths,
 permute() end-to-end for what="maps" (random null, no parcellation needed)
 and what="groups", get_p_values()/get_colocalizations() retrieval semantics
 (force_dict, stats filtering), correct_p() routing across mc_method families
-(meff, fdr_bh/statsmodels passthrough, maxT), normalize_colocalizations()/
+(meff, fdr_bh/statsmodels passthrough, maxT/step_maxT/minP/step_minP incl. the
+pooled_p and scale-heterogeneity paths), normalize_colocalizations()/
 get_normalized_colocalizations(), and copy()/to_pickle()/from_pickle()
 round-trips.
 """
@@ -428,13 +429,18 @@ def test_correct_p_meff_is_at_least_as_conservative_as_uncorrected(permuted_maps
     assert (p_corr.to_numpy() >= p_raw.to_numpy() - 1e-8).all()
 
 
-def test_correct_p_maxt_requires_stored_nulls(permuted_maps_nispace):
-    """maxT/step_maxT need the full null distribution -- to_pickle(save_nulls=
-    False) drops it, and correct_p("maxT") on the reloaded object must raise a
-    clear KeyError rather than silently using something else."""
+_FAMILYWISE_MC = ["maxT", "step_maxT", "minP", "step_minP"]
+
+
+@pytest.mark.parametrize("mc_method", _FAMILYWISE_MC)
+def test_correct_p_familywise_requires_stored_nulls(permuted_maps_nispace, mc_method):
+    """maxT/step_maxT/minP/step_minP need the full null distribution --
+    to_pickle(save_nulls=False) drops it, and correct_p() on the reloaded object
+    must raise a clear KeyError rather than silently using something else."""
     nsp = permuted_maps_nispace
-    nsp.correct_p(mc_method="maxT", verbose=False)  # works while nulls are present
-    assert nsp._check_permute("pearson", "xmaps", mc_method="maxt", raise_error=False)
+    nsp.correct_p(mc_method=mc_method, verbose=False)  # works while nulls are present
+    mc_key = mc_method.replace("_", "").lower()
+    assert nsp._check_permute("pearson", "xmaps", mc_method=mc_key, raise_error=False)
 
     import tempfile, os
     f = tempfile.mktemp(suffix=".pkl")
@@ -442,10 +448,91 @@ def test_correct_p_maxt_requires_stored_nulls(permuted_maps_nispace):
         nsp.to_pickle(f, save_nulls=False, verbose=False)
         nsp_reloaded = NiSpace.from_pickle(f, verbose=False)
         with pytest.raises(KeyError):
-            nsp_reloaded.correct_p(mc_method="maxT", verbose=False)
+            nsp_reloaded.correct_p(mc_method=mc_method, verbose=False)
     finally:
         if os.path.exists(f):
             os.remove(f)
+
+
+@pytest.mark.parametrize("mc_method", _FAMILYWISE_MC)
+def test_correct_p_familywise_at_least_as_conservative_as_uncorrected(permuted_maps_nispace,
+                                                                       mc_method):
+    nsp = permuted_maps_nispace
+    p_raw = nsp.get_p_values(verbose=False)
+    nsp.correct_p(mc_method=mc_method, verbose=False)
+    p_corr = nsp.get_corrected_p_values(verbose=False)
+    assert p_corr.shape == p_raw.shape
+    assert (p_corr.index == p_raw.index).all() and (p_corr.columns == p_raw.columns).all()
+    assert (p_corr.to_numpy() >= p_raw.to_numpy() - 1e-8).all()
+
+
+@pytest.mark.parametrize("mc_method", ["minP", "step_minP"])
+def test_correct_p_minp_mc_dimension_x_raises(permuted_maps_nispace, mc_method):
+    with pytest.raises(ValueError, match="not supported"):
+        permuted_maps_nispace.correct_p(mc_method=mc_method, mc_dimension="x", verbose=False)
+
+
+@pytest.mark.parametrize("mc_method", _FAMILYWISE_MC)
+def test_correct_p_familywise_pooled_p_uses_pooled_observed(mc_method):
+    """With several Y rows, pooled_p="mean" tests the mean colocalization: the stored
+    uncorrected p (and the null) is one "mean" row. The family-wise correction must
+    compare the POOLED observed statistic to that null -- it used to compare every
+    unpooled Y row to it and return an (n_Y, n_X) array under the pooled key.
+    Pooling must also happen on the Fisher-z scale, so colocalize()'s r_to_z must not
+    change the corrected p (same ground truth as
+    test_permute_pooled_p_never_averages_raw_rho)."""
+    p_corr = {}
+    for r_to_z in (True, False):
+        nsp = _make_multi_y_nsp(np.random.default_rng(42), n_x=4, n_y=6)
+        nsp.colocalize(method="pearson", r_to_z=r_to_z, verbose=False)
+        nsp.permute(what="maps", maps_method="random", n_perm=300, seed=7,
+                    pooled_p="mean", verbose=False)
+        p_raw = nsp.get_p_values(verbose=False)
+        nsp.correct_p(mc_method=mc_method, verbose=False)
+        p_corr[r_to_z] = nsp.get_p_values(mc_method=mc_method, verbose=False)
+        assert p_corr[r_to_z].shape == p_raw.shape == (1, 4)
+        assert list(p_corr[r_to_z].index) == ["mean"]
+        assert (p_corr[r_to_z].to_numpy() >= p_raw.to_numpy() - 1e-8).all()
+    np.testing.assert_allclose(p_corr[True].to_numpy(), p_corr[False].to_numpy())
+
+
+@pytest.fixture
+def nsp_xsea_unequal_sets(rng):
+    """XSEA X with one 2-map and one 20-map set of independent random maps: the
+    set-mean null of the small set is ~sqrt(10)x wider than the big set's."""
+    n_parcels = 30
+    tuples = [("small", f"g{i}") for i in range(2)] + [("big", f"g{i}") for i in range(2, 22)]
+    idx = pd.MultiIndex.from_tuples(tuples, names=["set", "gene"])
+    X = rng.normal(size=(len(tuples), n_parcels))
+    parcel_labels = [f"parcel{i}" for i in range(n_parcels)]
+    x_df = pd.DataFrame(X, index=idx, columns=parcel_labels)
+    y_df = pd.DataFrame(rng.normal(size=(1, n_parcels)), index=["y0"], columns=parcel_labels)
+    nsp = NiSpace(x=x_df, y=y_df, parcellation=None, standardize=False,
+                  n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    nsp.colocalize(method="pearson", xsea=True, xsea_aggregation_method="mean", verbose=False)
+    nsp.permute(what="maps", maps_method="random", n_perm=300, seed=3, verbose=False)
+    return nsp
+
+
+def test_correct_p_maxt_warns_on_heterogeneous_xsea_sets(nsp_xsea_unequal_sets, caplog):
+    nsp = nsp_xsea_unequal_sets
+    with caplog.at_level("WARNING"):
+        nsp.correct_p(mc_method="maxT", verbose=False)
+    msgs = [r.message for r in caplog.records if "differ in width" in r.message]
+    assert msgs and "XSEA" in msgs[0] and "minP" in msgs[0]
+    assert "'small'" in msgs[0] and "'big'" in msgs[0]
+
+    caplog.clear()
+    with caplog.at_level("WARNING"):
+        nsp.correct_p(mc_method="minP", verbose=False)
+    assert not any("differ in width" in r.message for r in caplog.records)
+
+
+def test_correct_p_maxt_no_scale_warning_for_comparable_columns(permuted_maps_nispace, caplog):
+    with caplog.at_level("WARNING"):
+        permuted_maps_nispace.correct_p(mc_method="maxT", verbose=False)
+    assert not any("differ in width" in r.message for r in caplog.records)
 
 
 def test_correct_p_store_false_does_not_persist(permuted_maps_nispace):

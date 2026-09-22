@@ -19,7 +19,7 @@ from .core.colocalize import (_get_colocalize_fun, _sort_colocs, _get_coloc_stat
                               _xsea_aggregate, _check_predictor_count, _DOMINANCE_MAX_PREDICTORS_DEFAULT)
 from .core.correlate_within_region import correlate_within_region_core, _CWR_METHODS
 from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_method,
-                               _EMPIRICAL_MC_METHODS, _resolve_permute_combo,
+                               _EMPIRICAL_MC_METHODS, _MAXT_SCALE_RATIO_WARN, _resolve_permute_combo,
                                _resolve_permute_mode_settings, _null_maps_cache_hit,
                                _resolve_maps_batch_size, _iter_null_map_batches)
 from .core.nullmaps import NullMaps, _NULLMAPS_WARN_BYTES
@@ -30,7 +30,9 @@ from .nulls import get_distance_matrix, _SPIN_METHODS, _DISTMAT_FREE_METHODS, _p
 from .stats.coloc import beta, elasticnet, lasso, mlr, partialpearson, pearson, rank2d, ridge
 from .stats.misc import (mc_correction, residuals_nan, zscore_df, permute_groups,
                           compute_meff, meff_sidak_correction,
-                          maxT_correction, step_maxT_correction, _null_stats_to_array,
+                          maxT_correction, step_maxT_correction,
+                          minP_correction, step_minP_correction, _family_scale_ratio,
+                          _null_stats_to_array,
                           null_to_p, rho_to_z, z_to_rho)
 from .stats.effectsize import rzscore_nan, zscore_nan
 from .cv import _get_dist_dep_splits, _get_rand_splits
@@ -3910,9 +3912,25 @@ class NiSpace:
             * ``"maxT"`` -- single-step max-statistic FWER correction from the
               permutation null computed by :meth:`permute`; requires the null
               colocalization distributions to still be available (i.e. not
-              dropped via ``save_nulls=False``). :cite:`westfall1993`
+              dropped via ``save_nulls=False``). Compares *raw* statistics across
+              the X columns, so it assumes their null distributions are on a
+              comparable scale; a warning is logged when they are not. Not
+              recommended for XSEA with sets of different sizes (the smallest
+              sets' wide nulls then absorb the whole error budget) -- use
+              ``"minP"``/``"step_minP"`` there. :cite:`westfall1993`
             * ``"step_maxT"`` -- step-down variant of ``"maxT"``, more powerful
               while preserving FWER control. :cite:`westfall1993`
+            * ``"minP"`` -- single-step min-p FWER correction: like ``"maxT"``,
+              but the family extreme is taken over per-column permutation
+              p-values instead of raw statistics, so every column gets an equal
+              share of the error budget regardless of its null's scale, location
+              or shape. Same null-availability requirement as ``"maxT"``. Its
+              resolution is limited by ``n_perm``: roughly ``2 * n_X / mc_alpha``
+              permutations (two-tailed) are needed for independent columns, and a
+              warning is logged when no column can reach significance -- for very
+              large families (e.g. thousands of gene sets), ``"fdr_bh"`` is
+              usually the practical choice. :cite:`westfall1993`
+            * ``"step_minP"`` -- step-down variant of ``"minP"``. :cite:`westfall1993`
             * ``"fdr_bh"`` -- Benjamini-Hochberg false discovery rate. :cite:`benjamini1995`
             * ``"bonferroni"``, or any other method name accepted by
               ``statsmodels.stats.multitest.multipletests`` (e.g. ``"holm"``,
@@ -3924,8 +3942,9 @@ class NiSpace:
             Axis over which to correct: ``"array"`` (jointly across all X x Y
             comparisons), ``"x"``/``"columns"`` (per X column), or
             ``"y"``/``"rows"`` (per Y row). Not all combinations are supported by
-            every method -- e.g. ``"maxT"``/``"step_maxT"`` don't support
-            per-column correction, and for the ``meff`` methods with multiple Y
+            every method -- e.g. ``"maxT"``/``"step_maxT"``/``"minP"``/
+            ``"step_minP"`` don't support per-column correction and treat
+            ``"array"`` as per-Y-row, and for the ``meff`` methods with multiple Y
             rows, ``"array"`` applies a joint X x Y correction that is only
             meaningful when the Y rows are related entities examined together
             (e.g. several disorders' effect-size maps); use ``mc_dimension="y"``
@@ -4027,27 +4046,18 @@ class NiSpace:
                         p_values, meff=meff, alpha=mc_alpha, dtype=self._dtype
                     )
 
-                # ── Max-T / Step-down Max-T ───────────────────────────────────
-                elif mc_method in {"maxT", "step_maxT"}:
-                    # warn if scale comparability assumption may be violated
-                    if stat in {"beta", "individual"} and "x" not in (self._zscore or ""):
-                        lgr.warning(
-                            f"maxT on stat='{stat}' assumes regression coefficients are on a "
-                            "comparable scale across X maps, but X was not z-scored "
-                            f"(standardize='{self._zscore}'). Max-T results may be unreliable. "
-                            "Re-run with standardize='x' (or 'xz') to satisfy this assumption."
-                        )
-                    # maxT corrects across X (columns) per Y row — override "array" default
-                    how_maxt = how if how != "a" else "r"
-                    if how == "a":
-                        lgr.info("mc_dimension not explicitly set to 'y'; defaulting to per-Y "
-                                 "(max across X) for maxT.")
-                    elif how == "c":
+                # ── Max-T / Min-P family-wise corrections (+ step-down variants) ──
+                elif mc_method in {"maxT", "step_maxT", "minP", "step_minP"}:
+                    # these correct across X (columns) per Y row -- override "array" default
+                    if how == "c":
                         lgr.critical_raise(
-                            "mc_dimension='x' (per-X column) is not supported for maxT. "
-                            "Use mc_dimension='y' (per-Y row, default) or 'array' (global).",
+                            f"mc_dimension='x' (per-X column) is not supported for {mc_method}. "
+                            "Use mc_dimension='y' (per-Y row, also used for the 'array' default).",
                             ValueError
                         )
+                    elif how == "a":
+                        lgr.info("mc_dimension not explicitly set to 'y'; defaulting to per-Y "
+                                 f"(across X) for {mc_method}.")
                     # get null key and null colocs
                     null_str = _get_df_string(
                         "null", xdimred=xdimred, ytrans=ytrans,
@@ -4058,26 +4068,55 @@ class NiSpace:
                             f"Null colocalizations for '{null_str}' not found. "
                             f"'{mc_method}' requires the full null distributions. "
                             "Either re-run permute(), or reload the object with save_nulls=True "
-                            "(note: correct_p('maxT'/'step_maxT') should be called before saving "
-                            "without nulls).",
+                            "(note: correct_p() with 'maxT'/'step_maxT'/'minP'/'step_minP' "
+                            "should be called before saving without nulls).",
                             KeyError
                         )
                     null_colocs = self._nulls["_colocs"][null_str]
-                    # get observed statistics (not p-values)
-                    with _quiet():
-                        obs_stats = self.get_colocalizations(
-                            method=coloc, stats=[stat],
-                            X_reduction=xdimred, Y_transform=ytrans,
-                            xsea=xsea, force_dict=True,
-                        )[stat]
+                    # observed statistics on the same footing as the null (pooled across Y
+                    # rows if permute() pooled them), aligned to the uncorrected p-values
+                    obs_stats = self._obs_stats_for_null(
+                        coloc=coloc, stat=stat, xdimred=xdimred, ytrans=ytrans, xsea=xsea,
+                        pooled=pooled, template=p_values,
+                    )
                     # get tail (use stored resolved p_tails if available, else default)
                     p_tails_stored = self._nulls.get(f"p_tails_{null_str}", {})
                     tail = p_tails_stored.get(stat, "two")
-                    correction_fn = maxT_correction if mc_method == "maxT" else step_maxT_correction
+                    # maxT compares raw statistics across X: warn if their nulls differ in
+                    # scale (checked on the data rather than guessed from the settings)
+                    if mc_method in {"maxT", "step_maxT"}:
+                        ratio, widest, narrowest = _family_scale_ratio(
+                            _null_stats_to_array(null_colocs, stat).astype(float), tail, how="r"
+                        )
+                        if ratio > _MAXT_SCALE_RATIO_WARN:  # False for NaN
+                            row_info = (f" in Y row '{p_values.index[widest[0]]}'"
+                                        if p_values.shape[0] > 1 else "")
+                            hint = ""
+                            if xsea:
+                                hint = " This is expected for XSEA with sets of different sizes."
+                            elif stat in {"beta", "individual"} and "x" not in (self._zscore or ""):
+                                hint = (" X was not z-scored, so regression coefficients don't "
+                                        "share a scale; standardize='x' may help.")
+                            lgr.warning(
+                                f"'{mc_method}' compares raw '{stat}' statistics across X "
+                                f"columns, but their null distributions differ in width by a "
+                                f"factor of {ratio:.1f}{row_info} (widest: "
+                                f"'{p_values.columns[widest[1]]}', narrowest: "
+                                f"'{p_values.columns[narrowest[1]]}'). The widest-null columns "
+                                "then produce nearly every family maximum, leaving the narrowest "
+                                "effectively unrejectable (FWER is still controlled, but power "
+                                f"is unbalanced).{hint} Use mc_method='minP'/'step_minP' for a "
+                                "scale-invariant correction."
+                            )
+                    correction_fn = {
+                        "maxT": maxT_correction, "step_maxT": step_maxT_correction,
+                        "minP": minP_correction, "step_minP": step_minP_correction,
+                    }[mc_method]
                     p_corr[p_str_mc], _ = correction_fn(
                         obs_stats, null_colocs, stat=stat,
-                        tail=tail, how=how_maxt,
-                        alpha=mc_alpha, dtype=self._dtype
+                        tail=tail, how="r",
+                        alpha=mc_alpha, dtype=self._dtype,
+                        p_raw=p_values,
                     )
 
         else:
@@ -4100,6 +4139,39 @@ class NiSpace:
             if self._return_self:
                 return self
         return p_corr
+
+    def _obs_stats_for_null(self, coloc, stat, xdimred, ytrans, xsea, pooled, template):
+        """
+        Observed statistics on the same footing as a stored permutation null.
+
+        For a null computed with ``pooled_p="mean"``/``"median"`` over several Y
+        rows, :meth:`permute` compared the *pooled* observed statistic against a
+        null of pooled statistics -- reproduce exactly that reduction (``"rho"``
+        pooled on the Fisher-z scale, never raw), instead of the per-row
+        colocalizations :meth:`get_colocalizations` returns. The result is
+        labeled like `template` (the stored uncorrected p-values of the same
+        test), in the same positional order the null was computed in.
+        """
+        with _quiet():
+            obs = self.get_colocalizations(
+                method=coloc, stats=[stat],
+                X_reduction=xdimred, Y_transform=ytrans,
+                xsea=xsea, force_dict=True,
+            )[stat]
+        vals = np.array(obs, dtype=float)
+        if pooled in ("mean", "median") and vals.shape[0] > 1:
+            # same Fisher-z-before-pooling rule as permute() (see _rho_already_z there)
+            if stat == "rho" and not self._coloc_kwargs_by_method.get(coloc, {}).get("r_to_z", True):
+                vals = rho_to_z(vals)
+            reducer = np.nanmedian if pooled == "median" else np.nanmean
+            vals = reducer(vals, axis=0)[np.newaxis, :]
+        if vals.shape != template.shape:
+            lgr.critical_raise(
+                f"Observed '{stat}' statistics ({vals.shape}) don't match the stored uncorrected "
+                f"p-values ({template.shape}) for coloc='{coloc}', pooled_p='{pooled}'.",
+                ValueError
+            )
+        return pd.DataFrame(vals, index=template.index, columns=template.columns)
 
     # ----------------------------------------------------------------------------------------------
 

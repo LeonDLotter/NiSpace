@@ -409,10 +409,21 @@ _MC_METHOD_ALIASES = {
     "step_maxt": "step_maxT",
     "stepmaxt": "step_maxT",
     "step_maxT": "step_maxT",
+    "minp": "minP",
+    "min_p": "minP",
+    "minP": "minP",
+    "step_minp": "step_minP",
+    "stepminp": "step_minP",
+    "step_minP": "step_minP",
 }
 
 # empirical methods handled internally — NOT passed to statsmodels
-_EMPIRICAL_MC_METHODS = {"meff_galwey", "meff_li_ji", "maxT", "step_maxT"}
+_EMPIRICAL_MC_METHODS = {"meff_galwey", "meff_li_ji", "maxT", "step_maxT", "minP", "step_minP"}
+
+# maxT/step_maxT compare raw statistics across the tests of a family; correct_p() warns
+# when the widest test null is more than this many times wider than the narrowest
+# (the narrowest-null tests then become effectively unrejectable -- use minP/step_minP)
+_MAXT_SCALE_RATIO_WARN = 2.0
 
 def _get_correct_mc_method(mc_method):
     return _MC_METHOD_ALIASES.get(mc_method, mc_method)

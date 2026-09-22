@@ -1273,6 +1273,11 @@ def xsea(y,
     mc_method : str or list, default="meff"
         Multiple-comparisons correction method(s), forwarded to :meth:`NiSpace.correct_p`.
         An explicit ``"mc_method"`` key inside ``correct_p_kwargs`` overrides this entirely.
+        For permutation-based FWER control across sets, prefer ``"minP"``/``"step_minP"``
+        over ``"maxT"``/``"step_maxT"``: set-level null distributions narrow with set size,
+        so maxT's raw-statistic comparison hands the error budget to the smallest sets.
+        For very large collections (thousands of sets), ``"fdr_bh"`` is usually more
+        practical, as minP needs ``n_perm`` to grow with the number of sets.
     normalize_colocalizations : bool, default=True
         Whether to call :meth:`NiSpace.normalize_colocalizations` after correction.
         Failures are caught and logged as a warning rather than raised.
@@ -1507,6 +1512,9 @@ def group_xsea(y, design,
         ``"pairedcohen(a,b)"`` (paired).
     mc_method : str or list, default="meff"
         Multiple-comparisons correction method(s), forwarded to :meth:`NiSpace.correct_p`.
+        As for :func:`xsea`, prefer ``"minP"``/``"step_minP"`` over ``"maxT"``/
+        ``"step_maxT"`` for permutation-based FWER control across sets of different sizes,
+        or ``"fdr_bh"`` for very large collections.
     normalize_colocalizations : bool, default=True
         Whether to call :meth:`NiSpace.normalize_colocalizations` after correction.
     xsea_aggregation_method : str or None, default=None

@@ -6,6 +6,8 @@
   colocalize() code path and clean_y()'s "protect" covariate-regression mode,
   see nispace.stats.coloc.partialpearson's docstring)
 - pca (ground-truth checked against sklearn.decomposition.PCA)
+- family-wise corrections: maxT_correction / step_maxT_correction (pinned against
+  their pre-refactor outputs) and minP_correction / step_minP_correction
 """
 
 import numpy as np
@@ -13,6 +15,8 @@ import pandas as pd
 import pytest
 from nispace.stats.misc import (
     null_to_p, rho_to_z, z_to_rho, residuals_nan, partial_residuals_nan, pca,
+    maxT_correction, step_maxT_correction, minP_correction, step_minP_correction,
+    _family_scale_ratio,
 )
 
 
@@ -362,3 +366,213 @@ def test_pca_rejects_n_components_out_of_range(pca_data):
         pca(pca_data, n_components=20)
     with pytest.raises(ValueError, match="out of range"):
         pca(pca_data, n_components=0)
+
+
+# ---------------------------------------------------------------------------
+# family-wise corrections: maxT / step_maxT / minP / step_minP
+# ---------------------------------------------------------------------------
+
+_FW_FUNS = [maxT_correction, step_maxT_correction, minP_correction, step_minP_correction]
+
+
+def _as_nulls(null_arr, stat="rho"):
+    """(n_perm, n_Y, n_X) array -> the list-of-dicts format the corrections consume."""
+    return [{stat: null_arr[b]} for b in range(null_arr.shape[0])]
+
+
+@pytest.fixture
+def fw_data():
+    """Seeded family: 2 Y rows x 5 X columns with heterogeneous null scales, n_perm=200.
+    No observed value exceeds every family maximum, so the 1/n_perm floor never binds."""
+    rng = np.random.default_rng(20260921)
+    null = rng.standard_normal((200, 2, 5)) * np.array([1.0, 0.5, 2.0, 1.0, 0.8])
+    obs = np.array([[0.3, -0.9, 2.5, 1.7, -0.2],
+                    [-1.1, 0.4, -3.0, 0.1, 1.9]])
+    return obs, null
+
+
+# pre-refactor outputs of maxT_correction/step_maxT_correction on fw_data -- the
+# refactor onto the shared family machinery must reproduce them exactly
+_MAXT_PINNED = {
+    ("maxT", "two", "r"): [[1., 0.91, 0.185, 0.515, 1.], [0.905, 0.995, 0.14, 1., 0.475]],
+    ("step", "two", "r"): [[0.955, 0.585, 0.185, 0.215, 0.955], [0.515, 0.815, 0.14, 0.89, 0.14]],
+    ("maxT", "two", "a"): [[1., 0.995, 0.39, 0.795, 1.], [0.975, 1., 0.25, 1., 0.68]],
+    ("step", "two", "a"): [[0.995, 0.77, 0.25, 0.38, 0.995], [0.74, 0.995, 0.25, 0.995, 0.25]],
+    ("maxT", "upper", "r"): [[0.885, 1., 0.065, 0.255, 0.975], [1., 0.89, 1., 0.965, 0.24]],
+    ("step", "upper", "r"): [[0.72, 0.96, 0.065, 0.11, 0.85], [0.945, 0.835, 0.945, 0.835, 0.24]],
+    ("maxT", "upper", "a"): [[0.99, 1., 0.19, 0.5, 1.], [1., 0.975, 1., 1., 0.385]],
+    ("step", "upper", "a"): [[0.945, 1., 0.19, 0.4, 0.945], [1., 0.94, 1., 0.945, 0.295]],
+}
+
+
+@pytest.mark.parametrize("key", list(_MAXT_PINNED))
+def test_maxT_step_maxT_pinned(fw_data, key):
+    obs, null = fw_data
+    fn = maxT_correction if key[0] == "maxT" else step_maxT_correction
+    p, reject = fn(obs, _as_nulls(null), "rho", tail=key[1], how=key[2])
+    np.testing.assert_array_equal(p, np.array(_MAXT_PINNED[key]))
+    np.testing.assert_array_equal(reject, np.array(_MAXT_PINNED[key]) <= 0.05)
+
+
+@pytest.mark.parametrize("fn", _FW_FUNS)
+@pytest.mark.parametrize("how", ["r", "a"])
+def test_family_nan_obs_column_excluded(fw_data, fn, how):
+    # a test with NaN observed statistic is dropped from its family: it gets NaN, and
+    # every other test is corrected exactly as if it had never been there (it used to
+    # poison maxT's family max, turning every p into 0)
+    obs, null = fw_data
+    obs_nan = obs.copy()
+    obs_nan[:, 2] = np.nan
+    keep = [0, 1, 3, 4]
+    p, reject = fn(obs_nan, _as_nulls(null), "rho", how=how)
+    p_ref, _ = fn(obs[:, keep], _as_nulls(null[:, :, keep]), "rho", how=how)
+    assert np.isnan(p[:, 2]).all() and not reject[:, 2].any()
+    np.testing.assert_array_equal(p[:, keep], p_ref)
+
+
+@pytest.mark.parametrize("fn", _FW_FUNS)
+def test_family_sporadic_null_nan_does_not_poison(fw_data, fn):
+    obs, null = fw_data
+    null_nan = null.copy()
+    null_nan[::7, 0, 1] = np.nan  # one test loses some permutations
+    p, _ = fn(obs, _as_nulls(null_nan), "rho")
+    assert np.isfinite(p).all()
+    assert ((p > 0) & (p <= 1)).all()
+
+
+@pytest.mark.parametrize("fn", _FW_FUNS)
+def test_family_shape_mismatch_raises(fw_data, fn):
+    # e.g. a pooled (1, n_X) null against unpooled (n_Y, n_X) observations must fail
+    # loudly instead of being broadcast into a silently wrong (n_Y, n_X) result
+    obs, null = fw_data
+    with pytest.raises(ValueError, match="do not match"):
+        fn(obs, _as_nulls(null[:, :1, :]), "rho")
+
+
+@pytest.mark.parametrize("fn", _FW_FUNS)
+def test_family_invalid_tail_or_how_raises(fw_data, fn):
+    obs, null = fw_data
+    with pytest.raises(ValueError, match="tail"):
+        fn(obs, _as_nulls(null), "rho", tail="both")
+    with pytest.raises(ValueError, match="not supported"):
+        fn(obs, _as_nulls(null), "rho", how="c")
+
+
+@pytest.mark.parametrize("fn", [minP_correction, step_minP_correction])
+@pytest.mark.parametrize("tail", ["two", "upper", "lower"])
+def test_minP_invariant_to_per_test_affine_transform(fw_data, fn, tail):
+    # minP works on per-test ranks, so rescaling/shifting one test's observed value and
+    # null together changes nothing -- the balance property maxT lacks
+    obs, null = fw_data
+    obs2, null2 = obs.copy(), null.copy()
+    obs2[:, 1] = obs2[:, 1] * 37.0 + 5.0
+    null2[:, :, 1] = null2[:, :, 1] * 37.0 + 5.0
+    p1, _ = fn(obs, _as_nulls(null), "rho", tail=tail)
+    p2, _ = fn(obs2, _as_nulls(null2), "rho", tail=tail)
+    np.testing.assert_array_equal(p1, p2)
+
+
+def test_maxT_not_invariant_to_per_test_affine_transform(fw_data):
+    obs, null = fw_data
+    obs2, null2 = obs.copy(), null.copy()
+    obs2[:, 1] *= 37.0
+    null2[:, :, 1] *= 37.0
+    p1, _ = maxT_correction(obs, _as_nulls(null), "rho")
+    p2, _ = maxT_correction(obs2, _as_nulls(null2), "rho")
+    assert not np.array_equal(p1, p2)
+
+
+@pytest.mark.parametrize("fn", _FW_FUNS)
+@pytest.mark.parametrize("tail", ["two", "upper", "lower"])
+def test_family_p_raw_floor(fw_data, fn, tail):
+    # with the uncorrected p passed, a corrected p is never below it, nor below 1/n_perm
+    obs, null = fw_data
+    n_perm = null.shape[0]
+    p_raw = np.array([[null_to_p(obs[y, x], null[:, y, x], tail=tail) for x in range(5)]
+                      for y in range(2)])
+    p, _ = fn(obs, _as_nulls(null), "rho", tail=tail, p_raw=p_raw)
+    assert (p >= p_raw).all()
+    assert (p >= 1.0 / n_perm).all()
+
+
+@pytest.mark.parametrize("single,step", [(maxT_correction, step_maxT_correction),
+                                         (minP_correction, step_minP_correction)])
+@pytest.mark.parametrize("how", ["r", "a"])
+def test_family_stepdown_never_more_conservative(fw_data, single, step, how):
+    obs, null = fw_data
+    p_single, _ = single(obs, _as_nulls(null), "rho", how=how)
+    p_step, _ = step(obs, _as_nulls(null), "rho", how=how)
+    assert (p_step <= p_single + 1e-12).all()
+
+
+@pytest.mark.parametrize("fn", _FW_FUNS)
+def test_family_tail_direction(fn):
+    rng = np.random.default_rng(1)
+    null = rng.standard_normal((500, 1, 3))
+    obs = np.array([[4.0, -4.0, 0.0]])
+    p_up, _ = fn(obs, _as_nulls(null), "rho", tail="upper")
+    p_lo, _ = fn(obs, _as_nulls(null), "rho", tail="lower")
+    assert p_up[0, 0] < 0.05 and p_up[0, 1] > 0.5
+    assert p_lo[0, 1] < 0.05 and p_lo[0, 0] > 0.5
+
+
+@pytest.mark.parametrize("tail", ["two", "upper", "lower"])
+def test_minP_single_test_family_matches_null_to_p(tail):
+    # with a family of one there is nothing to correct: minP reduces to the per-test
+    # permutation p (up to the augmented n_perm+1 convention)
+    rng = np.random.default_rng(2)
+    null = rng.standard_normal((400, 3, 1))
+    obs = np.array([[0.5], [-1.8], [2.4]])
+    p, _ = minP_correction(obs, _as_nulls(null), "rho", tail=tail)
+    expected = np.array([[null_to_p(obs[y, 0], null[:, y, 0], tail=tail)] for y in range(3)])
+    np.testing.assert_allclose(p, expected, atol=2.5 / 400)
+
+
+def test_minP_balanced_where_maxT_is_not():
+    # complete null, 8 exchangeable tests whose null scales span 2 orders of magnitude:
+    # both control FWER, but raw maxT hands (nearly) all rejections to the widest test
+    # while minP spreads them over all tests
+    rng = np.random.default_rng(3)
+    n_perm, m, n_sim = 999, 8, 300
+    scales = np.geomspace(0.01, 1.0, m)  # widest test = last
+    rej_maxT = np.zeros(m)
+    rej_minP = np.zeros(m)
+    fwer = {"maxT": {0.05: 0, 0.2: 0}, "minP": {0.05: 0, 0.2: 0}}
+    for _ in range(n_sim):
+        allv = rng.standard_normal((n_perm + 1, 1, m)) * scales
+        obs, nulls = allv[0], _as_nulls(allv[1:])
+        p_max, _ = maxT_correction(obs, nulls, "rho")
+        p_min, _ = minP_correction(obs, nulls, "rho")
+        for name, p in [("maxT", p_max), ("minP", p_min)]:
+            for a in fwer[name]:
+                fwer[name][a] += (p <= a).any()
+        rej_maxT += (p_max[0] <= 0.2)
+        rej_minP += (p_min[0] <= 0.2)
+    for name in fwer:
+        for a, n_fw in fwer[name].items():
+            se = np.sqrt(a * (1 - a) / n_sim)
+            assert n_fw / n_sim <= a + 3 * se, (name, a, n_fw / n_sim)
+    assert rej_maxT[-1] / rej_maxT.sum() >= 0.9
+    assert rej_minP.max() / rej_minP.sum() <= 0.4
+    assert (rej_minP > 0).sum() >= m - 1
+
+
+def test_minP_resolution_warning(caplog):
+    # 30 two-tailed tests with only 99 permutations: no test can reach alpha
+    rng = np.random.default_rng(4)
+    null = rng.standard_normal((99, 1, 30))
+    obs = rng.standard_normal((1, 30))
+    with caplog.at_level("WARNING"):
+        minP_correction(obs, _as_nulls(null), "rho")
+    assert any("no test can be declared significant" in r.message for r in caplog.records)
+
+
+def test_family_scale_ratio_flags_heterogeneous_nulls():
+    rng = np.random.default_rng(5)
+    null = rng.standard_normal((1000, 2, 3)) * np.array([1.0, 1.0, 1.0])
+    null[:, 1, 2] *= 10.0  # row 1, column 2 is 10x wider
+    ratio, widest, narrowest = _family_scale_ratio(null, "two", how="r")
+    assert ratio > 5
+    assert widest == (1, 2) and narrowest[0] == 1
+    ratio_eq, _, _ = _family_scale_ratio(null[:, :1, :], "two", how="r")
+    assert ratio_eq < 1.5

@@ -48,6 +48,12 @@ def test_null_method_key(method, expected):
     ("meff", "meff_galwey"),
     ("meff_li_ji", "meff_li_ji"),
     ("maxt", "maxT"),
+    ("step_maxt", "step_maxT"),
+    ("minp", "minP"),
+    ("min_p", "minP"),
+    ("minP", "minP"),
+    ("stepminp", "step_minP"),
+    ("step_minP", "step_minP"),
     ("fdr_bh", "fdr_bh"),  # already-canonical name passes through
     ("not_an_alias", "not_an_alias"),  # unknown method passes through unchanged
 ])

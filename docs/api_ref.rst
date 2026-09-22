@@ -158,6 +158,8 @@ API Reference
    meff_sidak_correction
    maxT_correction
    step_maxT_correction
+   minP_correction
+   step_minP_correction
 
 
 .. _api_io:
