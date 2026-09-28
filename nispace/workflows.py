@@ -1226,6 +1226,16 @@ def xsea(y,
     distribution, unless ``permute_sets=True`` (see below). All parameters not
     listed below behave exactly as in :func:`colocalization`.
 
+    .. warning::
+       Do not use ``mc_method="maxT"``/``"step_maxT"`` to correct across sets.
+       maxT compares the *raw* set-level statistics, but their null distributions
+       narrow with set size (and within-set coherence), so the smallest sets
+       produce nearly every null maximum and absorb the whole error budget --
+       large sets become effectively unrejectable, even with a strong true signal.
+       FWER stays controlled, but the correction is unbalanced. Use
+       ``mc_method="minP"``/``"step_minP"`` (scale-invariant, needs ``n_perm`` of
+       roughly ``2 * n_sets / alpha``) or ``"fdr_bh"`` for large collections.
+
     Parameters
     ----------
     y : array-like or pandas DataFrame or list
@@ -1472,6 +1482,12 @@ def group_xsea(y, design,
     All parameters not listed below behave exactly as in :func:`group_colocalization`
     (this function is a thin wrapper that injects ``xsea=True`` into
     ``colocalize_kwargs`` and forwards everything else unchanged).
+
+    .. warning::
+       Do not use ``mc_method="maxT"``/``"step_maxT"`` to correct across sets --
+       set-level nulls narrow with set size, so the smallest sets absorb the whole
+       error budget. Use ``"minP"``/``"step_minP"`` or ``"fdr_bh"`` (see
+       :func:`xsea`).
 
     Parameters
     ----------

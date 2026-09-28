@@ -422,8 +422,12 @@ _EMPIRICAL_MC_METHODS = {"meff_galwey", "meff_li_ji", "maxT", "step_maxT", "minP
 
 # maxT/step_maxT compare raw statistics across the tests of a family; correct_p() warns
 # when the widest test null is more than this many times wider than the narrowest
-# (the narrowest-null tests then become effectively unrejectable -- use minP/step_minP)
-_MAXT_SCALE_RATIO_WARN = 2.0
+# (the narrowest-null tests then become effectively unrejectable -- use minP/step_minP).
+# Calibrated on real data (q95-q50 width ratio, spatial null on Y): XSEA collections with
+# heterogeneous set sizes 3.2-14 (Siletti/PsychEncode/SynGO); mild, not worth a warning:
+# single PET maps 2.2-2.6, XSEA with few similar-sized sets (CorticalLayers) 2.0-3.0;
+# single maps can exceed it too (random mRNA genes 5.0, cortexfeatures 3.6)
+_MAXT_SCALE_RATIO_WARN = 3.0
 
 def _get_correct_mc_method(mc_method):
     return _MC_METHOD_ALIASES.get(mc_method, mc_method)

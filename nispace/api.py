@@ -2369,7 +2369,7 @@ class NiSpace:
             - ``"rho"`` -- signed mean, computed via Fisher-z averaging (each
               parcel's rho is z-transformed, averaged, then converted back to
               a correlation -- never a raw arithmetic mean of bounded rho
-              values, which is downward-biased for larger |rho|; standard
+              values, which is downward-biased for larger ``|rho|``; standard
               meta-analytic combination). Most powerful if you expect a
               consistent-direction relationship across parcels (mirrors
               :meth:`paired_colocalization`'s ``pooled_p="mean"``, which pools
@@ -3901,40 +3901,65 @@ class NiSpace:
         Parameters
         ----------
         mc_method : str, default "meff"
-            Correction method. One of:
+            Correction method; the aliases in parentheses are accepted too.
 
-            * ``"meff"`` / ``"meff_galwey"`` (default) -- Šidák correction using
-              an effective number of independent tests estimated from the
-              eigenvalues of X's (and, for ``mc_dimension="array"`` with
-              multiple Y rows, also Y's) correlation matrix. :cite:`galwey2009`
-            * ``"meff_li_ji"`` -- same Šidák-correction scheme, with an
-              alternative eigenvalue-based effective-N estimator. :cite:`liji2005`
-            * ``"maxT"`` -- single-step max-statistic FWER correction from the
-              permutation null computed by :meth:`permute`; requires the null
-              colocalization distributions to still be available (i.e. not
-              dropped via ``save_nulls=False``). Compares *raw* statistics across
-              the X columns, so it assumes their null distributions are on a
-              comparable scale; a warning is logged when they are not. Not
-              recommended for XSEA with sets of different sizes (the smallest
-              sets' wide nulls then absorb the whole error budget) -- use
-              ``"minP"``/``"step_minP"`` there. :cite:`westfall1993`
-            * ``"step_maxT"`` -- step-down variant of ``"maxT"``, more powerful
-              while preserving FWER control. :cite:`westfall1993`
-            * ``"minP"`` -- single-step min-p FWER correction: like ``"maxT"``,
-              but the family extreme is taken over per-column permutation
-              p-values instead of raw statistics, so every column gets an equal
-              share of the error budget regardless of its null's scale, location
-              or shape. Same null-availability requirement as ``"maxT"``. Its
-              resolution is limited by ``n_perm``: roughly ``2 * n_X / mc_alpha``
-              permutations (two-tailed) are needed for independent columns, and a
-              warning is logged when no column can reach significance -- for very
-              large families (e.g. thousands of gene sets), ``"fdr_bh"`` is
-              usually the practical choice. :cite:`westfall1993`
-            * ``"step_minP"`` -- step-down variant of ``"minP"``. :cite:`westfall1993`
-            * ``"fdr_bh"`` -- Benjamini-Hochberg false discovery rate. :cite:`benjamini1995`
-            * ``"bonferroni"``, or any other method name accepted by
-              ``statsmodels.stats.multitest.multipletests`` (e.g. ``"holm"``,
-              ``"hommel"``, ``"sidak"``, ``"fdr_by"``) -- passed through as-is.
+            *Empirical methods* (computed by NiSpace itself):
+
+            * ``"meff_galwey"`` (default; alias ``"meff"``, ``"meffgalwey"``) --
+              FWER: Šidák correction using an effective number of independent
+              tests estimated from the eigenvalues of X's (and, for
+              ``mc_dimension="array"`` with multiple Y rows, also Y's)
+              correlation matrix. For XSEA, Meff is estimated from the per-set
+              mean maps. :cite:`galwey2009`
+            * ``"meff_li_ji"`` (alias ``"meff_liji"``, ``"meffliji"``) -- FWER:
+              same Šidák scheme, with an alternative eigenvalue-based
+              effective-N estimator. :cite:`liji2005`
+            * ``"maxT"`` (alias ``"maxt"``) -- FWER: single-step max-statistic
+              correction from the permutation null computed by :meth:`permute`
+              (requires the null colocalizations to still be available, i.e.
+              not dropped via ``save_nulls=False``). Compares *raw* statistics
+              across X columns, so it assumes their null distributions are on a
+              comparable scale; a warning is logged when their widths differ by
+              more than 3x. **Not recommended for XSEA** with sets of different
+              sizes: set-level nulls narrow with set size, so the smallest sets
+              absorb the whole error budget -- use ``"minP"``/``"step_minP"``.
+              :cite:`westfall1993`
+            * ``"step_maxT"`` (alias ``"step_maxt"``, ``"stepmaxt"``) -- FWER:
+              step-down variant of ``"maxT"``, at least as powerful. Same
+              requirements and caveats. :cite:`westfall1993`
+            * ``"minP"`` (alias ``"minp"``, ``"min_p"``) -- FWER: single-step
+              min-p correction: like ``"maxT"``, but the family extreme is taken
+              over per-column permutation p-values instead of raw statistics,
+              so every column gets an equal share of the error budget
+              regardless of its null's scale, location or shape. Same
+              null-availability requirement as ``"maxT"``. Resolution is limited
+              by ``n_perm``: roughly ``2 * n_X / mc_alpha`` permutations
+              (two-tailed) are needed for independent columns, and a warning is
+              logged when no column can reach significance -- for very large
+              families (e.g. thousands of gene sets), ``"fdr_bh"`` is usually
+              the practical choice. :cite:`westfall1993`
+            * ``"step_minP"`` (alias ``"step_minp"``, ``"stepminp"``) -- FWER:
+              step-down variant of ``"minP"``, at least as powerful.
+              :cite:`westfall1993`
+
+            *Classical methods* (passed to
+            ``statsmodels.stats.multitest.multipletests``, operate on the
+            uncorrected p-values only):
+
+            * ``"bonferroni"`` (alias ``"bonf"``) -- FWER.
+            * ``"sidak"`` -- FWER.
+            * ``"holm"`` -- FWER, step-down Bonferroni.
+            * ``"holm-sidak"`` (alias ``"holmsidak"``) -- FWER, step-down Šidák.
+            * ``"simes-hochberg"`` (alias ``"simeshochberg"``) -- FWER, step-up.
+            * ``"hommel"`` -- FWER.
+            * ``"fdr_bh"`` (alias ``"fdr"``, ``"fdrbh"``) -- FDR,
+              Benjamini-Hochberg. :cite:`benjamini1995`
+            * ``"fdr_by"`` (alias ``"fdrby"``) -- FDR, Benjamini-Yekutieli
+              (valid under arbitrary dependence).
+            * ``"fdr_tsbh"`` (alias ``"fdrtsbh"``) -- FDR, two-stage
+              Benjamini-Hochberg.
+            * ``"fdr_tsbky"`` (alias ``"fdrtsbky"``) -- FDR, two-stage
+              Benjamini-Krieger-Yekutieli.
 
         mc_alpha : float, default 0.05
             Alpha threshold used by the correction.
@@ -4091,12 +4116,14 @@ class NiSpace:
                         if ratio > _MAXT_SCALE_RATIO_WARN:  # False for NaN
                             row_info = (f" in Y row '{p_values.index[widest[0]]}'"
                                         if p_values.shape[0] > 1 else "")
-                            hint = ""
                             if xsea:
                                 hint = " This is expected for XSEA with sets of different sizes."
                             elif stat in {"beta", "individual"} and "x" not in (self._zscore or ""):
                                 hint = (" X was not z-scored, so regression coefficients don't "
                                         "share a scale; standardize='x' may help.")
+                            else:
+                                hint = (" For single maps this typically reflects differences in "
+                                        "their spatial autocorrelation.")
                             lgr.warning(
                                 f"'{mc_method}' compares raw '{stat}' statistics across X "
                                 f"columns, but their null distributions differ in width by a "

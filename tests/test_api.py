@@ -498,10 +498,11 @@ def test_correct_p_familywise_pooled_p_uses_pooled_observed(mc_method):
 
 @pytest.fixture
 def nsp_xsea_unequal_sets(rng):
-    """XSEA X with one 2-map and one 20-map set of independent random maps: the
-    set-mean null of the small set is ~sqrt(10)x wider than the big set's."""
+    """XSEA X with one 2-map and one 50-map set of independent random maps: the
+    set-mean null of the small set is ~sqrt(25)=5x wider than the big set's (well
+    above the 3x warning threshold)."""
     n_parcels = 30
-    tuples = [("small", f"g{i}") for i in range(2)] + [("big", f"g{i}") for i in range(2, 22)]
+    tuples = [("small", f"g{i}") for i in range(2)] + [("big", f"g{i}") for i in range(2, 52)]
     idx = pd.MultiIndex.from_tuples(tuples, names=["set", "gene"])
     X = rng.normal(size=(len(tuples), n_parcels))
     parcel_labels = [f"parcel{i}" for i in range(n_parcels)]
