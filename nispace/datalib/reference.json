@@ -543,6 +543,461 @@
             "remote": "reference/bigbrain/plot/dset-bigbrain_plot-overview.png"
         }
     },
+    "celltypes-pak2024": {
+        "label": "CellTypes-Pak2024",
+        "description": "The NiSpace \"CellTypes-Pak2024\" dataset contains whole-brain maps of the relative abundance of six canonical cell types (astrocytes, endothelial cells, microglia, neurons, oligodendrocytes, and oligodendrocyte precursor cells) as published by Pak et al. (2024). Maps were reconstructed from Allen Human Brain Atlas (AHBA) bulk microarray data by Gaussian-process interpolation of 80 cell-type marker genes to all gray matter voxels and marker-gene-based deconvolution (BRETIGEA); per voxel, cell-type values sum to one and are scaled by gray matter density. Original maps are retrieved from the authors' GitHub repository (https://github.com/neuropm-lab/cellmaps; space MNIOriginal, 1.5mm SPM MNI grid, treated as MNI152NLin6Asym), resampled to 2mm MNI152NLin6Asym space and masked, and transformed to MNI152NLin2009cAsym, fsLR, and fsaverage spaces.",
+        "cortex_only": false,
+        "citations": [
+            {
+                "ref": "Pak et al., 2024",
+                "doi": "10.7554/eLife.89368"
+            },
+            {
+                "ref": "Hawrylycz et al., 2012",
+                "doi": "10.1038/nature11405"
+            }
+        ],
+        "license": "CC BY 4.0",
+        "collection": {
+            "All": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/collection-All.collect",
+                "description": "Six whole-brain canonical cell-type abundance maps (Pak et al., 2024)."
+            }
+        },
+        "tab": {
+            "AALCortical": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-AALCortical.csv.gz"
+            },
+            "AALSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-AALSubcortical.csv.gz"
+            },
+            "Aseg": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-Aseg.csv.gz"
+            },
+            "BrainnetomeCortical": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-BrainnetomeCortical.csv.gz"
+            },
+            "BrainnetomeSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-BrainnetomeSubcortical.csv.gz"
+            },
+            "DesikanKilliany": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-DesikanKilliany.csv.gz"
+            },
+            "DesikanKillianyTourville": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-DesikanKillianyTourville.csv.gz"
+            },
+            "Destrieux": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-Destrieux.csv.gz"
+            },
+            "Glasser": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-Glasser.csv.gz"
+            },
+            "HarvardOxfordCortical": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-HarvardOxfordCortical.csv.gz"
+            },
+            "HarvardOxfordSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-HarvardOxfordSubcortical.csv.gz"
+            },
+            "Schaefer1000Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-Schaefer1000Parcels17Networks.csv.gz"
+            },
+            "Schaefer1000Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-Schaefer1000Parcels7Networks.csv.gz"
+            },
+            "Schaefer100Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-Schaefer100Parcels17Networks.csv.gz"
+            },
+            "Schaefer100Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-Schaefer100Parcels7Networks.csv.gz"
+            },
+            "Schaefer200Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-Schaefer200Parcels17Networks.csv.gz"
+            },
+            "Schaefer200Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-Schaefer200Parcels7Networks.csv.gz"
+            },
+            "Schaefer400Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-Schaefer400Parcels17Networks.csv.gz"
+            },
+            "Schaefer400Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-Schaefer400Parcels7Networks.csv.gz"
+            },
+            "TianS1": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-TianS1.csv.gz"
+            },
+            "TianS2": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-TianS2.csv.gz"
+            },
+            "TianS3": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-TianS3.csv.gz"
+            },
+            "TianS4": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-TianS4.csv.gz"
+            },
+            "Yan100": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-Yan100.csv.gz"
+            },
+            "Yan1000": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-Yan1000.csv.gz"
+            },
+            "Yan200": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-Yan200.csv.gz"
+            },
+            "Yan400": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-pak2024/tab/dset-celltypes-pak2024_parc-Yan400.csv.gz"
+            }
+        },
+        "map": {
+            "cell-astrocytes_pub-pak2024": {
+                "MNIOriginal": {
+                    "host": "url",
+                    "remote": "https://raw.githubusercontent.com/neuropm-lab/cellmaps/9f97684e8cf2b8196e5b13c11d1001236aec2665/ast.nii"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/celltypes-pak2024/map/cell-astrocytes_pub-pak2024/cell-astrocytes_pub-pak2024_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/celltypes-pak2024/map/cell-astrocytes_pub-pak2024/cell-astrocytes_pub-pak2024_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-astrocytes_pub-pak2024/cell-astrocytes_pub-pak2024_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-astrocytes_pub-pak2024/cell-astrocytes_pub-pak2024_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-astrocytes_pub-pak2024/cell-astrocytes_pub-pak2024_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-astrocytes_pub-pak2024/cell-astrocytes_pub-pak2024_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "cell-endothelial_pub-pak2024": {
+                "MNIOriginal": {
+                    "host": "url",
+                    "remote": "https://raw.githubusercontent.com/neuropm-lab/cellmaps/9f97684e8cf2b8196e5b13c11d1001236aec2665/end.nii"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/celltypes-pak2024/map/cell-endothelial_pub-pak2024/cell-endothelial_pub-pak2024_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/celltypes-pak2024/map/cell-endothelial_pub-pak2024/cell-endothelial_pub-pak2024_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-endothelial_pub-pak2024/cell-endothelial_pub-pak2024_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-endothelial_pub-pak2024/cell-endothelial_pub-pak2024_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-endothelial_pub-pak2024/cell-endothelial_pub-pak2024_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-endothelial_pub-pak2024/cell-endothelial_pub-pak2024_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "cell-microglia_pub-pak2024": {
+                "MNIOriginal": {
+                    "host": "url",
+                    "remote": "https://raw.githubusercontent.com/neuropm-lab/cellmaps/9f97684e8cf2b8196e5b13c11d1001236aec2665/mic.nii"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/celltypes-pak2024/map/cell-microglia_pub-pak2024/cell-microglia_pub-pak2024_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/celltypes-pak2024/map/cell-microglia_pub-pak2024/cell-microglia_pub-pak2024_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-microglia_pub-pak2024/cell-microglia_pub-pak2024_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-microglia_pub-pak2024/cell-microglia_pub-pak2024_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-microglia_pub-pak2024/cell-microglia_pub-pak2024_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-microglia_pub-pak2024/cell-microglia_pub-pak2024_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "cell-neurons_pub-pak2024": {
+                "MNIOriginal": {
+                    "host": "url",
+                    "remote": "https://raw.githubusercontent.com/neuropm-lab/cellmaps/9f97684e8cf2b8196e5b13c11d1001236aec2665/neu.nii"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/celltypes-pak2024/map/cell-neurons_pub-pak2024/cell-neurons_pub-pak2024_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/celltypes-pak2024/map/cell-neurons_pub-pak2024/cell-neurons_pub-pak2024_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-neurons_pub-pak2024/cell-neurons_pub-pak2024_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-neurons_pub-pak2024/cell-neurons_pub-pak2024_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-neurons_pub-pak2024/cell-neurons_pub-pak2024_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-neurons_pub-pak2024/cell-neurons_pub-pak2024_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "cell-oligodendrocytes_pub-pak2024": {
+                "MNIOriginal": {
+                    "host": "url",
+                    "remote": "https://raw.githubusercontent.com/neuropm-lab/cellmaps/9f97684e8cf2b8196e5b13c11d1001236aec2665/oli.nii"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/celltypes-pak2024/map/cell-oligodendrocytes_pub-pak2024/cell-oligodendrocytes_pub-pak2024_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/celltypes-pak2024/map/cell-oligodendrocytes_pub-pak2024/cell-oligodendrocytes_pub-pak2024_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-oligodendrocytes_pub-pak2024/cell-oligodendrocytes_pub-pak2024_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-oligodendrocytes_pub-pak2024/cell-oligodendrocytes_pub-pak2024_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-oligodendrocytes_pub-pak2024/cell-oligodendrocytes_pub-pak2024_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-oligodendrocytes_pub-pak2024/cell-oligodendrocytes_pub-pak2024_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "cell-opc_pub-pak2024": {
+                "MNIOriginal": {
+                    "host": "url",
+                    "remote": "https://raw.githubusercontent.com/neuropm-lab/cellmaps/9f97684e8cf2b8196e5b13c11d1001236aec2665/opc.nii"
+                },
+                "MNI152NLin6Asym": {
+                    "host": "github-nispace",
+                    "remote": "reference/celltypes-pak2024/map/cell-opc_pub-pak2024/cell-opc_pub-pak2024_space-MNI152NLin6Asym_desc-proc.nii.gz"
+                },
+                "MNI152NLin2009cAsym": {
+                    "host": "github-nispace",
+                    "remote": "reference/celltypes-pak2024/map/cell-opc_pub-pak2024/cell-opc_pub-pak2024_space-MNI152NLin2009cAsym_desc-proc.nii.gz"
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-opc_pub-pak2024/cell-opc_pub-pak2024_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-opc_pub-pak2024/cell-opc_pub-pak2024_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-opc_pub-pak2024/cell-opc_pub-pak2024_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/celltypes-pak2024/map/cell-opc_pub-pak2024/cell-opc_pub-pak2024_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "reference/celltypes-pak2024/plot/dset-celltypes-pak2024_plot-overview.png"
+        }
+    },
+    "celltypes-zhang2025": {
+        "label": "CellTypes-Zhang2025",
+        "description": "The NiSpace \"CellTypes-Zhang2025\" dataset contains cortical abundances of 24 cell types (9 excitatory, 9 inhibitory, 6 non-neuronal) as published by Zhang et al. (2025). Cell-type fractions were imputed for each Allen Human Brain Atlas (AHBA) cortical bulk microarray sample with CIBERSORTx, using the single-nucleus RNA-seq data of Jorstad et al. (2023) as reference, and samples were mapped to the fsLR 32k surface. NiSpace recomputes parcel-wise values from these sample-level data (https://github.com/XihanZhang/human-cellular-func-con), following the authors' approach (exclusion of samples >4 mm from the surface; average of all samples within a parcel). Samples were additionally mirrored across hemispheres. Parcels without samples are NaN. Map names follow the Jorstad et al. (2023) subclass names (e.g., \"cell-L23IT\" for L2/3 IT neurons, \"cell-Pvalb\" for PVALB interneurons, \"cell-MicroPVM\" for microglia/perivascular macrophages), with the Jorstad et al. (2023) class given as \"class-excitatory\", \"class-inhibitory\", or \"class-nonneuronal\". The data are used with permission of the authors; please cite the original publication.",
+        "cortex_only": true,
+        "citations": [
+            {
+                "ref": "Zhang et al., 2025",
+                "doi": "10.1038/s41593-024-01812-2"
+            },
+            {
+                "ref": "Jorstad et al., 2023",
+                "doi": "10.1126/science.adf6812"
+            },
+            {
+                "ref": "Hawrylycz et al., 2012",
+                "doi": "10.1038/nature11405"
+            }
+        ],
+        "license": "attribution (by permission)",
+        "collection": {
+            "All": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/collection-All.collect",
+                "description": "All 24 cortical cell-type abundance maps imputed with the Jorstad et al. (2023) reference (Zhang et al., 2025)."
+            },
+            "Excitatory": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/collection-Excitatory.collect",
+                "description": "Nine excitatory neuron cell types."
+            },
+            "Inhibitory": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/collection-Inhibitory.collect",
+                "description": "Nine inhibitory neuron cell types."
+            },
+            "NonNeuronal": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/collection-NonNeuronal.collect",
+                "description": "Six non-neuronal cell types."
+            }
+        },
+        "tab": {
+            "AALCortical": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/tab/dset-celltypes-zhang2025_parc-AALCortical.csv.gz"
+            },
+            "BrainnetomeCortical": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/tab/dset-celltypes-zhang2025_parc-BrainnetomeCortical.csv.gz"
+            },
+            "DesikanKilliany": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/tab/dset-celltypes-zhang2025_parc-DesikanKilliany.csv.gz"
+            },
+            "DesikanKillianyTourville": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/tab/dset-celltypes-zhang2025_parc-DesikanKillianyTourville.csv.gz"
+            },
+            "Destrieux": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/tab/dset-celltypes-zhang2025_parc-Destrieux.csv.gz"
+            },
+            "Glasser": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/tab/dset-celltypes-zhang2025_parc-Glasser.csv.gz"
+            },
+            "HarvardOxfordCortical": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/tab/dset-celltypes-zhang2025_parc-HarvardOxfordCortical.csv.gz"
+            },
+            "Schaefer100Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/tab/dset-celltypes-zhang2025_parc-Schaefer100Parcels17Networks.csv.gz"
+            },
+            "Schaefer100Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/tab/dset-celltypes-zhang2025_parc-Schaefer100Parcels7Networks.csv.gz"
+            },
+            "Schaefer200Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/tab/dset-celltypes-zhang2025_parc-Schaefer200Parcels17Networks.csv.gz"
+            },
+            "Schaefer200Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/tab/dset-celltypes-zhang2025_parc-Schaefer200Parcels7Networks.csv.gz"
+            },
+            "Schaefer400Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/tab/dset-celltypes-zhang2025_parc-Schaefer400Parcels17Networks.csv.gz"
+            },
+            "Schaefer400Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/tab/dset-celltypes-zhang2025_parc-Schaefer400Parcels7Networks.csv.gz"
+            },
+            "Yan100": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/tab/dset-celltypes-zhang2025_parc-Yan100.csv.gz"
+            },
+            "Yan200": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/tab/dset-celltypes-zhang2025_parc-Yan200.csv.gz"
+            },
+            "Yan400": {
+                "host": "github-nispace",
+                "remote": "reference/celltypes-zhang2025/tab/dset-celltypes-zhang2025_parc-Yan400.csv.gz"
+            }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "reference/celltypes-zhang2025/plot/dset-celltypes-zhang2025_plot-overview.png"
+        }
+    },
     "cortexfeatures": {
         "label": "CortexFeatures",
         "description": "The NiSpace \"CortexFeatures\" dataset consists of different features of cortical topology available via neuromaps. Many of these maps were used in Shafiei et al., 2023. The maps are fetched directly from neuromaps (space=\"fsLROriginal\" or \"fsaverageOriginal\") or downloaded from the NiSpace-data GitHub repo (space=\"fsLR\" or \"fsaverage\"; recommended). Please cite neuromaps (https://neuromaps-main.readthedocs.io/) and the original publication for each map when used.",
@@ -1651,6 +2106,7 @@
                 "doi": "10.1038/s41592-021-01186-4"
             }
         ],
+        "license": "BSD 3-Clause",
         "map_info": {
             "cite_column": "doi",
             "display_columns": [
@@ -1702,6 +2158,7 @@
                 "doi": "10.1038/s41592-021-01186-4"
             }
         ],
+        "license": "BSD 3-Clause",
         "map_info": {
             "cite_column": "doi",
             "display_columns": [
@@ -1757,6 +2214,7 @@
                 "doi": "10.1016/j.neuroimage.2020.117038"
             }
         ],
+        "license": "CC BY 4.0",
         "collection": {
             "All": {
                 "host": "github-nispace",
@@ -2093,6 +2551,7 @@
                 "doi": "10.7554/eLife.86933.1"
             }
         ],
+        "license": "CC BY 4.0",
         "collection": {
             "All": {
                 "host": "github-nispace",
@@ -2116,7 +2575,8 @@
                         "ref": "Wang et al., 2018",
                         "doi": "10.1126/science.aat8464"
                     }
-                ]
+                ],
+                "license": "free"
             },
             "CellTypesPsychEncodeUMI": {
                 "host": "github-nispace",
@@ -2131,7 +2591,8 @@
                         "ref": "Wang et al., 2018",
                         "doi": "10.1126/science.aat8464"
                     }
-                ]
+                ],
+                "license": "free"
             },
             "CellTypesSilettiClusters": {
                 "host": "github-nispace",
@@ -2142,7 +2603,8 @@
                         "ref": "Siletti et al., 2023",
                         "doi": "10.1126/science.add7046"
                     }
-                ]
+                ],
+                "license": "BSD 2-Clause"
             },
             "CellTypesSilettiSuperclusters": {
                 "host": "github-nispace",
@@ -2153,7 +2615,8 @@
                         "ref": "Siletti et al., 2023",
                         "doi": "10.1126/science.add7046"
                     }
-                ]
+                ],
+                "license": "BSD 2-Clause"
             },
             "Chromosome": {
                 "host": "github-nispace",
@@ -2168,7 +2631,8 @@
                         "ref": "Subramanian et al., 2005",
                         "doi": "10.1073/pnas.0506580102"
                     }
-                ]
+                ],
+                "license": "CC BY 4.0"
             },
             "SynGO": {
                 "host": "github-nispace",
@@ -2179,7 +2643,8 @@
                         "ref": "Koopmans et al., 2019",
                         "doi": "10.1016/j.neuron.2019.05.002"
                     }
-                ]
+                ],
+                "license": "free (attribution)"
             },
             "GOBiologicalProcess": {
                 "host": "github-nispace",
@@ -2198,7 +2663,8 @@
                         "ref": "Subramanian et al., 2005",
                         "doi": "10.1073/pnas.0506580102"
                     }
-                ]
+                ],
+                "license": "CC BY 4.0"
             },
             "GOCellularComponent": {
                 "host": "github-nispace",
@@ -2217,7 +2683,8 @@
                         "ref": "Subramanian et al., 2005",
                         "doi": "10.1073/pnas.0506580102"
                     }
-                ]
+                ],
+                "license": "CC BY 4.0"
             },
             "GOMolecularFunction": {
                 "host": "github-nispace",
@@ -2236,7 +2703,8 @@
                         "ref": "Subramanian et al., 2005",
                         "doi": "10.1073/pnas.0506580102"
                     }
-                ]
+                ],
+                "license": "CC BY 4.0"
             },
             "CorticalLayers": {
                 "host": "github-nispace",
@@ -2255,7 +2723,8 @@
                         "ref": "Maynard et al., 2021",
                         "doi": "10.1038/s41593-020-00787-0"
                     }
-                ]
+                ],
+                "license": "CC0 1.0"
             },
             "ProteinAtlas": {
                 "host": "github-nispace",
@@ -2266,7 +2735,8 @@
                         "ref": "Sjöstedt et al., 2020",
                         "doi": "10.1126/science.aay5947"
                     }
-                ]
+                ],
+                "license": "CC BY 4.0"
             },
             "BrainSpan": {
                 "host": "github-nispace",
@@ -2281,7 +2751,8 @@
                         "ref": "Grote et al., 2016",
                         "doi": "10.1093/bioinformatics/btw392"
                     }
-                ]
+                ],
+                "license": "GPL 2.0+"
             },
             "BrainSpanWeights": {
                 "host": "github-nispace",
@@ -2296,7 +2767,8 @@
                         "ref": "Grote et al., 2016",
                         "doi": "10.1093/bioinformatics/btw392"
                     }
-                ]
+                ],
+                "license": "GPL 2.0+"
             },
             "ASDModulesGandal2022": {
                 "host": "github-nispace",
@@ -2307,7 +2779,8 @@
                         "ref": "Gandal et al., 2022",
                         "doi": "10.1038/s41586-022-05377-7"
                     }
-                ]
+                ],
+                "license": "CC BY 4.0"
             },
             "ASDModulesGandal2022Weights": {
                 "host": "github-nispace",
@@ -2318,7 +2791,8 @@
                         "ref": "Gandal et al., 2022",
                         "doi": "10.1038/s41586-022-05377-7"
                     }
-                ]
+                ],
+                "license": "CC BY 4.0"
             },
             "FMR1Targets": {
                 "host": "github-nispace",
@@ -2345,7 +2819,8 @@
                         "ref": "Tran et al., 2019",
                         "doi": "10.1038/s41593-018-0287-x"
                     }
-                ]
+                ],
+                "license": "free"
             },
             "FXSEditDiffWeights": {
                 "host": "github-nispace",
@@ -2356,7 +2831,8 @@
                         "ref": "Tran et al., 2019",
                         "doi": "10.1038/s41593-018-0287-x"
                     }
-                ]
+                ],
+                "license": "free"
             },
             "GWASAtlas": {
                 "host": "github-nispace",
@@ -2423,7 +2899,8 @@
                         "ref": "International League Against Epilepsy Consortium on Complex Epilepsies, 2014",
                         "doi": "10.1016/S1474-4422(14)70171-1"
                     }
-                ]
+                ],
+                "license": "free"
             },
             "GWASAtlasWeights": {
                 "host": "github-nispace",
@@ -2502,7 +2979,8 @@
                         "ref": "International League Against Epilepsy Consortium on Complex Epilepsies, 2014",
                         "doi": "10.1016/S1474-4422(14)70171-1"
                     }
-                ]
+                ],
+                "license": "free"
             },
             "HPOAllPsychiatric": {
                 "host": "github-nispace",
@@ -2517,7 +2995,8 @@
                         "ref": "Köhler et al., 2017",
                         "doi": "10.1093/nar/gkw1039"
                     }
-                ]
+                ],
+                "license": "HPO License"
             },
             "HPOCorePsychiatric": {
                 "host": "github-nispace",
@@ -2532,7 +3011,8 @@
                         "ref": "Köhler et al., 2017",
                         "doi": "10.1093/nar/gkw1039"
                     }
-                ]
+                ],
+                "license": "HPO License"
             }
         },
         "tab": {
@@ -2628,6 +3108,7 @@
                 "doi": "10.1038/s41586-025-08740-6"
             }
         ],
+        "license": "CC0 1.0",
         "map_info": {
             "cite_column": "doi",
             "display_columns": [
@@ -2982,6 +3463,7 @@
                 "doi": "10.7554/eLife.72129"
             }
         ],
+        "license": "Allen Institute Terms of Use",
         "collection": {
             "All": {
                 "host": "github-nispace",
@@ -3005,7 +3487,8 @@
                         "ref": "Wang et al., 2018",
                         "doi": "10.1126/science.aat8464"
                     }
-                ]
+                ],
+                "license": "free"
             },
             "CellTypesPsychEncodeUMI": {
                 "host": "github-nispace",
@@ -3020,7 +3503,8 @@
                         "ref": "Wang et al., 2018",
                         "doi": "10.1126/science.aat8464"
                     }
-                ]
+                ],
+                "license": "free"
             },
             "CellTypesSilettiClusters": {
                 "host": "github-nispace",
@@ -3031,7 +3515,8 @@
                         "ref": "Siletti et al., 2023",
                         "doi": "10.1126/science.add7046"
                     }
-                ]
+                ],
+                "license": "BSD 2-Clause"
             },
             "CellTypesSilettiSuperclusters": {
                 "host": "github-nispace",
@@ -3042,7 +3527,8 @@
                         "ref": "Siletti et al., 2023",
                         "doi": "10.1126/science.add7046"
                     }
-                ]
+                ],
+                "license": "BSD 2-Clause"
             },
             "Chromosome": {
                 "host": "github-nispace",
@@ -3057,7 +3543,8 @@
                         "ref": "Subramanian et al., 2005",
                         "doi": "10.1073/pnas.0506580102"
                     }
-                ]
+                ],
+                "license": "CC BY 4.0"
             },
             "SynGO": {
                 "host": "github-nispace",
@@ -3068,7 +3555,8 @@
                         "ref": "Koopmans et al., 2019",
                         "doi": "10.1016/j.neuron.2019.05.002"
                     }
-                ]
+                ],
+                "license": "free (attribution)"
             },
             "GOBiologicalProcess": {
                 "host": "github-nispace",
@@ -3087,7 +3575,8 @@
                         "ref": "Subramanian et al., 2005",
                         "doi": "10.1073/pnas.0506580102"
                     }
-                ]
+                ],
+                "license": "CC BY 4.0"
             },
             "GOCellularComponent": {
                 "host": "github-nispace",
@@ -3106,7 +3595,8 @@
                         "ref": "Subramanian et al., 2005",
                         "doi": "10.1073/pnas.0506580102"
                     }
-                ]
+                ],
+                "license": "CC BY 4.0"
             },
             "GOMolecularFunction": {
                 "host": "github-nispace",
@@ -3125,7 +3615,8 @@
                         "ref": "Subramanian et al., 2005",
                         "doi": "10.1073/pnas.0506580102"
                     }
-                ]
+                ],
+                "license": "CC BY 4.0"
             },
             "CorticalLayers": {
                 "host": "github-nispace",
@@ -3144,7 +3635,8 @@
                         "ref": "Maynard et al., 2021",
                         "doi": "10.1038/s41593-020-00787-0"
                     }
-                ]
+                ],
+                "license": "CC0 1.0"
             },
             "ProteinAtlas": {
                 "host": "github-nispace",
@@ -3155,7 +3647,8 @@
                         "ref": "Sjöstedt et al., 2020",
                         "doi": "10.1126/science.aay5947"
                     }
-                ]
+                ],
+                "license": "CC BY 4.0"
             },
             "BrainSpan": {
                 "host": "github-nispace",
@@ -3170,7 +3663,8 @@
                         "ref": "Grote et al., 2016",
                         "doi": "10.1093/bioinformatics/btw392"
                     }
-                ]
+                ],
+                "license": "GPL 2.0+"
             },
             "BrainSpanWeights": {
                 "host": "github-nispace",
@@ -3185,7 +3679,8 @@
                         "ref": "Grote et al., 2016",
                         "doi": "10.1093/bioinformatics/btw392"
                     }
-                ]
+                ],
+                "license": "GPL 2.0+"
             },
             "ASDModulesGandal2022": {
                 "host": "github-nispace",
@@ -3196,7 +3691,8 @@
                         "ref": "Gandal et al., 2022",
                         "doi": "10.1038/s41586-022-05377-7"
                     }
-                ]
+                ],
+                "license": "CC BY 4.0"
             },
             "ASDModulesGandal2022Weights": {
                 "host": "github-nispace",
@@ -3207,7 +3703,8 @@
                         "ref": "Gandal et al., 2022",
                         "doi": "10.1038/s41586-022-05377-7"
                     }
-                ]
+                ],
+                "license": "CC BY 4.0"
             },
             "FMR1Targets": {
                 "host": "github-nispace",
@@ -3234,7 +3731,8 @@
                         "ref": "Tran et al., 2019",
                         "doi": "10.1038/s41593-018-0287-x"
                     }
-                ]
+                ],
+                "license": "free"
             },
             "FXSEditDiffWeights": {
                 "host": "github-nispace",
@@ -3245,7 +3743,8 @@
                         "ref": "Tran et al., 2019",
                         "doi": "10.1038/s41593-018-0287-x"
                     }
-                ]
+                ],
+                "license": "free"
             },
             "GWASAtlas": {
                 "host": "github-nispace",
@@ -3312,7 +3811,8 @@
                         "ref": "International League Against Epilepsy Consortium on Complex Epilepsies, 2014",
                         "doi": "10.1016/S1474-4422(14)70171-1"
                     }
-                ]
+                ],
+                "license": "free"
             },
             "GWASAtlasWeights": {
                 "host": "github-nispace",
@@ -3391,7 +3891,8 @@
                         "ref": "International League Against Epilepsy Consortium on Complex Epilepsies, 2014",
                         "doi": "10.1016/S1474-4422(14)70171-1"
                     }
-                ]
+                ],
+                "license": "free"
             },
             "HPOAllPsychiatric": {
                 "host": "github-nispace",
@@ -3406,7 +3907,8 @@
                         "ref": "Köhler et al., 2017",
                         "doi": "10.1093/nar/gkw1039"
                     }
-                ]
+                ],
+                "license": "HPO License"
             },
             "HPOCorePsychiatric": {
                 "host": "github-nispace",
@@ -3421,7 +3923,8 @@
                         "ref": "Köhler et al., 2017",
                         "doi": "10.1093/nar/gkw1039"
                     }
-                ]
+                ],
+                "license": "HPO License"
             }
         },
         "tab": {
@@ -3558,6 +4061,7 @@
                 "doi": "10.1093/scan/nsm015"
             }
         ],
+        "license": "ODbL 1.0",
         "collection": {
             "All": {
                 "host": "github-nispace",
@@ -5930,6 +6434,7 @@
                 "doi": "10.1016/j.neuroimage.2021.118164"
             }
         ],
+        "license": "GPL 3.0",
         "collection": {
             "All": {
                 "host": "github-nispace",
@@ -6508,6 +7013,7 @@
                 "doi": "10.1093/cercor/bhab101"
             }
         ],
+        "license": "GPL 2.0",
         "collection": {
             "All": {
                 "host": "github-nispace",

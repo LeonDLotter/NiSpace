@@ -393,7 +393,36 @@ def _map_dropdown(maps):
     return _raw_html([details])
 
 
-def _info_block(data, n_maps):
+def _dataset_license_html(ds, data):
+    """License string for a reference dataset.
+
+    Uses a dataset-level ``license`` key if reference.json carries one; otherwise
+    summarizes the ``license`` column of the dataset's map_info.csv (public maps
+    only, with per-license map counts if mixed). Returns None if neither exists."""
+    if data.get("license"):
+        return data["license"]
+
+    sys.path.insert(0, str(REPO_DIR))
+    from nispace.datasets import fetch_map_info
+
+    info = fetch_map_info(ds, verbose=False)
+    if info is None or "license" not in info.columns:
+        return None
+    maps = data.get("map", {})
+    if maps:
+        public = [n for n, d in maps.items() if not _map_is_private(d)]
+        info = info.loc[info.index.isin(public)]
+    counts = info["license"].dropna().astype(str).str.strip().value_counts()
+    if counts.empty:
+        return None
+    if len(counts) == 1:
+        return counts.index[0]
+    return ", ".join(
+        f"{lic} ({n} map{'s' if n > 1 else ''})" for lic, n in counts.items()
+    )
+
+
+def _info_block(ds, data, n_maps):
     """RST lines for per-dataset info block."""
     tabs = data.get("tab", {})
     colls = data.get("collection", {})
@@ -444,6 +473,11 @@ def _info_block(data, n_maps):
                 f'<a href="https://doi.org/{doi}">{ref}</a>' if doi else ref
             )
         items.append("<strong>References:</strong> " + " · ".join(cite_parts))
+
+    license_ = _dataset_license_html(ds, data)
+    items.append(
+        f"<strong>License:</strong> {license_ or 'see original publication(s)'}"
+    )
 
     html = "<p>" + "<br>".join(items) + "</p>"
     return _raw_html([html])
@@ -555,7 +589,7 @@ def _gen_datasets(ref_lib):
         public_maps = {n: d for n, d in maps.items() if not _map_is_private(d)}
         n_maps = len(public_maps)
 
-        lines.extend(_info_block(data, n_maps))
+        lines.extend(_info_block(ds, data, n_maps))
 
         if n_maps:
             lines.extend(_map_dropdown(maps))
