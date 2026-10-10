@@ -216,6 +216,55 @@ def test_get_null_maps_custom_maps_skip_method_check(small_data_obs):
     assert null_maps.labels == ["x0", "x1"]
 
 
+def test_get_null_maps_custom_maps_missing_label_raises(small_data_obs):
+    """Provided null maps must never silently fall back to generated ones."""
+    custom = {lbl: np.zeros((20, 5)) for lbl in ["x0", "other"]}
+    with pytest.raises(ValueError, match="lack 1 map label"):
+        _get_null_maps(
+            small_data_obs, {}, null_maps=custom, null_method="random",
+            n_perm=20, seed=42, n_proc=1, verbose=False, standardize=False,
+        )
+
+
+def test_get_null_maps_custom_maps_too_few_perms_raises(small_data_obs):
+    custom = {lbl: np.zeros((10, 5)) for lbl in ["x0", "x1"]}
+    with pytest.raises(ValueError, match="10 permutations"):
+        _get_null_maps(
+            small_data_obs, {}, null_maps=custom, null_method="random",
+            n_perm=20, seed=42, n_proc=1, verbose=False, standardize=False,
+        )
+
+
+def test_get_null_maps_custom_maps_truncated_to_n_perm(small_data_obs):
+    custom = {lbl: np.random.default_rng(0).normal(size=(30, 5)) for lbl in ["x0", "x1"]}
+    null_maps, _ = _get_null_maps(
+        small_data_obs, {}, null_maps=custom, null_method="random",
+        n_perm=20, seed=42, n_proc=1, verbose=False, standardize=False,
+    )
+    assert null_maps.n_perm == 20
+    assert np.allclose(null_maps["x0"], custom["x0"][:20])   # float32 cast
+
+
+def test_null_maps_n_perm():
+    from nispace.core.permute import _null_maps_n_perm
+    d = {"a": np.zeros((30, 5)), "b": np.zeros((25, 5))}
+    assert _null_maps_n_perm(d) == 25
+    assert _null_maps_n_perm(NullMaps.from_dict({"a": np.zeros((30, 5))})) == 30
+
+
+def test_get_null_maps_custom_single_map_auto_relabeled():
+    """One data map + one provided null key: used regardless of label (e.g. a single
+    Y image gets label 0 while null_maps_from_nimare() keys it by map_label)."""
+    data_obs = pd.DataFrame(np.random.default_rng(1).normal(size=(1, 5)), index=[0])
+    arr = np.random.default_rng(0).normal(size=(20, 5))
+    null_maps, _ = _get_null_maps(
+        data_obs, {}, null_maps={"stat": arr}, null_method="random",
+        n_perm=20, seed=42, n_proc=1, verbose=False, standardize=False,
+    )
+    assert null_maps.labels == [0]
+    assert np.allclose(null_maps[0], arr)
+
+
 def test_get_null_maps_regenerates_on_missing_label(small_data_obs, cached_null_maps):
     data_obs_new_label = pd.DataFrame(
         np.random.default_rng(1).normal(size=(2, 5)), index=["x0", "xNEW"]

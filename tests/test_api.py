@@ -268,6 +268,40 @@ def test_get_p_values_generic_maps_resolves_to_stored_side(permuted_maps_nispace
                                   nsp.get_p_values(permute_what="xmaps", verbose=False))
 
 
+def _custom_y_nulls(nsp, n):
+    rng = np.random.default_rng(0)
+    return {lbl: rng.normal(size=(n, nsp._Y.shape[1])) for lbl in nsp._Y.index}
+
+
+def _n_null_colocs(nsp):
+    _, nulls = nsp.get_colocalizations(get_nulls=True, nulls_permute_what="ymaps", verbose=False)
+    return next(iter(nulls.values())).shape[1]   # {x_label: (stat, n_perm)}
+
+
+def test_permute_n_perm_inherited_from_provided_nulls(synthetic_nispace):
+    nsp = synthetic_nispace
+    nsp.colocalize(method="pearson", verbose=False)
+    nsp.permute(what="maps", maps_which="Y", maps_nulls=_custom_y_nulls(nsp, 37),
+                seed=1, verbose=False)
+    assert _n_null_colocs(nsp) == 37
+
+
+def test_permute_explicit_smaller_n_perm_uses_first_provided_nulls(synthetic_nispace):
+    nsp = synthetic_nispace
+    nsp.colocalize(method="pearson", verbose=False)
+    nsp.permute(what="maps", maps_which="Y", maps_nulls=_custom_y_nulls(nsp, 37),
+                n_perm=20, seed=1, verbose=False)
+    assert _n_null_colocs(nsp) == 20
+
+
+def test_permute_explicit_larger_n_perm_than_provided_nulls_raises(synthetic_nispace):
+    nsp = synthetic_nispace
+    nsp.colocalize(method="pearson", verbose=False)
+    with pytest.raises(ValueError, match="37 permutations"):
+        nsp.permute(what="maps", maps_which="Y", maps_nulls=_custom_y_nulls(nsp, 37),
+                    n_perm=100, seed=1, verbose=False)
+
+
 def test_get_colocalizations_generic_maps_nulls(permuted_maps_nispace):
     nsp = permuted_maps_nispace
     _, nulls = nsp.get_colocalizations(get_nulls=True, nulls_permute_what="maps", verbose=False)

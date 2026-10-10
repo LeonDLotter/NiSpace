@@ -53,6 +53,81 @@ def test_null_maps_from_nimare_continuous_mode(ale_result):
     assert np.isfinite(nulls["stat"]).all()
 
 
+def _assert_nulls_random(arr):
+    # random foci -> no two nulls identical and near-zero mean inter-null correlation
+    # (identity to the observed map is checked inside null_maps_from_nimare itself)
+    assert not any(np.allclose(arr[i], arr[j]) for i in range(len(arr)) for j in range(i))
+    r = np.corrcoef(arr)[np.triu_indices(len(arr), 1)]
+    assert np.nanmean(r) < 0.3
+
+
+def test_null_maps_from_nimare_nulls_are_random(ale_result):
+    # Regression: NiMARE >= 0.20 reuses stale i/j/k columns from inputs_["coordinates"]
+    # unless they are overwritten, which made every null equal to the observed map.
+    nulls = null_maps_from_nimare(
+        ale_result, parcellation="Yan100", n_perm=5, seed=0, n_proc=1,
+        validate=False, verbose=False,
+    )["stat"]
+    _assert_nulls_random(nulls)
+
+
+def test_null_maps_from_nimare_nulls_are_random_studyset():
+    # Studyset input (NIMADS) -- the path the original bug report used
+    try:
+        from nimare.nimads import Studyset
+        rng = np.random.default_rng(0)
+        studies = [{
+            "id": f"s{i}", "name": f"s{i}",
+            "analyses": [{
+                "id": "a", "name": "a",
+                "points": [{"coordinates": rng.uniform([-60, -90, -30], [60, 60, 70]).tolist(),
+                            "space": "MNI"} for _ in range(5)],
+                "metadata": {"sample_size": 30},
+            }],
+        } for i in range(10)]
+        result = ALE().fit(Studyset({"id": "x", "name": "x", "studies": studies}))
+    except (ImportError, KeyError):
+        pytest.skip("NiMARE version cannot fit an estimator on a Studyset")
+    nulls = null_maps_from_nimare(
+        result, parcellation="Yan100", n_perm=5, seed=1, n_proc=1,
+        validate=False, verbose=False,
+    )["stat"]
+    _assert_nulls_random(nulls)
+
+
+def test_nimare_colocalization_inherits_n_perm_from_nimare_nulls(ale_result):
+    import pandas as pd
+    from nispace.workflows import nimare_colocalization
+    nulls = null_maps_from_nimare(
+        ale_result, parcellation="Yan100", n_perm=7, seed=0, n_proc=1,
+        map_label="pain", validate=False, verbose=False,
+    )
+    x = pd.DataFrame(np.random.default_rng(0).normal(size=(3, 100)),
+                     index=["x0", "x1", "x2"])   # pre-parcellated toy X (Yan100)
+    nsp = nimare_colocalization(
+        y=ale_result.get_map("stat"), x=x, parcellation="Yan100",
+        nimare_nulls=nulls, seed=0, plot=False, verbose=False,
+        return_nispace_only=True,   # single Y image -> label 0, auto-matched to "pain"
+    )
+    _, null_colocs = nsp.get_colocalizations(
+        get_nulls=True, nulls_permute_what="ymaps", verbose=False
+    )
+    assert next(iter(null_colocs.values())).shape[1] == 7
+
+
+def test_check_null_maps_degenerate():
+    from nispace.helpers.nimare import _check_null_maps_degenerate
+    rng = np.random.default_rng(0)
+    good = rng.random((5, 20))
+    _check_null_maps_degenerate(good, obs_parc=rng.random(20))
+    # all-empty rows (binary mode, no surviving cluster) are legitimately identical
+    _check_null_maps_degenerate(np.zeros((5, 20)))
+    with pytest.raises(RuntimeError, match="non-empty null maps are identical"):
+        _check_null_maps_degenerate(np.tile(good[0], (5, 1)))
+    with pytest.raises(RuntimeError, match="identical to the observed"):
+        _check_null_maps_degenerate(good, obs_parc=good[2])
+
+
 def test_nimare_fwe_thresholds_returns_voxel_and_cluster_thresholds(ale_corrected_result):
     voxel_thr, cluster_thr = nimare_fwe_thresholds(
         ale_corrected_result, alpha=0.05, cluster_stat="size", voxel_thresh=0.001

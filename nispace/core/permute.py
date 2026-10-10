@@ -21,6 +21,14 @@ def _null_method_key(m):
     return str(m)
 
 
+def _null_maps_n_perm(null_maps):
+    """Number of permutations available in user-provided null maps (``NullMaps`` or
+    ``{label: (n_perm, n_parcels)}`` dict); the minimum across labels for a dict."""
+    if isinstance(null_maps, NullMaps):
+        return null_maps.n_perm
+    return min(np.shape(v)[0] for v in null_maps.values())
+
+
 def _null_maps_cache_hit(data_obs, nispace_nulls, null_maps=None, use_existing=True,
                          n_perm=1000, null_method="moran", permute_which=None,
                          dtype=np.float32):
@@ -47,6 +55,40 @@ def _null_maps_cache_hit(data_obs, nispace_nulls, null_maps=None, use_existing=T
         if null_maps is not None:
             lgr.info("Using provided null maps.")
             _custom = True
+            # Provided null maps must never be silently replaced by generated ones (the
+            # user would believe e.g. coordinate-based NiMARE nulls were used) -- raise on
+            # mismatches instead of falling through to the cache path's re-generation.
+            missing = [x for x in data_obs.index if x not in null_maps]
+            if missing and len(null_maps) == 1 and len(data_obs.index) == 1:
+                lgr.info(
+                    f"Provided null maps are labeled '{null_maps.labels[0]}', data map is "
+                    f"labeled '{data_obs.index[0]}'. Using them for this single map."
+                )
+                null_maps = NullMaps(
+                    null_maps.data, labels=[data_obs.index[0]],
+                    null_method=null_maps.null_method, null_type=null_maps.null_type,
+                    null_which=null_maps.null_which,
+                )
+            elif missing:
+                raise ValueError(
+                    f"Provided null maps lack {len(missing)} map label(s): {missing[:5]}"
+                    f"{' ...' if len(missing) > 5 else ''}. Available: {null_maps.labels[:5]}"
+                    f"{' ...' if len(null_maps) > 5 else ''}. Keys of the null-map dict "
+                    "must match the labels of the permuted data."
+                )
+            if null_maps.n_perm < n_perm:
+                raise ValueError(
+                    f"Provided null maps have {null_maps.n_perm} permutations but "
+                    f"n_perm={n_perm} was requested. Lower n_perm (or leave it at None to "
+                    "use all provided null maps) or provide more null maps."
+                )
+            elif null_maps.n_perm > n_perm:
+                lgr.info(f"Using the first {n_perm} of {null_maps.n_perm} provided null maps.")
+                null_maps = NullMaps(
+                    null_maps.data[:, :n_perm, :], labels=null_maps.labels,
+                    null_method=null_maps.null_method, null_type=null_maps.null_type,
+                    null_which=null_maps.null_which,
+                )
 
     # case null maps not given but existing
     elif null_maps is None and use_existing:

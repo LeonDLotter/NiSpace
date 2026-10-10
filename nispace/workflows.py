@@ -163,7 +163,7 @@ def colocalization(y,
                    plot=True,
                    combat=False,
                    binary_y=False,
-                   n_perm=10000,
+                   n_perm="auto",
                    seed=None,
                    n_proc=1,
                    verbose=True,
@@ -240,8 +240,10 @@ def colocalization(y,
         default toward ``"pearson"``. Not relevant to permutation here, since this
         function always permutes ``what="maps"`` (the ``binary_y`` restriction on
         ``permute(what="groups")`` only applies to :func:`group_colocalization`).
-    n_perm : int, default=10000
-        Number of permutations for null distribution. ``0`` (or ``None``) skips
+    n_perm : int or "auto", default="auto"
+        Number of permutations for null distribution. ``"auto"``: inherited from
+        provided null maps (e.g., ``nimare_nulls`` or ``permute_kwargs["maps_nulls"]``),
+        otherwise 10000. ``0`` (or ``None``) skips
         permutation testing entirely: only the raw colocalizations are computed
         (``nsp.get_colocalizations()``), and ``correct_p()``/``normalize_colocalizations()``
         are also skipped. Mirrors :meth:`NiSpace.correlate_within_region`'s own
@@ -1208,7 +1210,7 @@ def xsea(y,
          plot=True,
          combat=False,
          binary_y=False,
-         n_perm=10000,
+         n_perm="auto",
          seed=None,
          n_proc=1,
          verbose=True,
@@ -1325,8 +1327,9 @@ def xsea(y,
         Set if Y is binary. Forces ``NiSpace(binary_y=True)`` and drives the
         ``colocalization_method=None`` dynamic default toward ``"pearson"``. See
         :func:`colocalization` for the full behavior.
-    n_perm : int, default=10000
-        Number of permutations for null distribution.
+    n_perm : int or "auto", default="auto"
+        Number of permutations for null distribution. ``"auto"``: inherited from
+        provided null maps, otherwise 10000. See :func:`colocalization`.
     seed : int or None, default=None
         Random seed for reproducibility.
     n_proc : int, default=1
@@ -1668,7 +1671,7 @@ def nimare_colocalization(y,
                           plot=True,
                           binary_y=False,
                           nimare_nulls=None,
-                          n_perm=10000,
+                          n_perm="auto",
                           seed=None,
                           n_proc=1,
                           verbose=True,
@@ -1721,7 +1724,11 @@ def nimare_colocalization(y,
         sampling). When provided, sets
         ``maps_nulls=nimare_nulls`` and ``maps_which="Y"`` in ``permute_kwargs``
         so Y is permuted with the NiMARE null distribution. Explicit entries in
-        ``permute_kwargs`` take precedence.
+        ``permute_kwargs`` take precedence. Keys must match the Y map labels (a
+        single Y map and a single key are matched automatically). With the
+        default ``n_perm="auto"``, the number of permutations is taken from the
+        null maps; an explicit ``n_perm`` larger than the number of null maps
+        raises a ``ValueError``.
 
     Returns
     -------
@@ -1804,7 +1811,7 @@ def nimare_xsea(y,
                 plot=True,
                 binary_y=False,
                 nimare_nulls=None,
-                n_perm=10000,
+                n_perm="auto",
                 seed=None,
                 n_proc=1,
                 verbose=True,
@@ -1841,7 +1848,10 @@ def nimare_xsea(y,
         :func:`~nispace.helpers.null_maps_from_nimare` (uniform or, with its
         ``reporting_baseline`` argument, literature-weighted coordinate
         sampling). When provided, sets ``maps_nulls=nimare_nulls`` in
-        ``permute_kwargs``.
+        ``permute_kwargs``. Keys must match the Y map labels (a single Y map
+        and a single key are matched automatically). With the default
+        ``n_perm="auto"``, the number of permutations is taken from the null
+        maps; an explicit ``n_perm`` larger than that raises a ``ValueError``.
 
     Returns
     -------
@@ -1923,7 +1933,7 @@ def simple_colocalization(y, x="PET", z=None, x_collection=None, standardize="xz
                           y_covariates=None, colocalization_method="spearman",
                           mc_method="meff", normalize_colocalizations=True,
                           p_from_average_y=False, plot=True, combat=False,
-                          n_perm=10000, seed=None, n_proc=1, verbose=True,
+                          n_perm="auto", seed=None, n_proc=1, verbose=True,
                           nispace_object=None, fetch_x_kwargs=None, init_kwargs=None,
                           fit_kwargs=None, clean_y_kwargs=None, colocalize_kwargs=None,
                           permute_kwargs=None, correct_p_kwargs=None, plot_kwargs=None,
@@ -1995,7 +2005,7 @@ def simple_xsea(y, x="mRNA", z=None, x_collection=None, x_background=None,
                 mc_method="meff", normalize_colocalizations=True,
                 xsea_aggregation_method=None, permute_sets=False,
                 p_from_average_y=False, plot=True, combat=False,
-                n_perm=10000, seed=None, n_proc=1, verbose=True,
+                n_perm="auto", seed=None, n_proc=1, verbose=True,
                 nispace_object=None, fetch_x_kwargs=None, init_kwargs=None,
                 fit_kwargs=None, clean_y_kwargs=None, colocalize_kwargs=None,
                 permute_kwargs=None, correct_p_kwargs=None, plot_kwargs=None,

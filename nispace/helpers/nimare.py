@@ -19,7 +19,7 @@ _NIMARE_SPACE = "MNI152NLin6Asym"
 
 # Module-level so joblib can pickle it.
 def _run_one_perm(
-    iter_xyz, iter_df, est, parc_arr, parc_idc, bg_values,
+    iter_ijk, iter_xyz, iter_df, est, parc_arr, parc_idc, bg_values,
     voxel_thresh_z, min_cluster_extent, cluster_stat,
     return_cluster_stat=False,
 ):
@@ -34,9 +34,16 @@ def _run_one_perm(
     the largest cluster BEFORE FWE filtering — matching what NiMARE stores in
     null_distributions_ for FWE threshold derivation.
     """
-    iter_xyz = np.squeeze(iter_xyz)   # (n_coords, 1, 3) → (n_coords, 3)
     iter_df = iter_df.copy()
-    iter_df[["x", "y", "z"]] = iter_xyz
+    # Both voxel indices AND mm coordinates must be overwritten: newer NiMARE
+    # (confirmed for 0.20.0 and 0.22.1) only recomputes i/j/k from x/y/z for
+    # DataFrame input if the i/j/k columns are missing, and the
+    # estimator's inputs_["coordinates"] already carries them from the original
+    # fit -- writing only x/y/z made every permutation reproduce the observed map.
+    # Older NiMARE (e.g., 0.6.x) recomputes i/j/k from x/y/z unconditionally,
+    # which gives the same indices here (integer ijk -> mm -> ijk round trip).
+    iter_df[["i", "j", "k"]] = np.squeeze(iter_ijk, axis=1)   # (n_coords, 1, 3) → (n_coords, 3)
+    iter_df[["x", "y", "z"]] = np.squeeze(iter_xyz, axis=1)
     iter_ma = est.kernel_transformer.transform(
         iter_df, masker=est.masker, return_type="sparse"
     )
@@ -233,6 +240,38 @@ def _resolve_reporting_baseline(reporting_baseline, mask_img, verbose=True):
             "no null foci will be placed there."
         )
     return w / total
+
+
+def _check_null_maps_degenerate(null_arr, obs_parc=None):
+    """Raise if coordinate-sampling null maps are clearly not random.
+
+    Independently drawn foci never give identical (non-empty) parcellated maps,
+    and never reproduce the observed map. Either pattern means the random
+    coordinates did not reach NiMARE's kernel (e.g., stale i/j/k columns), so
+    every downstream p-value would be invalid -- fail loudly instead of logging.
+    All-zero rows (binary mode, no supra-threshold cluster) are legitimately
+    identical and handled by the separate empty-map warning.
+    """
+    def _same(a, b):
+        # relative tolerance only: ALE values can be tiny, an absolute one would
+        # declare any two near-zero maps "identical"
+        return np.allclose(a, b, rtol=1e-5, atol=0, equal_nan=True)
+
+    nonempty = null_arr[~np.all((null_arr == 0) | np.isnan(null_arr), axis=1)]
+    if nonempty.shape[0] >= 2 and all(_same(row, nonempty[0]) for row in nonempty[1:]):
+        raise RuntimeError(
+            f"All {nonempty.shape[0]} non-empty null maps are identical -- the random "
+            "coordinates were not applied. This is a bug; please report it together "
+            "with your NiMARE version."
+        )
+    if obs_parc is not None:
+        n_obs = sum(_same(row, obs_parc) for row in nonempty)
+        if n_obs > 0:
+            raise RuntimeError(
+                f"{n_obs}/{null_arr.shape[0]} null map(s) are identical to the observed "
+                "map -- the random coordinates were not applied. This is a bug; please "
+                "report it together with your NiMARE version."
+            )
 
 
 def _validate_null_maps(
@@ -843,6 +882,7 @@ def null_maps_from_nimare(
     )
     rand_ijk = null_ijk[rand_idx, :]                        # (n_coords, n_perm, 3)
     rand_xyz = vox2mm(rand_ijk, est.masker.mask_img.affine)  # (n_coords, n_perm, 3)
+    iter_ijks = np.split(rand_ijk, rand_ijk.shape[1], axis=1)  # list of (n_coords, 1, 3)
     iter_xyzs = np.split(rand_xyz, rand_xyz.shape[1], axis=1)  # list of (n_coords, 1, 3)
 
     iter_df = est.inputs_["coordinates"].copy()
@@ -873,7 +913,7 @@ def null_maps_from_nimare(
         r for r in tqdm(
             Parallel(return_as="generator", n_jobs=n_proc)(
                 delayed(_run_one_perm)(
-                    iter_xyzs[i], iter_df, est,
+                    iter_ijks[i], iter_xyzs[i], iter_df, est,
                     parc_arr_precomp, parc_idc_precomp, bg_values_precomp,
                     _voxel_thresh_z, None, cluster_stat,   # None: no FWE extent filter on nulls
                     _return_cluster_stat,
@@ -897,6 +937,18 @@ def null_maps_from_nimare(
     null_arr = np.stack(null_maps_list, axis=0).astype(dtype)  # (n_perm, n_parcels)
     label = map_label or outcome_map
     lgr.info(f"Done. null_maps['{label}'] shape: {null_arr.shape}")
+
+    # --- degeneracy check (always on, independent of validate) ---
+    _check_null_maps_degenerate(
+        null_arr,
+        obs_parc=(
+            None if _voxel_thresh_z is not None else
+            vol_to_vect_arr(
+                result.get_map(outcome_map).get_fdata().astype(np.float32),
+                parc_arr_precomp, parc_idc_precomp, bg_values_precomp,
+            ).astype(dtype)
+        ),
+    )
 
     # --- empty-map check ---
     empty_frac = float((null_arr == 0).all(axis=1).mean())

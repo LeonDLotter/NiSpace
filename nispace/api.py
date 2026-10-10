@@ -22,6 +22,7 @@ from .core.correlate_within_region import correlate_within_region_core, _CWR_MET
 from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_method,
                                _EMPIRICAL_MC_METHODS, _MAXT_SCALE_RATIO_WARN, _resolve_permute_combo,
                                _resolve_permute_mode_settings, _null_maps_cache_hit,
+                               _null_maps_n_perm,
                                _resolve_maps_batch_size, _iter_null_map_batches)
 from .core.nullmaps import NullMaps, _NULLMAPS_WARN_BYTES
 from .core.plot import _plot_categorical
@@ -2456,7 +2457,7 @@ class NiSpace:
     # PERMUTE ======================================================================================
 
     def permute(self, what, method=None, X_reduction=None, Y_transform=None, xsea=None,
-                n_perm=10000,
+                n_perm=None,
                 maps_which="X", maps_nulls=None, maps_method=None, maps_batch_size=None,
                 dist_mat=None,
                 sets_X_background=None,
@@ -2490,14 +2491,19 @@ class NiSpace:
             Y transformation label. Defaults to last used.
         xsea : bool, optional
             Whether to run in XSEA mode. Defaults to last used.
-        n_perm : int, optional
-            Number of permutations. Default is 10000.
+        n_perm : int, None, or "auto", optional
+            Number of permutations. ``None``/``"auto"`` (default): inherited from
+            ``maps_nulls`` if provided (number of null maps per label), otherwise
+            10000. An explicit value smaller than the number of provided null
+            maps uses the first ``n_perm`` of them.
         maps_which : str or list of str, optional
             Which data to generate null maps for: ``"X"``, ``"Y"``, or
             ``["X", "Y"]``. Default is ``"X"``.
         maps_nulls : dict, optional
             Pre-computed null maps as ``{map_name: array(n_perm, n_parcels)}``.
-            Bypasses null map generation entirely when provided and valid.
+            Bypasses null map generation entirely. Raises ``ValueError`` if keys
+            do not cover the permuted maps' labels (one map + one key are matched
+            automatically) or if arrays have fewer than an explicit ``n_perm``.
         maps_method : str, optional
             Null map generation method. Auto-selected from the parcellation when
             not set (default: ``"moran"`` for all parcellation types). Options:
@@ -2672,6 +2678,14 @@ class NiSpace:
         for w in combo_warnings:
             lgr.warning(w)
         lgr.info(f"Permutation of: {perm_info}.")
+
+        ## resolve n_perm: None/"auto" -> inherit from provided null maps, else 10000
+        if n_perm is None or (isinstance(n_perm, str) and n_perm == "auto"):
+            if "maps" in what and maps_nulls is not None:
+                n_perm = _null_maps_n_perm(maps_nulls)
+                lgr.info(f"Using n_perm={n_perm} from the provided null maps.")
+            else:
+                n_perm = 10000
             
         ## settings
         _rank_kwarg = kwargs.pop("rank", None)
