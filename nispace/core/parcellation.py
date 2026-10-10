@@ -13,7 +13,8 @@ from ..nulls import (
 )
 from ..io import load_distmat, load_spinmat, load_img, load_labels
 from ..utils.utils import set_log, relabel_nifti_parc, relabel_gifti_parc
-from .constants import _NULL_DEFAULT_COMBINED, _NULL_DEFAULT_CX_SURF, _NULL_DEFAULT_CX_VOL
+from .constants import (_NULL_DEFAULT_COMBINED, _NULL_DEFAULT_CX_SURF, _NULL_DEFAULT_CX_VOL,
+                        _SPACE_DEFAULT_VOL)
 
 
 # ---------------------------------------------------------------------------
@@ -45,6 +46,12 @@ def _spaces_match(query, candidate):
     if c == "mni" and "mni" in query.lower():
         return True
     return False
+
+
+def _is_specific_mni(space):
+    """True for a named MNI template (e.g. MNI152NLin6Asym), False for generic "MNI"/"MNI152"."""
+    s = space.lower().replace(" ", "").replace("-", "")
+    return "mni" in s and s not in ("mni", "mni152")
 
 
 # ---------------------------------------------------------------------------
@@ -1304,12 +1311,20 @@ class Parcellation:
     def get_image_for_dataspace(self, data_space):
         """Return the space name that best matches *data_space*.
 
+        Matching order: (1) exact name (case-insensitive); (2) alias or
+        generic match (e.g. "fsa" -> "fsaverage", "MNI152" -> any MNI
+        template), preferring the default volumetric space among several MNI
+        candidates. A specific MNI template is never silently swapped for
+        another one: if the requested template is not registered, the
+        fallback template is used with a warning (no template-to-template
+        transformation is applied when parcellating).
+
         Parameters
         ----------
         data_space : str or None
             Space name of the input data to match against this parcellation's
-            registered spaces. If ``None``, the first registered space is
-            returned without any matching logic.
+            registered spaces. If ``None``, the default volumetric space is
+            returned if registered, otherwise the first registered space.
 
         Returns
         -------
@@ -1322,15 +1337,30 @@ class Parcellation:
             If no registered space is compatible with *data_space*.
         """
         if data_space is None:
-            return self.spaces[0]
+            return _SPACE_DEFAULT_VOL if _SPACE_DEFAULT_VOL in self.spaces else self.spaces[0]
+
+        # (1) exact match -- registration order must not decide between MNI templates
+        _key = lambda s: s.lower().replace(" ", "").replace("-", "")
         for s in self.spaces:
-            if _spaces_match(data_space, s):
+            if _key(s) == _key(data_space):
                 return s
-        lgr.critical_raise(
-            f"No parcellation space matches data space '{data_space}'. "
-            f"Available: {self.spaces}.",
-            ValueError,
-        )
+
+        # (2) alias / generic match
+        matches = [s for s in self.spaces if _spaces_match(data_space, s)]
+        if not matches:
+            lgr.critical_raise(
+                f"No parcellation space matches data space '{data_space}'. "
+                f"Available: {self.spaces}.",
+                ValueError,
+            )
+        chosen = _SPACE_DEFAULT_VOL if _SPACE_DEFAULT_VOL in matches else matches[0]
+        if _is_specific_mni(data_space) and _is_specific_mni(chosen):
+            lgr.warning(
+                f"Parcellation '{self._name}': space '{data_space}' not available; using the "
+                f"'{chosen}' image instead (no template transformation is applied). "
+                f"Available: {self.spaces}."
+            )
+        return chosen
 
     def get_dist_mat(self, space=None, compute_if_missing=True,
                      resample=2, centroids=False, n_proc=1):

@@ -39,9 +39,11 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
                    fetch_x_kwargs,
                    init_kwargs,
                    fit_kwargs,
+                   xsea=False,
                    ):
     """Base workflow for colocalization, group comparison, and GSEA.
-    Will load X data, initialize NiSpace object """
+    Will load X data, initialize NiSpace object. If `xsea`, collection sets with
+    a single map are dropped by default (set-level aggregation needs >= 2 maps)."""
     
     status = {fun: False for fun in ["init", "fit"]}
     null_maps = None
@@ -103,7 +105,7 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
                     parcellation=parc_integrated,
                     hemi=parcellation_hemi,
                     verbose=verbose,
-                    **({"set_size_range": (2, None)} if x_collection is not None else {})
+                    **({"set_size_range": (2, None)} if xsea and x_collection is not None else {})
                 ) | fetch_x_kwargs
                 x = fetch_reference(**fetch_x_kwargs)
                 if isinstance(x, tuple):
@@ -325,7 +327,8 @@ def colocalization(y,
         nispace_object=nispace_object,
         fetch_x_kwargs=fetch_x_kwargs,
         init_kwargs=init_kwargs,
-        fit_kwargs=fit_kwargs
+        fit_kwargs=fit_kwargs,
+        xsea=colocalize_kwargs.get("xsea", False) or permute_kwargs.get("xsea", False),
     )
     status = status | {fun: False for fun in ["clean_y", "colocalize", "permute", "correct_p"]}   
     
@@ -642,7 +645,8 @@ def group_colocalization(y, design,
         nispace_object=nispace_object,
         fetch_x_kwargs=fetch_x_kwargs,
         init_kwargs=init_kwargs,
-        fit_kwargs=fit_kwargs
+        fit_kwargs=fit_kwargs,
+        xsea=colocalize_kwargs.get("xsea", False) or permute_kwargs.get("xsea", False),
     )
     status = status | {fun: False for fun in ["clean_y", "transform_y", "colocalize", "permute", "correct_p"]}   
       

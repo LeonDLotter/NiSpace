@@ -258,6 +258,57 @@ def test_permute_maps_stores_retrievable_null_colocs(permuted_maps_nispace):
     assert len(nsp._nulls["_colocs"]) > 0
 
 
+# ── generic permute_what="maps" -> stored "xmaps"/"ymaps"/"xymaps" ──────────
+
+def test_get_p_values_generic_maps_resolves_to_stored_side(permuted_maps_nispace):
+    nsp = permuted_maps_nispace
+    pd.testing.assert_frame_equal(nsp.get_p_values(permute_what="maps", verbose=False),
+                                  nsp.get_p_values(permute_what="xmaps", verbose=False))
+    pd.testing.assert_frame_equal(nsp.get_p_values(permute_what="MAPS", verbose=False),
+                                  nsp.get_p_values(permute_what="xmaps", verbose=False))
+
+
+def test_get_colocalizations_generic_maps_nulls(permuted_maps_nispace):
+    nsp = permuted_maps_nispace
+    _, nulls = nsp.get_colocalizations(get_nulls=True, nulls_permute_what="maps", verbose=False)
+    _, nulls_x = nsp.get_colocalizations(get_nulls=True, nulls_permute_what="xmaps", verbose=False)
+    assert nulls.keys() == nulls_x.keys()
+    for stat in nulls:
+        pd.testing.assert_frame_equal(nulls[stat], nulls_x[stat])
+
+
+def test_get_normalized_colocalizations_generic_maps(permuted_maps_nispace):
+    nsp = permuted_maps_nispace
+    nsp.normalize_colocalizations(verbose=False)
+    pd.testing.assert_frame_equal(nsp.get_normalized_colocalizations(perm="maps", verbose=False),
+                                  nsp.get_normalized_colocalizations(perm="xmaps", verbose=False))
+
+
+def test_plot_generic_maps(permuted_maps_nispace):
+    import matplotlib.pyplot as plt
+    permuted_maps_nispace.plot(permute_what="maps", show=False, verbose=False)
+    plt.close("all")
+
+
+def test_get_p_values_generic_maps_ambiguous_raises(permuted_maps_nispace):
+    nsp = permuted_maps_nispace
+    nsp.permute(what="maps", maps_which="Y", maps_method="random", n_perm=200, seed=1,
+                verbose=False)
+    with pytest.raises(ValueError, match="ambiguous"):
+        nsp.get_p_values(permute_what="maps", verbose=False)
+    # explicit sides still work, and the default (last run) is unaffected
+    nsp.get_p_values(permute_what="xmaps", verbose=False)
+    pd.testing.assert_frame_equal(nsp.get_p_values(verbose=False),
+                                  nsp.get_p_values(permute_what="ymaps", verbose=False))
+
+
+def test_get_p_values_generic_maps_before_permute_raises_keyerror(synthetic_nispace):
+    nsp = synthetic_nispace
+    nsp.colocalize(method="pearson", verbose=False)
+    with pytest.raises(KeyError, match="Did you run NiSpace.permute"):
+        nsp.get_p_values(permute_what="maps", verbose=False)
+
+
 def _make_multi_y_nsp(rng, n_parcels=25, n_x=1, n_y=8):
     labels = [f"p{i}" for i in range(n_parcels)]
     X = rng.normal(size=(n_x, n_parcels))

@@ -1,4 +1,5 @@
 import copy
+import re
 from typing import List, Union, Sequence, Literal, Dict
 from pathlib import Path
 
@@ -4371,7 +4372,8 @@ class NiSpace:
         permute_what : str, optional
             Which permutation ("what") to pull null distributions/p-values
             from; see :meth:`permute`'s ``what`` argument. Defaults to the
-            last-used value. The special value ``"pairs"`` collapses an N x N
+            last-used value. The generic ``"maps"`` resolves as in
+            :meth:`get_p_values`. The special value ``"pairs"`` collapses an N x N
             colocalization matrix to its diagonal (matched-pair SPICE-style
             results) before plotting.
         title : str, default "auto"
@@ -4447,6 +4449,12 @@ class NiSpace:
         if colocalizations_dict is None and method is None:
             lgr.critical_raise("Provide either a method name or a colocalization result!",
                                ValueError)
+
+        # "maps" shorthand -> stored x/y/xy-maps variant (only when results are pulled internally)
+        if colocalizations_dict is None and permute_what:
+            permute_what = self._resolve_permute_what(
+                permute_what, method, xsea, X_reduction, Y_transform,
+                self._get_last(pooled_p=None))
 
         # TODO (first non-dev release): remove sort_colocs parameter entirely
         if sort_colocs:
@@ -5098,7 +5106,8 @@ class NiSpace:
         perm : str, optional
             Which permutation ("what") the retrieved normalized result was
             computed against; see :meth:`permute`. Only relevant with
-            ``normalized=True``. Defaults to the last-used value.
+            ``normalized=True``. Defaults to the last-used value. The generic
+            ``"maps"`` resolves as in :meth:`get_p_values`.
         get_nulls : bool, default False
             Also return the null colocalization distributions alongside the
             observed statistics, as a ``(colocalizations, nulls)`` tuple.
@@ -5106,8 +5115,9 @@ class NiSpace:
             nulls to fetch.
         nulls_permute_what : str, optional
             Which permutation's null distributions to fetch when
-            ``get_nulls=True`` (e.g. ``"maps"``, ``"groups"``, ``"sets"``,
-            ``"pairs"``; see :meth:`permute`'s ``what`` argument).
+            ``get_nulls=True`` (e.g. ``"xmaps"``, ``"groups"``, ``"sets"``,
+            ``"pairs"``; see :meth:`permute`'s ``what`` argument). The generic
+            ``"maps"`` resolves as in :meth:`get_p_values`.
         pooled_p : bool or str, optional
             Pooling mode used for the stored null distribution being
             retrieved; see :meth:`permute`. Defaults to the last-used value.
@@ -5142,6 +5152,8 @@ class NiSpace:
 
             if normalized:
                 perm, pooled_p = self._get_last(perm=perm, pooled_p=pooled_p)
+                perm = self._resolve_permute_what(perm, method, xsea, X_reduction, Y_transform,
+                                                  pooled_p)
                 if stats is None:
                     stats = _get_coloc_stats(method, permuted_only=True)
                 elif isinstance(stats, str):
@@ -5204,13 +5216,15 @@ class NiSpace:
                 get_nulls = False
 
             if get_nulls:
+                pooled_p = self._get_last(pooled_p=pooled_p)
+                nulls_permute_what = self._resolve_permute_what(
+                    nulls_permute_what, method, xsea, X_reduction, Y_transform, pooled_p)
                 if nulls_permute_what not in ["groups", "groupsxmaps", "groupssets",
                                               "xmaps", "ymaps", "xymaps", "ymapssets",
                                               "sets", "pairs"]:
                     lgr.critical_raise("If 'get_nulls' is True, 'nulls_permute_what' must be one of "
                                        "{'groups', '{x|y|xy}maps', 'sets', 'pairs'}!",
                                        ValueError)
-                pooled_p = self._get_last(pooled_p=pooled_p)
                 out_null = None
 
                 # pairs permutation: null stored as flat array in self._nulls["pairs_null"]
@@ -5308,7 +5322,9 @@ class NiSpace:
         permute_what : str, optional
             Which permutation ("what") the p-values were computed against, see
             :meth:`permute`'s ``what`` argument. Defaults to the last-used
-            value.
+            value. Map permutations are stored by permuted side (``"xmaps"``,
+            ``"ymaps"``, ``"xymaps"``); the generic ``"maps"`` resolves to
+            whichever of these exists and raises if more than one does.
         stats : str or list of str, optional
             Which statistic(s)' p-values to retrieve. Defaults to all stats for
             which a permutation null exists.
@@ -5355,6 +5371,8 @@ class NiSpace:
             if mc_method is not None:
                 mc_method = _get_correct_mc_method(mc_method).replace("-", "").replace("_", "")
 
+            permute_what = self._resolve_permute_what(permute_what, method, xsea, X_reduction,
+                                                      Y_transform, pooled_p)
             self._check_permute(method, permute_what, mc_method, xsea, stats, X_reduction, Y_transform,
                                 pooled_p=pooled_p)
 
@@ -5640,9 +5658,43 @@ class NiSpace:
                     return False
                 
         return True
-        
+
+    def _resolve_permute_what(self, permute_what, method, xsea=False, X_reduction=None,
+                              Y_transform=None, pooled_p=False):
+        """Resolve the generic "maps" shorthand (also within combos, e.g. "groupsmaps") to
+        the stored "xmaps"/"ymaps"/"xymaps" variant. permute() stores maps results under the
+        permuted side, so "maps" is only resolvable if exactly one variant exists for the given
+        context; ambiguity raises instead of silently picking one (X and Y nulls can differ
+        substantially). All other values are returned unchanged."""
+        if not isinstance(permute_what, str):
+            return permute_what
+        permute_what = permute_what.lower()
+        if not re.search(r"(?<![xy])maps", permute_what):
+            return permute_what
+        candidates = [re.sub(r"(?<![xy])maps", f"{w}maps", permute_what) for w in ("x", "y", "xy")]
+        found = [
+            c for c in candidates
+            if self._check_permute(method, c, xsea=xsea, xdimred=X_reduction, ytrans=Y_transform,
+                                   pooled_p=pooled_p, raise_error=False)
+        ]
+        if not found:
+            lgr.critical_raise(
+                f"No permutation results for permute_what = '{permute_what}' (checked {candidates}) "
+                f"with method = '{method}', xsea = {xsea}, X dimensionality reduction = "
+                f"'{X_reduction}', Y transform = '{Y_transform}'. Did you run NiSpace.permute()?!",
+                KeyError
+            )
+        if len(found) > 1:
+            lgr.critical_raise(
+                f"permute_what = '{permute_what}' is ambiguous: results exist for {found}. "
+                "Pass one of them explicitly.",
+                ValueError
+            )
+        lgr.info(f"Resolved permute_what = '{permute_what}' to '{found[0]}'.")
+        return found[0]
+
     # ----------------------------------------------------------------------------------------------
-    
+
     def _get_last(self, **kwargs):
         out = []
         for arg, value in kwargs.items():

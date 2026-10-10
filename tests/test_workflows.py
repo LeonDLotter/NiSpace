@@ -700,3 +700,51 @@ def test_simple_xsea_warns_and_delegates(prefit_nispace_xsea):
         return_nispace_only=True,
     )
     assert isinstance(out, NiSpace)
+
+
+# ── X collection set-size default: XSEA workflows only ───────────────────
+
+class _StopAfterFetch(Exception):
+    pass
+
+
+def _fetch_x_kwargs_seen(monkeypatch, workflow, **kwargs):
+    """Run `workflow` with x="PET" up to the X fetch; return the fetch_reference kwargs."""
+    import nispace.workflows as wf_mod
+    seen = {}
+
+    def fake_fetch_reference(**kw):
+        seen.update(kw)
+        raise _StopAfterFetch
+
+    monkeypatch.setattr(wf_mod, "fetch_reference", fake_fetch_reference)
+    with pytest.raises(_StopAfterFetch):
+        workflow(y=pd.DataFrame(np.zeros((1, 3))), x="PET", plot=False, verbose=False, **kwargs)
+    return seen
+
+
+@pytest.mark.parametrize("workflow,kwargs", [
+    (colocalization, {}),
+    (group_colocalization, {"design": [0]}),
+    (paired_colocalization, {}),
+])
+def test_non_xsea_workflows_keep_single_map_sets(monkeypatch, workflow, kwargs):
+    # PET's default collection groups maps into sets; single-map sets (e.g. H3) must survive
+    seen = _fetch_x_kwargs_seen(monkeypatch, workflow, **kwargs)
+    assert seen["collection"] is not None
+    assert "set_size_range" not in seen
+
+
+@pytest.mark.parametrize("workflow,kwargs", [
+    (xsea, {}),
+    (group_xsea, {"design": [0]}),
+    (colocalization, {"colocalize_kwargs": {"xsea": True}}),
+])
+def test_xsea_workflows_drop_single_map_sets(monkeypatch, workflow, kwargs):
+    seen = _fetch_x_kwargs_seen(monkeypatch, workflow, **kwargs)
+    assert seen["set_size_range"] == (2, None)
+
+
+def test_xsea_set_size_range_overridable(monkeypatch):
+    seen = _fetch_x_kwargs_seen(monkeypatch, xsea, fetch_x_kwargs={"set_size_range": (5, None)})
+    assert seen["set_size_range"] == (5, None)
