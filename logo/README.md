@@ -48,4 +48,4 @@ There is one version for all backgrounds. Light rims around the letters and cell
 - **Brain size:** 1.25 F tall; its frontal pole ends above the "e" of "space".
 - **Line spacing:** 0.9 F.
 - **Regression line:** starts one natural letter gap (the c→e ink gap) plus one hex-lattice step after "space", on its baseline; a whole lattice step moves the plot without re-drawing its pattern. The plot's width/height is 0.75.
-- **Full name:** no box, ExtraBold, 0.18 F below the "p". n·i in light red (red + 35% white), s·p·a·c·e in light navy (navy + 40% white), both 1.2× and centred in their monospace cells; the rest in grey `#808893`.
+- **Full name:** no box, ExtraBold, 0.18 F below the "p". n·i in light red (red + 35% white), s·p·a·c·e in light navy (navy + 40% white), both 1.30× (the top of a big "c" meets the top of the "l"); the rest in grey `#808893`. The bigger letters get wider cells so every ink gap equals the normal one, and the name is refit to the same total width.

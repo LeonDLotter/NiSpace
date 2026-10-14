@@ -31,9 +31,10 @@ NSP_BRAIN_ONLY=1 "$PY" "$HERE/hexbin_logo.py" "$W/hex_n12.svg.cells.json" "$W/fa
 
 # 4 · logos with the text as outlines (one version for all backgrounds)
 "$PY" "$HERE/compose_logo.py" "$W/lockup.svg" "$FONT" "$OUT/nispace_logo.svg" 0 ""
-#   full name without a box, ExtraBold, 0.18 F below the "p"; n·i·s·p·a·c·e 1.2x in light red (35% white) /
-#   light navy (40% white), the rest grey #808893: all ~3.5:1 on white and on dark grey
-NSP_FONT_NAME="$FONT_NAME" NSP_HALO_TXT=0 NSP_NAME_GAP=0.18 NSP_HL_SCALE=1.2 NSP_REST="#808893" \
+#   full name without a box, ExtraBold, 0.18 F below the "p"; n·i·s·p·a·c·e 1.30x (top of c = top of l) in light red (35% white) /
+#   light navy (40% white), the rest grey #808893: all ~3.5:1 on white and on dark grey; "equal" spacing: the
+#   bigger letters get wider cells, so every ink gap matches the normal one (the name is refit to the same width)
+NSP_FONT_NAME="$FONT_NAME" NSP_HALO_TXT=0 NSP_NAME_GAP=0.18 NSP_HL_SCALE=1.3036 NSP_HL_SPACING=equal NSP_REST="#808893" \
   "$PY" "$HERE/compose_logo.py" "$W/lockup.svg" "$FONT" "$OUT/nispace_logo_fullname.svg" 1 "" halo 0.35 white mid "" 0.35 0.40
 "$PY" "$HERE/square_svg.py" "$W/lockup.svg" "$OUT/nispace_icon.svg" "$W/lockup.svg.layout.json"      # the logo graphic without text
 "$PY" "$HERE/square_svg.py" "$W/favicon.svg" "$OUT/nispace_favicon.svg" "$W/favicon.svg.layout.json"

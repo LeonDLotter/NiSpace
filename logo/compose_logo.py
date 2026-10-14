@@ -143,13 +143,43 @@ if fullname:
         # highlighted letters can be bigger: centred in their monospace cell (the first one keeps its ink left edge),
         # on the common baseline ("base") or with their x-height top on the others' ("top")
         HLK = float(os.environ.get("NSP_HL_SCALE", 1.0)); ALIGN = os.environ.get("NSP_HL_ALIGN", "base")
-        xh = fontN["OS/2"].sxHeight * s_
+        # spacing of the bigger letters: "cell" = squeezed into the normal monospace cell (tighter next to them);
+        # "equal" = the cell grows by the extra ink, so all ink gaps equal the normal ones;
+        # "scaled" = the whole cell grows with the letter (gaps around and within "spa" get wider)
+        SPACING = os.environ.get("NSP_HL_SPACING", "cell")
+        def inkw(gn):
+            b = BoundsPen(gsN); gsN[gn].draw(b); return b.bounds[2] - b.bounds[0]
+        def adv(gn, hl):
+            a = gsN[gn].width * s_
+            if not hl or HLK == 1 or SPACING == "cell": return a
+            return a + inkw(gn) * s_ * (HLK - 1) if SPACING == "equal" else a * HLK
         def place(i_, gn, x, hl):
             if not hl or HLK == 1: return x, 0.0, s_
             w = gsN[gn].width * s_
             lsb = fontN["hmtx"][gn][1] * s_
-            dx = -lsb * (HLK - 1) if i_ == 0 else w * (1 - HLK) / 2
+            if SPACING == "cell":
+                dx = -lsb * (HLK - 1) if i_ == 0 else w * (1 - HLK) / 2
+            elif SPACING == "equal" or i_ == 0:   # the ink starts where a normal letter's would (first letter: left edge)
+                dx = -lsb * (HLK - 1)
+            else:
+                dx = 0.0
             return x + dx, (xh * (HLK - 1) if ALIGN == "top" else 0.0), s_ * HLK
+        def ink_x(x):   # ink extent of the whole name starting at x
+            xs = []
+            for i_, ch in enumerate(name):
+                gn = cmap[ord(ch)]; hl = i_ in NI or i_ in SPACE
+                if ch != " ":
+                    gx, dy, sc = place(i_, gn, x, hl)
+                    b1 = BoundsPen(gsN); gsN[gn].draw(TransformPen(b1, (sc, 0, 0, -sc, gx, 0))); xs += [b1.bounds[0], b1.bounds[2]]
+                x += adv(gn, hl) + ls
+            return min(xs), max(xs)
+        if HLK != 1 and SPACING != "cell":   # wider cells: shrink size and spacing together so the name still spans the target
+            i0, i1 = ink_x(0.0); f_ = (target) / (i1 - i0)
+            fs, ls = fs * f_, ls * f_; s_ = fs / upm
+            xn = L + pad - i0 * f_
+            print(f"  name refit x{f_:.3f} for {SPACING} spacing")
+        xh = fontN["OS/2"].sxHeight * s_
+        x = xn
         if style == "halo":   # place the line by its real ink top (bigger letters included)
             bp = BoundsPen(gsN); xx = xn; ys = []
             for i_, ch in enumerate(name):
@@ -157,7 +187,7 @@ if fullname:
                 if ch != " ":
                     gx, dy, sc = place(i_, gn, xx, hl)
                     b1 = BoundsPen(gsN); gsN[gn].draw(TransformPen(b1, (sc, 0, 0, -sc, gx, dy))); ys += [b1.bounds[1], b1.bounds[3]]
-                xx += gsN[gn].width * s_ + ls
+                xx += adv(gn, hl) + ls
             ink_top = (p_low + float(NAME_GAP) * F) if NAME_GAP else LK["base2"] + gap
             base3 = ink_top - min(ys); bot = base3 + max(ys)
             print(f"  name ink top {ink_top:.2f}, gap below p {(ink_top - p_low) / F:.3f} F")
@@ -189,7 +219,7 @@ if fullname:
                     yy = base3 + 0.22 * fs + r * 0.3
                     pts = " ".join(f"{cxm + r * math.cos(math.radians(a)):.2f},{yy + r * math.sin(math.radians(a)):.2f}" for a in range(30, 390, 60))
                     els.append(f'<polygon points="{pts}" fill="{hexc(RED if i_ in NI else NAVY)}"/>')
-            x += gsN[gn].width * s_ + ls
+            x += adv(gn, hl) + ls
         H = bot + RIM / 2 + 0.02 * F - y0                      # the box rim reaches RIM / 2 below the box
 
 g = open(gsvg).read()
