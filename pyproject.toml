@@ -73,7 +73,8 @@ test = [
 Repository = "https://github.com/LeonDLotter/NiSpace"
 
 [tool.setuptools.packages]
-find = {}
+# only the nispace package; without "include", namespace discovery also packs docs/, poster/, logo/, ...
+find = {include = ["nispace*"]}
 
 [tool.setuptools.package-data]
 nispace = ["datalib/*", "datalib/**/*"]
