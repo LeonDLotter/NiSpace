@@ -141,7 +141,9 @@ if fullname:
 g = open(gsvg).read()
 inner = re.sub(r"^<svg[^>]*>\n?|</svg>\s*$", "", g.strip())
 inner = re.sub(r'<rect [^>]*/>\n?', "", inner)
-head = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{x0:.1f} {y0:.1f} {W:.1f} {H:.1f}">'
+# explicit width/height: without an intrinsic size, <img width:auto> in a shrink-to-fit box collapses to 0 (rtd sidebar)
+head = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W:.1f}" height="{H:.1f}" '
+        f'viewBox="{x0:.1f} {y0:.1f} {W:.1f} {H:.1f}">')
 bgrect = f'<rect x="{x0:.1f}" y="{y0:.1f}" width="{W:.1f}" height="{H:.1f}" fill="{bg}"/>' if bg else ""
 open(out, "w").write("\n".join([head, bgrect, inner, *under, *els, "</svg>"]) + "\n")
 print(out, style if fullname else "short", f"left ink {L:.1f}, right {Rgt:.1f}")

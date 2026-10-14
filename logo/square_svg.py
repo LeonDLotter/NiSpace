@@ -12,5 +12,7 @@ x, y, w, h = map(float, m.group(1).split())
 if len(sys.argv) > 3:
     x, y, w, h = json.load(open(sys.argv[3]))["graphic_bbox"]
 side = max(w, h)
-box = f'viewBox="{x - (side - w) / 2:.2f} {y - (side - h) / 2:.2f} {side:.2f} {side:.2f}"'
+# explicit width/height so the SVG has an intrinsic size when used as <img>
+box = (f'width="{side:.2f}" height="{side:.2f}" '
+       f'viewBox="{x - (side - w) / 2:.2f} {y - (side - h) / 2:.2f} {side:.2f} {side:.2f}"')
 open(dst, "w").write(s.replace(m.group(0), box, 1))
