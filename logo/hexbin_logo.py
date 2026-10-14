@@ -2,7 +2,8 @@
 Landed cells snap onto the brain's own hex lattice along a diagonal band; in-flight cells stay off-grid;
 a regression line replaces the axes. Layered rendering: lighter base stays at the grid position,
 true-colour cell on top (moved cells carry a matching rim).
-Usage: hexbin_logo.py CELLS.json OUT.svg LAYOUT[side|inside] [bg] [frame=0|1] [seed]"""
+Usage: hexbin_logo.py CELLS.json OUT.svg LAYOUT[side|inside|lockup] [bg] [frame=0|1] [seed] [land] [brain_h] [base1]
+       [line_h] [gap_to_line] [plot_aspect] [rim_width]"""
 import os, sys, json, math
 import numpy as np
 
@@ -12,6 +13,8 @@ bg = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else None
 frame = len(sys.argv) > 5 and sys.argv[5] == "1"
 seed = int(sys.argv[6]) if len(sys.argv) > 6 else 3
 rng = np.random.default_rng(seed)
+RIMW = float(sys.argv[13]) if len(sys.argv) > 13 and sys.argv[13] else None   # rim width of moved cells, drawing units (None: k * sw)
+RIMW_S = float(sys.argv[14]) if len(sys.argv) > 14 and sys.argv[14] else RIMW  # rim width of cells that stay in the brain
 R, sw = D["R"], D["sw"]
 p = R * math.sqrt(3); rp = 1.5 * R                         # lattice pitch (pointy-top hexes)
 RED, NAVY = np.array((178, 32, 31)), np.array((2, 61, 107))
@@ -74,7 +77,9 @@ if layout == "side":
     A = np.array([PX0 + 2, PY1 - 3]); B = np.array([PX1 - 2, PY0 + 3])   # regression line ends
     allow = lambda x, y: (x > PX0 + R) & (x < PX1 - R) & (y > PY0 + R) & (y < PY1 - R)
 elif layout == "lockup":
-    GAPF = float(sys.argv[11]) if len(sys.argv) > 11 else 0.7   # flight gap brain -> plot, in F
+    # flight gap brain -> plot, in F; "0.06+1p" adds whole lattice steps, which shifts the plot without re-drawing its pattern
+    g_, _, k_ = (sys.argv[11] if len(sys.argv) > 11 else "0.7").partition("+")
+    GAPF = float(g_) + (float(k_.rstrip("p")) * p / F if k_ else 0.0)
     ASP = float(sys.argv[12]) if len(sys.argv) > 12 else 1.3    # plot width / height
     PY0, PY1 = by0, LK["base2"]
     PX0 = 5 * ADV + GAPF * F                 # GAPF = 0: the line starts where a 6th letter would start
@@ -140,12 +145,16 @@ base, top = [], []
 for i in np.argsort(f):
     c0 = col(tv[i]); c = col(tdisp[i])
     l0 = c0 * (1 - TINT) + 255 * TINT; l1 = c * (1 - TINT) + 255 * TINT
-    rb = k[i] * (R - sw / math.sqrt(3)); rt = rb - INSET * k[i] * sw * 2 / math.sqrt(3)
+    rb = k[i] * (R - sw / math.sqrt(3))
+    # rim (edge-to-edge width): RIMW in font units, only mildly smaller on small edge cells, at most 40% of the cell
+    rw = RIMW if mv[i] else RIMW_S
+    w = INSET * k[i] * sw if rw is None else min(rw * (0.5 + 0.5 * k[i]), 0.4 * rb * math.sqrt(3) / 2)
+    rt = rb - w * 2 / math.sqrt(3)
     if rt <= 0: continue
     base.append(f'<polygon points="{hp(cx[i], cy[i], rb)}" fill="{hexc(l0)}"/>')
     if mv[i]:
         if BRAIN_ONLY: continue                              # favicon: the imprint stays, the blown cells are gone
-        top.append(f'<polygon points="{hp(px[i], py[i], (rb + rt) / 2)}" fill="{hexc(c)}" stroke="{hexc(l1)}" stroke-width="{INSET * k[i] * sw:.3f}"/>')
+        top.append(f'<polygon points="{hp(px[i], py[i], (rb + rt) / 2)}" fill="{hexc(c)}" stroke="{hexc(l1)}" stroke-width="{w:.3f}"/>')
     else:
         top.append(f'<polygon points="{hp(px[i], py[i], rt)}" fill="{hexc(c)}"/>')
 

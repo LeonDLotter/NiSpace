@@ -13,8 +13,9 @@ SOURCES = {
     "rh.pial": (f"{GIN}/surf/rh.pial", "7a255d18bd2a4bf0be12838e4d700cde"),
     "rh.thickness": (f"{GIN}/surf/rh.thickness", "bf847cabd14c0f98cb759c9bb8ac0a52"),
     "rh.aparc.annot": (f"{GIN}/label/rh.aparc.annot", "9cda966fc97d9348f777ea4c7e8c8ead"),
-    # JetBrains Mono Bold (SIL Open Font License 1.1)
+    # JetBrains Mono Bold (wordmark) and ExtraBold (full name) (SIL Open Font License 1.1)
     "JetBrainsMono-Bold.ttf": (f"{JBM}/JetBrainsMono-Bold.ttf", "79e9a0365a86aeb48c8d51212b215c9b"),
+    "JetBrainsMono-ExtraBold.ttf": (f"{JBM}/JetBrainsMono-ExtraBold.ttf", "8d83c4826bd219efd19fe257fe0165ec"),
 }
 
 
