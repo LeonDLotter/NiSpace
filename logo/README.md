@@ -17,7 +17,8 @@ Requirements: Python with numpy, scipy, nibabel, scikit-image, matplotlib and fo
 | `nispace_logo_fullname.svg` | the same, with "neuroimaging spatial colocalization environment" below |
 | `nispace_icon.svg` | the logo graphic without text, square: avatar, social |
 | `nispace_favicon.svg` | the partly dissolved brain only (12 columns, no flying cells or plot), square: 16–48 px and the 180 px touch icon |
-| `*_<size>.png` | PNG exports of the above |
+| `nispace_social_preview.svg` | the full-name logo centred on black, 1280 × 640 (`card_svg.py`): GitHub social preview |
+| `*_<size>.png` | PNG exports of the above (`nispace_social_preview_1280x640.png` for upload) |
 
 There is one version for all backgrounds. Light rims around the letters and cells keep it readable on dark backgrounds; the full name uses mid tones that read on both (about 3.5:1 on white and on dark grey).
 

@@ -37,6 +37,8 @@ NSP_FONT_NAME="$FONT_NAME" NSP_HALO_TXT=0 NSP_NAME_GAP=0.18 NSP_HL_SCALE=1.2 NSP
   "$PY" "$HERE/compose_logo.py" "$W/lockup.svg" "$FONT" "$OUT/nispace_logo_fullname.svg" 1 "" halo 0.35 white mid "" 0.35 0.40
 "$PY" "$HERE/square_svg.py" "$W/lockup.svg" "$OUT/nispace_icon.svg" "$W/lockup.svg.layout.json"      # the logo graphic without text
 "$PY" "$HERE/square_svg.py" "$W/favicon.svg" "$OUT/nispace_favicon.svg" "$W/favicon.svg.layout.json"
+# GitHub social preview (Settings > Social preview): 1280 x 640, full-name logo on black
+"$PY" "$HERE/card_svg.py" "$OUT/nispace_logo_fullname.svg" "$OUT/nispace_social_preview.svg" 1280 640 0.84 "#000000"
 
 # 5 · PNG exports
 command -v rsvg-convert > /dev/null || { echo "rsvg-convert not found: SVGs done, PNGs skipped"; exit 0; }
@@ -46,4 +48,5 @@ for w in 600 1200 2400; do
 done
 for s in 128 256 512; do rsvg-convert -w $s -h $s "$OUT/nispace_icon.svg" -o "$OUT/nispace_icon_${s}.png"; done
 for s in 16 32 48 180; do rsvg-convert -w $s -h $s "$OUT/nispace_favicon.svg" -o "$OUT/nispace_favicon_${s}.png"; done
+rsvg-convert -w 1280 -h 640 "$OUT/nispace_social_preview.svg" -o "$OUT/nispace_social_preview_1280x640.png"
 echo "done: $OUT"
