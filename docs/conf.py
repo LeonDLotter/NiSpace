@@ -67,7 +67,12 @@ html_theme = "sphinx_rtd_theme"
 html_title = project + ' - version ' + release
 html_static_path = ['_static']
 html_css_files = ['custom.css']
-html_theme_options = {}
+html_logo = '../logo/final/nispace_logo.svg'
+html_favicon = '../logo/final/nispace_favicon_32.png'
+html_theme_options = {
+    'logo_only': True,
+    'style_nav_header_background': '#343131',   # sidebar grey instead of the theme blue, which clashes with the logo
+}
 
 pygments_style = 'sphinx'
 

@@ -1,4 +1,8 @@
 
+.. image:: https://raw.githubusercontent.com/LeonDLotter/NiSpace/dev/logo/final/nispace_logo_fullname.svg
+  :width: 520
+  :alt: NiSpace: neuroimaging spatial colocalization environment
+
 ``NiSpace``
 ================================================================================
 
