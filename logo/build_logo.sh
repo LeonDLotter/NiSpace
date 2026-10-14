@@ -30,12 +30,15 @@ done
 NSP_BRAIN_ONLY=1 "$PY" "$HERE/hexbin_logo.py" "$W/hex_n12.svg.cells.json" "$W/favicon.svg" lockup "" 0 3 0.55 1.25 1.0 0.9 0.06 0.75
 
 # 4 · logos with the text as outlines (one version for all backgrounds)
-"$PY" "$HERE/compose_logo.py" "$W/lockup.svg" "$FONT" "$OUT/nispace_logo.svg" 0 ""
-#   full name without a box, ExtraBold, 0.18 F below the "p"; n·i·s·p·a·c·e 1.30x (top of c = top of l) in light red (35% white) /
-#   light navy (40% white), the rest grey #808893: all ~3.5:1 on white and on dark grey; "equal" spacing: the
-#   bigger letters get wider cells, so every ink gap matches the normal one (the name is refit to the same width)
-NSP_FONT_NAME="$FONT_NAME" NSP_HALO_TXT=0 NSP_NAME_GAP=0.18 NSP_HL_SCALE=1.3036 NSP_HL_SPACING=equal NSP_REST="#808893" \
-  "$PY" "$HERE/compose_logo.py" "$W/lockup.svg" "$FONT" "$OUT/nispace_logo_fullname.svg" 1 "" halo 0.35 white mid "" 0.35 0.40
+#   short logo: "ni" 0.06 F lower (closer to "space"), the descender of the "p" shortened to 60% as in the full-name version
+NSP_NI_UP=-0.06 NSP_P_DESC=0.6 "$PY" "$HERE/compose_logo.py" "$W/lockup.svg" "$FONT" "$OUT/nispace_logo.svg" 0 ""
+#   full name split ("split"), ExtraBold: "neuroimaging" under "ni" (as wide as "ni" with its rim), "spatial colocalization
+#   environment" under "space" in the same size; "ni" 0.03 F higher, the graphic unchanged; the descender of the "p" shortened
+#   to 60% so the lower line moves up; gap 0.07 F from the bottom of "ni" / the "p" to the top of the "i" below;
+#   n·i light red (35% white), s·p·a·c·e light navy (40% white), as tall as the "t" (1.26x, the cell grows by the extra ink);
+#   the rest grey #808893: all ~3.5:1 on white and on dark grey
+NSP_FONT_NAME="$FONT_NAME" NSP_NI_UP=0.03 NSP_NAME_GAP=0.07 NSP_P_DESC=0.6 NSP_HL_SCALE=t NSP_REST="#808893" \
+  "$PY" "$HERE/compose_logo.py" "$W/lockup.svg" "$FONT" "$OUT/nispace_logo_fullname.svg" 1 "" split 0.35 white mid "" 0.35 0.40
 "$PY" "$HERE/square_svg.py" "$W/lockup.svg" "$OUT/nispace_icon.svg" "$W/lockup.svg.layout.json"      # the logo graphic without text
 "$PY" "$HERE/square_svg.py" "$W/favicon.svg" "$OUT/nispace_favicon.svg" "$W/favicon.svg.layout.json"
 # GitHub social preview (Settings > Social preview): 1280 x 640, full-name logo on black

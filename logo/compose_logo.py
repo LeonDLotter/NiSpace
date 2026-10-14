@@ -1,7 +1,8 @@
 """Compose the final NiSpace logo: graphic SVG (font units) + "ni" / "space" (+ optional full name) as outlines.
 All alignment uses the letters' ink extents, so "ni", "space" and the full name share one left edge and the
 full name ends exactly at the graphic's right edge.
-Usage: compose_logo.py GRAPHIC.svg FONT.ttf OUT.svg [fullname=0|1] [bg] [namestyle=plain|box|hex]"""
+Usage: compose_logo.py GRAPHIC.svg FONT.ttf OUT.svg [fullname=0|1] [bg] [namestyle=plain|box|hex|halo|outline|split]
+(the final full name is "split": each expansion under its own part; see build_logo.sh)"""
 import os, sys, json, re, math
 import numpy as np
 from fontTools.ttLib import TTFont
@@ -55,16 +56,105 @@ def glyphs(d, c, rim=RIM):
             f'<path d="{d}" fill="{hexc(c)}"/>')
 
 # left edge = ink start of the big letters; both lines start there
-l_ni, _ = ink("ni", F); l_sp, _ = ink("space", F)
+l_ni, r_ni = ink("ni", F); l_sp, _ = ink("space", F)
 L = min(l_ni, l_sp)
 x_ni, x_sp = L - l_ni, L - l_sp
-els = [glyphs(path("ni", x_ni, LK["base1"], F), RED), glyphs(path("space", x_sp, LK["base2"], F), NAVY)]
+base1 = LK["base1"]
 
 x0, y0, W, H = LK["viewBox"]
 x0 = L - 0.04 * F; W = LK["ink_right"] + 0.04 * F - x0
 Rgt = LK["ink_right"]
-under = []
-if fullname:
+under = []; els = []
+# "ni" up by NI_UP (F; negative = down), descender of the "p" shortened to P_DESC of its depth: both for the short logo too
+NI_UP = float(os.environ.get("NSP_NI_UP", 0.0)) * F; P_DESC = float(os.environ.get("NSP_P_DESC", 1.0))
+base1 -= NI_UP
+bb_ni = draw("ni", 0, 0, F, 0, BoundsPen(gs)).bounds; bb_sp = draw("space", 0, 0, F, 0, BoundsPen(gs)).bounds
+KNOCK = False
+if fullname and style == "split":
+    # each expansion under its own part: "neuroimaging" under "ni" (same ink width), "spatial colocalization
+    # environment" under "space" in the same size (runs on under the plot); "ni" moves up to make room, the
+    # graphic stays. Highlights: colour, optionally bigger with "equal" spacing (the cell grows by the extra ink)
+    fontN = TTFont(os.environ.get("NSP_FONT_NAME") or fontf); gsN = fontN.getGlyphSet()
+    HLK = os.environ.get("NSP_HL_SCALE", "1.0")
+    if HLK == "t":   # a bigger x-height letter reaches the top of the "t"
+        tb = lambda ch: draw(ch, 0, 0, upm, 0, BoundsPen(gsN), gsN).bounds[1]
+        HLK = tb("t") / tb("c")
+    HLK = float(HLK)
+    # one gap for both lines (NAME_GAP): bottom of "ni" -> top of the (highlighted) "i" in "neuroimaging",
+    # bottom of the "p" -> top of an "i" in "colocalization"; "ni" moves up by NI_UP
+    G = float(NAME_GAP or 0.18) * F
+    def hl_line(txt, hls, fs, x=0.0):   # [(index, glyph, x, scale)]
+        s = fs / upm; out = []
+        for i_, ch in enumerate(txt):
+            gn = cmap[ord(ch)]; k = HLK if i_ in hls else 1.0
+            if ch != " ":
+                out.append((i_, gn, x - fontN["hmtx"][gn][1] * s * (k - 1), s * k))
+                b = BoundsPen(gsN); gsN[gn].draw(b); x += (b.bounds[2] - b.bounds[0]) * s * (k - 1)
+            x += gsN[gn].width * s
+        return out
+    def line_bounds(items, base=0.0):   # xmin, top, xmax, bottom (y down)
+        bp = BoundsPen(gsN)
+        for _, gn, gx, sc in items: gsN[gn].draw(TransformPen(bp, (sc, 0, 0, -sc, gx, base)))
+        return bp.bounds
+    def line_els(txt, hls, cols, fs, base, ds=None):
+        items = hl_line(txt, hls, fs); b = line_bounds(items)
+        items = hl_line(txt, hls, fs, L - RIM / 2 - b[0])   # starts at the outer edge of the big letters' rim
+        for i_, gn, gx, sc in items:
+            pen = SVGPathPen(gsN); gsN[gn].draw(TransformPen(pen, (sc, 0, 0, -sc, gx, base)))
+            els.append(f'<path d="{pen.getCommands()}" fill="{hexc(cols.get(i_, REST))}"/>')
+            if ds is not None: ds.append(pen.getCommands())
+        return line_bounds(items, base)
+    # with a shorter "p" line B moves up; the gap still counts from its end.
+    # "knockout": line B runs over the full "p", which is cut out around the letters by a transparent gap (KO);
+    # line B is then placed so that big s -> small s equals big n -> small n (bottom -> top of the highlighted letter)
+    KNOCK = os.environ.get("NSP_P_MODE") == "knockout"
+    KO = float(os.environ.get("NSP_KO_GAP", 0.03)) * F
+    A, B = "neuroimaging", "spatial colocalization environment"
+    HA, HB = {0, 5}, {0, 1, 2, 8, 23}
+    b = line_bounds(hl_line(A, HA, F)); fsA = F * (r_ni - l_ni + RIM) / (b[2] - b[0])   # "ni" with its rim (RIM / 2 shows each side)
+    tA, bA = b[1] * fsA / F, b[3] * fsA / F                                # ink top (the big "i") / bottom
+    i_top = draw("i", 0, 0, fsA, 0, BoundsPen(gsN), gsN).bounds[1]          # top of a normal "i" (y down, < 0)
+    sp_top = LK["base2"] + bb_sp[1]
+    baseA = base1 + bb_ni[3] + G - tA
+    print(f"  name size {fsA / F:.3f} F, highlights {HLK:.4f}x, 'neuroimaging' -> 'space' {(sp_top - baseA - bA) / F:.3f} F")
+    line_els(A, HA, {i: mix(RED, TINT_RED) for i in HA}, fsA, baseA)
+    baseB = LK["base2"] + bb_sp[3] * P_DESC + G - i_top        # the "p" is the lowest letter; y down, base 0
+    if KNOCK:
+        bnd = lambda ch, size, g: draw(ch, 0, 0, size, 0, BoundsPen(g), g).bounds
+        d_n = (baseA + bnd("n", fsA * HLK, gsN)[1]) - (base1 + bnd("n", F, gs)[3])
+        baseB = LK["base2"] + bnd("s", F, gs)[3] + d_n - bnd("s", fsA * HLK, gsN)[1]
+        print(f"  big n -> small n = big s -> small s = {d_n / F:.3f} F")
+    dB = []
+    bB = line_els(B, HB, {i: mix(NAVY, TINT_BLUE) for i in HB}, fsA, baseB, dB)
+    if KNOCK:
+        ko = "".join(f'<path d="{d}" fill="black" stroke="black" stroke-width="{2 * KO:.2f}" stroke-linejoin="round"/>' for d in dB)
+        under.append(f'<defs><mask id="nsp-ko" maskUnits="userSpaceOnUse" x="{x0 - F:.2f}" y="{y0 - F:.2f}" width="{10 * F:.2f}" height="{5 * F:.2f}">'
+                     f'<rect x="{x0 - F:.2f}" y="{y0 - F:.2f}" width="{10 * F:.2f}" height="{5 * F:.2f}" fill="white"/>{ko}</mask></defs>')
+    top = min(y0, base1 + bb_ni[1] - RIM / 2 - 0.02 * F)
+    W = max(W, bB[2] + 0.04 * F - x0)
+    bot = max(bB[3], LK["base2"] + bb_sp[3] * P_DESC + RIM / 2)   # the "p" may reach below the line (knockout)
+    H = bot + 0.02 * F - top; y0 = top
+elif not fullname and (NI_UP or P_DESC != 1.0):   # short logo: fit the frame to the moved "ni" / shorter "p"
+    gb = LK["graphic_bbox"]
+    top = min(gb[1], base1 + bb_ni[1] - RIM / 2 - 0.02 * F)
+    H = max(gb[1] + gb[3], LK["base2"] + bb_sp[3] * P_DESC + RIM / 2 + 0.02 * F) - top; y0 = top
+def space_path(x, base):   # "space"; the descender of the "p" clamped to P_DESC of its depth (the rim wraps the new end)
+    if P_DESC == 1.0: return path("space", x, base, F)
+    from fontTools.pens.recordingPen import RecordingPen
+    s = F / upm; pen = SVGPathPen(gs)
+    for ch in "space":
+        gn = cmap[ord(ch)]; tp = TransformPen(pen, (s, 0, 0, -s, x, base))
+        if ch == "p":
+            rec = RecordingPen(); gs[gn].draw(rec)
+            ymin = min(p[1] for _, a in rec.value for p in a if p)
+            for op, a in rec.value: getattr(tp, op)(*[p and (p[0], max(p[1], ymin * P_DESC)) for p in a])
+        else:
+            gs[gn].draw(tp)
+        x += gs[gn].width * s
+    return pen.getCommands()
+sp_el = glyphs(space_path(x_sp, LK["base2"]), NAVY)
+els[:0] = [glyphs(path("ni", x_ni, base1, F), RED), f'<g mask="url(#nsp-ko)">{sp_el}</g>' if KNOCK else sp_el]
+if fullname and style != "split":
     name = "neuroimaging spatial colocalization environment"
     nf = os.environ.get("NSP_FONT_NAME")                       # optional weight for the whole name (same advances)
     fontN = TTFont(nf) if nf else font
