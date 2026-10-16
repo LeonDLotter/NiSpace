@@ -181,10 +181,27 @@ def test_null_maps_from_nimare_reporting_baseline_binary(ale_result, ale_correct
     assert (arr >= 0).all() and (arr <= 1).all()
 
 
-def test_reporting_baseline_concentrated_in_one_parcel_drives_nulls(ale_result):
+def test_null_maps_from_nimare_coordinate_pool_baseline(ale_result):
+    # deterministic SALE: null foci resampled from a pool of reported coordinates
+    pool = ale_result.estimator.inputs_["coordinates"][["x", "y", "z"]].values
+    nulls = null_maps_from_nimare(
+        ale_result, parcellation="Yan100", reporting_baseline=pool,
+        n_perm=5, seed=0, n_proc=1, validate=False, verbose=False,
+    )
+    arr = nulls["stat"]
+    assert arr.shape == (5, 100)
+    assert np.isfinite(arr).all()
+    # no two nulls identical, but unlike the uniform null they are strongly
+    # correlated by design: every null focus lands on one of the pool's voxels
+    assert not any(np.allclose(arr[i], arr[j]) for i in range(5) for j in range(i))
+
+
+@pytest.mark.parametrize("as_pool", [False, True], ids=["image", "coord_pool"])
+def test_reporting_baseline_concentrated_in_one_parcel_drives_nulls(ale_result, as_pool):
     # all baseline mass in one parcel -> that parcel must carry the highest mean null ALE
     import nibabel as nib
     from nilearn.image import resample_img
+    from nimare.utils import vox2mm
     from nispace.datasets import fetch_parcellation
 
     mask_img = ale_result.estimator.masker.mask_img
@@ -199,10 +216,14 @@ def test_reporting_baseline_concentrated_in_one_parcel_drives_nulls(ale_result):
     in_mask = mask_img.get_fdata() != 0
     target_idx = int(np.argmax([((parc_arr == lab) & in_mask).sum() for lab in labels]))
     baseline = ((parc_arr == labels[target_idx]) & in_mask).astype(np.float32)
+    if as_pool:
+        # the same prior expressed as coordinates instead of a density map
+        baseline = vox2mm(np.vstack(np.where(baseline)).T.astype(float), mask_img.affine)
+    else:
+        baseline = nib.Nifti1Image(baseline, mask_img.affine)
 
     nulls = null_maps_from_nimare(
-        ale_result, parcellation=parc,
-        reporting_baseline=nib.Nifti1Image(baseline, mask_img.affine),
+        ale_result, parcellation=parc, reporting_baseline=baseline,
         n_perm=5, seed=0, n_proc=1, validate=False, verbose=False,
     )
     assert int(np.argmax(nulls["stat"].mean(axis=0))) == target_idx
@@ -215,15 +236,22 @@ def scale_result():
     from nimare.meta.cbma.ale import SCALE
     from nimare.utils import get_template
 
+    from nimare.utils import vox2mm
+
     tpl = get_template("mni152_2mm", mask="brain")
+    # small mask keeps the null fast, but must overlap the parcellation used
+    # below (left frontal/precentral: 6 Yan100 parcels) or every parcellated
+    # null map is trivially all-zero
     small = np.zeros(tpl.shape, dtype=np.uint8)
-    small[40:50, 50:60, 35:45] = 1
+    small[20:30, 60:70, 45:55] = 1
     small[tpl.get_fdata() == 0] = 0
     dset = Dataset(
         os.path.join(get_resource_path(), "nidm_pain_dset.json"),
         mask=nib.Nifti1Image(small, tpl.affine),
     )
-    xyz = dset.coordinates[["x", "y", "z"]].values
+    # SCALE's own null pool: a deterministic, clearly non-uniform subset of the
+    # mask (every third voxel), so reusing it must differ from uniform sampling
+    xyz = vox2mm(np.vstack(np.where(small)).T[::3].astype(float), tpl.affine)
     return SCALE(xyz=xyz, n_iters=5, n_cores=1).fit(dset)
 
 
@@ -243,11 +271,29 @@ def test_scale_result_rejects_binary_mode(scale_result, ale_corrected_result):
         )
 
 
-def test_scale_result_uniform_null_warns(scale_result, caplog):
-    with caplog.at_level("WARNING"):
-        nulls = null_maps_from_nimare(
-            scale_result, parcellation="Yan100",
-            n_perm=2, seed=0, n_proc=1, validate=False, verbose=False,
-        )
-    assert any("SCALE" in r.message for r in caplog.records)
+def test_scale_result_adopts_own_null(scale_result):
+    # by default a SCALE result's own null pool is reused, not uniform sampling
+    kwargs = dict(
+        parcellation="Yan100", n_perm=4, seed=0, n_proc=1, validate=False, verbose=False,
+    )
+    own = null_maps_from_nimare(scale_result, **kwargs)["stat"]
+    uniform = null_maps_from_nimare(scale_result, reporting_baseline="uniform", **kwargs)["stat"]
+    assert own.shape == uniform.shape == (4, 100)
+    assert np.isfinite(own).all()
+    assert not np.allclose(own, uniform)
+
+
+def test_scale_result_warns_when_own_null_unusable(scale_result, caplog):
+    est = scale_result.estimator
+    original_xyz = est.xyz
+    est.xyz = np.zeros((1, 3))   # nimare-gpu's placeholder for "no pool given"
+    try:
+        with caplog.at_level("WARNING"):
+            nulls = null_maps_from_nimare(
+                scale_result, parcellation="Yan100",
+                n_perm=2, seed=0, n_proc=1, validate=False, verbose=False,
+            )
+    finally:
+        est.xyz = original_xyz
+    assert any("uniform sampling is used" in r.message for r in caplog.records)
     assert nulls["stat"].shape == (2, 100)

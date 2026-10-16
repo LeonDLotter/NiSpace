@@ -176,3 +176,196 @@ def test_resolve_query_fetches_single_mabaseline_map_in_original_space(monkeypat
     w = _resolve_reporting_baseline("neurosynth", mask_img, verbose=False)
     assert calls == {"dataset": "mabaseline", "maps": expected[0], "space": "MNIOriginal"}
     assert w.sum() == pytest.approx(1.0)
+
+
+def test_resolve_uniform_keyword_returns_none():
+    # the only way to force uniform sampling for a SCALE result
+    assert _resolve_reporting_baseline("uniform", _mask_img()) is None
+    assert _resolve_reporting_baseline("UNIFORM", _mask_img()) is None
+
+
+# ---------------------------------------------------------------------------
+# Coordinate pools (deterministic SCALE/SALE null)
+#
+# These need NiMARE: pool coordinates must be snapped to voxels with the exact
+# convention NiMARE uses when it places kernels (mm2vox truncates, not rounds),
+# otherwise a focus could be counted on a different voxel than it is modelled.
+# ---------------------------------------------------------------------------
+
+def _vox2mm(mask_img, ijk):
+    from nimare.utils import vox2mm
+    return vox2mm(np.asarray(ijk, dtype=float), mask_img.affine)
+
+
+def test_coord_pool_weights_are_hit_counts():
+    pytest.importorskip("nimare")
+    from nispace.helpers.nimare import _coord_pool_to_weights
+    mask_img = _mask_img()
+    ijk = _mask_ijk(mask_img)
+    pool = _vox2mm(mask_img, [ijk[0]] * 3 + [ijk[5]])
+    w = _coord_pool_to_weights(pool, mask_img)
+    assert w.shape == (len(ijk),)
+    assert w.sum() == pytest.approx(1.0)
+    expected = np.zeros(len(ijk))
+    expected[[0, 5]] = [0.75, 0.25]
+    np.testing.assert_allclose(w, expected)
+
+
+def test_coord_pool_via_ndarray_and_table_and_dataset():
+    pytest.importorskip("nimare")
+    pd = pytest.importorskip("pandas")
+    from nispace.helpers.nimare import _coord_pool_to_weights
+    mask_img = _mask_img()
+    ijk = _mask_ijk(mask_img)
+    pool = _vox2mm(mask_img, [ijk[0], ijk[0], ijk[9]])
+    expected = _coord_pool_to_weights(pool, mask_img)
+
+    # (n, 3) array
+    np.testing.assert_allclose(_resolve_reporting_baseline(pool, mask_img), expected)
+    # table with x/y/z columns
+    table = pd.DataFrame(pool, columns=["x", "y", "z"])
+    np.testing.assert_allclose(_resolve_reporting_baseline(table, mask_img), expected)
+    # anything exposing .coordinates (NiMARE dataset duck type)
+    class _Dset:
+        coordinates = table
+    np.testing.assert_allclose(_resolve_reporting_baseline(_Dset(), mask_img), expected)
+
+
+def test_coord_pool_table_without_xyz_columns_raises():
+    pd = pytest.importorskip("pandas")
+    table = pd.DataFrame({"i": [1], "j": [1], "k": [1]})
+    with pytest.raises(ValueError, match="missing"):
+        _resolve_reporting_baseline(table, _mask_img())
+
+
+def test_coord_pool_drops_coordinates_outside_mask(caplog):
+    pytest.importorskip("nimare")
+    from nispace.helpers.nimare import _coord_pool_to_weights
+    mask_img = _mask_img()
+    ijk = _mask_ijk(mask_img)
+    pool = _vox2mm(mask_img, [ijk[0], ijk[1], [0, 0, 0], [99, 99, 99]])  # bg + out of bounds
+    with caplog.at_level("WARNING"):
+        w = _coord_pool_to_weights(pool, mask_img)
+    assert "outside the estimator's mask" in caplog.text
+    expected = np.zeros(len(ijk))
+    expected[[0, 1]] = 0.5
+    np.testing.assert_allclose(w, expected)
+
+
+def test_coord_pool_on_single_voxel_raises():
+    pytest.importorskip("nimare")
+    from nispace.helpers.nimare import _coord_pool_to_weights
+    mask_img = _mask_img()
+    pool = _vox2mm(mask_img, [_mask_ijk(mask_img)[0]] * 5)
+    with pytest.raises(ValueError, match="cannot define a null distribution"):
+        _coord_pool_to_weights(pool, mask_img)
+
+
+# ---------------------------------------------------------------------------
+# _scale_estimator_weights: reuse of a SCALE estimator's own null
+# ---------------------------------------------------------------------------
+
+class _FakeEstimator:
+    def __init__(self, mask_img, sampling_prob=None, xyz=None):
+        self.masker = type("M", (), {"mask_img": mask_img})()
+        self.sampling_prob = sampling_prob
+        self.xyz = xyz
+
+
+def test_scale_weights_from_sampling_prob_are_normalized():
+    from nispace.helpers.nimare import _scale_estimator_weights
+    mask_img = _mask_img()
+    n_vox = int((mask_img.get_fdata() != 0).sum())
+    prob = np.arange(1, n_vox + 1, dtype=float)
+    w = _scale_estimator_weights(_FakeEstimator(mask_img, sampling_prob=prob))
+    np.testing.assert_allclose(w, prob / prob.sum())
+
+
+def test_scale_weights_prefer_sampling_prob_over_xyz():
+    pytest.importorskip("nimare")
+    from nispace.helpers.nimare import _scale_estimator_weights
+    mask_img = _mask_img()
+    n_vox = int((mask_img.get_fdata() != 0).sum())
+    prob = np.full(n_vox, 1 / n_vox)
+    pool = _vox2mm(mask_img, _mask_ijk(mask_img)[:2])
+    w = _scale_estimator_weights(_FakeEstimator(mask_img, sampling_prob=prob, xyz=pool))
+    np.testing.assert_allclose(w, prob)
+
+
+def test_scale_weights_fall_back_to_xyz_pool(caplog):
+    pytest.importorskip("nimare")
+    from nispace.helpers.nimare import _scale_estimator_weights, _coord_pool_to_weights
+    mask_img = _mask_img()
+    pool = _vox2mm(mask_img, _mask_ijk(mask_img)[:4])
+    # no sampling_prob at all
+    w = _scale_estimator_weights(_FakeEstimator(mask_img, xyz=pool))
+    np.testing.assert_allclose(w, _coord_pool_to_weights(pool, mask_img))
+    # unusable sampling_prob -> warn, then still use the pool
+    with caplog.at_level("WARNING"):
+        w2 = _scale_estimator_weights(
+            _FakeEstimator(mask_img, sampling_prob=np.ones(3), xyz=pool)
+        )
+    assert "sampling_prob" in caplog.text
+    np.testing.assert_allclose(w2, w)
+
+
+def test_scale_weights_none_when_unusable(caplog):
+    pytest.importorskip("nimare")
+    from nispace.helpers.nimare import _scale_estimator_weights
+    mask_img = _mask_img()
+    assert _scale_estimator_weights(_FakeEstimator(mask_img)) is None
+    # degenerate pool (nimare-gpu sets xyz=zeros((1, 3)) when none is given)
+    with caplog.at_level("WARNING"):
+        assert _scale_estimator_weights(
+            _FakeEstimator(mask_img, xyz=np.zeros((1, 3)))
+        ) is None
+    assert "own null" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Continuous-mode validation against NiMARE's own p-values
+# ---------------------------------------------------------------------------
+
+class _FakeResult:
+    """Minimal MetaResult stand-in: .maps dict plus get_map() raising like NiMARE's."""
+
+    def __init__(self, **maps):
+        self.maps = maps
+
+    def get_map(self, name):
+        arr = self.maps.get(name)
+        if arr is None:
+            raise ValueError(f"No map with name '{name}' found.")
+        return nib.Nifti1Image(arr, np.eye(4))
+
+
+def _validate_continuous(result, caplog):
+    from nispace.helpers.nimare import _validate_null_maps
+    rng = np.random.default_rng(0)
+    parc_arr = np.zeros((4, 4, 4), dtype=np.float32)
+    parc_arr[:2] = 1
+    parc_arr[2:] = 2
+    parc_idc = np.array([1, 2], dtype=np.float32)
+    # set the level on the module logger, not just the root one: other tests can
+    # leave it above INFO, and then nothing would propagate to caplog
+    with caplog.at_level("INFO", logger="nispace.helpers.nimare"):
+        _validate_null_maps(
+            rng.random((20, 2)), None, result, "stat",
+            parc_arr, parc_idc, None, None, "size", 0.05, None,
+        )
+
+
+def test_validation_uses_logp_when_no_p_map(caplog):
+    # SCALE results carry 'logp' but no 'p' map -- this used to raise ValueError
+    rng = np.random.default_rng(1)
+    shape = (4, 4, 4)
+    _validate_continuous(
+        _FakeResult(stat=rng.random(shape), logp=rng.random(shape)), caplog
+    )
+    assert "Spearman" in caplog.text
+
+
+def test_validation_skips_without_p_or_logp(caplog):
+    rng = np.random.default_rng(2)
+    _validate_continuous(_FakeResult(stat=rng.random((4, 4, 4))), caplog)
+    assert "neither a 'p' nor a 'logp' map" in caplog.text
