@@ -43,6 +43,7 @@ from .core.region_influence import _get_region_influence_fun, _sort_region_influ
 from .core.region_contribution import (_get_region_contribution_fun, _sort_region_contribution,
                                        _CONTRIBUTION_METHODS)
 from .stats.coloc import rank2d
+from .stats.effectsize import rzscore_nan, zscore_nan
 from .stats.misc import (maxT_correction, step_maxT_correction, rho_to_z, z_to_rho, zscore_df,
                          null_to_p)
 from .utils.utils import set_log, _quiet, print_arg_pairs
@@ -1345,7 +1346,8 @@ def _compare_sets_pair_null(bg, w_a, w_b, n_shared, n_perm, ref_unit, seed):
 
 def compare_sets(X, background, pairs=None, null="overlap", n_perm=1000,
                  weighted=None, standardize=None, rank=False, remove_background_mean=True,
-                 p_tails="upper", return_nulls=False, n_proc=None, seed=None, verbose=None):
+                 p_tails="upper", z_method="robust", return_nulls=False, n_proc=None, seed=None,
+                 verbose=None):
     """
     Compare X sets with each other: how many maps (genes) they share, and how similar
     their set-mean maps are compared to random sets of the same sizes.
@@ -1408,6 +1410,10 @@ def compare_sets(X, background, pairs=None, null="overlap", n_perm=1000,
     p_tails : {"upper", "two", "lower"}, default "upper"
         Tail for the map-similarity p-values. ``"upper"``: are the sets more similar
         than random sets?
+    z_method : {"robust", "standard"}, default "robust"
+        How to z-score the observed r against its null, as in
+        :meth:`NiSpace.normalize_colocalizations`: ``"robust"`` (median/MAD) or
+        ``"standard"`` (mean/SD). Both r and null are Fisher-z transformed first.
     return_nulls : bool, default False
         Also return the null distributions.
     n_proc : int, optional
@@ -1428,10 +1434,11 @@ def compare_sets(X, background, pairs=None, null="overlap", n_perm=1000,
           background (plus any set maps missing from it) as universe;
         - ``r``: Pearson r between the two set-mean maps; ``r_null_median``,
           ``r_null_lo``, ``r_null_hi``: median and 2.5/97.5 percentiles of the
-          random-pair null; ``p_r``: permutation p-value;
+          random-pair null; ``p_r``: permutation p-value; ``z_r``: r z-scored against
+          the null (see ``z_method``);
         - ``r_resid``, ``r_resid_null_median``, ``r_resid_null_lo``, ``r_resid_null_hi``,
-          ``p_r_resid``: the same after removing the background mean map (only if
-          ``remove_background_mean=True``).
+          ``p_r_resid``, ``z_r_resid``: the same after removing the background mean map
+          (only if ``remove_background_mean=True``).
 
         p-values are not corrected for multiple comparisons.
     dict, optional
@@ -1594,6 +1601,7 @@ def compare_sets(X, background, pairs=None, null="overlap", n_perm=1000,
     )
 
     ## summarize
+    score_fn = rzscore_nan if z_method == "robust" else zscore_nan
     for row, (r_null, r_resid_null) in zip(rows, nulls):
         for stat, null_arr in (("r", r_null), ("r_resid", r_resid_null)):
             if null_arr is None:
@@ -1601,10 +1609,14 @@ def compare_sets(X, background, pairs=None, null="overlap", n_perm=1000,
             row[f"{stat}_null_median"] = np.median(null_arr)
             row[f"{stat}_null_lo"], row[f"{stat}_null_hi"] = np.percentile(null_arr, [2.5, 97.5])
             row[f"p_{stat}"] = null_to_p(row[stat], null_arr, tail=p_tails)
+            # same as NiSpace.normalize_colocalizations(): z-score of Fisher-z rho vs. null
+            row[f"z_{stat}"] = score_fn(rho_to_z(np.atleast_2d(row[stat])),
+                                        rho_to_z(null_arr)[:, None])[0, 0]
     cols = ["n_a", "n_b", "n_shared", "jaccard", "overlap_coef", "p_overlap",
-            "r", "r_null_median", "r_null_lo", "r_null_hi", "p_r"]
+            "r", "r_null_median", "r_null_lo", "r_null_hi", "p_r", "z_r"]
     if remove_background_mean:
-        cols += ["r_resid", "r_resid_null_median", "r_resid_null_lo", "r_resid_null_hi", "p_r_resid"]
+        cols += ["r_resid", "r_resid_null_median", "r_resid_null_lo", "r_resid_null_hi",
+                 "p_r_resid", "z_r_resid"]
     out = pd.DataFrame(rows).set_index(["set_a", "set_b"])[cols]
 
     lgr.info(f"Returning compare_sets results: \n"

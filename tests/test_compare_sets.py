@@ -109,6 +109,23 @@ def test_null_keeps_overlap(data):
     assert (nulls[("A", "A2")]["r"] < 0.99).all()
 
 
+@pytest.mark.parametrize("z_method", ["robust", "standard"])
+def test_z_vs_null_matches_manual(data, z_method):
+    """Same as NiSpace.normalize_colocalizations(): z-score of Fisher-z r vs Fisher-z null."""
+    X, bg, _ = data
+    res, nulls = diagnostics.compare_sets(X, bg, n_perm=200, z_method=z_method, seed=0,
+                                          return_nulls=True, verbose=False)
+    for pair in res.index:
+        for stat in ["r", "r_resid"]:
+            obs, null = np.arctanh(res.loc[pair, stat]), np.arctanh(nulls[pair][stat])
+            if z_method == "robust":
+                med = np.median(null)
+                expected = (obs - med) / (1.4826 * np.median(np.abs(null - med)))
+            else:
+                expected = (obs - null.mean()) / null.std(ddof=1)
+            assert res.loc[pair, f"z_{stat}"] == pytest.approx(expected, rel=1e-6)
+
+
 def test_null_reproducible_and_independent_of_n_proc(data):
     X, bg, _ = data
     r1 = diagnostics.compare_sets(X, bg, n_perm=100, seed=1, n_proc=1, verbose=False)
