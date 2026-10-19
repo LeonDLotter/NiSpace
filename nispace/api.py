@@ -3345,6 +3345,13 @@ class NiSpace:
                             f"({_X_obs.shape[1]}) -- 'sets' permutation calibration degrades "
                             "here, even with dimensionality reduction methods.")
             # get permuted indices
+            # TODO (postponed 2026-10-19): optional stratified/matched draws (e.g. gene length
+            # bins) -- per set, draw the observed count per stratum from that stratum's background
+            # pool. Plug in here as index draws (fast-XSEA path stays unchanged, cf. shelved
+            # xsea_matched_null branch); needs background map names, which are lost at the
+            # np.array() conversion above. Simple option preferred: categorical labels per map.
+            # Reuse in diagnostics.compare_sets()' random-pair null. See
+            # _explore/compare_gene_sets/HANDOFF.md.
             rng = np.random.default_rng(seed)
             _X_null = [
                 {name: rng.choice(bg_size, size=size, replace=False) 

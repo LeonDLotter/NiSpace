@@ -78,6 +78,7 @@ API Reference
    regional_influence
    regional_contribution
    local_colocalization
+   compare_sets
 
 
 .. _api_stats_coloc:

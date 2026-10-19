@@ -15,15 +15,21 @@ extend the core pipeline itself.
   "group" variant, this function auto-detects the pathway (see its docstring).
 - :func:`spatial_cross_validate` -- Hansen-et-al.-style distance-dependent cross-validation
   (GitHub issue #74).
+- :func:`compare_sets` -- overlap and set-mean-map similarity between X sets, against
+  size-matched random set pairs. Needs only set-structured X and a background, not
+  ``colocalize()``.
 
 ``regional_influence``/``regional_contribution`` moved here from :class:`NiSpace` (formerly
 ``NiSpace.regional_influence()``/``.regional_contribution()``) -- this is a clean break, no
 backward-compat wrapper was kept on the class.
 """
 
+from itertools import combinations
+
 import numpy as np
 import pandas as pd
-from scipy.stats import rankdata
+from scipy.sparse import csr_matrix
+from scipy.stats import rankdata, hypergeom
 from joblib import Parallel, delayed
 from tqdm import tqdm
 from contextlib import contextmanager
@@ -37,7 +43,8 @@ from .core.region_influence import _get_region_influence_fun, _sort_region_influ
 from .core.region_contribution import (_get_region_contribution_fun, _sort_region_contribution,
                                        _CONTRIBUTION_METHODS)
 from .stats.coloc import rank2d
-from .stats.misc import maxT_correction, step_maxT_correction, rho_to_z, z_to_rho
+from .stats.misc import (maxT_correction, step_maxT_correction, rho_to_z, z_to_rho, zscore_df,
+                         null_to_p)
 from .utils.utils import set_log, _quiet, print_arg_pairs
 
 
@@ -1291,6 +1298,322 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
 
     return {"stat_type": stat, "mc_method": mc_method, "pooled": pooled or False, "r_to_z": r_to_z,
            "stat": result, "p": p_raw_result, "p_corr": p_corr_result, "settings": settings}
+
+
+# SET COMPARISON ====================================================================================
+
+def _rowwise_corr(A, B):
+    """Pearson r between matching rows of A and B, both (n, n_parcels)."""
+    A = A - A.mean(axis=1, keepdims=True)
+    B = B - B.mean(axis=1, keepdims=True)
+    return (A * B).sum(axis=1) / np.sqrt((A * A).sum(axis=1) * (B * B).sum(axis=1))
+
+
+def _remove_ref_map(M, ref_unit):
+    """Residuals of each row of M after OLS on [intercept, ref map]. ``ref_unit`` is the
+    centered, unit-norm reference map, so this is just centering + removing the projection."""
+    Mc = M - M.mean(axis=1, keepdims=True)
+    return Mc - np.outer(Mc @ ref_unit, ref_unit)
+
+
+def _compare_sets_pair_null(bg, w_a, w_b, n_shared, n_perm, ref_unit, seed):
+    """Random-pair null for one pair of sets. Each draw takes ``n_a + n_b - n_shared``
+    distinct background rows: the first ``n_shared`` go into both random sets, the rest
+    are split into the A-only and B-only parts. ``w_a``/``w_b`` are the observed weights
+    ordered [shared genes, set-only genes], so shared genes keep their weight pairing."""
+    rng = np.random.default_rng(seed)
+    n_bg = bg.shape[0]
+    n_a, n_b = len(w_a), len(w_b)
+    n_draw = n_a + n_b - n_shared
+    idx = np.stack([rng.choice(n_bg, size=n_draw, replace=False) for _ in range(n_perm)])
+    idx_a = idx[:, :n_a]
+    idx_b = np.concatenate([idx[:, :n_shared], idx[:, n_a:]], axis=1)
+
+    # (weighted) set means as one sparse (n_perm, n_bg) @ (n_bg, n_parcels) product
+    def _set_maps(idc, w):
+        rows = np.repeat(np.arange(n_perm), idc.shape[1])
+        S = csr_matrix((np.tile(w / w.sum(), n_perm), (rows, idc.ravel())), shape=(n_perm, n_bg))
+        return np.asarray(S @ bg)
+
+    M_a, M_b = _set_maps(idx_a, w_a), _set_maps(idx_b, w_b)
+    r = _rowwise_corr(M_a, M_b)
+    r_resid = None
+    if ref_unit is not None:
+        r_resid = _rowwise_corr(_remove_ref_map(M_a, ref_unit), _remove_ref_map(M_b, ref_unit))
+    return r, r_resid
+
+
+def compare_sets(X, background, pairs=None, null="overlap", n_perm=1000,
+                 weighted=None, standardize=None, rank=False, remove_background_mean=True,
+                 p_tails="upper", return_nulls=False, n_proc=None, seed=None, verbose=None):
+    """
+    Compare X sets with each other: how many maps (genes) they share, and how similar
+    their set-mean maps are compared to random sets of the same sizes.
+
+    Intended for questions like "are my gene sets really different?". In
+    transcriptomic data, the mean maps of unrelated gene sets are often highly
+    correlated, because every set-mean map carries the dataset's dominant spatial
+    pattern. A raw correlation between two set-mean maps is therefore hard to
+    interpret on its own; this function compares it to a null of random set pairs
+    drawn from ``background`` with the same sizes (and, by default, the same number
+    of shared maps). Optionally, it repeats the comparison after regressing the
+    background's mean map out of every set-mean map, which removes the shared
+    pattern.
+
+    The set-mean map is what mean-aggregated XSEA "sees": for z-scored X rows, the
+    mean Pearson ``rho`` of a set's maps with any Y map equals exactly
+    ``r(set-mean map, Y) * sd(set-mean map)``. XSEA averages on the Fisher-z scale,
+    which stays close to this for the small per-map correlations typical of gene
+    data. Two sets with near-identical mean maps therefore give near-identical XSEA
+    results for every Y. Use ``rank=True`` for the Spearman
+    equivalent. This does not hold for multivariate methods (e.g., ``pcr``), which
+    represent a set by its main components rather than its mean map.
+
+    Does not need ``colocalize()`` and does not use Y.
+
+    Parameters
+    ----------
+    X : NiSpace or pandas.DataFrame
+        A fitted NiSpace object with set-structured X (its fitted X is used), or a
+        DataFrame with a ``"set"`` index level, a map-name level (``"map"``, else the
+        first other level that is not ``"weight"``), and optionally ``"weight"``, e.g.
+        from ``fetch_reference(..., collection=...)``.
+    background : pandas.DataFrame
+        Background pool of maps (rows, indexed by map name) for the random sets, e.g.
+        the full dataset from ``fetch_reference(<dataset>, parcellation=...)``.
+        Columns must include all X parcels. Required: the union of the sets in X is
+        a biased background. Also defines the universe for the hypergeometric test.
+    pairs : list of tuple, optional
+        ``(set_a, set_b)`` pairs to compare. Default: all unordered pairs of sets in X.
+    null : {"overlap", "disjoint"}, default "overlap"
+        ``"overlap"``: random pairs share as many maps as the observed pair, so the
+        null asks whether the two sets are more similar than their overlap alone
+        explains. ``"disjoint"``: random pairs share no maps.
+    n_perm : int, default 1000
+        Number of random pairs per observed pair.
+    weighted : bool, optional
+        Weighted set means using the ``"weight"`` index level of X. Defaults to True
+        if X has a ``"weight"`` level, else False. Random sets reuse the observed
+        weights.
+    standardize : bool, optional
+        Z-standardize each X and background map across parcels before averaging.
+        Defaults to the NiSpace object's X standardization if ``X`` is a NiSpace
+        object, else True (the NiSpace default).
+    rank : bool, default False
+        Rank each map across parcels before standardizing and averaging, i.e., the
+        set maps that Spearman-based XSEA aggregates.
+    remove_background_mean : bool, default True
+        Also compare set-mean maps after regressing out (with intercept) the mean map
+        of all background maps.
+    p_tails : {"upper", "two", "lower"}, default "upper"
+        Tail for the map-similarity p-values. ``"upper"``: are the sets more similar
+        than random sets?
+    return_nulls : bool, default False
+        Also return the null distributions.
+    n_proc : int, optional
+        Number of parallel jobs (over pairs). Defaults to the NiSpace object's setting,
+        else 1.
+    seed : int, optional
+        Random seed. Results do not depend on ``n_proc``.
+    verbose : bool, optional
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per pair, indexed by ``(set_a, set_b)``, with columns:
+
+        - ``n_a``, ``n_b``, ``n_shared``: set sizes and number of shared maps;
+        - ``jaccard``: ``n_shared / |A ∪ B|``; ``overlap_coef``: ``n_shared / min(n_a, n_b)``;
+        - ``p_overlap``: hypergeometric p for at least ``n_shared`` shared maps, given the
+          background (plus any set maps missing from it) as universe;
+        - ``r``: Pearson r between the two set-mean maps; ``r_null_median``,
+          ``r_null_lo``, ``r_null_hi``: median and 2.5/97.5 percentiles of the
+          random-pair null; ``p_r``: permutation p-value;
+        - ``r_resid``, ``r_resid_null_median``, ``r_resid_null_lo``, ``r_resid_null_hi``,
+          ``p_r_resid``: the same after removing the background mean map (only if
+          ``remove_background_mean=True``).
+
+        p-values are not corrected for multiple comparisons.
+    dict, optional
+        Only if ``return_nulls=True``: ``{(set_a, set_b): {"r": array, "r_resid": array}}``.
+    """
+    from .api import NiSpace
+
+    ## resolve inputs
+    if isinstance(X, NiSpace):
+        nsp = X
+        verbose = set_log(lgr, nsp._verbose if verbose is None else verbose)
+        nsp._check_fit()
+        X = nsp._X
+        if standardize is None:
+            standardize = bool(nsp._zscore) and "x" in nsp._zscore
+        if n_proc is None:
+            n_proc = nsp._n_proc
+    else:
+        verbose = set_log(lgr, True if verbose is None else verbose)
+        if standardize is None:
+            standardize = True
+        if n_proc is None:
+            n_proc = 1
+    lgr.info("*** diagnostics.compare_sets() - Comparing X sets. ***")
+
+    if (not isinstance(X, pd.DataFrame) or not isinstance(X.index, pd.MultiIndex)
+            or "set" not in X.index.names):
+        lgr.critical_raise("compare_sets() requires X with a MultiIndex containing a 'set' "
+                           "level!", ValueError)
+    # map names: the "map" level, else the first level that is neither "set" nor "weight"
+    map_level_name = "map" if "map" in X.index.names else \
+        next((n for n in X.index.names if n not in ("set", "weight")), None)
+    if map_level_name is None:
+        lgr.critical_raise("compare_sets() requires X with a map-name index level next to "
+                           "'set'!", ValueError)
+    if not isinstance(background, pd.DataFrame):
+        lgr.critical_raise("'background' must be a pandas DataFrame indexed by map name, not "
+                           f"{type(background)}!", TypeError)
+    if null not in ("overlap", "disjoint"):
+        lgr.critical_raise(f"'null' must be 'overlap' or 'disjoint', not '{null}'!", ValueError)
+    if weighted is None:
+        weighted = "weight" in X.index.names
+    elif weighted and "weight" not in X.index.names:
+        lgr.warning("weighted=True but X has no 'weight' index level. Using unweighted means.")
+        weighted = False
+
+    missing_cols = X.columns.difference(background.columns)
+    if len(missing_cols) > 0:
+        lgr.critical_raise(f"{len(missing_cols)} X parcels are missing from the background "
+                           f"columns, e.g. {list(missing_cols[:3])}!", ValueError)
+    background = background.loc[:, X.columns]
+
+    ## NaN handling: drop parcels with NaN in X, then background maps with NaN in the rest
+    nan_parcels = X.isnull().any(axis=0)
+    if nan_parcels.any():
+        lgr.warning(f"Dropping {nan_parcels.sum()} parcels with NaN values in X.")
+        X = X.loc[:, ~nan_parcels]
+        background = background.loc[:, ~nan_parcels.values]
+    nan_bg = background.isnull().any(axis=1)
+    if nan_bg.any():
+        lgr.warning(f"Dropping {nan_bg.sum()} background maps with NaN values.")
+        background = background.loc[~nan_bg]
+
+    ## preprocess maps (identical for X and background)
+    def _prep(arr):
+        arr = np.array(arr, dtype=np.float64)
+        if rank:
+            arr = rank2d(arr.T).T
+        if standardize:
+            arr = zscore_df(arr, along="rows", force_df=False)
+        return arr
+
+    X_arr = _prep(X)
+    bg_arr = _prep(background)
+    bg_names = pd.Index(background.index.get_level_values(-1) if isinstance(background.index, pd.MultiIndex)
+                        else background.index)
+    if bg_names.duplicated().any():
+        lgr.warning("Background contains duplicated map names. Keeping the first of each.")
+        keep = ~bg_names.duplicated()
+        bg_arr, bg_names = bg_arr[keep], bg_names[keep]
+    n_bg = bg_arr.shape[0]
+
+    ref_unit = None
+    if remove_background_mean:
+        ref = bg_arr.mean(axis=0)
+        ref = ref - ref.mean()
+        ref_unit = ref / np.linalg.norm(ref)
+
+    ## observed sets: {set: (map names, weights, set-mean map)}
+    set_level = X.index.get_level_values("set")
+    map_level = X.index.get_level_values(map_level_name)
+    weight_level = X.index.get_level_values("weight").astype(float) if weighted else None
+    sets = {}
+    for set_name in pd.unique(set_level):
+        idc = np.flatnonzero(set_level == set_name)
+        names = pd.Index(map_level[idc])
+        keep = ~names.duplicated()
+        idc, names = idc[keep], names[keep]
+        w = np.asarray(weight_level[idc]) if weighted else np.ones(len(idc))
+        sets[set_name] = {"maps": names, "w": pd.Series(w, index=names),
+                          "map": (w @ X_arr[idc]) / w.sum()}
+    if weighted and any((s["w"] <= 0).any() for s in sets.values()):
+        lgr.critical_raise("compare_sets() needs positive weights for weighted set means!",
+                           ValueError)
+    all_set_maps = pd.Index(np.unique(np.concatenate([s["maps"] for s in sets.values()])))
+    n_missing = len(all_set_maps.difference(bg_names))
+    if n_missing > 0:
+        lgr.warning(f"{n_missing} set maps are not in the background. They are used for the "
+                    "observed set maps and added to the hypergeometric universe, but random "
+                    "sets can't draw them.")
+    n_universe = len(bg_names.union(all_set_maps))
+
+    ## pairs
+    if pairs is None:
+        pairs = list(combinations(sets.keys(), 2))
+    else:
+        pairs = [tuple(p) for p in pairs]
+        unknown = {s for p in pairs for s in p} - set(sets.keys())
+        if unknown:
+            lgr.critical_raise(f"Unknown sets in 'pairs': {sorted(unknown)}", ValueError)
+
+    ## observed statistics + inputs for the null
+    rows, null_args = [], []
+    for a, b in pairs:
+        A, B = sets[a], sets[b]
+        shared = A["maps"].intersection(B["maps"])
+        n_a, n_b, n_sh = len(A["maps"]), len(B["maps"]), len(shared)
+        if n_a + n_b - (n_sh if null == "overlap" else 0) > n_bg:
+            lgr.critical_raise(f"Sets '{a}' and '{b}' together are larger than the background "
+                               f"({n_bg} maps)!", ValueError)
+        row = {
+            "set_a": a, "set_b": b, "n_a": n_a, "n_b": n_b, "n_shared": n_sh,
+            "jaccard": n_sh / (n_a + n_b - n_sh),
+            "overlap_coef": n_sh / min(n_a, n_b),
+            "p_overlap": hypergeom.sf(n_sh - 1, n_universe, n_a, n_b),
+            "r": _rowwise_corr(A["map"][None], B["map"][None])[0],
+        }
+        if remove_background_mean:
+            row["r_resid"] = _rowwise_corr(_remove_ref_map(A["map"][None], ref_unit),
+                                           _remove_ref_map(B["map"][None], ref_unit))[0]
+        rows.append(row)
+        if null == "overlap":
+            w_a = np.r_[A["w"][shared].values, A["w"].drop(shared).values]
+            w_b = np.r_[B["w"][shared].values, B["w"].drop(shared).values]
+            null_args.append((w_a, w_b, n_sh))
+        else:
+            null_args.append((A["w"].values, B["w"].values, 0))
+
+    ## random-pair nulls, one independent seed per pair
+    # TODO (postponed 2026-10-19): stratified/matched random sets (shared sampler with the
+    # permute(what="sets") TODO in api.py) and the PCA position of sets across a large pool of
+    # set-mean maps. See _explore/compare_gene_sets/HANDOFF.md.
+    seeds = np.random.SeedSequence(seed).spawn(len(pairs))
+    nulls = Parallel(n_jobs=n_proc)(
+        delayed(_compare_sets_pair_null)(bg_arr, w_a, w_b, n_sh, n_perm, ref_unit, s)
+        for (w_a, w_b, n_sh), s in tqdm(
+            zip(null_args, seeds), total=len(pairs),
+            desc=f"Random set pairs ({n_proc} proc)", disable=not verbose,
+        )
+    )
+
+    ## summarize
+    for row, (r_null, r_resid_null) in zip(rows, nulls):
+        for stat, null_arr in (("r", r_null), ("r_resid", r_resid_null)):
+            if null_arr is None:
+                continue
+            row[f"{stat}_null_median"] = np.median(null_arr)
+            row[f"{stat}_null_lo"], row[f"{stat}_null_hi"] = np.percentile(null_arr, [2.5, 97.5])
+            row[f"p_{stat}"] = null_to_p(row[stat], null_arr, tail=p_tails)
+    cols = ["n_a", "n_b", "n_shared", "jaccard", "overlap_coef", "p_overlap",
+            "r", "r_null_median", "r_null_lo", "r_null_hi", "p_r"]
+    if remove_background_mean:
+        cols += ["r_resid", "r_resid_null_median", "r_resid_null_lo", "r_resid_null_hi", "p_r_resid"]
+    out = pd.DataFrame(rows).set_index(["set_a", "set_b"])[cols]
+
+    lgr.info(f"Returning compare_sets results: \n"
+             f"{print_arg_pairs(n_pairs=len(pairs), null=null, n_perm=n_perm, weighted=weighted, standardize=standardize, rank=rank, remove_background_mean=remove_background_mean, n_background=n_bg)}")
+
+    if return_nulls:
+        return out, {p: {"r": r_null, "r_resid": r_resid_null}
+                     for p, (r_null, r_resid_null) in zip(pairs, nulls)}
+    return out
 
 
 # SPATIAL CROSS-VALIDATION ==========================================================================
