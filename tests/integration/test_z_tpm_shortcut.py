@@ -1,6 +1,7 @@
 """Coverage for the ``z="gm"``/``"wm"``/``"csf"``/``"veins"``/``"arteries"``
-TPM auto-fetch shortcut in ``NiSpace.fit()`` (api.py, the "data to control
-correlations for" block). Two code paths exist:
+TPM auto-fetch shortcut in ``NiSpace.fit()``. ``fit()`` builds all named z axes
+through ``core.axes.build_axes`` (shared with ``fetch_axes``). Two code paths exist
+for TPMs:
 
 - fast path: when the current parcellation is a registered/integrated one,
   ``fetch_reference("tpm", ..., parcellation=...)`` returns the precomputed
@@ -22,23 +23,23 @@ case below -- which broke during development of the fast path.
 import numpy as np
 import pytest
 
-import nispace.api as api_mod
+import nispace.datasets as ds_mod
 from nispace import NiSpace
 from nispace.datasets import fetch_reference, fetch_parcellation
 
 
 def _spy_fetch_reference(monkeypatch):
-    """Wrap api_mod.fetch_reference to record call kwargs while still
-    delegating to the real function -- lets tests assert which code path
-    (fast vs. fallback) was actually taken, not just infer it from output."""
+    """Wrap nispace.datasets.fetch_reference (imported at call time by core.axes) to
+    record call kwargs while still delegating to the real function -- lets tests assert
+    which code path (fast vs. fallback) was actually taken, not just infer it from output."""
     calls = []
-    real = api_mod.fetch_reference
+    real = ds_mod.fetch_reference
 
     def wrapper(*args, **kwargs):
         calls.append(kwargs)
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(api_mod, "fetch_reference", wrapper)
+    monkeypatch.setattr(ds_mod, "fetch_reference", wrapper)
     return calls
 
 
@@ -132,15 +133,30 @@ def test_fallback_path_resamples_to_custom_surface_parcellation(rng):
     assert np.isfinite(Z.values).all()
 
 
-def test_mixed_shortcut_list_not_intercepted(rng):
-    """A list is only intercepted as TPM shortcuts if EVERY element matches --
-    one non-shortcut entry falls through untouched to parcellate_data, which
-    then tries (and fails) to load it as an image path."""
+def test_mixed_shortcut_list_raises(rng):
+    """Named axes and other inputs (here: a would-be image path) can't be mixed in one
+    z list -- raised explicitly instead of falling through to parcellate_data, which used
+    to fail with a confusing FileNotFoundError on the axis name."""
     x, y = rng.normal(size=(1, 68)), rng.normal(size=(1, 68))
     nsp = NiSpace(x=x, y=y, z=["gm", "not_a_shortcut"], parcellation="DesikanKilliany",
                   verbose=False)
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(ValueError, match="mixes named axes"):
         nsp.fit()
+
+
+def test_fast_path_rows_follow_requested_order(rng):
+    """Regression: fetch_reference returns TPM maps in library order (gm, wm, ...), and the
+    rows used to be labelled positionally with the requested names -- z=["wm", "gm"] gave a
+    'wm' row holding grey matter."""
+    x, y = rng.normal(size=(1, 68)), rng.normal(size=(1, 68))
+    nsp_a = NiSpace(x=x, y=y, z=["wm", "gm"], parcellation="DesikanKilliany",
+                    standardize=False, verbose=False).fit()
+    nsp_b = NiSpace(x=x, y=y, z=["gm", "wm"], parcellation="DesikanKilliany",
+                    standardize=False, verbose=False).fit()
+    za, zb = nsp_a.get_z(), nsp_b.get_z()
+    assert list(za.index) == ["wm", "gm"]
+    np.testing.assert_allclose(za.loc["gm"].values, zb.loc["gm"].values)
+    np.testing.assert_allclose(za.loc["wm"].values, zb.loc["wm"].values)
 
 
 def test_fast_path_combined_parcellation_no_deprecated_name(rng, monkeypatch):
@@ -148,7 +164,6 @@ def test_fast_path_combined_parcellation_no_deprecated_name(rng, monkeypatch):
     must pass the (cx, sc) parts as a tuple -- concatenating them ("Yan200TianS2") still
     resolved, but through the deprecated-naming branch of _check_parcellation(), which
     logged a deprecation warning on every z="gm" fit."""
-    import nispace.datasets as ds_mod
     calls = _spy_fetch_reference(monkeypatch)
     warnings = []
     real_warning = ds_mod.lgr.warning

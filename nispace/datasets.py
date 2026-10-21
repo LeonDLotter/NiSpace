@@ -1586,6 +1586,82 @@ def fetch_reference(dataset: str,
     return data
 
 
+def fetch_axes(parcellation,
+               axes: Union[str, List[str]] = "default",
+               hemi: Union[str, List[str]] = None,
+               require_complete: bool = False,
+               verbose: bool = True) -> pd.DataFrame:
+    """
+    Fetch or compute named spatial axes (tissue, geometry, compartment, cortical hierarchy)
+    per parcel.
+
+    Every name returned here is also valid as ``NiSpace(z=...)`` and is what
+    :func:`nispace.diagnostics.shared_axes` checks Y and X against.
+
+    ==================================  ========================================================
+    Name                                Map
+    ==================================  ========================================================
+    ``gm``, ``wm``, ``csf``             Tissue probability (SPM), ``tpm`` dataset
+    ``veins``, ``arteries``             Vessel probability (Huck 2019 / Mouches 2019), ``tpm``
+    ``radial``                          Distance (mm) of the parcel centroid from the brain
+                                        centre (MNI 0, -20, 10); + = peripheral
+    ``ap``, ``si``, ``lr``              Centroid MNI y / z / x (+ = anterior / superior / right)
+    ``medlat``                          Distance from the midline, \\|x\\| (+ = lateral)
+    ``coords``                          Group: ``ap`` + ``si`` + ``lr``
+    ``cxsc``                            1 = subcortex, 0 = cortex (combined parcellations)
+    ``mem1``, ``mem2``, ...             Moran eigenvectors of the 1/d weight matrix between
+                                        parcel centroids (smoothest patterns first)
+    ``saaxis``                          Sensorimotor-association axis (Sydnor 2021)
+    ``fcgradient1``, ``fcgradient2``    FC gradients 1 and 2 (Margulies 2016)
+    ``t1t2``, ``thickness``             T1w/T2w ratio, cortical thickness (HCP S1200)
+    ==================================  ========================================================
+
+    Geometry, compartment and Moran axes are computed from the parcellation (centroids from the
+    MNI image if available, else from the fsLR/fsaverage surface). Tissue and hierarchy maps are
+    loaded from the ``tpm``/``cortexfeatures`` datasets; ``cortexfeatures`` covers cortex
+    parcellations only.
+
+    Parameters
+    ----------
+    parcellation : str or Parcellation
+        Integrated parcellation name (e.g. ``"Schaefer200"``, ``"Schaefer200+TianS3"``) or a
+        :class:`~nispace.core.parcellation.Parcellation` object (e.g. a custom one from
+        ``Parcellation.from_path``).
+    axes : str or list of str, default "default"
+        ``"default"``: ``gm``, ``radial``, ``ap``, ``si``, plus ``cxsc`` for combined
+        parcellations or ``saaxis``, ``fcgradient1``, ``fcgradient2`` for cortex parcellations
+        with a ``cortexfeatures`` table. ``"all"``: every named axis (not ``memK``). Axes that
+        are unavailable for the parcellation are skipped for ``"default"``/``"all"`` and raise
+        otherwise.
+    hemi : str or list of str, optional
+        Restrict an integrated parcellation (passed as name) to one hemisphere.
+    require_complete : bool, default False
+        Raise if an axis is undefined for some parcels (e.g. ``saaxis`` on a combined
+        parcellation, where subcortical parcels are NaN).
+    verbose : bool, default True
+
+    Returns
+    -------
+    pd.DataFrame of shape (n_axes, n_parcels)
+        Index = axis names, columns = parcel labels.
+    """
+    from .core.parcellation import Parcellation as _Parcellation
+    from .core.axes import build_axes
+    verbose = set_log(lgr, verbose)
+    if isinstance(parcellation, _Parcellation):
+        parc = parcellation
+    elif isinstance(parcellation, str) and \
+            _check_parcellation(parcellation, raise_not_found=False) is not None:
+        parc = fetch_parcellation(parcellation, hemi=hemi if hemi is not None else ["L", "R"],
+                                  return_dist_mat=False, verbose=verbose)
+    else:
+        lgr.critical_raise(
+            f"'parcellation' must be an integrated parcellation name or a Parcellation object "
+            f"(custom images: Parcellation.from_path(...)), got {parcellation!r}.", ValueError)
+    lgr.info(f"Building axis maps {axes!r} for parcellation '{parc._name}'.")
+    return build_axes(parc, axes, require_complete=require_complete, verbose=verbose)
+
+
 def fetch_map_info(dataset: str,
                    maps: Union[str, list] = None,
                    overwrite: bool = False,

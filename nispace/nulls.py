@@ -1688,6 +1688,14 @@ def generate_null_maps(method, data, parcellation, dist_mat=None, spin_mat=None,
     Notes
     -----
     See :doc:`/citation` for the citation of each null method.
+
+    Blocks share their random draws: every block of row ``i`` gets the same seed. This covers
+    the hemisphere blocks and the cortex and subcortex sub-calls of a split method. For
+    :func:`nulls_moran` (singleton procedure), MEM *k* therefore flips sign together in all
+    blocks with the same number of MEMs. For left/right this is intended: it is the
+    counterpart of the mirrored hemisphere rotations in spin tests. Cortex and subcortex MEMs
+    have no geometric correspondence. Still, coupled flips are a subset of independent flips,
+    so the test stays valid; on real data the coupling changed p-values only slightly.
     """
     verbose = set_log(lgr, verbose)
 

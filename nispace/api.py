@@ -14,6 +14,7 @@ import logging
 lgr = logging.getLogger(__name__)
 from .io import parcellate_data, to_pickle, from_pickle
 from .core.parcellation import Parcellation
+from .core.axes import build_axes, is_axis_name, resolve_axis_names
 from .core.reduce_x import _reduce_dimensions
 from .core.transform_y import _dummy_code_groups, _num_code_subjects, _get_transform_fun
 from .core.colocalize import (_get_colocalize_fun, _sort_colocs, _get_coloc_stats, _rank_regress,
@@ -27,7 +28,7 @@ from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_
 from .core.nullmaps import NullMaps, _NULLMAPS_WARN_BYTES
 from .core.plot import _plot_categorical
 from .core.constants import _COLOC_METHODS, _SPACE_DEFAULT_VOL, _COLOC_METHODS_UNIVARIATE
-from .datasets import fetch_parcellation, fetch_reference, _check_parcellation
+from .datasets import fetch_parcellation, _check_parcellation
 from .nulls import get_distance_matrix, _SPIN_METHODS, _DISTMAT_FREE_METHODS, _parse_null_method
 from .stats.coloc import beta, elasticnet, lasso, mlr, partialpearson, pearson, rank2d, ridge
 from .stats.misc import (mc_correction, residuals_nan, zscore_df, permute_groups,
@@ -243,8 +244,7 @@ class NiSpace:
                  y: Union[np.ndarray, pd.DataFrame, pd.Series, 
                           List[Union[str, Path, nib.Nifti1Image, nib.GiftiImage]],
                           Dict[str, Union[str, Path, nib.Nifti1Image, nib.GiftiImage]]] = None, 
-                 z: Union[Literal["gm", "wm", "csf", "veins", "arteries"],
-                          List[Literal["gm", "wm", "csf", "veins", "arteries"]],
+                 z: Union[str, List[str],
                           np.ndarray, pd.DataFrame, pd.Series,
                           List[Union[str, Path, nib.Nifti1Image, nib.GiftiImage]],
                           Dict[str, Union[str, Path, nib.Nifti1Image, nib.GiftiImage]]] = None,
@@ -300,11 +300,15 @@ class NiSpace:
             for x. Default is None. If None, NiSpace will create a copy of the reference maps to 
             evaluate reference map-to-map intercorrelations.
         z : str, list of str, or array-like, optional
-            Covariate maps to regress out of X and/or Y before colocalization. Can be one of the
-            shortcut strings ``"gm"``, ``"wm"``, ``"csf"``, ``"veins"``, or ``"arteries"`` (or a
-            list of several) to automatically fetch the corresponding tissue probability map (TPM)
-            from the NiSpace data library. Alternatively, accepts a numpy array, pandas
-            DataFrame/Series, or a list of image paths/objects. Default is None.
+            Covariate maps to regress out of X and/or Y before colocalization. Can be one or
+            several named axes (see :func:`~nispace.datasets.fetch_axes`): tissue probability
+            (``"gm"``, ``"wm"``, ``"csf"``, ``"veins"``, ``"arteries"``), geometry
+            (``"radial"``, ``"ap"``, ``"si"``, ``"lr"``, ``"medlat"``, ``"coords"``),
+            compartment (``"cxsc"``), Moran eigenvectors (``"mem1"``, ...), or cortical
+            hierarchy (``"saaxis"``, ``"fcgradient1"``, ``"fcgradient2"``, ``"t1t2"``,
+            ``"thickness"``). Axes must cover every parcel (e.g. cortical-hierarchy maps cannot
+            be used with cortex+subcortex parcellations). Alternatively, accepts a numpy array,
+            pandas DataFrame/Series, or a list of image paths/objects. Default is None.
             When Z is provided and :meth:`colocalize` is called with its default
             ``regress_z=True``, Z is regressed from X and Y before computing the correlation —
             making ``colocalize("spearman")`` operationally equivalent to
@@ -564,6 +568,7 @@ class NiSpace:
     
         ## handle parcellation
         if self._parc is not None:
+            parc_obj = None
             # integrated parcellation
             if isinstance(self._parc, dict) and isinstance(self._parc["parc"], str):
                 # check if parcellation is an integrated parcellation
@@ -577,40 +582,46 @@ class NiSpace:
                         return_spin_mat=self._load_spin_mat,
                         verbose=verbose,
                     )
-                    # activate space only when raw image data needs parcellating;
-                    # DataFrames/Series/ndarrays are already parcellated — everything
-                    # else (lists, paths, image objects, "gm" string, …) is raw
-                    needs_parcellating = any(
-                        not isinstance(d, (pd.DataFrame, pd.Series, np.ndarray))
-                        for d in [self._x, self._y, self._z] if d is not None
-                    )
-                    if needs_parcellating:
-                        active_space = parc_obj.get_image_for_dataspace(self._parc["space"])
-                        parc_obj.set_active_space(active_space)
-                    self._parc = parc_obj
-                    # populate dist_mat dict from Parcellation — use null space explicitly
-                    # (parc._space may be None when data is already parcellated)
-                    _ns_result = parc_obj.get_null_space()
-                    _null_dm_space = _ns_result[1][0] if isinstance(_ns_result[0], tuple) else _ns_result[0]
-                    dm = parc_obj.get_dist_mat(space=_null_dm_space, compute_if_missing=False)
-                    self._parc_dist_mat["null_maps"] = dm
-                    if not isinstance(dm, tuple):
-                        self._parc_dist_mat["cv"] = dm
-                    # NOTE: spin_mat is intentionally NOT eagerly resolved here (unlike
-                    # dist_mat above). Spin-rotation files are large (e.g. ~5GB per
-                    # hemisphere, decompressed, for a 1000-parcel cortical atlas) and only
-                    # matter for spin-test null methods (cornblath/alexander_bloch/vasa/
-                    # hungarian/baum) -- the vast majority of calls (moran/burt/random/
-                    # variogram null methods, or no permute() call at all) never touch it.
-                    # `permute()` already fetches it lazily, on demand, only when a spin
-                    # method is actually requested (see the `_cx_m in _SPIN_METHODS` gate
-                    # further down) -- `self._parc_spin_mat` falls back to
-                    # `self._parc.get_spin_mat(...)` there, which itself only resolves the
-                    # underlying file on first access (Parcellation._ensure_spin_mat_loaded).
-                    # Eagerly calling `parc_obj.get_spin_mat(...)` here used to force that
-                    # resolution unconditionally at fit() time, even for calls that never
-                    # use it -- found via a real ~25GB memory report for a moran/random-only
-                    # workflow that just happened to use an integrated parcellation.
+            # already-constructed Parcellation object (e.g. after make_bilateral()): work on a
+            # shallow copy, so space activation here or in permute() never changes the caller's
+            # object
+            elif isinstance(self._parc, dict) and isinstance(self._parc["parc"], Parcellation):
+                parc_obj = copy.copy(self._parc["parc"])
+            if parc_obj is not None:
+                # activate space only when raw image data needs parcellating;
+                # DataFrames/Series/ndarrays are already parcellated — everything
+                # else (lists, paths, image objects, "gm" string, …) is raw
+                needs_parcellating = any(
+                    not isinstance(d, (pd.DataFrame, pd.Series, np.ndarray))
+                    for d in [self._x, self._y, self._z] if d is not None
+                )
+                if needs_parcellating:
+                    active_space = parc_obj.get_image_for_dataspace(self._parc["space"])
+                    parc_obj.set_active_space(active_space)
+                self._parc = parc_obj
+                # populate dist_mat dict from Parcellation — use null space explicitly
+                # (parc._space may be None when data is already parcellated)
+                _ns_result = parc_obj.get_null_space()
+                _null_dm_space = _ns_result[1][0] if isinstance(_ns_result[0], tuple) else _ns_result[0]
+                dm = parc_obj.get_dist_mat(space=_null_dm_space, compute_if_missing=False)
+                self._parc_dist_mat["null_maps"] = dm
+                if not isinstance(dm, tuple):
+                    self._parc_dist_mat["cv"] = dm
+                # NOTE: spin_mat is intentionally NOT eagerly resolved here (unlike
+                # dist_mat above). Spin-rotation files are large (e.g. ~5GB per
+                # hemisphere, decompressed, for a 1000-parcel cortical atlas) and only
+                # matter for spin-test null methods (cornblath/alexander_bloch/vasa/
+                # hungarian/baum) -- the vast majority of calls (moran/burt/random/
+                # variogram null methods, or no permute() call at all) never touch it.
+                # `permute()` already fetches it lazily, on demand, only when a spin
+                # method is actually requested (see the `_cx_m in _SPIN_METHODS` gate
+                # further down) -- `self._parc_spin_mat` falls back to
+                # `self._parc.get_spin_mat(...)` there, which itself only resolves the
+                # underlying file on first access (Parcellation._ensure_spin_mat_loaded).
+                # Eagerly calling `parc_obj.get_spin_mat(...)` here used to force that
+                # resolution unconditionally at fit() time, even for calls that never
+                # use it -- found via a real ~25GB memory report for a moran/random-only
+                # workflow that just happened to use an integrated parcellation.
 
             # custom parcellation (string file path not matched as integrated)
             if not isinstance(self._parc, Parcellation):
@@ -689,49 +700,49 @@ class NiSpace:
         # data to control correlations for
         if self._z is not None:
             lgr.info("Checking input data for z (should be, e.g., grey matter probability):")
-            _TPM_SHORTCUTS = {"gm", "wm", "csf", "veins", "arteries"}
             _z_list = [self._z] if isinstance(self._z, str) else (
                 list(self._z) if isinstance(self._z, list) else None)
             _z_data_space = self._data_space[2]
-            if _z_list is not None and all(
-                    isinstance(s, str) and s.lower() in _TPM_SHORTCUTS for s in _z_list):
-                _z_list = [s.lower() for s in _z_list]
-                # integrated parcellation -> fetch the precomputed per-parcellation TPM table
-                # directly (faster, and already correctly background-treated -- safer than
-                # re-parcellating raw images under any background_value default/override).
-                # Only custom (non-integrated) parcellations fall back to raw TPM images,
-                # fetched in a fixed canonical volumetric space -- not '_data_space[2]', which
-                # describes user-supplied z data; there is none here, this is a fetched
-                # reference map -- and resampled by the normal parcellate_data() call below.
-                _parc_name = None
-                if isinstance(self._parc, Parcellation):
-                    _parc_name = ((self._parc._cx_name, self._parc._sc_name)
-                                  if self._parc._is_combined else self._parc._name)
-                _parc_integrated = _check_parcellation(_parc_name, raise_not_found=False) \
-                    if _parc_name else None
-                if _parc_integrated is not None:
-                    lgr.info(f"Fetching pre-parcellated TPM reference map(s) for z: {_z_list} "
-                             f"(parcellation: '{_parc_integrated}').")
-                    self._z = fetch_reference("tpm", maps=_z_list, parcellation=self._parc,
-                                              hemi=self._parc._selected_hemi, standardize_parcellated=False,
-                                              print_references=False, verbose=verbose)
-                else:
-                    lgr.info(f"Fetching TPM reference map(s) for z: {_z_list} "
-                             f"(space: '{_SPACE_DEFAULT_VOL}').")
-                    self._z = fetch_reference("tpm", maps=_z_list, space=_SPACE_DEFAULT_VOL,
-                                              print_references=False, verbose=verbose)
-                    _z_data_space = _SPACE_DEFAULT_VOL
-                if self._z_lab is None:
-                    self._z_lab = _z_list
             _input_kwargs_z = _input_kwargs.copy()
             if not _legacy_bg:
                 _input_kwargs_z["background_value"] = _resolve_per_role(_bg_spec, "z")
-            self._Z = parcellate_data(
-                self._z,
-                data_labels=self._z_lab,
-                data_space=_z_data_space,
-                **_input_kwargs_z
-            )
+            _is_axis = [is_axis_name(s) for s in _z_list] if _z_list is not None else [False]
+            if any(_is_axis) and not all(_is_axis):
+                lgr.critical_raise(
+                    "'z' mixes named axes (e.g. 'gm', 'radial') with other inputs: "
+                    f"{_z_list}. Pass either axis names only or data/images only.", ValueError)
+
+            # named axes (see nispace.datasets.fetch_axes): one code path for z= and fetch_axes.
+            # TPMs on an integrated parcellation come from the precomputed per-parcellation table
+            # (already background-treated); on a custom parcellation the raw TPM images are
+            # parcellated with this object's z settings (resampling target, z background value).
+            if all(_is_axis):
+                _z_names, _ = resolve_axis_names(_z_list, self._parc)
+                if not isinstance(self._parc, Parcellation):
+                    lgr.critical_raise(f"z={_z_names} requires a parcellation.", ValueError)
+                lgr.info(f"Building axis map(s) for z: {_z_names}.")
+                _ax = build_axes(
+                    self._parc, _z_names, require_complete=True, verbose=verbose,
+                    parcellate_kwargs={k: v for k, v in _input_kwargs_z.items()
+                                       if k not in ("parcellation", "verbose")})
+                if _ax.shape[1] != self._X.shape[1]:
+                    lgr.critical_raise(
+                        f"Axis maps have {_ax.shape[1]} parcels, 'x' has {self._X.shape[1]}.",
+                        ValueError)
+                _z_lab = self._z_lab if self._z_lab is not None else _z_names
+                if len(_z_lab) != len(_z_names):
+                    lgr.critical_raise(f"Got {len(_z_lab)} z_labels for {len(_z_names)} z axes "
+                                       f"({_z_names}).", ValueError)
+                self._Z = pd.DataFrame(_ax.loc[_z_names].to_numpy(),
+                                       index=list(_z_lab), columns=self._X.columns,
+                                       dtype=self._dtype)
+            else:
+                self._Z = parcellate_data(
+                    self._z,
+                    data_labels=self._z_lab,
+                    data_space=_z_data_space,
+                    **_input_kwargs_z
+                )
             lgr.info(f"Got 'z' data for {self._Z.shape[0]} x {self._Z.shape[1]} parcels.")
             
         else:

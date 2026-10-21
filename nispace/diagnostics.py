@@ -18,6 +18,9 @@ extend the core pipeline itself.
 - :func:`compare_sets` -- overlap and set-mean-map similarity between X sets, against
   size-matched random set pairs. Needs only set-structured X and a background, not
   ``colocalize()``.
+- :func:`shared_axes` -- whether Y and X share known spatial axes (tissue, geometry,
+  compartment, cortical hierarchy; :func:`nispace.datasets.fetch_axes`) and whether the Moran
+  null is degenerate (dominated by one eigenvector). Needs only ``fit()``.
 
 ``regional_influence``/``regional_contribution`` moved here from :class:`NiSpace` (formerly
 ``NiSpace.regional_influence()``/``.regional_contribution()``) -- this is a clean break, no
@@ -1626,6 +1629,502 @@ def compare_sets(X, background, pairs=None, null="overlap", n_perm=1000,
         return out, {p: {"r": r_null, "r_resid": r_resid_null}
                      for p, (r_null, r_resid_null) in zip(pairs, nulls)}
     return out
+
+
+# SHARED AXES =======================================================================================
+
+_MORAN_NULL_METHODS = frozenset({"moran", "variomoran"})
+_MAX_FLAG_LOG_LINES = 20
+
+
+def _corr_rows(A, B):
+    """Pearson r between every row of A and every row of B -> (n_A, n_B); NaN for constant rows."""
+    A = A - A.mean(axis=1, keepdims=True)
+    B = B - B.mean(axis=1, keepdims=True)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        A = A / np.linalg.norm(A, axis=1, keepdims=True)
+        B = B / np.linalg.norm(B, axis=1, keepdims=True)
+    return A @ B.T
+
+
+def _resid_rows(M, A):
+    """OLS residuals of every row of M on the rows of A plus an intercept."""
+    D = np.column_stack([np.ones(M.shape[1]), A.T])
+    beta, *_ = np.linalg.lstsq(D, M.T, rcond=None)
+    return (M.T - D @ beta).T
+
+
+def _r2_rows(M, A):
+    """R^2 of every row of M regressed on the rows of A (plus intercept)."""
+    res = _resid_rows(M, A)
+    tot = ((M - M.mean(axis=1, keepdims=True)) ** 2).sum(axis=1)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return 1 - (res ** 2).sum(axis=1) / tot
+
+
+def _axes_attribution(X, Y, A, spearman):
+    """Observed r, partial r (all rows of A partialled jointly), loadings and R^2 on one parcel set.
+
+    Spearman = rank X, Y and A, then Pearson on residuals -- the same convention as
+    ``colocalize("partialspearman")`` (ranks Z too, see _resolve_coloc_data).
+    """
+    if spearman:
+        X, Y, A = (rankdata(M, axis=1) for M in (X, Y, A))
+    rho = _corr_rows(Y, X)
+    rho_partial = _corr_rows(_resid_rows(Y, A), _resid_rows(X, A))
+    return dict(rho=rho, rho_partial=rho_partial, load_x=_corr_rows(X, A), load_y=_corr_rows(Y, A),
+                r2_x=_r2_rows(X, A), r2_y=_r2_rows(Y, A))
+
+
+def _pool_rows(values, how, axis=0, fisher=True):
+    """Pool correlations across Y rows on the Fisher-z scale (never average raw r)."""
+    v = np.arctanh(np.clip(values, -0.9999999, 0.9999999)) if fisher else values
+    v = np.nanmedian(v, axis=axis) if how == "median" else np.nanmean(v, axis=axis)
+    return np.tanh(v) if fisher else v
+
+
+def _moran_null_blocks(nsp, keep):
+    """Blocks the (stored or default) maps null randomizes independently, mirroring
+    generate_null_maps(): split cx/sc for a tuple method on a combined parcellation, per
+    hemisphere for surface (tuple) distance matrices, else the whole map.
+
+    Returns (null_method, source, blocks, notes); blocks = list of (name, parcel_idc, dist_mat).
+    """
+    from .nulls import _parse_null_method
+    parc = nsp._parc
+    notes = []
+    stored = nsp._nulls.get("maps_null") if isinstance(getattr(nsp, "_nulls", None), dict) else None
+    if stored is not None and getattr(stored, "null_method", None) is not None:
+        null_method, source = stored.null_method, "stored"
+    else:
+        null_method, source = parc.default_null_method, "default"
+    cx_method, sc_method = _parse_null_method(null_method)
+    n = len(keep)
+    lh_prefix, rh_prefix = parc._lh_prefix, parc._rh_prefix
+
+    def _hemi_split(name, idc, dist):
+        labels = np.asarray(parc._labels)[idc]
+        out = []
+        for h, prefix, d in zip(("L", "R"), (lh_prefix, rh_prefix), dist):
+            sel = np.array([str(l).startswith(prefix) for l in labels])
+            if sel.any() and d is not None:
+                out.append((f"{name}-{h}" if name else h, idc[sel], np.asarray(d, dtype=float)))
+        return out
+
+    def _block(name, idc, method, dist):
+        if method in _MORAN_NULL_METHODS:
+            if method == "variomoran":
+                notes.append(f"{name or 'map'}: 'variomoran' fits a map-specific weight matrix; "
+                             "checked with the 1/d Moran basis.")
+            if dist is None:
+                notes.append(f"{name or 'map'}: no distance matrix available, skipped.")
+                return []
+            if isinstance(dist, tuple):
+                return _hemi_split(name, idc, dist)
+            return [(name or "map", idc, np.asarray(dist, dtype=float))]
+        notes.append(f"{name or 'map'}: null method '{method}' is not a Moran null, skipped.")
+        return []
+
+    with _quiet():
+        if parc._is_combined and sc_method is not None:
+            sc_idc = np.sort(np.asarray(parc.get_sc_idc(), dtype=int))
+            cx_idc = np.setdiff1d(np.arange(n), sc_idc)
+            dist_cx, dist_sc = parc.get_cx_dist_mat()[0], parc.get_sc_dist_mat()[0]
+            if dist_cx is None or dist_sc is None:
+                # same fallback as generate_null_maps(): sub-blocks of the full matrix
+                full = nsp._get_dist_mat("null_maps", store=False)
+                if not isinstance(full, tuple):
+                    full = np.asarray(full, dtype=float)
+                    dist_cx = full[np.ix_(cx_idc, cx_idc)] if dist_cx is None else dist_cx
+                    dist_sc = full[np.ix_(sc_idc, sc_idc)] if dist_sc is None else dist_sc
+            blocks = _block("cortex", cx_idc, cx_method, dist_cx) + \
+                _block("subcortex", sc_idc, sc_method, dist_sc)
+        else:
+            blocks = _block("", np.arange(n), cx_method, nsp._get_dist_mat("null_maps", store=False))
+    for name, idc, dist in blocks:
+        if dist.shape != (len(idc), len(idc)):
+            lgr.critical_raise(f"Null block '{name}': distance matrix {dist.shape} does not match "
+                               f"{len(idc)} parcels.", RuntimeError)
+    return null_method, source, blocks, notes
+
+
+def _null_degeneracy(P, F, blocks, keep, n_mem, spearman):
+    """MEM spectra per map and per (fixed, permuted) pair; see shared_axes() Notes.
+
+    P : permuted maps (n_P, n_parcels); F : fixed maps (n_F, n_parcels); keep : finite parcels.
+    Returns per-map spectra for P and F and pair weights a (n_F, n_P, n_terms) + term labels.
+    """
+    from .nulls import _moran_fit_1_over_d
+    # fixed side enters the correlation over the whole (finite) map: rank there, then center
+    F_full = F[:, keep]
+    if spearman:
+        F_full = rankdata(F_full, axis=1)
+    F_full = F_full - F_full.mean(axis=1, keepdims=True)
+    F_full = F_full / np.linalg.norm(F_full, axis=1, keepdims=True)
+    F_c = np.full(F.shape, np.nan)
+    F_c[:, keep] = F_full
+
+    F_c0 = np.nan_to_num(F_c)   # parcels outside `keep` don't enter the correlation
+
+    # generate_null_maps() seeds every block (hemispheres, cortex/subcortex) identically, so MSR
+    # draws the same sign sequence for MEM i of all blocks with the same number of MEMs: those
+    # terms flip together and act as one term, key (k, i). Verified against stored nulls in
+    # tests/integration/test_shared_axes.py (test_msr_signs_shared_across_blocks).
+    spectra, contrib = [], {}   # contrib[(k, i)] -> (n_F, n_P) summed pair weights
+    for name, idc, dist in blocks:
+        # MEMs are fit per map on its own finite parcels of the block, like the null generator
+        # (one fit per unique NaN mask)
+        fits = {}
+
+        def _basis(local):
+            key = local.tobytes()
+            if key not in fits:
+                n_l = int(local.sum())
+                if n_l < 4:
+                    fits[key] = None
+                else:
+                    mem, _ = _moran_fit_1_over_d(dist[np.ix_(local, local)].copy(),
+                                                 n_components=min(n_mem, n_l - 1))
+                    fits[key] = np.asarray(mem, dtype=float)
+            return fits[key]
+
+        for role, M in (("P", P), ("F", F)):
+            Mb = M[:, idc]
+            n_rows = len(Mb)
+            finite = np.isfinite(Mb)
+            n_p = finite.sum(axis=1)
+            top_mem = np.zeros(n_rows, dtype=int)
+            top_share, recon_r2 = np.full(n_rows, np.nan), np.full(n_rows, np.nan)
+            masks, group = np.unique(finite, axis=0, return_inverse=True)
+            for g, local in enumerate(masks):
+                rows = np.flatnonzero(group.ravel() == g)
+                mem = _basis(local)
+                if mem is None:
+                    continue
+                V = Mb[np.ix_(rows, np.flatnonzero(local))]
+                sd = V.std(axis=1, ddof=1)
+                with np.errstate(invalid="ignore", divide="ignore"):
+                    c = ((V - V.mean(axis=1, keepdims=True)) / sd[:, None]) @ mem   # MSR coefs
+                c2 = c ** 2
+                top_mem[rows] = np.argmax(c2, axis=1) + 1
+                top_share[rows] = c2.max(axis=1) / c2.sum(axis=1)
+                recon_r2[rows] = c2.sum(axis=1) / (local.sum() - 1)
+                if role == "P":
+                    # MSR null in this block: mean + sd * mem @ (+-c) -> its correlation with the
+                    # (centred, unit-norm) fixed map is sum_i s_i * (c_i sd) * <F, mem_i>
+                    proj_F = F_c0[:, idc[local]] @ mem   # (n_F, k)
+                    cP = c * sd[:, None]                 # (n_rows_g, k)
+                    k = mem.shape[1]
+                    for i in range(k):
+                        w = contrib.setdefault((k, i), np.zeros((len(F), len(P))))
+                        w[:, rows] += np.outer(proj_F[:, i], cP[:, i])
+            spectra.append(dict(role=role, block=name, n_parcels=n_p, top_mem=top_mem,
+                                top_share=top_share, recon_r2=recon_r2))
+    if not contrib:
+        return spectra, None, []
+    uniq = list(contrib)
+    a = np.stack([contrib[u] for u in uniq], axis=-1)   # (n_F, n_P, n_terms)
+    one_group = len({kk[0] for kk in uniq}) == 1
+    terms = [f"mem{i + 1}" if one_group else f"mem{i + 1} (k={k})" for k, i in uniq]
+    return spectra, a, terms
+
+
+def _pair_metrics(a):
+    """top share / effective number of terms of r_null = sum_k s_k a_k (random signs s_k)."""
+    a2 = a ** 2
+    tot = a2.sum(axis=-1)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return np.argmax(a2, axis=-1), a2.max(axis=-1) / tot, tot ** 2 / (a2 ** 2).sum(axis=-1)
+
+
+def shared_axes(nsp, axes="default", method=None, X_reduction=None, Y_transform=None,
+                pooled=None, null_check=True, n_mem=15, delta_threshold=0.2,
+                loading_threshold=0.3, mem_share_threshold=0.75, verbose=None):
+    """Check whether Y and X share known spatial axes, and whether the Moran null is degenerate.
+
+    Descriptive only (no p-values). Needs a fitted ``nsp``; ``colocalize()``/``permute()`` are
+    optional (their settings are picked up if present). Design notes:
+    ``_explore/shared_axes_design.md``.
+
+    1. **Loadings**: correlation of every Y row and X map with every axis (tissue, geometry,
+       compartment, cortical hierarchy; see :func:`nispace.datasets.fetch_axes`), plus the axis
+       x axis correlations.
+    2. **Attribution**: every X-Y correlation before and after partialling each axis alone and
+       all axes jointly -- the same computation as ``colocalize("partialspearman"/
+       "partialpearson")`` with that axis as Z. A row is flagged when the correlation changes by
+       ``>= delta_threshold`` *and* both X and Y load on the axis (``|rho| >= loading_threshold``;
+       joint row: R^2 of X and of Y on all axes ``>= loading_threshold**2``). Without the loading
+       condition, an axis that only Y follows would flag every X map: partialling it inflates the
+       correlation through the denominator, not because the axis is shared.
+    3. **Null degeneracy** (``null_check=True``): Moran spectral randomization flips the signs of a
+       map's coefficients on the leading Moran eigenvectors (MEMs). For one X-Y pair, a null
+       correlation is then a sum of random-sign terms ``a_k``, each the product of the permuted
+       map's and the fixed map's MEM-k coefficient. If one term carries a share s of
+       ``sum a_k**2``, the null is approximately a mixture of two normals at +-a_1 (Gaussian
+       approximation of the remaining terms): it has two modes for s > 0.5 and is clearly
+       bimodal (Sarle's coefficient > 0.555) for s > 0.775. Pairs with s above
+       ``mem_share_threshold`` (default 0.75) are flagged: their null mainly tests the sign of one
+       gradient.
+
+    Parameters
+    ----------
+    nsp : NiSpace
+        Fitted NiSpace object. If X has a ``set`` level (collections, XSEA), every map is checked
+        individually, once even if it is listed in several sets.
+    axes : str or list of str, default "default"
+        Axis names, ``"default"`` or ``"all"`` (see :func:`nispace.datasets.fetch_axes`).
+        Unavailable axes are skipped for ``"default"``/``"all"`` and raise otherwise. Axes that
+        cover only some parcels (e.g. ``saaxis`` on a combined parcellation) are evaluated on
+        those parcels (``n_parcels`` column).
+    method : {"spearman", "pearson"}, optional
+        Default: Spearman if the last ``colocalize()`` ranked the data (spearman,
+        partialspearman, ``rank=True``), Pearson for pearson/partialpearson, else Spearman.
+        The diagnostic is pairwise for every colocalization method; for joint models
+        (mlr/dominance/pls/...) it shows which X maps share an axis with Y, not how the joint
+        fit changes.
+    X_reduction, Y_transform : str, optional
+        Use reduced X / transformed Y, as in ``colocalize()``.
+    pooled : {False, "mean", "median"}, optional
+        For several Y rows (e.g. subject-level transforms): add a row pooled across Y on the
+        Fisher-z scale, and flag that row (single-subject correlations are noisy). Default: as
+        the last ``permute()`` (forced to "mean" for group permutation), else False.
+    null_check : bool, default True
+        Run the null-degeneracy check (needs a parcellation and a Moran null: the stored maps
+        null if ``permute("maps")`` ran, else the parcellation's default null). Skipped after
+        ``permute("groups")``.
+    n_mem : int, default 15
+        Number of MEMs per block (NiSpace's Moran null default).
+    delta_threshold, loading_threshold, mem_share_threshold : float
+        Flag thresholds, see above.
+    verbose : bool, optional
+
+    Returns
+    -------
+    dict
+        ``"axes"`` (axes x parcels), ``"loadings"`` (rows: role/map, cols: axes), ``"axis_corr"``,
+        ``"attribution"`` (y, x, axis [name or "joint"], n_parcels, rho, rho_partial, delta,
+        flagged), ``"null_degeneracy"`` (y, x, top_term, top_share, n_eff, flagged) and
+        ``"null_spectrum"`` (role, map, block, n_parcels, top_mem, top_share, recon_r2) -- both
+        None when the check is skipped -- and ``"settings"``. Correlations are raw rho (not
+        Fisher-z).
+    """
+    from .core.axes import build_axes
+    verbose = set_log(lgr, nsp._verbose if verbose is None else verbose)
+
+    # --- method / data --------------------------------------------------------------------------
+    last_method = nsp._last_settings.get("method")
+    if method is None:
+        last_kwargs = getattr(nsp, "_coloc_kwargs_by_method", {}).get(last_method, {}) \
+            if last_method else {}
+        if last_method in ("pearson", "partialpearson") and not last_kwargs.get("rank", False):
+            method = "pearson"
+        else:
+            method = "spearman"
+    if method not in ("spearman", "pearson"):
+        lgr.critical_raise(f"method must be 'spearman' or 'pearson', got '{method}'.", ValueError)
+    spearman = method == "spearman"
+
+    with _quiet():
+        X = nsp._X if not X_reduction else nsp.get_x(X_reduction=X_reduction)
+        if Y_transform:
+            if not nsp._check_transform(ytrans=Y_transform, raise_error=True):
+                lgr.critical_raise(f"Y transform '{Y_transform}' was not run.", KeyError)
+            Y = nsp.get_y(Y_transform=Y_transform)
+        else:
+            Y = nsp._Y
+    def _labels(index):
+        return [str(i[-1] if isinstance(i, tuple) else i) for i in index]
+
+    if isinstance(X.index, pd.MultiIndex) and "set" in X.index.names:
+        # collections come with a (set, map) index even without XSEA: check every map on its
+        # own (as colocalize() does without xsea=True), once if it is listed in several sets
+        X = X[~pd.Index(_labels(X.index)).duplicated()]
+        lgr.info(f"X has a 'set' level: {len(X)} unique map(s) checked individually, "
+                 "set membership ignored.")
+    x_lab, y_lab = _labels(X.index), _labels(Y.index)
+    X_arr, Y_arr = np.asarray(X, dtype=float), np.asarray(Y, dtype=float)
+    keep = np.isfinite(X_arr).all(axis=0) & np.isfinite(Y_arr).all(axis=0)
+    n_y = len(y_lab)
+
+    # --- pooling --------------------------------------------------------------------------------
+    perm_mode = nsp._last_settings.get("perm")
+    if pooled is None:
+        pooled = nsp._last_settings.get("pooled_p", False)
+    if perm_mode:
+        pooled, mode_warning = _resolve_permute_mode_settings([perm_mode], pooled)
+        if mode_warning:
+            lgr.warning(mode_warning)
+    if pooled and pooled not in ("mean", "median"):
+        pooled = "mean"
+    if n_y <= 1:
+        pooled = False
+    pooled_lab = f"pooled ({pooled})" if pooled else None
+
+    # --- axes -----------------------------------------------------------------------------------
+    if nsp._parc is None:
+        lgr.critical_raise("shared_axes() needs a parcellation (NiSpace(parcellation=...)).",
+                           ValueError)
+    if nsp._Z is not None:
+        lgr.info("Z stored in nsp is not used; list the axes to check in 'axes'.")
+    # X's columns are parcel labels -- all of them, or a subset with NiSpace(drop_nan=True):
+    # axes and null blocks are defined on the full parcellation and selected by label
+    lab_pos = {str(l): i for i, l in enumerate(nsp._parc._labels)}
+    not_parcels = [str(c) for c in X.columns if str(c) not in lab_pos]
+    if not_parcels:
+        lgr.critical_raise(
+            f"shared_axes(): {len(not_parcels)} of {X.shape[1]} data column(s) are not parcel "
+            f"labels of the parcellation (e.g. '{not_parcels[0]}'); axes are defined per parcel.",
+            ValueError)
+    pos = np.array([lab_pos[str(c)] for c in X.columns])
+    n_parc = len(lab_pos)
+    with _quiet():
+        A = build_axes(nsp._parc, axes, verbose=False)
+    A = A.iloc[:, pos]
+    A.columns = X.columns
+    if len(A) == 0:
+        lgr.critical_raise(f"No axis available for axes={axes!r}.", ValueError)
+    ax_names = list(A.index)
+    A_arr = A.to_numpy(dtype=float)
+    lgr.info(f"shared_axes(): {len(x_lab)} X map(s), {n_y} Y row(s), axes {ax_names}, {method}.")
+
+    axis_corr = A.T.corr(method=method)
+
+    # --- loadings + attribution: one parcel set per axis, plus all axes jointly ------------------
+    lt, dt = loading_threshold, delta_threshold
+    load_x = np.full((len(x_lab), len(ax_names)), np.nan)
+    load_y = np.full((n_y, len(ax_names)), np.nan)
+    rows = []
+
+    def _add_rows(axis, mask, res, crit_x, crit_y):
+        rho, rho_p = res["rho"], res["rho_partial"]
+        y_names = list(y_lab)
+        if pooled:
+            rho = np.vstack([rho, _pool_rows(rho, pooled)])
+            rho_p = np.vstack([rho_p, _pool_rows(rho_p, pooled)])
+            crit_y = np.append(crit_y, _pool_rows(crit_y, pooled, fisher=axis != "joint"))
+            y_names.append(pooled_lab)
+        delta = rho_p - rho
+        thr = lt ** 2 if axis == "joint" else lt
+        shared = (np.abs(crit_y)[:, None] >= thr) & (np.abs(crit_x)[None, :] >= thr)
+        flagged = (np.abs(delta) >= dt) & shared
+        for i, y in enumerate(y_names):
+            for j, x in enumerate(x_lab):
+                rows.append((y, x, axis, int(mask.sum()), rho[i, j], rho_p[i, j], delta[i, j],
+                             bool(flagged[i, j])))
+
+    for k, a in enumerate(ax_names):
+        mask = keep & np.isfinite(A_arr[k])
+        res = _axes_attribution(X_arr[:, mask], Y_arr[:, mask], A_arr[[k]][:, mask], spearman)
+        load_x[:, k], load_y[:, k] = res["load_x"][:, 0], res["load_y"][:, 0]
+        _add_rows(a, mask, res, res["load_x"][:, 0], res["load_y"][:, 0])
+    if len(ax_names) > 1:
+        mask = keep & np.isfinite(A_arr).all(axis=0)
+        res = _axes_attribution(X_arr[:, mask], Y_arr[:, mask], A_arr[:, mask], spearman)
+        _add_rows("joint", mask, res, res["r2_x"], res["r2_y"])
+
+    attribution = pd.DataFrame(rows, columns=["y", "x", "axis", "n_parcels", "rho", "rho_partial",
+                                              "delta", "flagged"])
+    load_rows = [("Y", y) for y in y_lab] + [("X", x) for x in x_lab]
+    load_vals = [load_y, load_x]
+    if pooled:
+        load_rows.insert(n_y, ("Y", pooled_lab))
+        load_vals = [load_y, _pool_rows(load_y, pooled)[None, :], load_x]
+    loadings = pd.DataFrame(np.vstack(load_vals), columns=ax_names,
+                            index=pd.MultiIndex.from_tuples(load_rows, names=["role", "map"]))
+
+    # log flagged rows: one line per (Y, axis), strongest changes first (pooled row only when
+    # pooling, with the per-row flag count)
+    flag_rows = attribution[attribution["flagged"]]
+    if pooled:
+        n_rows_flagged = flag_rows[flag_rows["y"] != pooled_lab].groupby(["x", "axis"]).size()
+        flag_rows = flag_rows[flag_rows["y"] == pooled_lab]
+    n_lines = 0
+    for (y_name, axis), grp in flag_rows.groupby(["y", "axis"], sort=False):
+        if n_lines == _MAX_FLAG_LOG_LINES:
+            lgr.warning("... more flagged rows, see 'attribution'.")
+            break
+        grp = grp.reindex(grp["delta"].abs().sort_values(ascending=False).index)
+        shown = [f"'{r.x}' {r.rho:+.2f}->{r.rho_partial:+.2f}"
+                 + (f" [{n_rows_flagged.get((r.x, axis), 0)}/{n_y} rows]" if pooled else "")
+                 for r in grp.head(5).itertuples()]
+        more = f" (+{len(grp) - 5} more)" if len(grp) > 5 else ""
+        z_arg = repr(axis) if axis != "joint" else repr(ax_names)
+        lgr.warning(f"'{y_name}' shares axis '{axis}' with {len(grp)} X map(s): "
+                    f"{', '.join(shown)}{more}. Sensitivity: NiSpace(..., z={z_arg}).")
+        n_lines += 1
+
+    # --- null degeneracy ------------------------------------------------------------------------
+    null_deg, null_spec, null_settings = None, None, {}
+    if null_check and perm_mode and "groups" in perm_mode and "maps" not in perm_mode:
+        lgr.info("Null check skipped: permute('groups') uses no spatial (Moran) null.")
+    elif null_check:
+        side = "Y" if perm_mode == "Ymaps" else "X"
+        if perm_mode == "XYmaps":
+            lgr.info("Null check: both sides were permuted; reporting X as the permuted side.")
+        # null blocks index the full parcellation: place the data there (dropped parcels NaN)
+        keep_full = np.zeros(n_parc, dtype=bool)
+        keep_full[pos] = keep
+
+        def _full(M):
+            out = np.full((len(M), n_parc), np.nan)
+            out[:, pos] = M
+            return out
+
+        null_method, source, blocks, notes = _moran_null_blocks(nsp, keep_full)
+        for note in notes:
+            lgr.info(f"Null check: {note}")
+        null_settings = dict(null_method=null_method, null_source=source, permuted=side,
+                             null_blocks={b[0]: int(keep_full[b[1]].sum()) for b in blocks})
+        if blocks:
+            P, F = (X_arr, Y_arr) if side == "X" else (Y_arr, X_arr)
+            p_lab, f_lab = (x_lab, y_lab) if side == "X" else (y_lab, x_lab)
+            spectra, a, terms = _null_degeneracy(_full(P), _full(F), blocks, keep_full, n_mem,
+                                                 spearman)
+            spec_rows = []
+            for s in spectra:
+                labs, role = (p_lab, side) if s["role"] == "P" else \
+                    (f_lab, "Y" if side == "X" else "X")
+                for i, lab in enumerate(labs):
+                    spec_rows.append((role, lab, s["block"], int(s["n_parcels"][i]),
+                                      int(s["top_mem"][i]), s["top_share"][i], s["recon_r2"][i]))
+            null_spec = pd.DataFrame(spec_rows, columns=["role", "map", "block", "n_parcels",
+                                                         "top_mem", "top_share", "recon_r2"])
+            # a: (n_F, n_P, n_terms) -> orient as (n_y, n_x, n_terms)
+            a_yx = a if side == "X" else a.transpose(1, 0, 2)
+            y_names = list(y_lab)
+            if pooled and side == "X":
+                # X nulls are shared by all Y rows: the pooled null sums the averaged terms
+                a_yx = np.concatenate([a_yx, a_yx.mean(axis=0, keepdims=True)], axis=0)
+                y_names.append(pooled_lab)
+            top, share, n_eff = _pair_metrics(a_yx)
+            flag = share > mem_share_threshold
+            if pooled:
+                # flags only on what is tested: the pooled row (X permuted) or none (Y permuted:
+                # independent nulls per row average out, the pooled null is not bimodal)
+                flag[: n_y] = False
+            null_deg = pd.DataFrame(
+                [(y, x, terms[top[i, j]], share[i, j], n_eff[i, j], bool(flag[i, j]))
+                 for i, y in enumerate(y_names) for j, x in enumerate(x_lab)],
+                columns=["y", "x", "top_term", "top_share", "n_eff", "flagged"])
+            n_flag = int(null_deg["flagged"].sum())
+            if n_flag:
+                worst = null_deg[null_deg["flagged"]].sort_values("top_share").iloc[-1]
+                lgr.warning(
+                    f"Moran null degenerate for {n_flag} X-Y pair(s) (e.g. '{worst.x}' ~ "
+                    f"'{worst.y}': {worst.top_term} carries {worst.top_share:.0%} of the null "
+                    "variance). These nulls mainly test the sign of one gradient (bimodal null "
+                    "distribution); consider a spin null (cortex) or label permutation.")
+
+    settings = dict(method=method, axes=ax_names,
+                    n_parcels={a: int((keep & np.isfinite(A_arr[k])).sum())
+                               for k, a in enumerate(ax_names)},
+                    pooled=pooled, delta_threshold=dt, loading_threshold=lt,
+                    mem_share_threshold=mem_share_threshold, n_mem=n_mem,
+                    X_reduction=X_reduction, Y_transform=Y_transform, **null_settings)
+    lgr.info(f"Returning shared_axes results: \n"
+             f"{print_arg_pairs(method=method, axes=ax_names, pooled=pooled, n_flagged=int(attribution['flagged'].sum()), null_check=null_deg is not None, X_reduction=X_reduction, Y_transform=Y_transform)}")
+    return dict(axes=A, loadings=loadings, axis_corr=axis_corr, attribution=attribution,
+                null_degeneracy=null_deg, null_spectrum=null_spec, settings=settings)
 
 
 # SPATIAL CROSS-VALIDATION ==========================================================================

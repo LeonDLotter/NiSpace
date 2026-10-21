@@ -39,6 +39,7 @@ API Reference
    apply_collection
    fetch_metadata
    fetch_map_info
+   fetch_axes
    fetch_plot
    fetch_example
 
@@ -79,6 +80,7 @@ API Reference
    regional_contribution
    local_colocalization
    compare_sets
+   shared_axes
 
 
 .. _api_stats_coloc:

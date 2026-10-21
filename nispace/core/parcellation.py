@@ -257,6 +257,7 @@ class Parcellation:
         self._hemi_dict              = {}  # {space: ("L", "R") | None}
         self._resolution_dict        = {}  # {space: str}
         self._is_surface_dict        = {}  # {space: bool}
+        self._centroids              = {}  # {space: (n_parcels, 3) array}, see get_centroids()
 
         # --- combined-specific ---
         self._cx_idc_lh   = None    # cx-LH parcel indices within the combined data vector
@@ -1124,6 +1125,7 @@ class Parcellation:
         self._hemi_dict.clear()
         self._resolution_dict.clear()
         self._is_surface_dict.clear()
+        getattr(self, "_centroids", {}).clear()
 
         self._bilateral = True
         lgr.info(
@@ -1299,6 +1301,7 @@ class Parcellation:
         self._hemi_dict.clear()
         self._resolution_dict.clear()
         self._is_surface_dict.clear()
+        getattr(self, "_centroids", {}).clear()
 
         self._selected_hemi = keep_hemi
         lgr.info(f"select_hemi('{keep_hemi}'): {len(keep_idc)} parcels selected.")
@@ -1473,6 +1476,100 @@ class Parcellation:
             )
         self._ensure_image_loaded(space)
         return self._images[space]
+
+    def _centroid_space(self):
+        """Space used by :meth:`get_centroids` by default: MNI first, then fsLR, then fsaverage."""
+        for preferred in ["MNI152NLin6Asym", "MNI152NLin2009cAsym"]:
+            if preferred in self.spaces:
+                return preferred
+        for check in ["mni", "fslr", "fsa"]:
+            for s in self.spaces:
+                if check in s.lower():
+                    return s
+        if not self.spaces:
+            lgr.critical_raise(f"Parcellation '{self._name}' has no registered space.", ValueError)
+        return self.spaces[0]
+
+    def get_centroids(self, space=None):
+        """Parcel centroid coordinates in mm, one row per parcel (``_labels`` order).
+
+        Centroids are the plain mean voxel (volume) or vertex (surface) position of each
+        parcel -- not snapped to a voxel inside the parcel, since they are meant for smooth
+        trend axes (see :func:`nispace.datasets.fetch_axes`), not as parcel locations.
+
+        Volumes give MNI coordinates. Surfaces use the fsLR midthickness / fsaverage pial
+        mesh, i.e. approximately MNI (fsaverage: MNI305, a few mm off). Bilateral
+        parcellations (:meth:`make_bilateral`) average both hemispheres with x mirrored to
+        the right (x >= 0). Results are cached per space.
+
+        Rows follow the parcellater's rule for data columns: the image's non-zero parcel
+        values in ascending order (surfaces: left, then right hemisphere), matched to
+        ``_labels`` by position. Values need not equal label index + 1 (after
+        :meth:`select_hemi` the original values remain), so centroids line up with
+        parcellated data by construction.
+
+        Parameters
+        ----------
+        space : str, optional
+            Space to compute centroids in. Default: an MNI space if available (so all
+            parcellations share one frame), else fsLR, else fsaverage.
+
+        Returns
+        -------
+        np.ndarray of shape (n_parcels, 3)
+            x (+ = right), y (+ = anterior), z (+ = superior).
+        """
+        space = space or self._centroid_space()
+        if not hasattr(self, "_centroids"):
+            self._centroids = {}  # objects pickled before this attribute existed
+        if space in self._centroids:
+            return self._centroids[space].copy()
+
+        img = self.get_image(space)
+        self._fit_space(space)
+        if self._is_surface_dict[space]:
+            from ..nulls import _get_surface_atlas
+            imgs = img if isinstance(img, tuple) else (img,)
+            hemis = self._hemi_dict[space] or ("L", "R")[:len(imgs)]
+            atlas, surf_key = _get_surface_atlas(space, _img_density_for_neuromaps(imgs[0]))
+            vals, xyz = [], []
+            for img_h, hemi in zip(imgs, hemis):
+                v = np.asarray(load_data(img_h)).astype(int).ravel()
+                surf = nib.load(getattr(atlas[surf_key], hemi))
+                keep = v != 0
+                vals.append(v[keep])
+                xyz.append(np.asarray(surf.darrays[0].data, dtype=float)[keep])
+            # per hemisphere, values in ascending order, L before R (as the parcellater orders
+            # columns); bilateral images share values across hemispheres -> pool them
+            if self._bilateral:
+                vals, xyz = [np.concatenate(vals)], [np.concatenate(xyz)]
+        else:
+            data = np.rint(np.asarray(img.dataobj)).astype(int)
+            ijk = np.nonzero(data)
+            vals = [data[ijk]]
+            xyz = [nib.affines.apply_affine(img.affine, np.column_stack(ijk))]
+
+        centroids = []
+        for v, c in zip(vals, xyz):
+            if self._bilateral:
+                c = c.copy()
+                c[:, 0] = np.abs(c[:, 0])
+            uniq, pos = np.unique(v, return_inverse=True)
+            n = np.bincount(pos, minlength=len(uniq))
+            centroids.append(np.column_stack(
+                [np.bincount(pos, weights=c[:, d], minlength=len(uniq)) for d in range(3)]
+            ) / n[:, None])
+        centroids = np.vstack(centroids)
+
+        if len(centroids) != len(self._labels):
+            lgr.critical_raise(
+                f"Parcellation '{self._name}' ({space}): the image has {len(centroids)} parcel "
+                f"values but there are {len(self._labels)} labels. Labels and image disagree, "
+                "so centroids cannot be assigned to labels.",
+                ValueError,
+            )
+        self._centroids[space] = centroids
+        return centroids.copy()
 
     def get_labels(self):
         """Return parcel labels (space-independent).
