@@ -141,3 +141,29 @@ def test_mixed_shortcut_list_not_intercepted(rng):
                   verbose=False)
     with pytest.raises(FileNotFoundError):
         nsp.fit()
+
+
+def test_fast_path_combined_parcellation_no_deprecated_name(rng, monkeypatch):
+    """Combined (cx+sc) parcellations take the fast path too. The integrated-name lookup
+    must pass the (cx, sc) parts as a tuple -- concatenating them ("Yan200TianS2") still
+    resolved, but through the deprecated-naming branch of _check_parcellation(), which
+    logged a deprecation warning on every z="gm" fit."""
+    import nispace.datasets as ds_mod
+    calls = _spy_fetch_reference(monkeypatch)
+    warnings = []
+    real_warning = ds_mod.lgr.warning
+    monkeypatch.setattr(ds_mod.lgr, "warning",
+                        lambda msg, *a, **k: (warnings.append(str(msg)), real_warning(msg, *a, **k)))
+
+    expected = fetch_reference("tpm", maps=["gm"], parcellation="Yan200+TianS2",
+                               standardize_parcellated=False, print_references=False,
+                               verbose=False)
+    n = expected.shape[1]
+    nsp = NiSpace(x=rng.normal(size=(1, n)), y=rng.normal(size=(1, n)), z="gm",
+                  parcellation="Yan200+TianS2", standardize=False, verbose=False)
+    nsp.fit()
+
+    assert len(calls) == 1
+    assert calls[0].get("parcellation") is not None   # fast path, not the raw-image fallback
+    assert not any("deprecated naming" in w for w in warnings)
+    np.testing.assert_allclose(nsp.get_z().values, expected.values)

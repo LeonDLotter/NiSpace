@@ -56,3 +56,25 @@ def test_fetch_collection_all_returns_map_table():
     assert isinstance(coll, pd.DataFrame)
     assert "map" in coll.columns
     assert coll.shape[0] > 0
+
+
+def test_fetch_reference_accepts_combined_parcellation_object(monkeypatch):
+    """A combined Parcellation object is resolved via its (cx, sc) name tuple: same table
+    as the "+"-string name, and no deprecated-naming warning (the parts used to be
+    concatenated, which hit the legacy branch of _check_parcellation())."""
+    import nispace.datasets as ds_mod
+    from nispace.datasets import fetch_parcellation
+    warnings = []
+    real_warning = ds_mod.lgr.warning
+    monkeypatch.setattr(ds_mod.lgr, "warning",
+                        lambda msg, *a, **k: (warnings.append(str(msg)), real_warning(msg, *a, **k)))
+
+    parc = fetch_parcellation("Yan200+TianS2", verbose=False)
+    assert parc._is_combined
+    df_obj = fetch_reference("tpm", maps=["gm"], parcellation=parc,
+                             print_references=False, verbose=False)
+    df_str = fetch_reference("tpm", maps=["gm"], parcellation="Yan200+TianS2",
+                             print_references=False, verbose=False)
+
+    pd.testing.assert_frame_equal(df_obj, df_str)
+    assert not any("deprecated naming" in w for w in warnings)

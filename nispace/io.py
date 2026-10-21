@@ -172,11 +172,18 @@ def parcellate_data(data,
                     "Use an MNI space or fetch pre-parcellated data via fetch_reference(). # TODO"
                 )
         parc_labels = parc_labels if parc_labels is not None else parcellation._labels
-        parc_hemi   = parc_hemi   if parc_hemi   is not None else parcellation._hemi
-        parc_space  = parc_space  if parc_space  is not None else parcellation._space
-        # _image_obj requires an active space; if none is set (pre-parcellated data path),
-        # set to None — list inputs will raise their own error, DataFrame inputs don't need it
-        parcellation = parcellation._image_obj if parcellation._space is not None else None
+        # no active space but an explicit, registered parc_space: use that space's image
+        if parcellation._space is None and parc_space in parcellation.spaces:
+            if parc_space not in parcellation._hemi_dict:
+                parcellation._fit_space(parc_space)
+            parc_hemi = parc_hemi if parc_hemi is not None else parcellation._hemi_dict.get(parc_space)
+            parcellation = parcellation.get_image(parc_space)
+        else:
+            parc_hemi   = parc_hemi   if parc_hemi   is not None else parcellation._hemi
+            parc_space  = parc_space  if parc_space  is not None else parcellation._space
+            # _image_obj requires an active space; if none is set (pre-parcellated data path),
+            # set to None — list inputs will raise their own error, DataFrame inputs don't need it
+            parcellation = parcellation._image_obj if parcellation._space is not None else None
 
     ## put data into list
     if isinstance(data, Path):

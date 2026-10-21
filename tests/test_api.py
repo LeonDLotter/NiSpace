@@ -701,3 +701,52 @@ def test_pickle_roundtrip_save_nulls_false_drops_nulls(permuted_maps_nispace, tm
         nsp_reloaded.get_p_values(verbose=False),
         nsp.get_p_values(verbose=False),
     )
+
+
+def test_pickle_omits_coloc_closures_and_reload_rebuilds_them(synthetic_nispace, tmp_path):
+    """Colocalization closures are dill-pickled by value (raw bytecode), which breaks across
+    Python versions (a 3.9 pickle raised NameError: 'zeros' in permute() under 3.11). They
+    must not be written; from_pickle() rebuilds them, and permute() gives the same nulls."""
+    from nispace.io import from_pickle as raw_from_pickle
+    nsp = synthetic_nispace
+    nsp.colocalize(method="pearson", verbose=False)
+    f = tmp_path / "nsp.pkl"
+    nsp.to_pickle(str(f), verbose=False)
+
+    assert raw_from_pickle(str(f), use_dill=True)._colocs_fun == {}
+    assert "pearson" in nsp._colocs_fun   # in-memory object untouched
+
+    nsp_reloaded = NiSpace.from_pickle(str(f), verbose=False)
+    assert callable(nsp_reloaded._colocs_fun["pearson"])
+    for obj in (nsp, nsp_reloaded):
+        obj.permute(what="maps", maps_method="random", n_perm=50, seed=3, verbose=False)
+    pd.testing.assert_frame_equal(nsp_reloaded.get_p_values(verbose=False),
+                                  nsp.get_p_values(verbose=False))
+
+
+def test_from_pickle_replaces_stale_pickled_closures(synthetic_nispace, tmp_path, monkeypatch):
+    """Old pickles still carry closures: they are always rebuilt from the stored kwargs,
+    never reused; a method without stored kwargs is dropped with a warning."""
+    import nispace.api as api_mod
+    from nispace.io import to_pickle as raw_to_pickle
+    nsp = synthetic_nispace
+    nsp.colocalize(method="pearson", verbose=False)
+
+    def _broken(X, y, weights=None):
+        raise NameError("name 'zeros' is not defined")
+
+    nsp._colocs_fun["pearson"] = _broken
+    nsp._colocs_fun["spearman"] = _broken   # no stored kwargs for this one
+    del nsp._coloc_seed_by_method           # pre-seed-storage pickle
+    f = tmp_path / "old.pkl"
+    raw_to_pickle(nsp, str(f), use_dill=True)
+
+    warnings = []
+    monkeypatch.setattr(api_mod.lgr, "warning", lambda msg, *a, **k: warnings.append(str(msg)))
+    nsp_reloaded = NiSpace.from_pickle(str(f), verbose=False)
+
+    assert nsp_reloaded._colocs_fun["pearson"] is not _broken
+    assert "spearman" not in nsp_reloaded._colocs_fun
+    assert any("spearman" in w and "colocalize()" in w for w in warnings)
+    nsp_reloaded.permute(what="maps", maps_method="random", n_perm=20, seed=1, verbose=False)
+    assert nsp_reloaded.get_p_values(verbose=False).notna().all().all()

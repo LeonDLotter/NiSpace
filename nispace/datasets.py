@@ -1333,7 +1333,7 @@ def fetch_reference(dataset: str,
     from .core.parcellation import Parcellation as _Parcellation
     if isinstance(parcellation, _Parcellation):
         if parcellation._is_combined:
-            parcellation = (parcellation._cx_name or "") + (parcellation._sc_name or "")
+            parcellation = (parcellation._cx_name, parcellation._sc_name)
         else:
             parcellation = parcellation._name
     elif bilateral and parcellation is None:

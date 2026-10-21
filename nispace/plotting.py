@@ -1,6 +1,7 @@
 import inspect
 import matplotlib as mpl        
 import matplotlib.pyplot as plt
+import matplotlib.transforms as mtransforms
 from matplotlib.ticker import MaxNLocator
 from matplotlib.collections import PatchCollection
 import pandas as pd
@@ -1406,6 +1407,32 @@ def _data_to_surf_verts(data_lh, data_rh, parc_arr_lh, parc_arr_rh, medial=None)
     return vert_lh, vert_rh
 
 
+def _drawn_top(fig, ax):
+    """Top (figure fraction) of the content actually drawn inside ``ax`` and its child
+    axes -- projected 3D surface meshes and images -- or None if nothing is measurable.
+    Requires a prior ``fig.draw_without_rendering()`` (3D paths are only projected on draw).
+    """
+    to_fig = fig.transFigure.inverted()
+    tops = []
+    stack = [ax]
+    while stack:
+        a = stack.pop()
+        stack.extend(a.child_axes)
+        for c in a.collections:
+            paths = [p.vertices for p in c.get_paths() if len(p.vertices)]
+            if not paths:
+                continue
+            v = np.concatenate(paths)
+            v = v[np.isfinite(v).all(axis=1)]
+            if len(v):
+                tops.append(to_fig.transform(a.transData.transform(v))[:, 1].max())
+        for im in a.images:
+            bb = im.get_window_extent()
+            if np.isfinite(bb.y1):
+                tops.append(to_fig.transform((0, bb.y1))[1])
+    return max(tops) if tops else None
+
+
 def _render_surf_row(ax, fig, vert_lh, vert_rh, parc_arr_lh, parc_arr_rh,
                      surf_geom, bg_data, views, cmap, vmin, vmax,
                      symmetric_cmap, bg_on_data, darkness, threshold, alpha,
@@ -1706,8 +1733,9 @@ def brainplot(
     vmin, vmax : float, optional
         Color scale limits. None = auto-computed per map.
     shared_colorscale : bool
-        Compute vmin/vmax across all maps (one shared colorbar). Always
-        True for combined parcellations.
+        Compute vmin/vmax across all maps (one shared colorbar). For combined
+        (cx+sc) plots, the cortex and subcortex panels of one map always share
+        a scale; this flag controls sharing across maps.
     symmetric_cmap : bool or "auto"
         Center color limits at 0. True → RdBu_r, False → viridis (unless
         cmap is set explicitly). "auto" (default) detects from the data:
@@ -2229,8 +2257,9 @@ def brainplot(
             )
 
     # -- vmin / vmax --
-    force_shared = is_combined
-    use_shared   = shared_colorscale or force_shared
+    # combined (cx+sc) maps: each map's limits come from its full row, so the cx and sc
+    # panels of one map always share a scale; across maps it follows shared_colorscale
+    use_shared   = shared_colorscale
     _global_vmin = _global_vmax = None
 
     if _img_mode is not None:
@@ -2739,8 +2768,26 @@ def brainplot(
     if title_kwargs:
         _title_kw.update(title_kwargs)
     _title_y_override = _title_kw.pop("y", None)
+    # Anchor titles to what is actually drawn: surface renders leave empty space inside
+    # their axes, so a title placed relative to the axes box floats far above the brain.
+    # Measure drawn content once (draw without rendering) and place titles a few points
+    # above it; fall back to the axes-relative position if nothing measurable is found.
+    _content_tops = {}
+    if _title_y_override is None and _pending_titles:
+        try:
+            fig.draw_without_rendering()
+            for (_tax, _) in _pending_titles:
+                _content_tops[id(_tax)] = _drawn_top(fig, _tax)
+        except Exception:
+            _content_tops = {}
+    _title_pad = mtransforms.offset_copy(fig.transFigure, fig=fig, y=6, units="points")
     for (_tax, _tstr) in _pending_titles:
         _pos = _tax.get_position()
+        _top = _content_tops.get(id(_tax))
+        if _top is not None:
+            fig.text(_pos.x0 + _pos.width / 2, _top, _tstr, ha="center", va="bottom",
+                     transform=_title_pad, **_title_kw)
+            continue
         _ty = _pos.y0 + (_title_y_override if _title_y_override is not None else _title_y) * _pos.height
         fig.text(
             _pos.x0 + _pos.width / 2, _ty, _tstr,

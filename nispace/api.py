@@ -183,6 +183,11 @@ _DEPR_IGNORE_BACKGROUND_DATA = (
     "background exclusion (equivalent to ignore_background_data=False), or a scalar/"
     "list/'auto'/per-role dict to enable it (equivalent to ignore_background_data=True)."
 )
+_DEPR_PICKLED_COLOC_FUN = (
+    "This pickle predates stored colocalization settings for method(s) {methods}; their "
+    "colocalization functions were dropped. Re-run colocalize() before permute() with them. "
+    "Pickles of this age will no longer be supported from the first non-dev release."
+)
 
 
 def _resolve_per_role(value, role, default="auto"):
@@ -448,6 +453,7 @@ class NiSpace:
         self._colocs = {}
         self._colocs_fun = {}
         self._coloc_kwargs_by_method = {}
+        self._coloc_seed_by_method = {}
         self._nulls = {
             "_colocs": {}
         }
@@ -699,7 +705,7 @@ class NiSpace:
                 # reference map -- and resampled by the normal parcellate_data() call below.
                 _parc_name = None
                 if isinstance(self._parc, Parcellation):
-                    _parc_name = ((self._parc._cx_name or "") + (self._parc._sc_name or "")
+                    _parc_name = ((self._parc._cx_name, self._parc._sc_name)
                                   if self._parc._is_combined else self._parc._name)
                 _parc_integrated = _check_parcellation(_parc_name, raise_not_found=False) \
                     if _parc_name else None
@@ -1929,6 +1935,9 @@ class NiSpace:
             self._coloc_kwargs_by_method[method]["rank"] = rank
             self._coloc_kwargs_by_method[method]["regress_z"] = regress_z
             self._coloc_kwargs_by_method[method]["zy_matched"] = zy_matched
+            # seed is kept separately (consumers pass seed= next to these kwargs); together
+            # with the kwargs it lets _build_colocs_fun() rebuild the closure after unpickling
+            self._coloc_seed_by_method[method] = seed
             # save last settings
             self._set_last(
                 method=method,
@@ -5513,6 +5522,11 @@ class NiSpace:
                 self_save._nulls = {
                     "_colocs": {}
                 }
+            # colocalization closures are not saved: dill pickles them by value, i.e. as raw
+            # bytecode, which is Python-version-specific -- a pickle written under one Python
+            # version would restore broken functions under another. from_pickle() rebuilds
+            # them from the stored per-method kwargs instead.
+            self_save._colocs_fun = {}
 
             # save
             to_pickle(self_save, filepath, use_dill=True)
@@ -5592,12 +5606,44 @@ class NiSpace:
             # introduced would otherwise be missing it entirely (AttributeError on first use)
             for attr, default in [
                 ("_coloc_kwargs_by_method", {}),
+                ("_coloc_seed_by_method", {}),
             ]:
                 if not hasattr(nispace_object, attr):
                     setattr(nispace_object, attr, default)
 
+            # rebuild colocalization closures with the current code. Older pickles contain
+            # them as dill-serialized bytecode, which breaks when loaded under a different
+            # Python version (e.g. NameError on a 3.9 pickle in 3.11) -- never reuse those.
+            # The rebuild itself is permanent (to_pickle() no longer saves closures).
+            # TODO (first non-dev release): remove the legacy handling of pickles written
+            # before closures were dropped: the _pickled_methods/_lost check and
+            # _DEPR_PICKLED_COLOC_FUN warning below, and the "_coloc_seed_by_method"
+            # backfill above (keep the loop rebuilding _colocs_fun).
+            _pickled_methods = set(getattr(nispace_object, "_colocs_fun", None) or {})
+            nispace_object._colocs_fun = {}
+            for method in nispace_object._coloc_kwargs_by_method:
+                nispace_object._colocs_fun[method] = nispace_object._build_colocs_fun(method)
+            _lost = sorted(_pickled_methods - set(nispace_object._colocs_fun))
+            if _lost:
+                lgr.warning(_DEPR_PICKLED_COLOC_FUN.format(methods=_lost))
+
             # return
             return nispace_object
+
+    # ----------------------------------------------------------------------------------------------
+
+    def _build_colocs_fun(self, method):
+        """Rebuild the per-row colocalization closure for `method` from the settings
+        stored by colocalize() (see from_pickle())."""
+        kwargs = {k: v for k, v in self._coloc_kwargs_by_method[method].items()
+                  if k not in ("rank", "regress_z", "zy_matched")}
+        return _get_colocalize_fun(
+            method=method,
+            seed=self._coloc_seed_by_method.get(method, self._seed),
+            verbose=False,
+            dtype=self._dtype,
+            **kwargs
+        )
 
 
     # PRIVATE METHODS ==============================================================================

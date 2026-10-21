@@ -70,3 +70,32 @@ def test_fit_does_not_eagerly_load_spin_mat_by_default():
     resolved = parc.get_spin_mat(space=space)
     assert resolved is not None
     assert not (isinstance(resolved[0], dict))
+
+
+def test_parcellate_data_with_inactive_parcellation_object_and_explicit_space():
+    """A Parcellation object without an active space (as returned by fetch_parcellation())
+    plus an explicit, registered parc_space must parcellate with that space's image.
+    Previously the object collapsed to None ("parcellation must not be None").
+    Ground truth: parcellating the label image itself returns each parcel's own label."""
+    import nibabel as nib
+    from nispace.datasets import fetch_parcellation
+    from nispace.io import parcellate_data
+
+    parc = fetch_parcellation("Yan200", verbose=False)
+    assert parc._space is None
+    lab_img = parc.get_image("MNI152NLin6Asym")
+    data = nib.Nifti1Image(np.asarray(lab_img.dataobj).astype(float), lab_img.affine)
+
+    out = parcellate_data(data, data_labels=["labels"], data_space="MNI152NLin6Asym",
+                          parcellation=parc, parc_space="MNI152NLin6Asym", verbose=False)
+    assert out.shape == (1, 200)
+    assert list(out.columns) == list(parc._labels)
+    np.testing.assert_allclose(out.values[0], np.arange(1, 201))
+
+    # same result as the explicit image path
+    parc_active = fetch_parcellation("Yan200", verbose=False)
+    parc_active.set_active_space("MNI152NLin6Asym")
+    ref = parcellate_data(data, data_labels=["labels"], data_space="MNI152NLin6Asym",
+                          parcellation=parc_active._image_obj, parc_space="MNI152NLin6Asym",
+                          parc_labels=parc_active._labels, verbose=False)
+    pd.testing.assert_frame_equal(out, ref)
