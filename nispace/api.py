@@ -214,6 +214,42 @@ _DEPR_PICKLED_COLOC_FUN = (
 )
 
 
+def _check_x_set_duplicates(X):
+    """Duplicate handling for set-indexed X (a ``"set"`` index level).
+
+    A map may belong to several sets (expected for set enrichment), but not twice to the
+    same set -- that would count it twice in the set score. Within-set duplicates
+    (same set and map label) are dropped, keeping the first entry; maps in several sets
+    are kept and reported, because analyses without ``xsea`` treat each membership as a
+    separate map. Map identity is the index without the ``"set"``/``"weight"`` levels.
+    Returns X (deduplicated if needed).
+    """
+    idx = X.index.to_frame(index=False)
+    map_cols = [c for c in idx.columns if c not in ("set", "weight")]
+    if not map_cols:
+        return X
+    keys = idx[map_cols].apply(tuple, axis=1) if len(map_cols) > 1 else idx[map_cols[0]]
+
+    within = pd.Series(list(zip(idx["set"], keys))).duplicated(keep="first").to_numpy()
+    if within.any():
+        examples = [f"{s}: {m}" for s, m in zip(idx["set"][within], keys[within])][:3]
+        lgr.warning(f"{int(within.sum())} map(s) occur more than once within the same set and "
+                    f"were dropped (first entry kept), e.g. {examples}. A map may belong to "
+                    "several sets, but only once per set.")
+        X = X.loc[~within]
+        idx, keys = idx.loc[~within].reset_index(drop=True), keys[~within].reset_index(drop=True)
+
+    n_sets_per_map = (pd.DataFrame({"set": idx["set"].to_numpy(), "key": list(keys)})
+                      .groupby("key", sort=False)["set"].nunique())
+    multi = n_sets_per_map[n_sets_per_map > 1]
+    if len(multi):
+        lgr.warning(f"{len(multi)} map(s) belong to several sets, e.g. {list(multi.index[:3])}. "
+                    "Expected for set enrichment (xsea=True), where set resampling draws from "
+                    "the unique maps; analyses without xsea treat every set membership as a "
+                    "separate map (repeated results, larger multiple-comparison family).")
+    return X
+
+
 def _resolve_per_role(value, role, default="auto"):
     """Resolve a background_value spec (scalar/False/dict) for one X/Y/Z role.
 
@@ -848,13 +884,15 @@ class NiSpace:
         # twice) -- cheap diagnostic, not a dedup path; NaN-safe via pandas .duplicated()
         for _name, _data in (("X", self._X), ("Y", self._Y), ("Z", self._Z)):
             if _data is not None:
+                if (_name == "X") and ("set" in _data.index.names):
+                    # set-indexed X: label-based check (within-set duplicates dropped,
+                    # maps in several sets reported)
+                    self._X = _check_x_set_duplicates(self._X)
+                    continue
                 _n_dup = int(_data.duplicated().sum())
                 if _n_dup:
-                    if (_name == "X") and ("set" in _data.index.names):
-                        continue
-                    else:
-                        lgr.warning(f"{_n_dup} duplicate row(s) found in '{_name}' data -- if "
-                                    "unintended, check your input for accidentally repeated maps.")
+                    lgr.warning(f"{_n_dup} duplicate row(s) found in '{_name}' data -- if "
+                                "unintended, check your input for accidentally repeated maps.")
 
         ## return complete object
         return self
@@ -3373,8 +3411,14 @@ class NiSpace:
                 if sets_X_background.shape[1] != _X_obs.shape[1]:
                     lgr.critical_raise(f"X background maps of wrong shape {sets_X_background.shape}!",
                                        ValueError)
-                lgr.info(f"Will use {sets_X_background.shape[0]} provided background maps.")
                 sets_X_background = np.array(sets_X_background, dtype=dtype)
+                # random sets must be drawn from unique maps (NaN-safe row dedup)
+                _n_bg = sets_X_background.shape[0]
+                sets_X_background = pd.DataFrame(sets_X_background).drop_duplicates().to_numpy()
+                if sets_X_background.shape[0] < _n_bg:
+                    lgr.warning(f"{_n_bg - sets_X_background.shape[0]} duplicate map(s) dropped from "
+                                "the provided X background; random sets are drawn from unique maps.")
+                lgr.info(f"Will use {sets_X_background.shape[0]} provided background maps.")
                 if "x" in self._zscore:
                     lgr.info("Z-standardizing X background maps.")
                     sets_X_background = zscore_df(sets_X_background, along="rows", force_df=False)
