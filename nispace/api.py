@@ -26,7 +26,7 @@ from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_
                                _null_maps_n_perm,
                                _resolve_maps_batch_size, _iter_null_map_batches)
 from .core.nullmaps import NullMaps, _NULLMAPS_WARN_BYTES
-from .core.plot import _plot_categorical
+from .core.plot import _plot_categorical, _plot_correlation, _clean_map_label
 from .core.constants import _COLOC_METHODS, _SPACE_DEFAULT_VOL, _COLOC_METHODS_UNIVARIATE
 from .datasets import fetch_parcellation, _check_parcellation
 from .nulls import get_distance_matrix, _SPIN_METHODS, _DISTMAT_FREE_METHODS, _parse_null_method
@@ -122,6 +122,29 @@ def _cwr_omnibus_aggregate(rho, omnibus_stat, already_z=False):
             f"'omnibus_stat' must be one of {_CWR_OMNIBUS_STATS}, got '{omnibus_stat}'.",
             ValueError
         )
+
+
+_CBAR_LABELS_Y = {
+    "cohen": "Cohen's d", "pairedcohen": "Paired Cohen's d", "hedges": "Hedges' g",
+    "zscore": "Z score", "rzscore": "Robust z score", "prc": "Percent change",
+    "logfc": "Log fold change", "centile": "Centile", "elemdiff": "Difference",
+    "meandiff": "Mean difference", "mean": "Mean", "median": "Median", "std": "SD",
+    "var": "Variance",
+}
+_CBAR_LABELS_X = {"pca": "PCA score", "ica": "ICA score", "fa": "Factor score"}
+
+
+def _auto_colorbar_label(data, Y_transform, X_reduction):
+    """plot_brain(colorbar_label="auto"): a label only where the plotted values' meaning is known
+    (a known Y transform or X reduction), else "" (raw Y/X, DataFrames, unknown transforms)."""
+    if not isinstance(data, str):
+        return ""
+    if data.upper() == "Y" and isinstance(Y_transform, str):
+        m = re.match(r"\s*(\w+)\s*\(", Y_transform)
+        return _CBAR_LABELS_Y.get(m.group(1).lower(), "") if m else ""
+    if data.upper() == "X" and isinstance(X_reduction, str):
+        return _CBAR_LABELS_X.get(X_reduction.lower(), "")
+    return ""
 
 
 def _match_maps(index, queries):
@@ -4346,6 +4369,154 @@ class NiSpace:
 
     # PLOT ====================================================================================
 
+    _CORRELATION_PLOT_METHODS = ("spearman", "pearson", "partialspearman", "partialpearson")
+
+    def _plot_correlation(self, method, X_reduction, Y_transform, Y_maps, X_maps, permute_what,
+                          mc_method, annot_p, title, fig, ax, figsize, show, plot_kwargs):
+        """plot(kind="correlation"): parcel-wise scatter of one Y row vs. selected X maps."""
+        from scipy.stats import rankdata
+        plot_kwargs = {} if plot_kwargs is None else dict(plot_kwargs)
+        self._check_fit()
+
+        # method: explicit, else the last pairwise method, else spearman
+        if method is None:
+            last = self._last_settings.get("method")
+            method = last if last in self._CORRELATION_PLOT_METHODS else "spearman"
+        if method not in self._CORRELATION_PLOT_METHODS:
+            lgr.critical_raise(
+                f"plot(kind='correlation') shows pairwise correlations; method must be one of "
+                f"{self._CORRELATION_PLOT_METHODS}, got '{method}'.", ValueError)
+        _, X_reduction, Y_transform, _, permute_what = self._get_last(
+            method=method, X_reduction=X_reduction, Y_transform=Y_transform, xsea=None,
+            perm=permute_what)
+        spearman, partial = "spearman" in method, method.startswith("partial")
+
+        with _quiet():
+            X = self.get_x(X_reduction=X_reduction)
+            Y = self.get_y(Y_transform=Y_transform)
+
+        # one Y row, up to max_panels X maps
+        y_pos = _match_maps(Y.index, Y_maps) if Y_maps is not None else list(range(len(Y)))
+        if len(y_pos) != 1:
+            lgr.critical_raise(
+                f"plot(kind='correlation') plots one Y row; {len(y_pos)} match. Select one with "
+                f"Y_maps= (available: {[str(i) for i in Y.index[:10]]}"
+                f"{' ...' if len(Y) > 10 else ''}).", ValueError)
+        if X_maps is None:
+            x_pos = list(range(len(X)))
+        else:  # panels in the order the maps were asked for
+            queries = [X_maps] if isinstance(X_maps, (str, int)) else list(X_maps)
+            x_pos = list(dict.fromkeys(i for q in queries for i in _match_maps(X.index, q)))
+        if not x_pos:
+            lgr.critical_raise(f"No X maps matching {X_maps!r} found.", ValueError)
+        max_panels = plot_kwargs.pop("max_panels", 12)
+        if max_panels is not None and len(x_pos) > max_panels:
+            lgr.critical_raise(
+                f"{len(x_pos)} X maps selected; plot(kind='correlation') draws one panel per map "
+                f"(max_panels={max_panels}). Select maps with X_maps=.", ValueError)
+        y_row = Y.iloc[y_pos[0]]
+        X_sel = X.iloc[x_pos]
+        y = np.asarray(y_row, dtype=float)
+        X_arr = np.asarray(X_sel, dtype=float)
+
+        Z_arr = None
+        if partial:
+            if self._Z is None:
+                lgr.critical_raise(f"Method '{method}' needs Z (NiSpace(z=...)).", ValueError)
+            Z_arr = np.asarray(self._Z, dtype=float)
+
+        def _rank(v, keep):
+            out = np.full(v.shape, np.nan)
+            out[keep] = rankdata(v[keep])
+            return out
+
+        def _resid(v, Zm, keep):
+            D = np.column_stack([np.ones(keep.sum()), Zm[:, keep].T])
+            beta = np.linalg.lstsq(D, v[keep], rcond=None)[0]
+            out = np.full(v.shape, np.nan)
+            out[keep] = v[keep] - D @ beta
+            return out
+
+        ranks = bool(plot_kwargs.pop("ranks", False))
+        xs, ys, rs = [], [], []
+        for xv in X_arr:
+            keep = np.isfinite(xv) & np.isfinite(y)
+            if Z_arr is not None:
+                keep &= np.isfinite(Z_arr).all(axis=0)
+            xr, yr = (_rank(xv, keep), _rank(y, keep)) if spearman else (xv, y)
+            if partial:
+                Zr = np.vstack([_rank(z, keep) for z in Z_arr]) if spearman else Z_arr
+                xr, yr = _resid(xr, Zr, keep), _resid(yr, Zr, keep)
+            rs.append(np.corrcoef(xr[keep], yr[keep])[0, 1])
+            show_ranks = partial or (spearman and ranks)
+            xs.append(np.where(keep, xr if show_ranks else xv, np.nan))
+            ys.append(np.where(keep, yr if show_ranks else y, np.nan))
+
+        # stored permutation p-values (corrected if a correction was run)
+        # stored permutation p-values: uncorrected, plus the correction if one was run; labels as
+        # in the categorical plot's legend (the mc_method string as given)
+        p_annot = []
+        if annot_p and permute_what:
+            mc = mc_method or self._last_settings.get("mc_method")
+            if isinstance(mc, str) and mc.lower() in ("uncorrected", "none", "false"):
+                mc = None
+            _perm = self._resolve_permute_what(permute_what, method, None, X_reduction,
+                                               Y_transform, self._get_last(pooled_p=None))
+            _wanted = [(None, r"$p_{\mathrm{uncorrected}}$")]
+            if mc:
+                _mc_lab = mc_method or _get_correct_mc_method(mc).replace("_", "").replace("-", "")
+                _wanted.append((_get_correct_mc_method(mc).replace("_", "").replace("-", ""),
+                                rf"$p_{{\mathrm{{{_mc_lab.replace('_', '-')}}}}}$"))
+            for _mc, _lab in _wanted:
+                try:
+                    with _quiet():
+                        p_df = self.get_p_values(method=method, X_reduction=X_reduction,
+                                                 Y_transform=Y_transform, permute_what=_perm,
+                                                 mc_method=_mc)
+                    p_df = next(iter(p_df.values())) if isinstance(p_df, dict) else p_df
+                    p_annot.append((_lab, np.asarray(p_df.iloc[y_pos[0], x_pos], dtype=float)))
+                except Exception as e:  # no p-values for this setting: plot without
+                    lgr.info(f"No p-values ({_lab}) to annotate: {e}")
+
+        # point colours: compartment for combined parcellations
+        color_by = plot_kwargs.pop("color_by", "auto")
+        groups = None
+        if color_by == "auto":
+            color_by = "compartment" if getattr(self._parc, "_is_combined", False) else None
+        if color_by == "compartment":
+            if not getattr(self._parc, "_is_combined", False):
+                lgr.warning("color_by='compartment' needs a combined cortex+subcortex "
+                            "parcellation; ignoring.")
+            else:
+                sc_labels = {str(self._parc._labels[i]) for i in self._parc.get_sc_idc()}
+                groups = np.array(["Subcortex" if str(c) in sc_labels else "Cortex"
+                                   for c in X.columns])
+        elif color_by is not None:
+            lgr.critical_raise(f"color_by must be 'compartment' or None, got {color_by!r}.",
+                               ValueError)
+
+        what = "residual" if partial else ("rank" if spearman and ranks else None)
+        y_name = str(y_row.name[-1] if isinstance(y_row.name, tuple) else y_row.name)
+        if Y_transform:
+            y_name = nice_stats_labels(Y_transform.split("(")[0])
+        y_axis_label = f"{y_name}" + (f" ({what})" if what else "")
+        x_labels = [_clean_map_label(i) for i in X_sel.index]
+        if title == "auto":
+            title = None if len(x_pos) == 1 else f"{nice_stats_labels(method)} colocalization"
+        stat_label = {"spearman": r"$\rho$", "pearson": "$r$",
+                      "partialspearman": r"partial $\rho$", "partialpearson": "partial $r$"}[method]
+
+        fig_axes = _plot_correlation(
+            x_vals=np.vstack(xs), y_vals=np.vstack(ys), x_labels=x_labels, y_label=y_name,
+            r_values=np.array(rs), stat_label=stat_label, p_values=p_annot,
+            groups=groups, x_axis_label=(f"X map ({what})" if what and len(x_pos) > 1 else None),
+            y_axis_label=y_axis_label, title=title, fig=fig, ax=ax, figsize=figsize,
+            ncols=plot_kwargs.pop("ncols", None), line=plot_kwargs.pop("line", True),
+            kwargs=plot_kwargs)
+        if show:
+            plt.show()
+        return fig_axes
+
     def plot(self, kind="categorical",
              method=None, stats=None,
              X_reduction=None, Y_transform=None,
@@ -4366,17 +4537,27 @@ class NiSpace:
         """
         Plot a stored colocalization result as a categorical (per-X-map) plot,
         one figure per requested statistic, optionally overlaid with the null
-        permutation distribution and significance annotation.
+        permutation distribution and significance annotation -- or, with
+        ``kind="correlation"``, as parcel-wise scatter plots of one Y row against X maps.
 
-        Only ``kind="categorical"`` is currently implemented -- ``"correlation"``,
-        ``"brain"``, and ``"nullhist"`` are planned but not yet built (passing
-        them raises ``NotImplementedError``). For brain-map visualization, use
-        the separate :meth:`plot_brain` method instead.
+        ``"brain"`` and ``"nullhist"`` are planned but not yet built (passing them raises
+        ``NotImplementedError``). For brain-map visualization, use :meth:`plot_brain`.
 
         Parameters
         ----------
-        kind : str, default "categorical"
-            Only ``"categorical"`` is currently supported.
+        kind : {"categorical", "correlation"}, default "categorical"
+            ``"categorical"``: one point/bar per X map (all stats of ``method``).
+            ``"correlation"``: scatter of the parcel values of one Y row (select with
+            ``Y_maps`` if there are several) against each selected X map, one panel per X map,
+            with a regression line and the correlation (computed from the plotted data) plus
+            the stored permutation p-value (if any) in the corner. Only for the pairwise
+            methods ``spearman``, ``pearson``, ``partialspearman``, ``partialpearson`` (default:
+            the last of these used, else ``"spearman"``). Partial methods plot the residuals
+            after regressing Z (ranked first for Spearman). Combined cortex+subcortex
+            parcellations colour points by compartment. ``plot_kwargs`` options: ``ranks``
+            (bool, default False: plot ranks for Spearman), ``color_by`` (``"compartment"`` or
+            None), ``max_panels`` (default 12), ``ncols``, ``line`` (default True),
+            ``scatter_kws``, ``line_kws``, ``sharey``.
         method, X_reduction, Y_transform, xsea : optional
             Identify which stored :meth:`colocalize` result to plot; see
             :meth:`colocalize`. Default to the last-used values. Ignored if
@@ -4462,13 +4643,23 @@ class NiSpace:
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.plot() - Plot colocalization results. ***")
 
-        if kind in {"correlation", "brain", "nullhist"}:
+        if kind in {"brain", "nullhist"}:
             lgr.critical_raise(
                 f"plot(kind='{kind}') is planned but not yet implemented. "
-                "Only kind='categorical' is currently supported. For brain-map "
+                "Use kind='categorical' or kind='correlation'. For brain-map "
                 "visualization, use plot_brain() instead.",
                 NotImplementedError
             )
+        if kind == "correlation":
+            return self._plot_correlation(
+                method=method, X_reduction=X_reduction, Y_transform=Y_transform,
+                Y_maps=Y_maps if Y_maps is not None else Y_labels,
+                X_maps=X_maps if X_maps is not None else X_labels,
+                permute_what=permute_what, mc_method=mc_method, annot_p=annot_p, title=title,
+                fig=fig, ax=ax, figsize=figsize, show=show, plot_kwargs=plot_kwargs)
+        if kind != "categorical":
+            lgr.critical_raise(f"Unknown kind '{kind}'; use 'categorical' or 'correlation'.",
+                               ValueError)
 
         # kwargs
         plot_kwargs = {} if plot_kwargs is None else plot_kwargs
@@ -4535,6 +4726,11 @@ class NiSpace:
                             ytrans=Y_transform, xsea=xsea)
         get_kwargs = dict(method=method, stats=stats, X_reduction=X_reduction,
                           Y_transform=Y_transform, xsea=xsea)
+
+        # "rho" on the Fisher-z scale? XSEA always pools on it (forced for correlations); else the
+        # r_to_z of the stored result. Unknown for a passed-in result -> labelled plain "Rho".
+        _rho_is_z = colocalizations_dict is None and (
+            bool(xsea) or self._coloc_kwargs_by_method.get(method, {}).get("r_to_z", True))
 
         # get colocalization results
         _z_method = self._last_settings.get("z_method", "robust")
@@ -4704,7 +4900,9 @@ class NiSpace:
             if title == "auto":
                 _title = f"{nice_stats_labels(method)} colocalization"
                 if Y_transform:
-                    _title += f" after {nice_stats_labels(Y_transform.replace('(a,b)', ''))} transform"
+                    # one part per line: keeps the title narrower than the plot, so it can't run
+                    # into the legend column right of it
+                    _title += f"\nafter {nice_stats_labels(Y_transform.replace('(a,b)', ''))} transform"
                 if permute_what:
                     _perm_str = nice_stats_labels(permute_what)
                     if values == "z":
@@ -4810,7 +5008,8 @@ class NiSpace:
                     title=_title,
                     figsize=figsize,
                     kwargs=plot_kwargs,
-                    null_kwargs=nullplot_kwargs
+                    null_kwargs=nullplot_kwargs,
+                    rho_is_z=_rho_is_z,
                 )
 
             if show:
@@ -4838,9 +5037,10 @@ class NiSpace:
                    shared_colorscale=False,
                    symmetric_cmap="auto",
                    colorbar=True,
-                   colorbar_label="",
+                   colorbar_label="auto",
                    ncols=1,
                    title="auto",
+                   title_fontsize=None,
                    n_max=5,
                    figsize=None,
                    show=True,
@@ -4878,10 +5078,20 @@ class NiSpace:
             Force symmetric colorscale around zero.
         colorbar : bool
             Show colorbar.
-        colorbar_label : str
-            Label for the colorbar title.
+        colorbar_label : str, default "auto"
+            Label for the colorbar title. ``"auto"`` labels only values whose meaning is known:
+            Y after a known transform (e.g. ``"pairedcohen"`` -> "Paired Cohen's d", ``"zscore"``
+            -> "Z score") and X after ``"pca"``/``"ica"``/``"fa"`` (-> "PCA score", ...);
+            untransformed Y, unreduced X, a passed DataFrame and unknown transforms get no label.
+            ``""`` for no label; any other string is used as given.
         ncols : int
             Number of columns in the subplot grid.
+        title : str, list, or bool, default "auto"
+            Map titles. ``"auto"`` uses the map labels; pass a string, a list (one per map),
+            or ``False``/``None`` for no titles.
+        title_fontsize : float or str, optional
+            Font size of the map titles (points or a matplotlib size name). Defaults to
+            ``"large"``; increase it when many maps share a row and the figure is shown small.
         n_max : int
             Maximum number of maps to plot. Raises an error if exceeded.
         figsize : tuple, optional
@@ -4947,6 +5157,9 @@ class NiSpace:
                 ValueError,
             )
 
+        if colorbar_label == "auto":
+            colorbar_label = _auto_colorbar_label(data, Y_transform, X_reduction)
+
         # -- call brainplot --
         fig, axes = brainplot(
             data=data_df,
@@ -4963,6 +5176,7 @@ class NiSpace:
             colorbar_label=colorbar_label,
             ncols=ncols,
             title=title,
+            title_fontsize=title_fontsize,
             figsize=figsize,
             verbose=verbose,
             **kwargs,

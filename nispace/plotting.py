@@ -75,6 +75,31 @@ def nice_stats_labels(string, add_dollars=True):
     return result
 
 
+# Display labels for PET target names (matplotlib math text). Exact-name lookup only: names not
+# listed here (mGluR5, rCPS, SV2A, COX1, CMRglu, ...) are already in their usual style and stay.
+_TARGET_LABELS = {
+    "GABAa": r"GABA$_\mathrm{A}$",
+    "GABAa5": r"GABA$_\mathrm{A}$ $\alpha$5",
+    "5HT1a": r"5HT$_\mathrm{1A}$",
+    "5HT1b": r"5HT$_\mathrm{1B}$",
+    "5HT2a": r"5HT$_\mathrm{2A}$",
+    "5HT4": r"5HT$_\mathrm{4}$",
+    "5HT6": r"5HT$_\mathrm{6}$",
+    "D1": r"D$_\mathrm{1}$",
+    "D23": r"D$_\mathrm{2/3}$",
+    "M1": r"M$_\mathrm{1}$",
+    "H3": r"H$_\mathrm{3}$",
+    "CB1": r"CB$_\mathrm{1}$",
+    "A4B2": r"$\alpha_\mathrm{4}\beta_\mathrm{2}$",
+}
+
+
+def nice_target_label(name):
+    """Display label for a PET target name (e.g. "GABAa" -> GABA_A, "5HT1a" -> 5HT_1A,
+    "D23" -> D_2/3, as math text); any other string is returned unchanged."""
+    return _TARGET_LABELS.get(str(name), str(name))
+
+
 def hide_empty_axes(axes):
     """Turn off any axes in a 2D array of subplot axes that were never drawn
     into (i.e. still at matplotlib's default (0, 1, 0, 1) data limits)."""
@@ -509,7 +534,7 @@ def catplot(fig, ax, data_long, categorical_var="variable", continuous_var="valu
     legend = dict(
         plot=True,
         loc="center left",
-        bbox_to_anchor=(1, 0.5),
+        bbox_to_anchor=(1.03, 0.5),   # a small gap between plot and legend
         nice_labels=True,
         kwargs={}
     ) | ({} if legend is None else legend)
@@ -795,7 +820,7 @@ def nullplot(fig, ax, data_long, categorical_var="variable", continuous_var="val
     legend = dict(
         plot=True,
         loc="center left",
-        bbox_to_anchor=(1, 0.5),
+        bbox_to_anchor=(1.03, 0.5),   # a small gap between plot and legend
         nice_labels=True,
         kwargs={}
     ) | ({} if legend is None else legend)
@@ -1527,10 +1552,75 @@ def _data_to_volume(data, ref_nii, labels_in_img, bg_value=np.nan):
     return new_img_like(ref_nii, stat_arr, copy_header=True)
 
 
+def _glass_content_bbox(sub_ax):
+    """Data-coordinate bbox (x0, x1, y0, y1) of the visible (unmasked) stat-map pixels drawn
+    into one glass-brain view, or None."""
+    boxes = []
+    for im in sub_ax.get_images():
+        arr = im.get_array()
+        if arr is None:
+            continue
+        arr = np.ma.asarray(arr)
+        if arr.ndim == 3:   # RGBA: visible where alpha > 0
+            vis = (np.asarray(arr[..., 3]) > 0) if arr.shape[-1] == 4 else \
+                ~np.ma.getmaskarray(arr).all(-1)
+        else:
+            vis = ~np.ma.getmaskarray(arr) & np.isfinite(np.ma.filled(arr, np.nan))
+        if not vis.any():
+            continue
+        rows, cols = np.nonzero(vis)
+        nr, nc = vis.shape
+        l, r, b, t = im.get_extent()
+        xs = l + (r - l) * np.array([cols.min(), cols.max() + 1]) / nc
+        if im.origin == "upper":
+            ys = t + (b - t) * np.array([rows.max() + 1, rows.min()]) / nr
+        else:
+            ys = b + (t - b) * np.array([rows.min(), rows.max() + 1]) / nr
+        boxes.append((xs.min(), xs.max(), ys.min(), ys.max()))
+    if not boxes:
+        return None
+    boxes = np.array(boxes)
+    return boxes[:, 0].min(), boxes[:, 1].max(), boxes[:, 2].min(), boxes[:, 3].max()
+
+
+def _fit_glass_views(view_axes, parent_ax, gap_frac=0.025, pad_frac=0.015):
+    """Lay out glass-brain views on their drawn content at one common scale.
+
+    nilearn gives every view a fixed-width axes (from the full-brain extent) via an axes locator;
+    zooming those around their centres leaves small content (e.g. subcortex only) at different
+    heights and with uneven gaps. Here the locator is removed and each view is cropped to its
+    content and placed explicitly: one mm-to-inch scale for all views (a voxel has the same size
+    everywhere), centred on one horizontal line, equal gaps, the block centred in `parent_ax`.
+    Axis directions are kept (the left lateral view has an inverted x axis).
+    """
+    boxes = [_glass_content_bbox(a) for a in view_axes]
+    if any(b is None for b in boxes):
+        return
+    fig = parent_ax.figure
+    fw, fh = fig.get_size_inches()
+    pp = parent_ax.get_position()
+    W, H = pp.width * fw, pp.height * fh
+    pad = pad_frac * max(max(x1 - x0, y1 - y0) for x0, x1, y0, y1 in boxes)
+    ws = [x1 - x0 + 2 * pad for x0, x1, y0, y1 in boxes]
+    hs = [y1 - y0 + 2 * pad for x0, x1, y0, y1 in boxes]
+    gap = gap_frac * W
+    scale = min((W - gap * (len(view_axes) - 1)) / sum(ws), H / max(hs))   # inches per mm
+    x = pp.x0 * fw + (W - scale * sum(ws) - gap * (len(view_axes) - 1)) / 2
+    yc = pp.y0 * fh + H / 2
+    for a, (x0, x1, y0, y1), w, h in zip(view_axes, boxes, ws, hs):
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        xl, yl = (cx - w / 2, cx + w / 2), (cy - h / 2, cy + h / 2)
+        a.set_xlim(xl[::-1] if a.xaxis_inverted() else xl)
+        a.set_ylim(yl[::-1] if a.yaxis_inverted() else yl)
+        a.set_axes_locator(None)   # otherwise nilearn re-positions the axes at draw time
+        a.set_position([x / fw, (yc - scale * h / 2) / fh, scale * w / fw, scale * h / fh])
+        x += scale * w + gap
+
+
 def _render_vol_row(ax, fig, stat_nii, bg_img, kind, display_mode, cut_coords,
                     cmap, vmin, vmax, symmetric_cmap, threshold, alpha,
                     draw_cross, colorbar, dim="auto", colorbar_label="", colorbar_inset=None,
-                    draw_brain=True, zoom=1.0, black_bg=False,
+                    draw_brain=True, zoom=1.0, black_bg=False, fit_views=False,
                     **kwargs):
     """Render one brain map as a glass brain or anatomical slices into *ax*."""
     if kind == "glass":
@@ -1564,6 +1654,8 @@ def _render_vol_row(ax, fig, stat_nii, bg_img, kind, display_mode, cut_coords,
                     _center = (_lo + _hi) / 2
                     _half = (_hi - _lo) / (2 * zoom)
                     _setter(_center - _half, _center + _half)
+        if fit_views and len(_new_axes) > 1:
+            _fit_glass_views([a for a in _new_axes if a.get_images()], ax)
         if colorbar:
             _norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
             _sm = plt.cm.ScalarMappable(cmap=cmap, norm=_norm)
@@ -1633,6 +1725,7 @@ def brainplot(
     colorbar_inset=None,
     ncols=1,
     title="auto",
+    title_fontsize=None,
     hspace=None,
     wspace=None,
     figsize=None,
@@ -1757,6 +1850,11 @@ def brainplot(
         label for tabular input and shows no title for NIfTI/GIfTI image input
         (where no meaningful label is available). Pass a string, a list of
         strings (one per map), or ``False``/``None`` to disable.
+    title_fontsize : float or str, optional
+        Font size of the map titles, in points or as a matplotlib size name
+        (``"large"``, ...). Defaults to ``"large"``. Useful when many maps share one
+        row and the figure is shown small (e.g. on slides). A ``"fontsize"`` key
+        in *title_kwargs* takes precedence.
     hspace : float
         Vertical spacing between map rows (passed to GridSpec/subplots).
     wspace : float, optional
@@ -2334,10 +2432,10 @@ def brainplot(
                 target = p[0].split("-")[1]
                 n      = p[2].split("-")[1]
                 pub    = p[4].split("-")[1].capitalize()
-                return f"{target} ({pub}, n = {n})"
+                return f"{nice_target_label(target)} ({pub}, n = {n})"
             except (IndexError, ValueError):
                 pass
-        return s
+        return nice_target_label(s)
 
     # Normalise title to a per-map list (or None to disable).
     if title in (False, None, ""):
@@ -2623,6 +2721,7 @@ def brainplot(
                 cmap, v_min, v_max,
                 symmetric_cmap, threshold, alpha, draw_cross,
                 colorbar=False, dim=dim, draw_brain=False, zoom=_sc_zoom,
+                fit_views=_sc_kind == "glass" and not _zoom_user_set,
                 black_bg=black_bg, **kwargs,
             )
             if colorbar:
@@ -2682,6 +2781,7 @@ def brainplot(
                 cmap, v_min, v_max,
                 symmetric_cmap, threshold, alpha, draw_cross,
                 colorbar=False, dim=dim, draw_brain=False, zoom=_sc_zoom,
+                fit_views=_sc_kind == "glass" and not _zoom_user_set,
                 black_bg=black_bg,
                 **kwargs,
             )
@@ -2762,7 +2862,8 @@ def brainplot(
     else:  # glass
         _title_y = 1.02
         _title_va = "bottom"
-    _title_kw = {"fontsize": "large", "fontweight": "bold"}
+    _title_kw = {"fontsize": "large" if title_fontsize is None else title_fontsize,
+                 "fontweight": "bold"}
     if black_bg:
         _title_kw["color"] = "white"
     if title_kwargs:

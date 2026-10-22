@@ -6,7 +6,7 @@ from matplotlib.legend_handler import HandlerTuple
 
 import logging
 lgr = logging.getLogger(__name__)
-from ..plotting import catplot, nullplot, nice_stats_labels, print_significance
+from ..plotting import catplot, nullplot, nice_stats_labels, nice_target_label, print_significance
 
 
 def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
@@ -14,7 +14,7 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
                       sort=False, sort_order=None,
                       annot_p=True, z_method="robust",
                       title=None, fig=None, ax=None, figsize=None,
-                      kwargs=None, null_kwargs=None, clean_labels=True):
+                      kwargs=None, null_kwargs=None, clean_labels=True, rho_is_z=False):
 
     # kwargs
     kwargs = {} if kwargs is None else kwargs
@@ -72,13 +72,16 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
                 X_labels = colocs_df.columns
                 
             # check if pet labels, if yes make nice string
-            if all([s in X_labels[0] for s in ["target-", "tracer-", "pub-"]]):
+            # str(): labels may be non-strings (e.g. integer positions of an unnamed X index)
+            if all([s in str(X_labels[0]) for s in ["target-", "tracer-", "pub-"]]):
                 tmp = []
                 for l in X_labels:
                     l_split = l.split("_")
-                    tmp.append(f"{l_split[0].split('-')[1]} ({l_split[4].split('-')[1].capitalize()}, "
+                    tmp.append(f"{nice_target_label(l_split[0].split('-')[1])} ({l_split[4].split('-')[1].capitalize()}, "
                                f"n = {l_split[2].split('-')[1]})")
                 X_labels = tmp
+            else:  # plain labels that are target names (e.g. "5HT2a") get the display form too
+                X_labels = [nice_target_label(l) if isinstance(l, str) else l for l in X_labels]
             # check if brainmap labels, if yes make nice string
             # if all([s in X_labels[0] for s in ["domain-", "n-"]]):
             #     tmp = []
@@ -135,6 +138,8 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
         legend_title = stat_label
     else:
         stat_label = nice_stats_labels(stat)
+        if stat == "rho" and rho_is_z:   # stored on the Fisher-z scale (colocalize(r_to_z=True))
+            stat_label = f"$z$({stat_label})"
         legend_title = stat_label
     if title in ["", None, False]:
         title = None
@@ -195,8 +200,11 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
     # create figure/ax
     if not (ax or fig):
         if not figsize:
+            # ~0.24 in per X category on top of a small base: few categories (e.g. 3 components)
+            # stay flat instead of tall relative to the width; with 1-2 categories the legend may
+            # be taller than the plot (fine)
             n_elements = colocs_df.shape[1]
-            figsize=(1.5 + 0.2 * n_elements, 5)
+            figsize = (1.0 + 0.24 * n_elements, 5)
             if catplot_kwargs["categorical_axis"] != "x":
                 figsize = np.flip(figsize)
         fig, ax = plt.subplots(1, figsize=figsize)
@@ -283,7 +291,7 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
                         norms = np.max(np.abs(pts), axis=1)
                         leg_kwargs["bbox_to_anchor"] = tuple(pts[norms.argmax()])
                     except Exception:
-                        leg_kwargs["bbox_to_anchor"] = (1.0, 0.5)
+                        leg_kwargs["bbox_to_anchor"] = (1.03, 0.5)
                 new_leg = ax.legend(_ref_handles, _ref_labels, **leg_kwargs)
                 new_leg.get_children()[0].get_children()[:0] = old_boxes
             else:
@@ -328,7 +336,7 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
                             norms = np.max(np.abs(pts), axis=1)
                             leg_kwargs["bbox_to_anchor"] = tuple(pts[norms.argmax()])
                         except Exception:
-                            leg_kwargs["bbox_to_anchor"] = (1.0, 0.5)
+                            leg_kwargs["bbox_to_anchor"] = (1.03, 0.5)
                     new_leg = ax.legend(_sig_handles, _sig_labels, **leg_kwargs)
                     new_leg.get_children()[0].get_children()[:0] = old_boxes
                 else:
@@ -354,7 +362,7 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
                     norms = np.max(np.abs(pts), axis=1)
                     leg_kwargs["bbox_to_anchor"] = tuple(pts[norms.argmax()])
                 except Exception:
-                    leg_kwargs["bbox_to_anchor"] = (1.0, 0.5)
+                    leg_kwargs["bbox_to_anchor"] = (1.03, 0.5)
             new_leg = ax.legend([(_dot_proxy, _eb_proxy)], ["Observed mean\n(95% CI)"], **leg_kwargs)
             new_leg.get_children()[0].get_children().extend(old_boxes)
         else:
@@ -363,3 +371,102 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
 
     return fig, ax, plot
 
+
+
+# CORRELATION (SCATTER) PLOT =======================================================================
+
+_COMPARTMENT_COLORS = {"Cortex": "#4C72B0", "Subcortex": "#DD8452"}
+
+
+def _clean_map_label(label):
+    """Readable map label: 'target-D23_tracer-flb457_n-55_..._pub-sandiego2015' -> 'D23
+    (Sandiego2015, n = 55)' (same convention as the categorical plot); else the label itself."""
+    lab = str(label[-1] if isinstance(label, tuple) else label)
+    if all(s in lab for s in ["target-", "tracer-", "pub-"]):
+        parts = dict(p.split("-", 1) for p in lab.split("_") if "-" in p)
+        return (f"{nice_target_label(parts['target'])} ({parts['pub'].capitalize()}, "
+                f"n = {parts.get('n', '?')})")
+    return nice_target_label(lab)
+
+
+def _format_p(p):
+    return f"{p:.0e}".replace("e-0", "e-") if p < 0.001 else f"{p:.3f}"
+
+
+def _plot_correlation(x_vals, y_vals, x_labels, y_label, r_values, stat_label,
+                      p_values=None, groups=None, x_axis_label=None,
+                      y_axis_label=None, title=None, fig=None, ax=None, figsize=None,
+                      ncols=None, line=True, kwargs=None):
+    """Parcel-wise scatter of one Y row against one or more X maps (one panel per X map).
+
+    x_vals : (n_x, n_parcels) array; y_vals : (n_parcels,) or (n_x, n_parcels) array (partial
+    residuals differ per X map). NaN parcels are dropped per panel. r_values: one value per X map;
+    p_values: list of (label, values per X map), one annotation line each (NaN skipped). groups : (n_parcels,) labels used for point colours
+    ("Cortex"/"Subcortex" use the compartment colours). Returns (fig, axes).
+    """
+    kwargs = {} if kwargs is None else dict(kwargs)
+    scatter_kws = dict(s=12, alpha=0.5, linewidths=0)
+    scatter_kws.update(kwargs.pop("scatter_kws", {}))
+    line_kws = dict(color="black", lw=1.2)
+    line_kws.update(kwargs.pop("line_kws", {}))
+
+    x_vals = np.atleast_2d(np.asarray(x_vals, dtype=float))
+    y_vals = np.asarray(y_vals, dtype=float)
+    if y_vals.ndim == 1:
+        y_vals = np.tile(y_vals, (x_vals.shape[0], 1))
+    n = x_vals.shape[0]
+
+    if ax is not None:
+        axes = np.atleast_1d(ax).ravel()
+        if len(axes) < n:
+            lgr.critical_raise(f"Got {len(axes)} axes for {n} X maps.", ValueError)
+        fig = fig if fig is not None else axes[0].figure
+    else:
+        ncols = ncols or min(n, 4)
+        nrows = int(np.ceil(n / ncols))
+        if figsize is None:
+            figsize = (2.6 * ncols, 2.5 * nrows)   # compact: text and markers read larger
+        fig, axes = plt.subplots(nrows, ncols, figsize=figsize, squeeze=False,
+                                 sharey=kwargs.pop("sharey", True), constrained_layout=True)
+        axes = axes.ravel()
+        for a in axes[n:]:
+            a.axis("off")
+
+    groups = None if groups is None else np.asarray(groups)
+    for i in range(n):
+        a = axes[i]
+        xv, yv = x_vals[i], y_vals[i]
+        keep = np.isfinite(xv) & np.isfinite(yv)
+        if groups is not None:
+            for g in pd.unique(groups[keep]):
+                sel = keep & (groups == g)
+                a.scatter(xv[sel], yv[sel], color=_COMPARTMENT_COLORS.get(g), label=str(g),
+                          **scatter_kws)
+        else:
+            a.scatter(xv[keep], yv[keep], color="#4C72B0", **scatter_kws)
+        if line and keep.sum() > 2:
+            b1, b0 = np.polyfit(xv[keep], yv[keep], 1)
+            xs = np.array([xv[keep].min(), xv[keep].max()])
+            a.plot(xs, b0 + b1 * xs, **line_kws)
+        txt = f"{stat_label} = {r_values[i]:.2f}"
+        for p_lab, p_val in (p_values or []):
+            if np.isfinite(p_val[i]):
+                txt += f"\n{p_lab} = {_format_p(p_val[i])}"
+        # annotation in the corner the regression line leaves free
+        right = r_values[i] < 0
+        a.text(0.97 if right else 0.03, 0.97, txt, transform=a.transAxes, va="top",
+               ha="right" if right else "left", fontsize=9,
+               bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="none", alpha=0.8))
+        # "MOR (Kantonen2020, n = 204)" -> two lines: compact panels would let labels collide
+        a.set_xlabel(x_axis_label or str(x_labels[i]).replace(" (", "\n(", 1))
+        if n > 1 and x_axis_label:
+            a.set_title(x_labels[i], fontsize=10)
+        if i % (len(axes) if ax is not None else (ncols or 1)) == 0 or ax is not None:
+            a.set_ylabel(y_axis_label or y_label)
+        a.spines[["top", "right"]].set_visible(False)
+    if groups is not None:  # outside the last panel: points fill the whole data area
+        axes[n - 1].legend(frameon=False, fontsize=8, loc="center left", bbox_to_anchor=(1.0, 0.5),
+                           handletextpad=0.2, markerscale=1.3)
+    if title:
+        fig.suptitle(title)
+    return fig, axes[:n]
