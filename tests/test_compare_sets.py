@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from scipy.stats import hypergeom, rankdata
+from statsmodels.stats.multitest import multipletests
 
 from nispace import NiSpace
 import nispace.diagnostics as diagnostics
@@ -147,6 +148,20 @@ def test_random_sets_not_significant(data, rng):
     assert res.r_null_lo.iloc[0] < res.r.iloc[0] < res.r_null_hi.iloc[0]
 
 
+def test_mc_correction_across_pairs(data):
+    """Each p column is corrected across pairs on its own; mc_method=None adds no columns."""
+    X, bg, _ = data
+    res = diagnostics.compare_sets(X, bg, n_perm=50, mc_method="holm", seed=0, verbose=False)
+    p_cols = ["p_overlap", "p_r", "p_r_resid"]
+    for p_col in p_cols:
+        np.testing.assert_allclose(res[f"{p_col}_corr"],
+                                   multipletests(res[p_col], method="holm")[1])
+        assert list(res.columns).index(f"{p_col}_corr") == list(res.columns).index(p_col) + 1
+    res_none = diagnostics.compare_sets(X, bg, n_perm=50, mc_method=None, seed=0, verbose=False)
+    assert not any(c.endswith("_corr") for c in res_none.columns)
+    pd.testing.assert_frame_equal(res_none, res.drop(columns=[f"{c}_corr" for c in p_cols]))
+
+
 def test_nispace_input_matches_dataframe(data):
     X, bg, _ = data
     y = pd.DataFrame(np.ones((1, N_PARCELS)) + np.arange(N_PARCELS), index=["y"],
@@ -167,7 +182,7 @@ def test_pairs_subset(data):
 
 
 @pytest.mark.parametrize("case", ["no_set_level", "background_type", "missing_parcels",
-                                  "unknown_pair", "null", "too_large"])
+                                  "unknown_pair", "null", "too_large", "mc_method"])
 def test_errors(data, case):
     X, bg, _ = data
     kwargs = dict(n_perm=10, verbose=False)
@@ -184,5 +199,7 @@ def test_errors(data, case):
     elif case == "too_large":
         bg = bg.iloc[:40]
         kwargs["null"] = "disjoint"
+    elif case == "mc_method":
+        kwargs["mc_method"] = "fdr_xyz"
     with pytest.raises((ValueError, TypeError)):
         diagnostics.compare_sets(X, bg, **kwargs)

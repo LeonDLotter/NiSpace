@@ -47,8 +47,8 @@ from .core.region_contribution import (_get_region_contribution_fun, _sort_regio
                                        _CONTRIBUTION_METHODS)
 from .stats.coloc import rank2d
 from .stats.effectsize import rzscore_nan, zscore_nan
-from .stats.misc import (maxT_correction, step_maxT_correction, rho_to_z, z_to_rho, zscore_df,
-                         null_to_p)
+from .stats.misc import (maxT_correction, step_maxT_correction, mc_correction, rho_to_z,
+                         z_to_rho, zscore_df, null_to_p)
 from .utils.utils import set_log, _quiet, print_arg_pairs
 
 
@@ -1349,8 +1349,8 @@ def _compare_sets_pair_null(bg, w_a, w_b, n_shared, n_perm, ref_unit, seed):
 
 def compare_sets(X, background, pairs=None, null="overlap", n_perm=1000,
                  weighted=None, standardize=None, rank=False, remove_background_mean=True,
-                 p_tails="upper", z_method="robust", return_nulls=False, n_proc=None, seed=None,
-                 verbose=None):
+                 p_tails="upper", mc_method="fdr_bh", z_method="robust", return_nulls=False,
+                 n_proc=None, seed=None, verbose=None):
     """
     Compare X sets with each other: how many maps (genes) they share, and how similar
     their set-mean maps are compared to random sets of the same sizes.
@@ -1412,7 +1412,15 @@ def compare_sets(X, background, pairs=None, null="overlap", n_perm=1000,
         of all background maps.
     p_tails : {"upper", "two", "lower"}, default "upper"
         Tail for the map-similarity p-values. ``"upper"``: are the sets more similar
-        than random sets?
+        than random sets? A non-significant p does not show that two sets differ; use ``r``
+        against its null range and ``z_r`` for that.
+    mc_method : str or None, default "fdr_bh"
+        Multiple-comparison correction of all p-values across pairs, any
+        ``statsmodels.stats.multitest.multipletests`` method (e.g. ``"fdr_bh"``, ``"holm"``,
+        ``"fdr_by"``). Each p column is corrected separately. Pairs that share a set are
+        dependent; ``"fdr_bh"`` assumes positive dependence, ``"holm"`` and ``"fdr_by"``
+        hold under any dependence. The smallest possible p is ``1 / (n_perm + 1)``, so
+        increase ``n_perm`` for many pairs. ``None``: no correction.
     z_method : {"robust", "standard"}, default "robust"
         How to z-score the observed r against its null, as in
         :meth:`NiSpace.normalize_colocalizations`: ``"robust"`` (median/MAD) or
@@ -1434,16 +1442,16 @@ def compare_sets(X, background, pairs=None, null="overlap", n_perm=1000,
         - ``n_a``, ``n_b``, ``n_shared``: set sizes and number of shared maps;
         - ``jaccard``: ``n_shared / |A ∪ B|``; ``overlap_coef``: ``n_shared / min(n_a, n_b)``;
         - ``p_overlap``: hypergeometric p for at least ``n_shared`` shared maps, given the
-          background (plus any set maps missing from it) as universe;
+          background (plus any set maps missing from it) as universe; ``p_overlap_corr``:
+          corrected across pairs (only if ``mc_method`` is set);
         - ``r``: Pearson r between the two set-mean maps; ``r_null_median``,
           ``r_null_lo``, ``r_null_hi``: median and 2.5/97.5 percentiles of the
-          random-pair null; ``p_r``: permutation p-value; ``z_r``: r z-scored against
-          the null (see ``z_method``);
+          random-pair null; ``p_r``: permutation p-value; ``p_r_corr``: ``p_r`` corrected
+          across pairs (only if ``mc_method`` is set); ``z_r``: r z-scored against the null
+          (see ``z_method``);
         - ``r_resid``, ``r_resid_null_median``, ``r_resid_null_lo``, ``r_resid_null_hi``,
-          ``p_r_resid``, ``z_r_resid``: the same after removing the background mean map
-          (only if ``remove_background_mean=True``).
-
-        p-values are not corrected for multiple comparisons.
+          ``p_r_resid``, ``p_r_resid_corr``, ``z_r_resid``: the same after removing the
+          background mean map (only if ``remove_background_mean=True``).
     dict, optional
         Only if ``return_nulls=True``: ``{(set_a, set_b): {"r": array, "r_resid": array}}``.
     """
@@ -1482,6 +1490,12 @@ def compare_sets(X, background, pairs=None, null="overlap", n_perm=1000,
                            f"{type(background)}!", TypeError)
     if null not in ("overlap", "disjoint"):
         lgr.critical_raise(f"'null' must be 'overlap' or 'disjoint', not '{null}'!", ValueError)
+    if mc_method is not None:
+        try:
+            mc_correction(np.array([0.5]), method=mc_method)
+        except ValueError:
+            lgr.critical_raise(f"mc_method='{mc_method}' is not a statsmodels multipletests "
+                               "method!", ValueError)
     if weighted is None:
         weighted = "weight" in X.index.names
     elif weighted and "weight" not in X.index.names:
@@ -1621,9 +1635,14 @@ def compare_sets(X, background, pairs=None, null="overlap", n_perm=1000,
         cols += ["r_resid", "r_resid_null_median", "r_resid_null_lo", "r_resid_null_hi",
                  "p_r_resid", "z_r_resid"]
     out = pd.DataFrame(rows).set_index(["set_a", "set_b"])[cols]
+    # corrected p next to each raw p, across pairs and separately per column
+    if mc_method is not None:
+        for p_col in [c for c in ("p_overlap", "p_r", "p_r_resid") if c in out.columns]:
+            out.insert(out.columns.get_loc(p_col) + 1, f"{p_col}_corr",
+                       mc_correction(out[p_col].to_numpy(), method=mc_method)[0])
 
     lgr.info(f"Returning compare_sets results: \n"
-             f"{print_arg_pairs(n_pairs=len(pairs), null=null, n_perm=n_perm, weighted=weighted, standardize=standardize, rank=rank, remove_background_mean=remove_background_mean, n_background=n_bg)}")
+             f"{print_arg_pairs(n_pairs=len(pairs), null=null, n_perm=n_perm, mc_method=mc_method, weighted=weighted, standardize=standardize, rank=rank, remove_background_mean=remove_background_mean, n_background=n_bg)}")
 
     if return_nulls:
         return out, {p: {"r": r_null, "r_resid": r_resid_null}
