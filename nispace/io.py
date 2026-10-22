@@ -149,6 +149,7 @@ def parcellate_data(data,
     """
     verbose = set_log(lgr, verbose)
 
+    # TODO (first non-dev release): remove ignore_background_data and drop_background_parcels
     # deprecation shims -- both legacy params are forwarded through to
     # Parcellater.transform() as-is (it's the single source of truth for
     # old-vs-new precedence); only drop_background_parcels needs resolving

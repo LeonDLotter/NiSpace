@@ -270,6 +270,7 @@ class Parcellater():
         self._parc_idc_bg = []
         self._parc_idc_excl = []
         
+        # TODO (first non-dev release): remove the legacy ignore_background_data path
         # resolve background_value (+ deprecated ignore_background_data) into
         # (is_disabled, bg_spec) -- see _DEPR_IGNORE_BACKGROUND_DATA for the
         # legacy path, which replicates the old two-independent-parameter

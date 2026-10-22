@@ -429,6 +429,7 @@ def _info_block(ds, data, n_maps):
     meta = data.get("metadata", {})
     cortex_only = data.get("cortex_only", None)
     default_coll = data.get("default_collection", "")
+    default_set_coll = data.get("default_set_collection", "")
     citations = data.get("citations", [])
 
     items = []
@@ -451,12 +452,16 @@ def _info_block(ds, data, n_maps):
     if colls:
         coll_parts = []
         for n, e in colls.items():
-            inner = f"<strong>{n}</strong>" if n == default_coll else n
+            inner = (f"<strong>{n}</strong>" if n == default_coll else
+                     f"<em>{n}</em>" if n == default_set_coll else n)
             if e.get("host") == "github-nispace":
                 coll_parts.append(f'<a href="{_gh_blob(e["remote"])}">{inner}</a>')
             else:
                 coll_parts.append(inner)
-        suffix = " (bold = default)" if default_coll else ""
+        suffix = ", ".join(
+            [t for t, on in (("bold = default", default_coll),
+                             ("italic = default for set enrichment", default_set_coll)) if on])
+        suffix = f" ({suffix})" if suffix else ""
         items.append("<strong>Collections:</strong> " + ", ".join(coll_parts) + suffix)
 
     if meta and meta.get("host") == "github-nispace":
@@ -505,7 +510,7 @@ def _gen_datasets(ref_lib):
     lines.append(".. code-block:: python")
     lines.append("")
     lines.append("   from nispace.datasets import fetch_reference")
-    lines.append("   pet = fetch_reference(\"pet\", collection=\"UniqueTracers\",")
+    lines.append("   pet = fetch_reference(\"pet\", collection=\"OnePerTarget\",")
     lines.append("                         parcellation=\"Schaefer200\")")
     lines.append("")
 
@@ -560,9 +565,10 @@ def _gen_datasets(ref_lib):
     lines.append("   .. code-block:: python")
     lines.append("")
     lines.append("      from nispace.datasets import fetch_reference, fetch_collection")
-    lines.append("      pet = fetch_reference(\"pet\", collection=\"UniqueTracers\",")
+    lines.append("      pet = fetch_reference(\"pet\", collection=\"OnePerTarget\",")
     lines.append("                            parcellation=\"Schaefer200\")")
-    lines.append("      colls = fetch_collection(\"UniqueTracers\", dataset=\"pet\")")
+    lines.append("      # overlapping sets, for set enrichment (XSEA) only")
+    lines.append("      colls = fetch_collection(\"OnePerTarget-Sets\", dataset=\"pet\")")
     lines.append("")
     lines.append("----")
     lines.append("")

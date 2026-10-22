@@ -95,9 +95,14 @@ def _workflow_base(x, y, z, x_collection, #x_load_nulls,
             if x in reference_lib:
                 lgr.info(f"Loading integrated {x} dataset as X data.")
                 if x_collection is None or not isinstance(x_collection, str):
+                    # set enrichment needs a set collection (sets may overlap); plain analyses a
+                    # flat one, where every map appears once
                     x_collection = reference_lib[x].get("default_collection")
+                    if xsea:
+                        x_collection = reference_lib[x].get("default_set_collection", x_collection)
                     if x_collection is not None:
-                        lgr.info(f"Using default collection '{x_collection}'.")
+                        lgr.info(f"Using default {'set ' if xsea else ''}collection "
+                                 f"'{x_collection}'.")
                 fetch_x_kwargs = dict(
                     dataset=x,
                     collection=x_collection,
@@ -190,7 +195,9 @@ def colocalization(y,
     z : array-like or None, default=None
         Optional confound data to regress out. Can be "gm", or input types as listed for y.
     x_collection : str or None, default=None
-        If x is a string reference dataset, specifies which collection to use.
+        If x is a string reference dataset, specifies which collection to use. Defaults to
+        the dataset's ``default_collection``, or its ``default_set_collection`` when set
+        enrichment (XSEA) is run.
     standardize : str, default="xz"
         Which data to standardize. Can contain "x", "y", and/or "z".
     space : str, default=_SPACE_DEFAULT_VOL ("MNI152NLin6Asym")
@@ -503,7 +510,9 @@ def group_colocalization(y, design,
     z : array-like or None, default=None
         Optional confound data to regress out. Can be "gm", or input types as listed for y.
     x_collection : str or None, default=None
-        If x is a string reference dataset, specifies which collection to use.
+        If x is a string reference dataset, specifies which collection to use. Defaults to
+        the dataset's ``default_collection``, or its ``default_set_collection`` when set
+        enrichment (XSEA) is run.
     standardize : str, default="xz"
         Which data to standardize. Can contain "x", "y", and/or "z".
     space : str, default=_SPACE_DEFAULT_VOL ("MNI152NLin6Asym")
@@ -1254,7 +1263,9 @@ def xsea(y,
     z : array-like or None, default=None
         Optional confound data to regress out. Can be "gm", or input types as listed for y.
     x_collection : str or None, default=None
-        If x is a string reference dataset, specifies which collection to use.
+        If x is a string reference dataset, specifies which collection to use. Defaults to
+        the dataset's ``default_collection``, or its ``default_set_collection`` when set
+        enrichment (XSEA) is run.
     x_background : array-like or None, default=None
         Pool of "background" X maps used as the null when ``permute_sets=True``
         (X-set-membership permutation). If ``None`` and ``x`` is a reference dataset
@@ -1510,7 +1521,9 @@ def group_xsea(y, design,
     z : array-like or None, default=None
         Optional confound data to regress out. Can be "gm", or input types as listed for y.
     x_collection : str or None, default=None
-        If x is a string reference dataset, specifies which collection to use.
+        If x is a string reference dataset, specifies which collection to use. Defaults to
+        the dataset's ``default_collection``, or its ``default_set_collection`` when set
+        enrichment (XSEA) is run.
     standardize : str, default="xz"
         Which data to standardize. Can contain "x", "y", and/or "z".
     space : str, default=_SPACE_DEFAULT_VOL ("MNI152NLin6Asym")

@@ -613,6 +613,7 @@ def fetch_parcellation(parcellation: str = _PARC_DEFAULT,
         return parc_obj
 
     # ---- LEGACY PATH: space explicitly given and return_parcellation_only=False ----
+    # TODO (first non-dev release): remove this array-return path (see signature TODO)
     lgr.warning(_DEPR_FETCH_PARC_LEGACY)
     # run load_parc for a single parcellation
     if isinstance(parc, str):
@@ -874,8 +875,32 @@ def _filter_maps(maps_avail: List[str],
     return filtered_maps
 
 
+def _sets_from_entity(maps: List[str], entity: str) -> pd.DataFrame:
+    """
+    Build a ``["set", "map"]`` collection from a BIDS-style entity in the map IDs, e.g.
+    ``entity="target"``: ``"target-D23_tracer-flb457_n-55_..."`` -> set ``"D23"``.
+    """
+    entity = entity.lower()
+    sets, missing = [], []
+    for m in maps:
+        entities = {k.lower(): v for k, v in
+                    (tok.split("-", 1) for tok in str(m).split("_") if "-" in tok)}
+        if entity in entities:
+            sets.append(entities[entity])
+        else:
+            missing.append(m)
+    if missing:
+        entities_avail = [tok.split("-", 1)[0] for tok in str(missing[0]).split("_") if "-" in tok]
+        lgr.critical_raise(f"set_by='{entity}': entity not found in {len(missing)} map ID(s), "
+                           f"e.g. '{missing[0]}'. Entities in that ID: {entities_avail}",
+                           ValueError)
+    return (pd.DataFrame({"set": sets, "map": list(maps)})
+            .sort_values("set", kind="stable")
+            .reset_index(drop=True))
+
+
 def _load_collection(collection_path):
-    
+
     # if path, read file
     if isinstance(collection_path, (str,Path)):
         collection_path =Path(collection_path)
@@ -1208,6 +1233,7 @@ def fetch_reference(dataset: str,
                     space: str = None,
                     collection: str = None,
                     sets: Union[None, str, List[str]] = None,
+                    set_by: Union[None, str] = None,
                     set_size_range: Union[None, Tuple[int, int]] = None,
                     weight_range: Union[None, Tuple[float, float]] = None,
                     weight_quantile: Union[None, float] = None,
@@ -1251,8 +1277,14 @@ def fetch_reference(dataset: str,
         Name of an integrated collection to filter/group maps by (see
         :func:`fetch_collection`); ``"All"`` is equivalent to not filtering.
     sets : str or list of str, optional
-        Restrict to specific named sets within `collection`. Requires `collection`
-        to define sets.
+        Restrict to specific named sets within `collection` (or within the groups
+        created by `set_by`). Requires `collection` to define sets, or `set_by`.
+    set_by : str, optional
+        Group maps into sets on the fly by a BIDS-style entity of the map IDs, e.g.
+        ``"target"`` or ``"tracer"`` for ``"target-D23_tracer-flb457_n-55_..."``.
+        Applied to the maps selected by `maps`/`collection`; sets already defined by
+        `collection` (and its weights) are replaced. `sets` and the set filters below
+        act on the resulting groups.
     set_size_range : tuple (int, int), optional
         Keep only collection sets whose membership count falls within this range.
         Forwarded to :func:`fetch_collection`.
@@ -1313,7 +1345,7 @@ def fetch_reference(dataset: str,
         map.
         If `parcellation` is given: a DataFrame of shape (n_maps, n_parcels),
         indexed by map name (or a ``["set", "map"]``/``["set", "map", "weight"]``
-        MultiIndex if `collection` groups maps into sets).
+        MultiIndex if `collection` or `set_by` groups maps into sets).
         If `return_metadata=True`: the above, plus the metadata DataFrame from
         :func:`fetch_map_info`, as a 2-tuple (or an n+1-tuple if the data itself
         was already a tuple of per-hemisphere paths).
@@ -1443,26 +1475,41 @@ def fetch_reference(dataset: str,
                 ValueError
             )
     
-    # Filter by 'collection'
+    # Filter by 'collection' and/or group by a map-ID entity
     if collection == "All":
         collection = None
+    set_filter_kwargs = dict(
+        set_size_range=set_size_range,
+        weight_range=weight_range,
+        weight_quantile=weight_quantile,
+        set_top_n=set_top_n,
+        set_specificity=set_specificity,
+    )
     if collection:
         collection_df, maps_avail = fetch_collection(
             collection,
-            dataset, 
-            maps_avail, 
+            dataset,
+            maps_avail,
             return_maps=True,
-            set_size_range=set_size_range,
-            weight_range=weight_range,
-            weight_quantile=weight_quantile,
-            set_top_n=set_top_n,
-            set_specificity=set_specificity,
-            overwrite=overwrite, 
+            **(set_filter_kwargs if not set_by else {}),
+            overwrite=overwrite,
             check_file_hash=check_file_hash,
-            verbose=verbose            
+            verbose=verbose
         )
+        if set_by and "set" in collection_df.columns:
+            lgr.info(f"set_by='{set_by}': using collection '{collection}' only as map "
+                     "selection; its sets (and weights) are replaced.")
     else:
         collection_df = None
+    if set_by:
+        lgr.info(f"Building sets from the '{set_by}' entity of {len(maps_avail)} maps.")
+        collection_df, maps_avail = fetch_collection(
+            _sets_from_entity(maps_avail, set_by),
+            maps=maps_avail,
+            return_maps=True,
+            **set_filter_kwargs,
+            verbose=verbose
+        )
 
     # Filter by 'sets'
     if sets is not None:

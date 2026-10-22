@@ -58,6 +58,37 @@ def test_fetch_collection_all_returns_map_table():
     assert coll.shape[0] > 0
 
 
+def test_fetch_reference_set_by_entity():
+    """set_by groups the selected maps by a map-ID entity; sets= and set filters act
+    on the new groups; a collection's own sets/weights are replaced."""
+    df = fetch_reference("pet", set_by="target", parcellation="Yan100",
+                         print_references=False, verbose=False)
+    assert df.index.names == ["set", "map"]
+    for s, m in df.index:
+        assert m.startswith(f"target-{s}_")
+    assert not df.index.get_level_values("map").duplicated().any()
+
+    d23 = fetch_reference("pet", set_by="target", sets="D23", parcellation="Yan100",
+                          print_references=False, verbose=False)
+    assert len(d23) > 1 and set(d23.index.get_level_values("set")) == {"D23"}
+
+    multi = fetch_reference("pet", set_by="target", set_size_range=(2, None),
+                            parcellation="Yan100", print_references=False, verbose=False)
+    assert multi.index.get_level_values("set").value_counts().min() >= 2
+
+    coll = fetch_reference("pet", collection="UniqueTracerSets", set_by="tracer",
+                           parcellation="Yan100", print_references=False, verbose=False)
+    assert coll.index.names == ["set", "map"]
+    for s, m in coll.index:
+        assert f"_tracer-{s}_" in m
+
+
+def test_fetch_reference_set_by_missing_entity_raises():
+    with pytest.raises(ValueError):
+        fetch_reference("rsn", set_by="target", parcellation="Yan100",
+                        print_references=False, verbose=False)
+
+
 def test_fetch_reference_accepts_combined_parcellation_object(monkeypatch):
     """A combined Parcellation object is resolved via its (cx, sc) name tuple: same table
     as the "+"-string name, and no deprecated-naming warning (the parts used to be

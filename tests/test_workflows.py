@@ -748,3 +748,41 @@ def test_xsea_workflows_drop_single_map_sets(monkeypatch, workflow, kwargs):
 def test_xsea_set_size_range_overridable(monkeypatch):
     seen = _fetch_x_kwargs_seen(monkeypatch, xsea, fetch_x_kwargs={"set_size_range": (5, None)})
     assert seen["set_size_range"] == (5, None)
+
+
+# ── default collection: flat for plain analyses, set collection for XSEA ──
+
+@pytest.fixture
+def _mock_pet_defaults(monkeypatch):
+    import nispace.workflows as wf_mod
+    monkeypatch.setitem(wf_mod.reference_lib["pet"], "default_collection", "FlatDefault")
+    monkeypatch.setitem(wf_mod.reference_lib["pet"], "default_set_collection", "SetDefault")
+    return wf_mod.reference_lib["pet"]
+
+
+@pytest.mark.parametrize("workflow,kwargs", [
+    (colocalization, {}),
+    (group_colocalization, {"design": [0]}),
+    (paired_colocalization, {}),
+])
+def test_plain_workflows_use_default_collection(monkeypatch, _mock_pet_defaults, workflow, kwargs):
+    assert _fetch_x_kwargs_seen(monkeypatch, workflow, **kwargs)["collection"] == "FlatDefault"
+
+
+@pytest.mark.parametrize("workflow,kwargs", [
+    (xsea, {}),
+    (group_xsea, {"design": [0]}),
+    (colocalization, {"colocalize_kwargs": {"xsea": True}}),
+])
+def test_xsea_workflows_use_default_set_collection(monkeypatch, _mock_pet_defaults, workflow,
+                                                   kwargs):
+    assert _fetch_x_kwargs_seen(monkeypatch, workflow, **kwargs)["collection"] == "SetDefault"
+
+
+def test_xsea_falls_back_to_default_collection(monkeypatch, _mock_pet_defaults):
+    monkeypatch.delitem(_mock_pet_defaults, "default_set_collection")
+    assert _fetch_x_kwargs_seen(monkeypatch, xsea)["collection"] == "FlatDefault"
+
+
+def test_explicit_x_collection_wins(monkeypatch, _mock_pet_defaults):
+    assert _fetch_x_kwargs_seen(monkeypatch, xsea, x_collection="Mine")["collection"] == "Mine"
