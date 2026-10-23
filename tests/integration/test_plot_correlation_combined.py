@@ -20,7 +20,8 @@ def test_combined_parcellation_coloured_by_compartment(rng):
                   parcellation="Schaefer100+TianS1", verbose=False).fit()
     nsp.colocalize("spearman")
     fig, axes = nsp.plot(kind="correlation", show=False)
-    labels = [t.get_text() for t in axes[0].get_legend().get_texts()]
+    (legend,) = fig.legends  # right of the figure
+    labels = [t.get_text() for t in legend.get_texts()]
     assert sorted(labels) == ["Cortex", "Subcortex"]
     n_sc = len(np.asarray(axes[0].collections[1].get_offsets()))
     assert n_sc == 16

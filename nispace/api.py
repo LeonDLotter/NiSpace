@@ -26,7 +26,8 @@ from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_
                                _null_maps_n_perm,
                                _resolve_maps_batch_size, _iter_null_map_batches)
 from .core.nullmaps import NullMaps, _NULLMAPS_WARN_BYTES
-from .core.plot import _plot_categorical, _plot_correlation, _clean_map_label
+from .core.plot import (_plot_categorical, _plot_correlation, _plot_correlation_lines,
+                        _clean_map_label, _LINE_LABEL_MAX_MAPS)
 from .core.constants import _COLOC_METHODS, _SPACE_DEFAULT_VOL, _COLOC_METHODS_UNIVARIATE
 from .datasets import fetch_parcellation, _check_parcellation
 from .nulls import get_distance_matrix, _SPIN_METHODS, _DISTMAT_FREE_METHODS, _parse_null_method
@@ -4455,7 +4456,8 @@ class NiSpace:
 
     def _plot_correlation(self, method, X_reduction, Y_transform, Y_maps, X_maps, permute_what,
                           mc_method, annot_p, title, fig, ax, figsize, show, plot_kwargs):
-        """plot(kind="correlation"): parcel-wise scatter of one Y row vs. selected X maps."""
+        """plot(kind="correlation"): parcel-wise scatter of one Y row vs. selected X maps, or one
+        regression line per Y row if several are selected."""
         from scipy.stats import rankdata
         plot_kwargs = {} if plot_kwargs is None else dict(plot_kwargs)
         self._check_fit()
@@ -4477,13 +4479,21 @@ class NiSpace:
             X = self.get_x(X_reduction=X_reduction)
             Y = self.get_y(Y_transform=Y_transform)
 
-        # one Y row, up to max_panels X maps
-        y_pos = _match_maps(Y.index, Y_maps) if Y_maps is not None else list(range(len(Y)))
-        if len(y_pos) != 1:
+        # one Y row (scatter) or several (one regression line each), up to max_panels X maps
+        if isinstance(Y_maps, str) and Y_maps.lower() == "all":
+            y_pos = list(range(len(Y)))
+        elif Y_maps is not None:
+            queries = [Y_maps] if isinstance(Y_maps, (str, int)) else list(Y_maps)
+            y_pos = list(dict.fromkeys(i for q in queries for i in _match_maps(Y.index, q)))
+        else:
+            y_pos = list(range(len(Y)))
+        if not y_pos or (Y_maps is None and len(y_pos) > 1):
             lgr.critical_raise(
-                f"plot(kind='correlation') plots one Y row; {len(y_pos)} match. Select one with "
-                f"Y_maps= (available: {[str(i) for i in Y.index[:10]]}"
+                f"plot(kind='correlation'): {len(y_pos)} Y rows match. Select one with Y_maps= "
+                f"for a scatter plot, or several (a list, or Y_maps='all') for one regression "
+                f"line per row (available: {[str(i) for i in Y.index[:10]]}"
                 f"{' ...' if len(Y) > 10 else ''}).", ValueError)
+        lines = len(y_pos) > 1
         if X_maps is None:
             x_pos = list(range(len(X)))
         else:  # panels in the order the maps were asked for
@@ -4498,7 +4508,7 @@ class NiSpace:
                 f"(max_panels={max_panels}). Select maps with X_maps=.", ValueError)
         y_row = Y.iloc[y_pos[0]]
         X_sel = X.iloc[x_pos]
-        y = np.asarray(y_row, dtype=float)
+        Y_arr = np.asarray(Y.iloc[y_pos], dtype=float)
         X_arr = np.asarray(X_sel, dtype=float)
 
         Z_arr = None
@@ -4519,26 +4529,48 @@ class NiSpace:
             out[keep] = v[keep] - D @ beta
             return out
 
+        # plotted values: the data as they are (default), ranks (`ranks`), or residuals (partial
+        # methods); `standardize` z-scores each row's plotted values, so a fitted line's slope is
+        # the correlation of what is shown
         ranks = bool(plot_kwargs.pop("ranks", False))
-        xs, ys, rs = [], [], []
-        for xv in X_arr:
-            keep = np.isfinite(xv) & np.isfinite(y)
+        standardize = bool(plot_kwargs.pop("standardize", False))
+
+        def _z(v, keep):
+            out = np.full(v.shape, np.nan)
+            sd = v[keep].std()
+            out[keep] = (v[keep] - v[keep].mean()) / (sd if sd > 0 else 1.0)
+            return out
+
+        def _pair(xv, yv):
+            keep = np.isfinite(xv) & np.isfinite(yv)
             if Z_arr is not None:
                 keep &= np.isfinite(Z_arr).all(axis=0)
-            xr, yr = (_rank(xv, keep), _rank(y, keep)) if spearman else (xv, y)
+            xr, yr = (_rank(xv, keep), _rank(yv, keep)) if spearman else (xv, yv)
             if partial:
                 Zr = np.vstack([_rank(z, keep) for z in Z_arr]) if spearman else Z_arr
                 xr, yr = _resid(xr, Zr, keep), _resid(yr, Zr, keep)
-            rs.append(np.corrcoef(xr[keep], yr[keep])[0, 1])
-            show_ranks = partial or (spearman and ranks)
-            xs.append(np.where(keep, xr if show_ranks else xv, np.nan))
-            ys.append(np.where(keep, yr if show_ranks else y, np.nan))
+            r = np.corrcoef(xr[keep], yr[keep])[0, 1]
+            if partial:
+                xd, yd = xr, yr
+            elif ranks:
+                xd, yd = (xr, yr) if spearman else (_rank(xv, keep), _rank(yv, keep))
+            else:
+                xd, yd = xv, yv
+            if standardize:
+                xd, yd = _z(xd, keep), _z(yd, keep)
+            return r, np.where(keep, xd, np.nan), np.where(keep, yd, np.nan)
+
+        # (n_x, n_y) correlations and (n_x, n_y, n_parcels) plotted values
+        pairs = [[_pair(xv, yv) for yv in Y_arr] for xv in X_arr]
+        rs = np.array([[p[0] for p in row] for row in pairs])
+        xs = np.array([[p[1] for p in row] for row in pairs])
+        ys = np.array([[p[2] for p in row] for row in pairs])
 
         # stored permutation p-values (corrected if a correction was run)
         # stored permutation p-values: uncorrected, plus the correction if one was run; labels as
         # in the categorical plot's legend (the mc_method string as given)
         p_annot = []
-        if annot_p and permute_what:
+        if annot_p and permute_what and not lines:
             mc = mc_method or self._last_settings.get("mc_method")
             if isinstance(mc, str) and mc.lower() in ("uncorrected", "none", "false"):
                 mc = None
@@ -4580,8 +4612,13 @@ class NiSpace:
             lgr.critical_raise(f"color_by must be 'compartment' or None, got {color_by!r}.",
                                ValueError)
 
-        what = "residual" if partial else ("rank" if spearman and ranks else None)
-        y_name = str(y_row.name[-1] if isinstance(y_row.name, tuple) else y_row.name)
+        what = "residual" if partial else ("rank" if ranks else None)
+        if standardize:
+            what = f"z-scored {what}" if what else "z-scored"
+        if lines:
+            y_name = "Y"
+        else:
+            y_name = str(y_row.name[-1] if isinstance(y_row.name, tuple) else y_row.name)
         if Y_transform:
             y_name = nice_stats_labels(Y_transform.split("(")[0])
         y_axis_label = f"{y_name}" + (f" ({what})" if what else "")
@@ -4591,9 +4628,61 @@ class NiSpace:
         stat_label = {"spearman": r"$\rho$", "pearson": "$r$",
                       "partialspearman": r"partial $\rho$", "partialpearson": "partial $r$"}[method]
 
+        if lines:
+            # line colours: groups= (one label per selected or per Y row), else the groups of
+            # transform_y(), matched by row label (raw Y with Y_transform=False, or subject-wise
+            # transforms keeping a subset of subjects, e.g. zscore(a,b) -> group a only)
+            y_groups = plot_kwargs.pop("groups", None)
+            # line labels: "maps" = own colour + legend entry per Y row (default for up to
+            # _LINE_LABEL_MAX_MAPS rows without explicit groups), "groups" = colour by group
+            line_labels = plot_kwargs.pop("line_labels", "auto")
+            if line_labels not in ("auto", "maps", "groups"):
+                lgr.critical_raise(f"line_labels must be 'auto', 'maps' or 'groups', got "
+                                   f"{line_labels!r}.", ValueError)
+            if line_labels == "auto":
+                line_labels = ("maps" if y_groups is None and len(y_pos) <= _LINE_LABEL_MAX_MAPS
+                               else "groups")
+            row_labels = None
+            if line_labels == "maps":
+                row_labels = [str(i[-1] if isinstance(i, tuple) else i) for i in Y.index[y_pos]]
+                y_groups = None
+            stored = getattr(self, "_groups", None)
+            if row_labels is not None:
+                pass
+            elif y_groups is None and stored is not None and len(stored) == len(self._Y):
+                lookup = pd.Series(np.asarray(stored, dtype=object), index=self._Y.index)
+                sel_idx = Y.index[y_pos]
+                if lookup.index.is_unique and sel_idx.isin(lookup.index).all():
+                    y_groups = lookup.loc[sel_idx].to_numpy()
+                elif len(Y) == len(self._Y):
+                    y_groups = lookup.to_numpy()[y_pos]
+            elif y_groups is not None:
+                y_groups = np.asarray(y_groups, dtype=object)
+                if len(y_groups) == len(Y) and len(Y) != len(y_pos):
+                    y_groups = y_groups[y_pos]
+                elif len(y_groups) != len(y_pos):
+                    lgr.critical_raise(
+                        f"groups has {len(y_groups)} labels; expected one per selected Y row "
+                        f"({len(y_pos)}) or per Y row ({len(Y)}).", ValueError)
+            if y_groups is not None:
+                y_groups = np.array(["n/a" if pd.isna(g) else g for g in y_groups], dtype=object)
+            plot_kwargs.pop("line", None)  # lines are the plot here
+            fig_axes = _plot_correlation_lines(
+                x_vals=xs, y_vals=ys, r_values=rs, x_labels=x_labels, stat_label=stat_label,
+                groups=y_groups, row_labels=row_labels,
+                x_axis_label=(f"X map ({what})" if what and len(x_pos) > 1 else
+                              (f"{x_labels[0]} ({what})" if what else None)),
+                y_axis_label=y_axis_label, title=title, fig=fig, ax=ax, figsize=figsize,
+                ncols=plot_kwargs.pop("ncols", None), points=plot_kwargs.pop("points", False),
+                mean_line=plot_kwargs.pop("mean_line", True), standardized=standardize,
+                kwargs=plot_kwargs)
+            if show:
+                plt.show()
+            return fig_axes
+
         fig_axes = _plot_correlation(
-            x_vals=np.vstack(xs), y_vals=np.vstack(ys), x_labels=x_labels, y_label=y_name,
-            r_values=np.array(rs), stat_label=stat_label, p_values=p_annot,
+            x_vals=xs[:, 0], y_vals=ys[:, 0], x_labels=x_labels, y_label=y_name,
+            r_values=rs[:, 0], stat_label=stat_label, p_values=p_annot,
             groups=groups, x_axis_label=(f"X map ({what})" if what and len(x_pos) > 1 else None),
             y_axis_label=y_axis_label, title=title, fig=fig, ax=ax, figsize=figsize,
             ncols=plot_kwargs.pop("ncols", None), line=plot_kwargs.pop("line", True),
@@ -4623,7 +4712,8 @@ class NiSpace:
         Plot a stored colocalization result as a categorical (per-X-map) plot,
         one figure per requested statistic, optionally overlaid with the null
         permutation distribution and significance annotation -- or, with
-        ``kind="correlation"``, as parcel-wise scatter plots of one Y row against X maps.
+        ``kind="correlation"``, as parcel-wise scatter plots of one Y row against X maps
+        (or one regression line per Y row for several rows).
 
         ``"brain"`` and ``"nullhist"`` are planned but not yet built (passing them raises
         ``NotImplementedError``). For brain-map visualization, use :meth:`plot_brain`.
@@ -4639,10 +4729,36 @@ class NiSpace:
             methods ``spearman``, ``pearson``, ``partialspearman``, ``partialpearson`` (default:
             the last of these used, else ``"spearman"``). Partial methods plot the residuals
             after regressing Z (ranked first for Spearman). Combined cortex+subcortex
-            parcellations colour points by compartment. ``plot_kwargs`` options: ``ranks``
-            (bool, default False: plot ranks for Spearman), ``color_by`` (``"compartment"`` or
-            None), ``max_panels`` (default 12), ``ncols``, ``line`` (default True),
-            ``scatter_kws``, ``line_kws``, ``sharey``.
+            parcellations colour points by compartment.
+
+            Selecting several Y rows (``Y_maps="all"`` or a list) draws one regression line
+            per row instead, with a mean line and the mean correlation (Fisher-z averaged) in
+            the corner; no p-values. Up to 20 rows, each line gets its own colour and its Y
+            map label in the legend (e.g. ENIGMA maps, or the subjects of ``zscore(a,b)``);
+            beyond that, or with ``groups``, lines are coloured by group with a mean line per
+            group. This shows how consistent an association is
+            across the maps that were colocalized one by one, typically the per-subject maps
+            of a group comparison: deviation maps of each subject from a reference group
+            (``zscore(a,b)``, ``rzscore(a,b)``, ``centile(a,b)``; one map per group-``a``
+            subject) or within-subject difference maps (``elemdiff(a,b)`` with
+            ``subjects``). Group colours come from :meth:`transform_y` (matched by row label)
+            or from labels passed as ``groups``. A group-level map (``cohen(a,b)``, ``hedges(a,b)``,
+            ``pairedcohen(a,b)``) is a single row: use the scatter plot.
+
+            By default, the data are plotted as they are (as fitted, transformed, or residualized
+            for partial methods), so offsets and scales stay visible, e.g. each subject's mean
+            deviation for ``zscore(a,b)``. ``plot_kwargs`` options: ``ranks`` (bool, default
+            False; plot ranks, for any non-partial method), ``standardize`` (bool, default
+            False; z-score each row's plotted values, so a line's slope is the correlation of
+            what is shown), ``color_by`` (``"compartment"`` or None; one Y row), ``max_panels``
+            (default 12), ``ncols``, ``line`` (default True; one Y row), ``scatter_kws``,
+            ``line_kws``, ``sharey``, ``box_aspect`` (height/width of each panel's plot box;
+            default 1, i.e. square; None: free). Several Y rows only: ``line_labels`` (``"auto"``;
+            ``"maps"``: one colour and legend entry per row; ``"groups"``), ``groups`` (labels
+            per selected or per Y row; default: the :meth:`transform_y` groups if they
+            match), ``points``
+            (default False), ``mean_line`` (default True), ``mean_line_kws``, ``palette``
+            (dict or list of colours).
         method, X_reduction, Y_transform, xsea : optional
             Identify which stored :meth:`colocalize` result to plot; see
             :meth:`colocalize`. Default to the last-used values. Ignored if

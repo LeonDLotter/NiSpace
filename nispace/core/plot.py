@@ -393,6 +393,71 @@ def _format_p(p):
     return f"{p:.0e}".replace("e-0", "e-") if p < 0.001 else f"{p:.3f}"
 
 
+# line spacing of wrapped (two-line) panel titles and x labels, e.g. "MOR\n(Kantonen2020, ...)"
+_LABEL_LINESPACING = 1.4
+
+
+def _suptitle(fig, title):
+    """Figure title with some distance to the panel titles below (constrained layout reserves
+    the space of the trailing empty line)."""
+    fig.suptitle(f"{title}\n", linespacing=0.9)
+
+
+def _correlation_panels(n, fig, ax, figsize, ncols, sharey, box_aspect=1, multiline=False):
+    """n panels: the given axes, or a new grid (unused cells hidden). `box_aspect`: height/width
+    of each panel's plot box (default 1: square; None: free). `multiline`: panel labels wrap to
+    two lines -> more height per row. Returns (fig, axes, ncols)."""
+    if ax is not None:
+        axes = np.atleast_1d(ax).ravel()
+        if len(axes) < n:
+            lgr.critical_raise(f"Got {len(axes)} axes for {n} X maps.", ValueError)
+        if box_aspect is not None:
+            for a in axes[:n]:
+                a.set_box_aspect(box_aspect)
+        return (fig if fig is not None else axes[0].figure), axes, None
+    ncols = ncols or min(n, 4)
+    nrows = int(np.ceil(n / ncols))
+    if figsize is None:
+        # compact: text and markers read larger; a wrapped label line adds height per row
+        if n == 1:  # a single panel reads too small at the grid cell size
+            figsize = (3.8, 3.65 if multiline else 3.25)
+        else:
+            figsize = (2.8 * ncols, (3.05 if multiline else 2.65) * nrows)
+    fig, axes = plt.subplots(nrows, ncols, figsize=figsize, squeeze=False,
+                             sharey=sharey, constrained_layout=True)
+    try:  # a bit more room between panels than the constrained-layout default (0.02)
+        fig.get_layout_engine().set(wspace=0.08, hspace=0.1)
+    except AttributeError:  # matplotlib < 3.6
+        pass
+    axes = axes.ravel()
+    for a in axes[n:]:
+        a.axis("off")
+    if box_aspect is not None:
+        for a in axes[:n]:
+            a.set_box_aspect(box_aspect)
+    return fig, axes, ncols
+
+
+def _panels_legend(fig, axes, n, own_grid, **kwargs):
+    """Legend of the last used panel, always on the right: outside the figure for an own grid
+    (so it doesn't widen a grid column), next to the last panel for axes passed by the caller."""
+    handles, labels = axes[n - 1].get_legend_handles_labels()
+    if not handles:
+        return
+    # borderpad: padding inside the (invisible) legend frame = distance to the panels, in font
+    # sizes (matplotlib default 0.4; borderaxespad would pull an "outside" legend inwards)
+    kw = dict(frameon=False, fontsize=8, handlelength=1.5, borderpad=1.6)
+    kw.update(kwargs)
+    if own_grid:
+        try:
+            fig.legend(handles, labels, loc="outside right center", **kw)
+        except ValueError:  # matplotlib < 3.7: no "outside" placement -> at the right edge
+            fig.legend(handles, labels, loc="center left", bbox_to_anchor=(1.0, 0.5),
+                       bbox_transform=fig.transFigure, **kw)
+        return
+    axes[n - 1].legend(handles, labels, loc="center left", bbox_to_anchor=(1.0, 0.5), **kw)
+
+
 def _plot_correlation(x_vals, y_vals, x_labels, y_label, r_values, stat_label,
                       p_values=None, groups=None, x_axis_label=None,
                       y_axis_label=None, title=None, fig=None, ax=None, figsize=None,
@@ -416,21 +481,9 @@ def _plot_correlation(x_vals, y_vals, x_labels, y_label, r_values, stat_label,
         y_vals = np.tile(y_vals, (x_vals.shape[0], 1))
     n = x_vals.shape[0]
 
-    if ax is not None:
-        axes = np.atleast_1d(ax).ravel()
-        if len(axes) < n:
-            lgr.critical_raise(f"Got {len(axes)} axes for {n} X maps.", ValueError)
-        fig = fig if fig is not None else axes[0].figure
-    else:
-        ncols = ncols or min(n, 4)
-        nrows = int(np.ceil(n / ncols))
-        if figsize is None:
-            figsize = (2.6 * ncols, 2.5 * nrows)   # compact: text and markers read larger
-        fig, axes = plt.subplots(nrows, ncols, figsize=figsize, squeeze=False,
-                                 sharey=kwargs.pop("sharey", True), constrained_layout=True)
-        axes = axes.ravel()
-        for a in axes[n:]:
-            a.axis("off")
+    fig, axes, ncols = _correlation_panels(n, fig, ax, figsize, ncols, kwargs.pop("sharey", True),
+                                           kwargs.pop("box_aspect", 1),
+                                           any(" (" in str(l) for l in x_labels))
 
     groups = None if groups is None else np.asarray(groups)
     for i in range(n):
@@ -458,15 +511,143 @@ def _plot_correlation(x_vals, y_vals, x_labels, y_label, r_values, stat_label,
                ha="right" if right else "left", fontsize=9,
                bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="none", alpha=0.8))
         # "MOR (Kantonen2020, n = 204)" -> two lines: compact panels would let labels collide
-        a.set_xlabel(x_axis_label or str(x_labels[i]).replace(" (", "\n(", 1))
-        if n > 1 and x_axis_label:
-            a.set_title(x_labels[i], fontsize=10)
+        a.set_xlabel(x_axis_label or str(x_labels[i]).replace(" (", "\n(", 1),
+                     linespacing=_LABEL_LINESPACING)
+        if n > 1 and x_axis_label:  # "MOR (Kantonen2020, n = 204)" -> two lines, as the x labels
+            a.set_title(str(x_labels[i]).replace(" (", "\n(", 1), fontsize=10,
+                        linespacing=_LABEL_LINESPACING)
         if i % (len(axes) if ax is not None else (ncols or 1)) == 0 or ax is not None:
             a.set_ylabel(y_axis_label or y_label)
         a.spines[["top", "right"]].set_visible(False)
-    if groups is not None:  # outside the last panel: points fill the whole data area
-        axes[n - 1].legend(frameon=False, fontsize=8, loc="center left", bbox_to_anchor=(1.0, 0.5),
-                           handletextpad=0.2, markerscale=1.3)
+    if groups is not None:  # outside the data area: points fill all of it
+        _panels_legend(fig, axes, n, ax is None, handletextpad=0.2, markerscale=1.3,
+                       handlelength=None)
     if title:
-        fig.suptitle(title)
+        _suptitle(fig, title)
+    return fig, axes[:n]
+
+
+def _fisher_mean(r):
+    """Mean of correlations on the Fisher-z scale (never average raw correlations)."""
+    r = np.clip(np.asarray(r, dtype=float), -0.999999, 0.999999)
+    return float(np.tanh(np.nanmean(np.arctanh(r))))
+
+
+# line mode: up to this many Y rows, each line gets its own colour and legend entry by default
+# (tab20: distinct colours up to 20)
+_LINE_LABEL_MAX_MAPS = 20
+
+
+def _row_colors(n, palette=None, labels=None):
+    """One colour per row: palette (list or dict by label), else tab10 / tab20 / viridis."""
+    if isinstance(palette, dict):
+        return [palette.get(l, palette.get(str(l))) for l in labels]
+    if palette is not None:
+        return [palette[i % len(palette)] for i in range(n)]
+    if n <= 10:
+        return [plt.get_cmap("tab10")(i) for i in range(n)]
+    if n <= 20:
+        return [plt.get_cmap("tab20")(i) for i in range(n)]
+    return [plt.get_cmap("viridis")(v) for v in np.linspace(0, 0.95, n)]
+
+
+def _plot_correlation_lines(x_vals, y_vals, r_values, x_labels, stat_label, groups=None,
+                            row_labels=None, x_axis_label=None, y_axis_label=None, title=None,
+                            fig=None, ax=None, figsize=None, ncols=None, points=False,
+                            mean_line=True, standardized=True, kwargs=None):
+    """One regression line per Y row against one or more X maps (one panel per X map).
+
+    x_vals, y_vals : (n_x, n_y, n_parcels) arrays of the plotted values (NaN parcels dropped
+    per line). r_values : (n_x, n_y) correlations of the colocalization method, summarized
+    (Fisher-z mean) in the corner annotation.
+
+    row_labels : (n_y,) labels -> one colour and legend entry per line, plus one overall mean
+    line (black, dashed). Else groups : (n_y,) labels colouring the lines, with a bold mean
+    line and mean correlation per group. Mean lines use the Fisher-z mean slope if
+    `standardized` (the slope is then a correlation), else the mean slope and intercept.
+    Returns (fig, axes).
+    """
+    kwargs = {} if kwargs is None else dict(kwargs)
+    by_row = row_labels is not None
+    line_kws = dict(lw=1.2, alpha=0.9) if by_row else dict(lw=0.8, alpha=0.35)
+    line_kws.update(kwargs.pop("line_kws", {}))
+    mean_kws = dict(lw=2.5, color="black", ls="--") if by_row else dict(lw=2.5)
+    mean_kws.update(kwargs.pop("mean_line_kws", {}))
+    scatter_kws = dict(s=4, alpha=0.15, linewidths=0)
+    scatter_kws.update(kwargs.pop("scatter_kws", {}))
+    palette = kwargs.pop("palette", None)
+
+    x_vals = np.asarray(x_vals, dtype=float)
+    y_vals = np.asarray(y_vals, dtype=float)
+    r_values = np.asarray(r_values, dtype=float)
+    n, n_y = x_vals.shape[:2]
+    if by_row:
+        # every row its own "group": its colour, its legend entry; one overall mean
+        row_labels = [str(l) for l in row_labels]
+        row_colors = _row_colors(n_y, palette, row_labels)
+        sets = [(None, np.arange(n_y))]
+    else:
+        if groups is None:
+            groups = np.full(n_y, None, dtype=object)
+        groups = np.asarray(groups, dtype=object)
+        labels = list(pd.unique(groups))
+        if palette is None:
+            colors = {g: ("#4C72B0" if g is None else f"C{i}") for i, g in enumerate(labels)}
+        elif isinstance(palette, dict):
+            colors = {g: palette.get(g, palette.get(str(g))) for g in labels}
+        else:
+            colors = {g: palette[i % len(palette)] for i, g in enumerate(labels)}
+        sets = [(g, np.flatnonzero(groups == g) if g is not None else np.arange(n_y))
+                for g in labels]
+
+    fig, axes, ncols = _correlation_panels(n, fig, ax, figsize, ncols, kwargs.pop("sharey", True),
+                                           kwargs.pop("box_aspect", 1),
+                                           any(" (" in str(l) for l in x_labels))
+    for i in range(n):
+        a = axes[i]
+        txt = []
+        for g, sel in sets:
+            slopes, icepts, x_lo, x_hi = [], [], [], []
+            for j in sel:
+                xv, yv = x_vals[i, j], y_vals[i, j]
+                keep = np.isfinite(xv) & np.isfinite(yv)
+                if keep.sum() < 3:
+                    continue
+                color = row_colors[j] if by_row else colors[g]
+                if points:
+                    a.scatter(xv[keep], yv[keep], color=color, **scatter_kws)
+                b1, b0 = np.polyfit(xv[keep], yv[keep], 1)
+                xs = np.array([xv[keep].min(), xv[keep].max()])
+                a.plot(xs, b0 + b1 * xs, color=color,
+                       label=(row_labels[j] if by_row and i == n - 1 else None), **line_kws)
+                slopes.append(b1); icepts.append(b0)
+                x_lo.append(xs[0]); x_hi.append(xs[1])
+            if mean_line and slopes:
+                b1 = _fisher_mean(slopes) if standardized else float(np.mean(slopes))
+                b0 = 0.0 if standardized else float(np.mean(icepts))
+                xs = np.array([min(x_lo), max(x_hi)])
+                if by_row:
+                    lab, kws = ("mean" if i == n - 1 else None), mean_kws
+                else:
+                    lab = None if g is None else f"{g} (n = {len(slopes)})"
+                    kws = dict(mean_kws, color=colors[g])
+                a.plot(xs, b0 + b1 * xs, label=lab, **kws)
+            name = "mean " if g is None else f"{g}: mean "
+            txt.append(f"{name}{stat_label} = {_fisher_mean(r_values[i, sel]):.2f}")
+        right = _fisher_mean(r_values[i]) < 0
+        a.text(0.97 if right else 0.03, 0.97, "\n".join(txt), transform=a.transAxes, va="top",
+               ha="right" if right else "left", fontsize=9,
+               bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="none", alpha=0.8))
+        a.set_xlabel(x_axis_label or str(x_labels[i]).replace(" (", "\n(", 1),
+                     linespacing=_LABEL_LINESPACING)
+        if n > 1 and x_axis_label:  # "MOR (Kantonen2020, n = 204)" -> two lines, as the x labels
+            a.set_title(str(x_labels[i]).replace(" (", "\n(", 1), fontsize=10,
+                        linespacing=_LABEL_LINESPACING)
+        if i % (len(axes) if ax is not None else (ncols or 1)) == 0 or ax is not None:
+            a.set_ylabel(y_axis_label or "Y")
+        a.spines[["top", "right"]].set_visible(False)
+    if by_row or (labels != [None] and mean_line):
+        _panels_legend(fig, axes, n, ax is None)
+    if title:
+        _suptitle(fig, title)
     return fig, axes[:n]
