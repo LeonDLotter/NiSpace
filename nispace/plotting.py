@@ -1545,10 +1545,18 @@ def _data_to_volume(data, ref_nii, labels_in_img, bg_value=np.nan):
     """
     parc_arr = ref_nii.get_fdata()
     stat_arr = np.full(parc_arr.shape, bg_value, dtype=np.float32)
-    for i, label in enumerate(labels_in_img):
-        if i < len(data):
-            val = float(data[i])
-            stat_arr[parc_arr == label] = bg_value if not np.isfinite(val) else val
+    n = min(len(labels_in_img), len(data))
+    if n == 0:
+        return new_img_like(ref_nii, stat_arr, copy_header=True)
+    labels = np.asarray(labels_in_img, dtype=np.float64)[:n]
+    vals = np.asarray(data, dtype=np.float64)[:n]
+    vals = np.where(np.isfinite(vals), vals, bg_value)
+    # one lookup pass over the volume instead of one full-volume comparison per label
+    order = np.argsort(labels, kind="stable")
+    labels_sorted = labels[order]
+    pos = np.clip(np.searchsorted(labels_sorted, parc_arr), 0, n - 1)
+    hit = labels_sorted[pos] == parc_arr
+    stat_arr[hit] = vals[order][pos[hit]]
     return new_img_like(ref_nii, stat_arr, copy_header=True)
 
 

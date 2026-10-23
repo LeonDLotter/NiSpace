@@ -464,12 +464,14 @@ def permute_groups(groups, strategy="shuffle", paired=False, subjects=None, n_pe
                 
             def perm_fun(i):
                 rng = np.random.default_rng(None if seed is None else seed + i)
-                groups_tmp = np.full(groups.shape, np.nan)
+                # position in group_labels per sample, -1 = not yet assigned (works for any
+                # label dtype, e.g. strings)
+                groups_tmp = np.full(groups.shape, -1)
                 group_idc_tmp = group_idc.copy()
-                for label, size in zip(group_labels, group_sizes):
+                for k, (label, size) in enumerate(zip(group_labels, group_sizes)):
                     if verbose=="debug" and i == 0:
                         print(f"Permuted group '{label}' of size {size}:")
-                    
+
                     for l, s in zip(group_labels, group_sizes):
                         idc = group_idc_tmp[l]
                         fraction = s / n
@@ -478,15 +480,15 @@ def permute_groups(groups, strategy="shuffle", paired=False, subjects=None, n_pe
                             print(f"{n_sample} samples ({n_sample / size * 100:.02f} %) from group '{l}'.")
                         idc_perm = rng.choice(idc, n_sample, replace=False)
                         group_idc_tmp[l] = idc[~np.isin(idc, idc_perm)]
-                        groups_tmp[idc_perm] = label
-                        
-                if np.isnan(groups_tmp).any():
-                    groups_tmp[np.isnan(groups_tmp)] = rng.permutation(group_labels)
+                        groups_tmp[idc_perm] = k
 
-                if np.isnan(groups_perm).any():
-                    raise ValueError("Problem with group assignment")
-                else:
-                    return groups_tmp.astype(groups.dtype)  
+                # samples left over by the floor-rounding: give each group its missing
+                # count, so group sizes are preserved (for 2 groups, at most one each)
+                unassigned = groups_tmp < 0
+                if unassigned.any():
+                    n_missing = group_sizes - np.bincount(groups_tmp[~unassigned], minlength=n_labels)
+                    groups_tmp[unassigned] = rng.permutation(np.repeat(np.arange(n_labels), n_missing))
+                return group_labels[groups_tmp]
         
         # shuffle: random permutation across the whole set
         elif "shuff" in strategy:
@@ -520,12 +522,13 @@ def permute_groups(groups, strategy="shuffle", paired=False, subjects=None, n_pe
             for ses in group_labels:
                 subs_by_session_idc.loc[unique_subjects, ses] = np.where((groups==ses) & np.isin(subjects, unique_subjects))[0]
             
-            session_combinations = list(permutations(group_labels))
+            # orderings of positions in group_labels (works for any label dtype, e.g. strings)
+            session_combinations = list(permutations(range(n_labels)))
             n_samples = np.floor(n_subjects / len(session_combinations)).astype(int)
-            
+
             def perm_fun(i):
                 rng = np.random.default_rng(None if seed is None else seed + i)
-                sessions_perm = np.full(n, np.nan)
+                sessions_perm = np.full(n, -1)
                 subs_tmp = unique_subjects.copy()
                 for session_labels_perm in session_combinations:
                     subs = rng.choice(subs_tmp, n_samples, replace=False)
@@ -533,12 +536,11 @@ def permute_groups(groups, strategy="shuffle", paired=False, subjects=None, n_pe
                     sessions_perm[subs_by_session_idc.loc[subs, :]] = session_labels_perm
 
                 if len(subs_tmp) > 0:
-                    sessions_perm[subs_by_session_idc.loc[subs_tmp, :]] = rng.permutation(group_labels) 
-            
-                if np.isnan(sessions_perm).any():
+                    sessions_perm[subs_by_session_idc.loc[subs_tmp, :]] = rng.permutation(n_labels)
+
+                if (sessions_perm < 0).any():
                     raise ValueError("Problem with group assignment")
-                else:
-                    return sessions_perm.astype(groups.dtype)   
+                return group_labels[sessions_perm]
                     
         
         # shuffle: random permutation within subjects

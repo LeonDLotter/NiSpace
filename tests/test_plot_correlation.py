@@ -1,4 +1,7 @@
-"""NiSpace.plot(kind="correlation"): parcel-wise scatter of one Y row vs. X maps."""
+"""NiSpace.plot(kind="correlation"): parcel-wise scatter of one Y row vs. X maps.
+
+Runs on the synthetic fake parcellation (conftest.py). The cortex/subcortex colouring test
+needs a real combined parcellation: tests/integration/test_plot_correlation_combined.py."""
 
 import re
 
@@ -9,11 +12,14 @@ import pytest
 
 from nispace import NiSpace
 
-N_DK = 68
+N_PARCELS = 24  # fake_parcellation
 
 
-def _nsp(x, y, parc="DesikanKilliany", z=None):
-    return NiSpace(x=x, y=y, z=z, parcellation=parc, verbose=False).fit()
+@pytest.fixture
+def _nsp(fake_parcellation):
+    def make(x, y, z=None):
+        return NiSpace(x=x, y=y, z=z, parcellation=fake_parcellation, verbose=False).fit()
+    return make
 
 
 def _panel_r(ax):
@@ -28,9 +34,9 @@ def _close_figs():
 
 
 @pytest.mark.parametrize("method", ["spearman", "pearson"])
-def test_annotated_r_matches_colocalize(rng, method):
-    x = pd.DataFrame(rng.normal(size=(3, N_DK)), index=["a", "b", "c"])
-    y = rng.normal(size=(1, N_DK))
+def test_annotated_r_matches_colocalize(rng, method, _nsp):
+    x = pd.DataFrame(rng.normal(size=(3, N_PARCELS)), index=["a", "b", "c"])
+    y = rng.normal(size=(1, N_PARCELS))
     nsp = _nsp(x, y)
     nsp.colocalize(method, r_to_z=False)
     expected = nsp.get_colocalizations(method).iloc[0]
@@ -40,10 +46,10 @@ def test_annotated_r_matches_colocalize(rng, method):
         assert _panel_r(ax) == pytest.approx(expected[lab], abs=0.006)
 
 
-def test_partial_plots_residuals_and_matches_partialspearman(rng):
-    x = pd.DataFrame(rng.normal(size=(2, N_DK)), index=["a", "b"])
-    y = rng.normal(size=(1, N_DK))
-    nsp = _nsp(x, y, z="gm")
+def test_partial_plots_residuals_and_matches_partialspearman(rng, _nsp):
+    x = pd.DataFrame(rng.normal(size=(2, N_PARCELS)), index=["a", "b"])
+    y = rng.normal(size=(1, N_PARCELS))
+    nsp = _nsp(x, y, z=rng.normal(size=(1, N_PARCELS)))
     nsp.colocalize("partialspearman", r_to_z=False)
     expected = nsp.get_colocalizations("partialspearman").iloc[0]
     fig, axes = nsp.plot(kind="correlation", show=False)
@@ -55,9 +61,9 @@ def test_partial_plots_residuals_and_matches_partialspearman(rng):
         assert abs(np.asarray(xy)[:, 0].mean()) < 1e-6
 
 
-def test_x_maps_order_and_single_y_required(rng):
-    x = pd.DataFrame(rng.normal(size=(3, N_DK)), index=["a", "b", "c"])
-    y = pd.DataFrame(rng.normal(size=(2, N_DK)), index=["y0", "y1"])
+def test_x_maps_order_and_single_y_required(rng, _nsp):
+    x = pd.DataFrame(rng.normal(size=(3, N_PARCELS)), index=["a", "b", "c"])
+    y = pd.DataFrame(rng.normal(size=(2, N_PARCELS)), index=["y0", "y1"])
     nsp = _nsp(x, y)
     nsp.colocalize("spearman")
     with pytest.raises(ValueError, match="one Y row"):
@@ -66,15 +72,15 @@ def test_x_maps_order_and_single_y_required(rng):
     assert [ax.get_xlabel() for ax in axes] == ["c", "a"]
 
 
-def test_non_pairwise_method_raises(rng):
-    nsp = _nsp(rng.normal(size=(3, N_DK)), rng.normal(size=(1, N_DK)))
+def test_non_pairwise_method_raises(rng, _nsp):
+    nsp = _nsp(rng.normal(size=(3, N_PARCELS)), rng.normal(size=(1, N_PARCELS)))
     with pytest.raises(ValueError, match="pairwise"):
         nsp.plot(kind="correlation", method="mlr", show=False)
 
 
-def test_p_value_annotated_after_permutation(rng):
-    x = pd.DataFrame(rng.normal(size=(2, N_DK)), index=["a", "b"])
-    nsp = _nsp(x, rng.normal(size=(1, N_DK)))
+def test_p_value_annotated_after_permutation(rng, _nsp):
+    x = pd.DataFrame(rng.normal(size=(2, N_PARCELS)), index=["a", "b"])
+    nsp = _nsp(x, rng.normal(size=(1, N_PARCELS)))
     nsp.colocalize("spearman")
     nsp.permute("maps", n_perm=50, seed=1)
     nsp.correct_p(mc_method="fdr_bh")
@@ -88,14 +94,3 @@ def test_p_value_annotated_after_permutation(rng):
         assert lines[2].startswith(r"$p_{\mathrm{fdr-bh}}$")
     fig, axes = nsp.plot(kind="correlation", mc_method="uncorrected", show=False)
     assert all(len(ax.texts[0].get_text().split("\n")) == 2 for ax in axes)
-
-
-def test_combined_parcellation_coloured_by_compartment(rng):
-    n = 116  # Schaefer100 + TianS1
-    nsp = _nsp(rng.normal(size=(1, n)), rng.normal(size=(1, n)), parc="Schaefer100+TianS1")
-    nsp.colocalize("spearman")
-    fig, axes = nsp.plot(kind="correlation", show=False)
-    labels = [t.get_text() for t in axes[0].get_legend().get_texts()]
-    assert sorted(labels) == ["Cortex", "Subcortex"]
-    n_sc = len(np.asarray(axes[0].collections[1].get_offsets()))
-    assert n_sc == 16

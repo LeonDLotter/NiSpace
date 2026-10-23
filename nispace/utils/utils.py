@@ -604,7 +604,7 @@ def get_background_value(img, border_size=2):
     return background
 
 
-@njit
+@njit(cache=True)
 def vect_to_vol_arr(vect, parc_arr, parc_idc, bg_value=0):
     """Broadcast a per-parcel value vector back into a full volume array.
 
@@ -642,9 +642,34 @@ def vect_to_vol_arr(vect, parc_arr, parc_idc, bg_value=0):
     parc_idc = parc_idc.astype(vect.dtype)
     if len(parc_idc) != len(vect):
         raise ValueError(f"vect ({vect.shape}) and parc_idc ({parc_idc.shape}) don't match.")
-    for i, idx in enumerate(parc_idc):
-        vect_arr_1d[parc_arr_1d==idx] = vect[i]
+    parcel_of = _parcel_index_per_voxel(parc_arr_1d, parc_idc)
+    for v in range(len(parc_arr_1d)):
+        if parcel_of[v] >= 0:
+            vect_arr_1d[v] = vect[parcel_of[v]]
     return vect_arr_1d.reshape(parc_arr.shape)
+
+
+@njit(cache=True, nogil=True)
+def _parcel_index_per_voxel(parc_arr_1d, parc_idc):
+    """Position in `parc_idc` of each voxel's label, or -1 if the label is not in `parc_idc`.
+
+    One binary search per voxel, so the kernels below make a single pass over the volume
+    instead of one full-volume comparison per parcel. For a label listed more than once
+    in `parc_idc`, the last position wins (as with per-label assignment in list order).
+    """
+    n = len(parc_idc)
+    out = np.full(len(parc_arr_1d), -1, dtype=np.int64)
+    if n == 0:
+        return out
+    order = np.argsort(parc_idc, kind="mergesort")
+    idc_sorted = parc_idc[order]
+    # side="right" - 1 lands on the last of equal labels (mergesort keeps list order)
+    pos = np.searchsorted(idc_sorted, parc_arr_1d, side="right") - 1
+    for v in range(len(parc_arr_1d)):
+        j = pos[v]
+        if j >= 0 and idc_sorted[j] == parc_arr_1d[v]:
+            out[v] = order[j]
+    return out
 
 def _resolve_bg_array(bg_spec, auto_value=np.nan):
     """Resolve a background_value spec to a sorted float64 array for vol_to_vect_arr.
@@ -677,25 +702,14 @@ def vol_to_vect_arr(vol_arr, parc_arr, parc_idc, bg_values):
         Values to exclude in addition to NaN. Pass an empty array for NaN-only
         exclusion (equivalent to nanmean).
     """
-    vol_arr2d = vol_arr.flatten()
-    parc_arr2d = parc_arr.flatten().astype(vol_arr.dtype)
-    parc_idc = parc_idc.astype(vol_arr.dtype)
-    vect = np.zeros(len(parc_idc), dtype=vol_arr.dtype)
-    for i, idx in enumerate(parc_idc):
-        in_parcel = parc_arr2d == idx
-        not_nan = ~np.isnan(vol_arr2d)
-        idc = in_parcel & not_nan
-        for bg in bg_values:
-            idc = idc & (vol_arr2d != bg)
-        vals = vol_arr2d[idc]
-        vect[i] = vals.mean() if len(vals) > 0 else np.nan
-    return vect
+    means, _, _, _ = vol_to_vect_arr_stats(vol_arr, parc_arr, parc_idc, bg_values)
+    return means
 
 
 @njit(cache=True, nogil=True)
 def vol_to_vect_arr_stats(vol_arr, parc_arr, parc_idc, bg_values):
     """Aggregate vol_arr into parcel means plus coverage/background-flag stats,
-    in a single pass over parc_idc.
+    in a single pass over the voxels.
 
     Unlike :func:`vol_to_vect_arr`, `parc_idc` here is expected to be the FULL
     original label set (``Parcellater.parcellation_idc``), not just labels
@@ -735,24 +749,34 @@ def vol_to_vect_arr_stats(vol_arr, parc_arr, parc_idc, bg_values):
     parc_idc = parc_idc.astype(vol_arr.dtype)
     n = len(parc_idc)
     means = np.full(n, np.nan, dtype=vol_arr.dtype)
+    # accumulate in the data dtype, in voxel order: same result as numba's arr.mean()
+    sums = np.zeros(n, dtype=vol_arr.dtype)
     n_valid = np.zeros(n, dtype=np.int64)
     n_total = np.zeros(n, dtype=np.int64)
+    n_raw = np.zeros(n, dtype=np.int64)
     all_background = np.zeros(n, dtype=np.bool_)
-    not_nan = ~np.isnan(vol_arr2d)
-    for i in range(n):
-        idx = parc_idc[i]
-        in_parcel = parc_arr2d == idx
-        n_total[i] = in_parcel.sum()
-        raw = in_parcel & not_nan
-        n_raw = raw.sum()
-        valid_mask = raw
+    parcel_of = _parcel_index_per_voxel(parc_arr2d, parc_idc)
+    for v in range(len(vol_arr2d)):
+        i = parcel_of[v]
+        if i < 0:
+            continue
+        n_total[i] += 1
+        val = vol_arr2d[v]
+        if np.isnan(val):
+            continue
+        n_raw[i] += 1
+        is_bg = False
         for bg in bg_values:
-            valid_mask = valid_mask & (vol_arr2d != bg)
-        vals = vol_arr2d[valid_mask]
-        n_valid[i] = len(vals)
-        if len(vals) > 0:
-            means[i] = vals.mean()
-        all_background[i] = (n_valid[i] == 0) and (n_raw > 0)
+            if val == bg:
+                is_bg = True
+                break
+        if not is_bg:
+            sums[i] += val
+            n_valid[i] += 1
+    for i in range(n):
+        if n_valid[i] > 0:
+            means[i] = sums[i] / n_valid[i]
+        all_background[i] = (n_valid[i] == 0) and (n_raw[i] > 0)
     return means, n_valid, n_total, all_background
 
 
@@ -1212,7 +1236,7 @@ def mirror_gifti(img, direction="left_to_right", match_r=False, mask=None):
         return (nib.GiftiImage(darrays=dat_mirr[0]), nib.GiftiImage(darrays=dat_mirr[1]))
     
 
-@njit
+@njit(cache=True)
 def _corr_vector(data_1d, correlation=1, seed=None):  
     
     # standardize input (population std, ddof=0: standardizing the given vector

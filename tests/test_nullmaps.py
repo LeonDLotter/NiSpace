@@ -268,14 +268,21 @@ def test_astype_returns_new_nullmaps_with_correct_dtype():
 # fired -- or was deliberately suppressed -- at the original construction).
 
 import logging
-from nispace.core.nullmaps import _NULLMAPS_WARN_BYTES
+from nispace.core import nullmaps as _nullmaps_mod
+
+
+@pytest.fixture(autouse=True)
+def _small_warn_threshold(monkeypatch):
+    # The warning logic doesn't depend on the absolute threshold; a 1 GB array per test
+    # made these the slowest unit tests in the suite.
+    monkeypatch.setattr(_nullmaps_mod, "_NULLMAPS_WARN_BYTES", 1_000_000)
 
 
 def _make_large(warn_large=True):
-    # a (n_maps, n_perm, n_parcels) float32 array just over the 1GB threshold
+    # a (n_maps, n_perm, n_parcels) float32 array just over the warning threshold
     n_parcels = 50
     n_perm = 50
-    n_maps = _NULLMAPS_WARN_BYTES // (n_perm * n_parcels * 4) + 10
+    n_maps = _nullmaps_mod._NULLMAPS_WARN_BYTES // (n_perm * n_parcels * 4) + 10
     rng = np.random.default_rng(0)
     data = rng.standard_normal((n_maps, n_perm, n_parcels)).astype(np.float32)
     labels = [f"map{i}" for i in range(n_maps)]

@@ -39,9 +39,11 @@ def test_permute_maps_x_batched_matches_unbatched_real_geometry():
     nsp_u = NiSpace.from_pickle(_pickle_path("intro02_nsp.pkl.blosc"), verbose=False)
     assert nsp_b._X.shape[0] > 5  # sanity: enough rows for a small maps_batch_size to matter
 
-    nsp_b.permute(what="maps", maps_which="X", n_perm=100, seed=777,
+    # n_proc=1: the pickle stores n_proc=4, and starting that worker pool cost ~6 s of this
+    # test's ~7 s; parallel dispatch of the fast path is covered in tests/test_permute.py
+    nsp_b.permute(what="maps", maps_which="X", n_perm=20, seed=777, n_proc=1,
                  maps_use_existing=False, maps_batch_size=5, pooled_p=False, verbose=False)
-    nsp_u.permute(what="maps", maps_which="X", n_perm=100, seed=777,
+    nsp_u.permute(what="maps", maps_which="X", n_perm=20, seed=777, n_proc=1,
                  maps_use_existing=False, maps_batch_size=False, pooled_p=False, verbose=False)
 
     pb = nsp_b.get_p_values(pooled_p=False)
@@ -60,7 +62,7 @@ def test_permute_maps_x_batched_rank_true_no_z_real_data_does_not_crash():
     # this pickle's stored method is "spearman" (rank=True), and no Z was ever provided.
     nsp = NiSpace.from_pickle(_pickle_path("intro02_nsp.pkl.blosc"), verbose=False)
     assert nsp._Z is None
-    p = nsp.permute(what="maps", maps_which="X", n_perm=50, seed=1,
+    p = nsp.permute(what="maps", maps_which="X", n_perm=50, seed=1, n_proc=1,
                     maps_use_existing=False, maps_batch_size=5, pooled_p=False, verbose=False)
     p = nsp.get_p_values(pooled_p=False)
     assert ((p.to_numpy() >= 0) & (p.to_numpy() <= 1)).all()

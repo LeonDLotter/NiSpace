@@ -194,7 +194,7 @@ def mantel(data, distmat, spearman=False):
     r = corr(diffmat_flat[notnan], distmat_flat[notnan], rank=spearman)
     return r 
 
-@njit   
+@njit(cache=True)
 def mantel_fast(data, flat_distmat, spearman=False):
     
     diffmat = np.abs(data[:, None] - data[None, :])
@@ -203,7 +203,7 @@ def mantel_fast(data, flat_distmat, spearman=False):
     r = corr(diffmat_flat[notnan], flat_distmat[notnan], rank=spearman)
     return r
 
-@njit
+@njit(cache=True)
 def numba_squareform(square_mat):
     """Convert square distance matrix to condensed vector form using Numba."""
     n = square_mat.shape[0]

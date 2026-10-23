@@ -11,7 +11,7 @@ lgr = logging.getLogger(__name__)
 from ..utils.utils import _del_from_tuple
 
 # for backwards compatibility
-@njit(nogil=True)
+@njit(cache=True, nogil=True)
 def rank_array(array):
     """Backwards-compatibility alias for `rank1d` (same signature/behavior)."""
     return rank1d(array)

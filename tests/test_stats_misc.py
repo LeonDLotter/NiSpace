@@ -8,6 +8,7 @@
 - pca (ground-truth checked against sklearn.decomposition.PCA)
 - family-wise corrections: maxT_correction / step_maxT_correction (pinned against
   their pre-refactor outputs) and minP_correction / step_minP_correction
+- permute_groups: every strategy, paired and unpaired
 """
 
 import numpy as np
@@ -16,7 +17,7 @@ import pytest
 from nispace.stats.misc import (
     null_to_p, rho_to_z, z_to_rho, residuals_nan, partial_residuals_nan, pca,
     maxT_correction, step_maxT_correction, minP_correction, step_minP_correction,
-    _family_scale_ratio,
+    _family_scale_ratio, permute_groups,
 )
 
 
@@ -593,3 +594,95 @@ def test_family_scale_ratio_flags_heterogeneous_nulls():
     assert widest == (1, 2) and narrowest[0] == 1
     ratio_eq, _, _ = _family_scale_ratio(null[:, :1, :], "two", how="r")
     assert ratio_eq < 1.5
+
+
+# ---------------------------------------------------------------------------
+# permute_groups
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("sizes", [(7, 5), (8, 3), (10, 10), (5, 5, 3), (7, 2, 2), (3, 3, 3, 2)])
+def test_permute_groups_prop_preserves_group_sizes(sizes):
+    """Regression: with 3+ groups the floor-rounding leftovers were filled with one copy of
+    each label, which crashed whenever the leftover count differed from the group count
+    (e.g. sizes 5/5/3). Two groups always leave 0 or 2 over, so they worked by chance."""
+    groups = np.repeat(np.arange(len(sizes)), sizes)
+    for perm in permute_groups(groups, strategy="prop", n_perm=10, seed=0):
+        np.testing.assert_array_equal(np.bincount(perm, minlength=len(sizes)), sizes)
+
+
+def test_permute_groups_prop_composition_is_proportional():
+    """Each new group takes floor(size * share) samples from every original group (the
+    JuSpace scheme); with 10/10 that is exactly 5 from each into each."""
+    groups = np.repeat([0, 1], 10)
+    for perm in permute_groups(groups, strategy="prop", n_perm=10, seed=1):
+        for new in (0, 1):
+            np.testing.assert_array_equal(np.bincount(groups[perm == new], minlength=2), [5, 5])
+
+
+@pytest.mark.parametrize("paired", [False, True])
+def test_permute_groups_prop_string_labels(paired):
+    """Regression: "prop" built the result in a float NaN array, so string labels
+    crashed (the API dummy-codes groups first; direct calls didn't)."""
+    groups = np.repeat(["hc", "pat"], 4)
+    kw = dict(paired=True, subjects=np.tile(np.arange(4), 2)) if paired else {}
+    perm = permute_groups(groups, strategy="prop", seed=0, **kw)
+    assert perm.dtype == groups.dtype
+    assert sorted(perm) == sorted(groups)
+
+
+def test_permute_groups_shuffle_and_draw_unpaired():
+    groups = np.repeat([0, 1, 2], [4, 3, 5])
+    shuffled = permute_groups(groups, strategy="shuffle", n_perm=20, seed=0)
+    assert all(np.array_equal(np.bincount(p), [4, 3, 5]) for p in shuffled)
+    drawn = permute_groups(groups, strategy="draw", n_perm=20, seed=0)
+    assert all(len(p) == len(groups) and set(p) <= {0, 1, 2} for p in drawn)
+    # with replacement: label counts vary across draws
+    assert len({tuple(np.bincount(p, minlength=3)) for p in drawn}) > 1
+
+
+@pytest.mark.parametrize("strategy", ["shuffle", "prop"])
+def test_permute_groups_paired_permutes_within_subject(strategy):
+    n_sub, n_ses = 9, 2
+    groups = np.repeat(np.arange(n_ses), n_sub)
+    subjects = np.tile(np.arange(n_sub), n_ses)
+    for perm in permute_groups(groups, strategy=strategy, paired=True, subjects=subjects,
+                               n_perm=10, seed=0):
+        for sub in range(n_sub):
+            assert sorted(perm[subjects == sub]) == list(range(n_ses))
+        if strategy == "prop":
+            # exactly floor(n_sub / n_ses!) subjects per session ordering, rest random
+            n_swapped = int((perm[:n_sub] == 1).sum())
+            assert n_sub // 2 <= n_swapped <= n_sub // 2 + 1
+
+
+@pytest.mark.parametrize("strategy,kw", [("shuffle", {}), ("prop", {}), ("draw", {}),
+                                         ("prop", {"paired": True}),
+                                         ("shuffle", {"paired": True})])
+def test_permute_groups_seed_reproducible_and_n_perm_shape(strategy, kw):
+    groups = np.repeat([0, 1], 6)
+    if kw.get("paired"):
+        kw = dict(kw, subjects=np.tile(np.arange(6), 2))
+    a = permute_groups(groups, strategy=strategy, n_perm=5, seed=3, **kw)
+    b = permute_groups(groups, strategy=strategy, n_perm=5, seed=3, **kw)
+    assert isinstance(a, list) and len(a) == 5
+    assert all(np.array_equal(x, y) for x, y in zip(a, b))
+    single = permute_groups(groups, strategy=strategy, n_perm=1, seed=3, **kw)
+    assert isinstance(single, np.ndarray)
+    np.testing.assert_array_equal(single, a[0])
+
+
+def test_permute_groups_errors():
+    groups = np.repeat([0, 1], 3)
+    subjects = np.tile([1, 2, 3], 2)
+    with pytest.raises(ValueError, match="requires argument 'subjects'"):
+        permute_groups(groups, paired=True)
+    with pytest.raises(ValueError, match="Number of subjects"):
+        permute_groups(groups, paired=True, subjects=subjects[:-1])
+    with pytest.raises(ValueError, match="same number of samples"):
+        permute_groups(np.array([0, 0, 0, 1, 1, 1, 1]), paired=True,
+                       subjects=np.array([1, 2, 3, 1, 2, 3, 4]))
+    with pytest.raises(ValueError, match="Unknown unpaired"):
+        permute_groups(groups, strategy="bogus")
+    with pytest.raises(ValueError, match="Unknown paired"):
+        permute_groups(groups, strategy="draw", paired=True, subjects=subjects)
+

@@ -50,9 +50,8 @@ def test_vect_to_vol_arr_and_vol_to_vect_arr_roundtrip(synthetic_parc_nifti):
 
 
 def test_vol_to_vect_arr_stats_mean_coverage_and_background_flag(synthetic_parc_nifti):
-    """vol_to_vect_arr_stats is a separate function from vol_to_vect_arr
-    (nimare.py's permutation hot loop calls vol_to_vect_arr directly and must
-    not be affected by this) -- covers means/n_valid/n_total/all_background,
+    """vol_to_vect_arr_stats (vol_to_vect_arr returns its means; nimare.py's
+    permutation hot loop calls vol_to_vect_arr) -- covers means/n_valid/n_total/all_background,
     including a label absent from parc_arr (the "dropped during resampling"
     case, parc_idc[3]=4.0 here) which must yield n_total=0, NaN mean, and
     all_background=False (not confused with a genuine all-background parcel)."""
@@ -79,6 +78,56 @@ def test_vol_to_vect_arr_stats_mean_coverage_and_background_flag(synthetic_parc_
     np.testing.assert_array_equal(n_valid, [n_per_parcel, 0, n_per_parcel - n_p3_nan, 0])
     np.testing.assert_array_equal(n_total, [n_per_parcel, n_per_parcel, n_per_parcel, 0])
     np.testing.assert_array_equal(all_background, [False, True, False, False])
+
+
+def _naive_stats(vol, parc, idc, bgs):
+    """Per-label boolean-mask reference (the kernels' original algorithm, in numpy)."""
+    vol, parc = vol.ravel(), parc.ravel().astype(vol.dtype)
+    out = []
+    for lab in idc.astype(vol.dtype):
+        in_p = parc == lab
+        raw = in_p & ~np.isnan(vol)
+        valid = raw & ~np.isin(vol, bgs)
+        out.append((vol[valid].mean() if valid.any() else np.nan, valid.sum(), in_p.sum(),
+                    valid.sum() == 0 and raw.sum() > 0))
+    return [np.array(c) for c in zip(*out)] if out else [np.array([])] * 4
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_kernels_match_naive_reference(dtype):
+    """vol_to_vect_arr(_stats)/vect_to_vol_arr do one label lookup per voxel; check them
+    against the per-label masking reference on random data with NaNs, background values,
+    unsorted labels, labels absent from the image and image labels not in parc_idc."""
+    rng = np.random.default_rng(0)
+    for trial in range(30):
+        parc = rng.integers(0, 12, size=(9, 8, 7)).astype(rng.choice([np.int16, np.float32]))
+        vol = rng.normal(size=parc.shape).astype(dtype)
+        vol[rng.random(parc.shape) < 0.2] = np.nan
+        vol[rng.random(parc.shape) < 0.2] = 0.0
+        vol[rng.random(parc.shape) < 0.05] = 1.5
+        idc = rng.permutation(np.arange(1, 16))[:rng.integers(1, 15)].astype(np.float64)
+        bgs = [np.array([], dtype=np.float64), np.array([0.0]), np.array([0.0, 1.5])][trial % 3]
+
+        stats = vol_to_vect_arr_stats(vol, parc, idc, bgs)
+        for got, exp in zip(stats, _naive_stats(vol, parc, idc, bgs)):
+            # float32: sequential accumulation vs numpy's pairwise mean
+            np.testing.assert_allclose(got, exp, equal_nan=True,
+                                       **(dict(rtol=1e-5, atol=1e-6) if dtype == np.float32
+                                          else dict(rtol=1e-12)))
+        assert stats[0].dtype == dtype
+        np.testing.assert_array_equal(vol_to_vect_arr(vol, parc, idc, bgs), stats[0])
+
+        vect = rng.normal(size=len(idc)).astype(dtype)
+        expected = np.full(parc.shape, -1.0, dtype=dtype)
+        for v, lab in zip(vect, idc):
+            expected[parc == lab] = v
+        np.testing.assert_array_equal(vect_to_vol_arr(vect, parc, idc, -1.0), expected)
+
+
+def test_vect_to_vol_arr_duplicate_label_last_wins():
+    parc = np.array([0.0, 1.0, 3.0, 3.0, 2.0])
+    out = vect_to_vol_arr(np.array([1.0, 2.0, 9.0]), parc, np.array([3.0, 1.0, 3.0]), 0)
+    np.testing.assert_array_equal(out, [0.0, 2.0, 9.0, 9.0, 0.0])
 
 
 def test_vect_to_vol_arr_length_mismatch_raises(synthetic_parc_nifti):

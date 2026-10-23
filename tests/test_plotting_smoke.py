@@ -1,9 +1,9 @@
 """Smoke tests (does it run and return a figure, not pixel-level
 correctness) for NiSpace.plot(kind="categorical") -- catplot()/nullplot()/
 print_significance() in plotting.py -- using purely synthetic data (no real
-brain geometry needed). plot_brain()/brainplot() (actual surface/volume
-rendering) need real parcellation geometry and are smoke-tested separately
-under tests/integration/.
+brain geometry needed). plot_brain()/brainplot() glass-brain rendering runs on the
+fake parcellation in tests/test_plot_brain_labels.py; surface/combined layouts need real
+geometry and are tested under tests/integration/.
 """
 
 import matplotlib
@@ -89,3 +89,24 @@ def test_plot_before_any_permute_degrades_gracefully(unpermuted_nispace):
     degradation (disabling null overlay/annotation with a warning)."""
     fig, ax, plot = unpermuted_nispace.plot(kind="categorical", show=False, verbose=False)
     assert isinstance(fig, plt.Figure)
+
+
+def test_data_to_volume_matches_per_label_assignment():
+    """_data_to_volume (brainplot's per-parcel -> voxel projection) against per-label
+    assignment: unsorted labels, fewer values than labels, non-finite values -> bg_value."""
+    import nibabel as nib
+    from nispace.plotting import _data_to_volume
+
+    rng = np.random.default_rng(0)
+    parc = rng.integers(0, 9, size=(6, 7, 5)).astype(np.int16)
+    ref = nib.Nifti1Image(parc, np.eye(4))
+    labels = np.array([5.0, 1.0, 8.0, 3.0, 2.0])
+    data = np.array([1.5, np.nan, -2.0, np.inf])   # one value short of the labels
+    for bg in (np.nan, 0.0):
+        expected = np.full(parc.shape, bg, dtype=np.float32)
+        for lab, v in zip(labels, data):
+            expected[parc == lab] = v if np.isfinite(v) else bg
+        out = _data_to_volume(data, ref, labels, bg).get_fdata()
+        np.testing.assert_array_equal(out, expected)
+    assert np.isnan(_data_to_volume([], ref, labels).get_fdata()).all()
+

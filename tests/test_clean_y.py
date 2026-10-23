@@ -4,9 +4,10 @@ Two parts:
 1. Below: general unit coverage of the covariate-normalization helpers and the
    within/between regression engines (_normalize_cov_df, _detect_categoricals,
    _encode, _clean_y_between, _clean_y_within). Offline/network-free. ComBat
-   correctness (neuroHarmonize's own numerics) is out of scope -- only
-   NiSpace's wiring around it is tested (site detection, disabling when no
-   site column).
+   numerics are neuroHarmonize's; NiSpace's wiring around it (covariate
+   assembly, combat_protect, combat_train learn/apply split, model reuse, NaN
+   imputation/restoring, disabling without a site column) is checked against
+   direct neuroHarmonize calls.
 2. Original content (kept as-is): regression tests for a bug where
    clean_y(how="between", covariates_between=...) without an explicit
    `protect` argument fully demeaned every parcel across subjects (removing
@@ -21,6 +22,8 @@ Two parts:
    covariate with *zero* true relationship to anything collapsed mean
    per-subject colocalization from ~0.81 to ~0.002.
 """
+
+import logging
 
 import numpy as np
 import pandas as pd
@@ -180,6 +183,99 @@ def test_clean_y_between_handles_dtype_mismatch(between_setup):
 
 
 # ── _clean_y_within ───────────────────────────────────────────────────────────
+
+@pytest.fixture
+def combat_setup(rng):
+    """24 subjects at 3 sites with additive site offsets and an age effect."""
+    n_subjects, n_parcels = 24, 20
+    site = np.repeat(["s1", "s2", "s3"], 8)
+    age = rng.normal(size=n_subjects)
+    Y = (rng.normal(size=(n_subjects, n_parcels))
+         + np.repeat([0.0, 2.0, -1.0], 8)[:, None] * rng.uniform(0.5, 1.5, n_parcels)
+         + 0.5 * age[:, None])
+    return Y, site, age, n_subjects
+
+
+def _combat(Y, cov, n_subjects, **overrides):
+    return _clean_y_between(Y.copy(), cov, n_subjects, **_default_between_kwargs(
+        combat=True, dtype=np.float64, **overrides))
+
+
+def test_clean_y_between_combat_site_only_matches_neuroharmonize(combat_setup):
+    from neuroHarmonize import harmonizationLearn
+    Y, site, _, n = combat_setup
+    out, model, combat_cov = _combat(Y, pd.DataFrame({"site": site}), n)
+    _, expected = harmonizationLearn(Y.copy(), pd.DataFrame({"SITE": site}))
+    np.testing.assert_allclose(out, expected)
+    assert list(combat_cov.columns) == ["SITE"]
+    assert model is not None
+
+
+def test_clean_y_between_combat_then_regression(combat_setup):
+    """Continuous covariates are protected in ComBat, then regressed out by OLS."""
+    from neuroHarmonize import harmonizationLearn
+    Y, site, age, n = combat_setup
+    out, _, combat_cov = _combat(Y, pd.DataFrame({"site": site, "age": age}), n)
+    assert list(combat_cov.columns) == ["SITE", "age"]
+    _, harmonized = harmonizationLearn(Y.copy(), pd.DataFrame({"SITE": site, "age": age}))
+    expected = np.array([partial_residuals_nan(age[:, None], np.zeros((n, 0)), harmonized[:, i])
+                         for i in range(Y.shape[1])]).T
+    np.testing.assert_allclose(out, expected)
+
+
+def test_clean_y_between_combat_protect_columns_only_protected(combat_setup):
+    from neuroHarmonize import harmonizationLearn
+    Y, site, _, n = combat_setup
+    grp = np.tile(["a", "b"], n // 2)
+    out, _, combat_cov = _combat(Y, pd.DataFrame({"site": site}), n,
+                                 combat_protect=pd.DataFrame({"grp": grp}))
+    assert list(combat_cov.columns) == ["SITE", "grp_b"]
+    _, expected = harmonizationLearn(
+        Y.copy(), pd.DataFrame({"SITE": site, "grp_b": (grp == "b").astype(float)}))
+    np.testing.assert_allclose(out, expected)   # no OLS step: grp is protect-only
+
+
+def test_clean_y_between_combat_train_learns_on_subset_applies_to_rest(combat_setup):
+    from neuroHarmonize import harmonizationLearn, harmonizationApply
+    Y, site, _, n = combat_setup
+    train = np.tile([True, True, True, False], n // 4)
+    out, _, _ = _combat(Y, pd.DataFrame({"site": site}), n, combat_train=train)
+    model, expected_train = harmonizationLearn(Y[train], pd.DataFrame({"SITE": site[train]}))
+    expected_test = harmonizationApply(Y[~train], pd.DataFrame({"SITE": site[~train]}), model)
+    np.testing.assert_allclose(out[train], expected_train)
+    np.testing.assert_allclose(out[~train], expected_test)
+
+
+def test_clean_y_between_combat_invalid_train_is_ignored(combat_setup, caplog):
+    Y, site, _, n = combat_setup
+    cov = pd.DataFrame({"site": site})
+    with caplog.at_level(logging.WARNING):
+        out, _, _ = _combat(Y, cov, n, combat_train=[1, 2])
+    assert "combat_train" in caplog.text
+    np.testing.assert_allclose(out, _combat(Y, cov, n)[0])
+
+
+def test_clean_y_between_combat_reuses_given_model(combat_setup):
+    Y, site, _, n = combat_setup
+    cov = pd.DataFrame({"site": site})
+    out, model, _ = _combat(Y, cov, n)
+    out_reused, model_reused, _ = _combat(Y, cov, n, combat_model=model)
+    assert model_reused is model
+    np.testing.assert_allclose(out_reused, out)
+
+
+def test_clean_y_between_combat_nan_imputed_then_restored(combat_setup):
+    """NaNs are median-imputed per map for ComBat and put back afterwards."""
+    from neuroHarmonize import harmonizationLearn
+    Y, site, _, n = combat_setup
+    Y = Y.copy()
+    Y[3, 4] = Y[10, 0] = np.nan
+    out, _, _ = _combat(Y, pd.DataFrame({"site": site}), n)
+    imputed = np.apply_along_axis(lambda x: np.where(np.isnan(x), np.nanmedian(x), x), 1, Y)
+    _, expected = harmonizationLearn(imputed, pd.DataFrame({"SITE": site}))
+    expected[np.isnan(Y)] = np.nan
+    np.testing.assert_allclose(out, expected)
+
 
 def test_clean_y_within_z_without_z_data_raises(rng):
     Y = rng.normal(size=(4, 6))
