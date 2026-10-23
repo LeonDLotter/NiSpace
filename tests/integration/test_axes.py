@@ -78,8 +78,142 @@ def test_geometry_axes_from_centroids(dk, dk_axes):
 
 
 def test_all_axes_complete_for_cortex_parcellation(dk_axes):
-    assert dk_axes.shape == (15, 68)
+    # MNI default space for parcel shape -> no "area"
+    assert dk_axes.shape == (20, 68)
+    assert "area" not in dk_axes.index and {"sulc", "curv", "size"} <= set(dk_axes.index)
     assert not dk_axes.isna().any().any()
+
+
+# --- parcel shape ------------------------------------------------------------------------------
+
+def _shape_parcellation(shapes, vox=2.0):
+    """Volumetric Parcellation with one parcel per (semi-axes in mm) ellipsoid."""
+    import nibabel as nib
+    from nispace.core.parcellation import Parcellation
+    n = 40
+    data = np.zeros((n * len(shapes), n, n), dtype=np.int16)
+    g = (np.arange(n) - n / 2 + 0.5) * vox
+    x, y, z = np.meshgrid(g, g, g, indexing="ij")
+    for i, (a, b, c) in enumerate(shapes):
+        inside = (x / a) ** 2 + (y / b) ** 2 + (z / c) ** 2 <= 1
+        data[i * n:(i + 1) * n][inside] = i + 1
+    img = nib.Nifti1Image(data, np.diag([vox, vox, vox, 1]))
+    return Parcellation.from_path(img, space="MNI152NLin6Asym",
+                                  labels=[f"p{i}" for i in range(len(shapes))], verbose=False)
+
+
+def test_parcel_shape_ground_truth():
+    """Ball: dispersion ~ 0, elongation ~ 0. Ellipsoid (a, b, c): elongation = log(a / b),
+    R_g² = (a² + b² + c²) / 5 vs. 3/5 r² of the equal-volume ball."""
+    shapes = [(20, 20, 20), (30, 15, 15), (24, 12, 6)]
+    ax = fetch_axes(_shape_parcellation(shapes), "parcelgeom", verbose=False)
+    assert list(ax.index) == ["size", "dispersion", "elongation"]
+    for i, (a, b, c) in enumerate(shapes):
+        disp = ((a ** 2 + b ** 2 + c ** 2) / 5) / (0.6 * (a * b * c) ** (2 / 3))
+        assert ax.iloc[:, i]["dispersion"] == pytest.approx(np.log(disp), abs=0.02)
+        assert ax.iloc[:, i]["elongation"] == pytest.approx(np.log(a / b), abs=0.02)
+        assert np.exp(ax.iloc[:, i]["size"]) * 8 == pytest.approx(4 / 3 * np.pi * a * b * c,
+                                                                  rel=0.03)
+
+
+def test_parcel_shape_volume_counts_and_covariance(dk):
+    """Volume: size = log voxel count; shape from the plain coordinate covariance."""
+    import nibabel as nib
+    p = fetch_parcellation("DesikanKilliany", verbose=False)
+    p.set_active_space("MNI152NLin6Asym")
+    ax = fetch_axes(p, "parcelgeom", verbose=False)
+    img = p.get_image("MNI152NLin6Asym")
+    data = np.rint(np.asarray(img.dataobj)).astype(int)
+    vals, counts = np.unique(data[data > 0], return_counts=True)
+    np.testing.assert_allclose(ax.loc["size"].values, np.log(counts))
+    xyz = nib.affines.apply_affine(img.affine, np.column_stack(np.nonzero(data == vals[5])))
+    lam = np.sort(np.linalg.eigvalsh(np.cov(xyz.T, bias=True)))[::-1]
+    assert ax.loc["elongation"].iloc[5] == pytest.approx(np.log(np.sqrt(lam[0] / lam[1])))
+
+
+def test_parcel_shape_surface_and_area_availability(dk):
+    """Surface: size = log vertex count, area available; explicit 'area' on a volume raises,
+    the group and 'all' skip it."""
+    from neuromaps.images import load_data
+    p = fetch_parcellation("DesikanKilliany", verbose=False)
+    p.set_active_space("fsLR")
+    ax = fetch_axes(p, "parcelgeom", verbose=False)
+    assert list(ax.index) == ["size", "area", "dispersion", "elongation"]
+    counts = np.concatenate([np.unique(v[v > 0], return_counts=True)[1] for v in
+                             (np.asarray(load_data(h)).astype(int) for h in p.get_image("fsLR"))])
+    np.testing.assert_allclose(ax.loc["size"].values, np.log(counts))
+    # sphere-based shape: never below the ideal disc
+    assert (ax.loc["dispersion"] > -0.01).all() and (ax.loc["elongation"] >= 0).all()
+    # total area of all parcels ~ one cortical sheet per hemisphere (fsLR midthickness ~ 1e5 mm²)
+    assert 1.2e5 < np.exp(ax.loc["area"]).sum() < 2.4e5
+    with pytest.raises(AxisUnavailableError, match="'area' needs a surface"):
+        fetch_axes(dk, "area", verbose=False)
+
+
+@pytest.mark.parametrize("space", ["MNI152NLin6Asym", "fsLR"])
+def test_parcel_shape_bilateral_pools_hemispheres(space):
+    full = fetch_parcellation("DesikanKilliany", verbose=False)
+    full.set_active_space(space)
+    bil = fetch_parcellation("DesikanKilliany", hemi=["L", "R"], return_dist_mat=False,
+                             verbose=False)
+    bil.make_bilateral()
+    bil.set_active_space(space)
+    a_full = fetch_axes(full, ["size", "dispersion"], verbose=False)
+    a_bil = fetch_axes(bil, ["size", "dispersion"], verbose=False)
+    lh = a_full.loc[:, [l.startswith("hemi-L") for l in a_full.columns]].values
+    rh = a_full.loc[:, [l.startswith("hemi-R") for l in a_full.columns]].values
+    assert a_bil.shape == (2, 34)
+    np.testing.assert_allclose(a_bil.loc["size"].values, np.log(np.exp(lh[0]) + np.exp(rh[0])))
+    # count-weighted mean of the two hemispheres' (unlogged) dispersion; volumes are split at
+    # x = 0 (no hemisphere labels left), so midline-crossing parcels differ slightly
+    w_l, w_r = np.exp(lh[0]), np.exp(rh[0])
+    expected = np.log((w_l * np.exp(lh[1]) + w_r * np.exp(rh[1])) / (w_l + w_r))
+    np.testing.assert_allclose(a_bil.loc["dispersion"].values, expected,
+                               **(dict(atol=0.02) if "MNI" in space else dict(rtol=1e-6)))
+
+
+def test_parcel_shape_explicit_space(dk):
+    """space= overrides the active space (e.g. surface-parcellated tables with MNI active)."""
+    p = fetch_parcellation("DesikanKilliany", verbose=False)
+    p.set_active_space("MNI152NLin6Asym")
+    surf = fetch_axes(p, "parcelgeom", space="fsLR", verbose=False)
+    p_fslr = fetch_parcellation("DesikanKilliany", verbose=False)
+    p_fslr.set_active_space("fsLR")
+    np.testing.assert_allclose(surf.values,
+                               fetch_axes(p_fslr, "parcelgeom", verbose=False).values)
+    assert p._space == "MNI152NLin6Asym"
+    with pytest.raises(ValueError, match="No parcellation space matches"):
+        fetch_axes(p, "size", space="fsLRx", verbose=False)
+
+
+def test_parcel_shape_combined_surface_cortex():
+    """Combined + surface space: cortex from the cortex surface, subcortex from the MNI volume,
+    log values z-scored within each compartment; area only for cortex."""
+    c = fetch_parcellation("Schaefer100+TianS1", verbose=False)
+    a = fetch_axes(c, ["size", "area", "dispersion"], space="fsLR", verbose=False)
+    sc = np.asarray(c.get_sc_idc())
+    cx = np.setdiff1d(np.arange(a.shape[1]), sc)
+    assert a.loc["area"].isna().sum() == len(sc) == 16
+    cx_ref = fetch_axes("Schaefer100Parcels7Networks", ["size", "dispersion"], space="fsLR",
+                        verbose=False).values
+    cx_ref = (cx_ref - cx_ref.mean(1, keepdims=True)) / cx_ref.std(1, keepdims=True)
+    np.testing.assert_allclose(a.loc[["size", "dispersion"]].values[:, cx], cx_ref, atol=1e-10)
+    sc_ref = fetch_axes(c, "size", verbose=False).values[0, sc]  # MNI volume
+    np.testing.assert_allclose(a.loc["size"].values[sc],
+                               (sc_ref - sc_ref.mean()) / sc_ref.std(), atol=1e-10)
+    # the group leaves out area (not defined for subcortex); MNI stays the default
+    assert "area" not in fetch_axes(c, "parcelgeom", space="fsLR", verbose=False).index
+    np.testing.assert_allclose(fetch_axes(c, "size", verbose=False).values[0, sc], sc_ref)
+    with pytest.raises(AxisUnavailableError, match="cortex surfaces"):
+        fetch_axes(c, "size", space="fsaverage5x", verbose=False)
+
+
+def test_parcel_shape_uses_nispace_data_space(rng):
+    """NiSpace(z=...) builds parcel shape in the data's space (surface data -> vertices)."""
+    nsp = NiSpace(x=rng.normal(size=(1, 68)), y=rng.normal(size=(1, 68)), z="parcelgeom",
+                  parcellation="DesikanKilliany", parcellation_space="fsLR", standardize=False,
+                  verbose=False).fit()
+    assert list(nsp.get_z().index) == ["size", "area", "dispersion", "elongation"]
 
 
 def test_hemi_restricted(dk):

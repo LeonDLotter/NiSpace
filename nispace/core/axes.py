@@ -1,16 +1,18 @@
-"""Named spatial axes: tissue, geometry, compartment and cortical-hierarchy maps per parcel.
+"""Named spatial axes: tissue, geometry, parcel shape, compartment and cortical-hierarchy maps
+per parcel.
 
 One registry shared by :func:`nispace.datasets.fetch_axes`, ``NiSpace(z=...)`` and
 :func:`nispace.diagnostics.shared_axes`, so all three build identical maps. Design notes:
-``_explore/shared_axes_design.md``.
+``_explore/shared_axes_design.md``, parcel shape: ``_explore/parcel_geometry_axes/NOTES.md``.
 
-Geometry/compartment/MEM axes are computed from the parcellation itself; tissue maps come from
-the ``tpm`` dataset and cortical-hierarchy maps from the ``cortexfeatures`` dataset.
+Geometry/parcel-shape/compartment/MEM axes are computed from the parcellation itself; tissue maps
+come from the ``tpm`` dataset and cortical-hierarchy maps from the ``cortexfeatures`` dataset.
 """
 
 import copy
 import re
 
+import nibabel as nib
 import numpy as np
 import pandas as pd
 
@@ -40,6 +42,19 @@ _AXES = {
     "si":       dict(kind="geometry", desc="Centroid MNI z; + = superior."),
     "lr":       dict(kind="geometry", desc="Centroid MNI x; + = right."),
     "medlat":   dict(kind="geometry", desc="Distance from the midline, |x|; + = lateral."),
+    # parcel shape (parcellation image in the active space)
+    "size":       dict(kind="parcelgeom",
+                       desc="log number of voxels (volume) or vertices (surface): parcel size "
+                            "and amount of data per parcel."),
+    "area":       dict(kind="parcelgeom",
+                       desc="log surface area (mm², population-average vertex areas); "
+                            "surface only."),
+    "dispersion": dict(kind="parcelgeom",
+                       desc="log mean squared distance to the parcel centroid relative to an "
+                            "equal-size ball (volume) or disc (surface sphere); 0 = round."),
+    "elongation": dict(kind="parcelgeom",
+                       desc="log sqrt(lambda1 / lambda2) of the coordinate covariance; "
+                            "0 = no main direction."),
     # compartment
     "cxsc":     dict(kind="compartment",
                      desc="Compartment indicator, 1 = subcortex, 0 = cortex (combined parcellations)."),
@@ -54,8 +69,13 @@ _AXES = {
                         desc="T1w/T2w ratio, myelin proxy (HCP S1200)."),
     "thickness":   dict(kind="cortexfeatures", map="feature-thickness_pub-hcps1200",
                         desc="Cortical thickness (HCP S1200)."),
+    "sulc":        dict(kind="cortexfeatures", map="feature-sulc_pub-hcps1200",
+                        desc="Sulcal depth (HCP S1200); HCP sign, - = sulcal, + = gyral."),
+    "curv":        dict(kind="cortexfeatures", map="feature-curv_pub-hcps1200",
+                        desc="Mean curvature (HCP S1200); HCP sign, - = sulcal, + = gyral."),
 }
-_AXIS_GROUPS = {"coords": ["ap", "si", "lr"]}
+_AXIS_GROUPS = {"coords": ["ap", "si", "lr"],
+                "parcelgeom": ["size", "area", "dispersion", "elongation"]}
 _MEM_PATTERN = re.compile(r"^mem([1-9]\d*)$")
 _TPM_AXES = frozenset(k for k, v in _AXES.items() if v["kind"] == "tpm")
 _DEFAULT_AXES = ["gm", "radial", "ap", "si"]
@@ -109,16 +129,20 @@ def _cortexfeatures_table(parc):
     return cx_name if cx_name in reference_lib.get("cortexfeatures", {}).get("tab", {}) else None
 
 
-def resolve_axis_names(axes, parc=None):
+def resolve_axis_names(axes, parc=None, space=None):
     """Expand `axes` into a list of registry names.
 
     Parameters
     ----------
     axes : str or list of str
-        ``"default"``, ``"all"``, a registry name, a group name (``"coords"``), ``"memK"``, or a
-        list of these. Case-insensitive.
+        ``"default"``, ``"all"``, a registry name, a group name (``"coords"``,
+        ``"parcelgeom"``; the latter includes ``"area"`` only for surface parcellations),
+        ``"memK"``, or a list of these. Case-insensitive.
     parc : Parcellation, optional
-        Needed to resolve ``"default"`` (depends on the parcellation type).
+        Needed to resolve ``"default"`` (depends on the parcellation type) and
+        ``"parcelgeom"``.
+    space : str, optional
+        Space of the parcel-shape axes (see :func:`build_axes`).
 
     Returns
     -------
@@ -146,6 +170,9 @@ def resolve_axis_names(axes, parc=None):
             lgr.critical_raise(f"Axis names must be strings, got {type(a)}. {_valid_names_msg()}",
                                ValueError)
         expanded = _AXIS_GROUPS.get(a, [a])
+        if a == "parcelgeom" and parc is not None and _geom_space(parc, space)[1] != "surface":
+            # group: drop what can't be built for every parcel
+            expanded = [n for n in expanded if n != "area"]
         for n in expanded:
             if _axis_kind(n) is None:
                 lgr.critical_raise(f"Unknown axis '{n}'. {_valid_names_msg()}", ValueError)
@@ -216,6 +243,175 @@ def _build_geometry(centroids, name):
     return {"ap": y, "si": z, "lr": x, "medlat": np.abs(x)}[name]
 
 
+def _geom_space(parc, space=None):
+    """Space for parcel-shape axes: `space`, else the active (data) space, else the centroid
+    default. Returns (space name, kind) with kind "volume", "surface", or "combined_surface"
+    (combined parcellation: cortex from its stored surface, subcortex from the MNI volume)."""
+    from .parcellation import _spaces_match
+    if space is None:
+        space = parc._space or parc._centroid_space()
+    elif parc._is_combined and space not in parc.spaces:
+        cx_space = next((s for s in parc._cx_surface if _spaces_match(space, s)), None)
+        if cx_space is None:
+            raise AxisUnavailableError(
+                f"Parcel shape: no '{space}' image for combined parcellation '{parc._name}' "
+                f"(MNI: {parc.spaces}, cortex surfaces: {list(parc._cx_surface)}).")
+        return cx_space, "combined_surface"
+    else:
+        space = parc.get_image_for_dataspace(space)
+    surface = isinstance(parc.get_image(space), (tuple, nib.GiftiImage))
+    return space, "surface" if surface else "volume"
+
+
+def _vertex_area(coords, faces):
+    """Area per vertex: one third of each adjacent triangle."""
+    a, b, c = coords[faces[:, 0]], coords[faces[:, 1]], coords[faces[:, 2]]
+    tri = 0.5 * np.linalg.norm(np.cross(b - a, c - a), axis=1)
+    return np.bincount(faces.ravel(), weights=np.repeat(tri / 3, 3), minlength=len(coords))
+
+
+def _shape_stats(vals, xyz, w):
+    """Per parcel value: weight sum, trace and two largest eigenvalues of the weighted
+    coordinate covariance (bincount moments, one pass over all points)."""
+    uniq, pos = np.unique(vals, return_inverse=True)
+    k = len(uniq)
+    wsum = np.bincount(pos, weights=w, minlength=k)
+    mean = np.column_stack([np.bincount(pos, weights=w * xyz[:, d], minlength=k)
+                            for d in range(3)]) / wsum[:, None]
+    cov = np.empty((k, 3, 3))
+    for d in range(3):
+        for e in range(d, 3):
+            m2 = np.bincount(pos, weights=w * xyz[:, d] * xyz[:, e], minlength=k) / wsum
+            cov[:, d, e] = cov[:, e, d] = m2 - mean[:, d] * mean[:, e]
+    lam = np.linalg.eigvalsh(cov)[:, ::-1]
+    return uniq, wsum, np.trace(cov, axis1=1, axis2=2), lam[:, 0], lam[:, 1]
+
+
+def _surface_blocks(imgs, hemis, space):
+    """(values, count, area, dispersion, elongation) per hemisphere of a surface parcellation."""
+    from ..nulls import _img_density_for_neuromaps
+    from ..datasets import fetch_template
+    from neuromaps.images import load_data
+    density = _img_density_for_neuromaps(imgs[0])
+    sph = fetch_template(space, desc="sphere", res=density, check_file_hash=False, verbose=False)
+    vaavg = fetch_template(space, desc="vaavg", res=density, check_file_hash=False,
+                           verbose=False)
+    blocks = []
+    for img_h, hemi in zip(imgs, hemis):
+        i_h = ("L", "R").index(hemi)
+        v = np.asarray(load_data(img_h)).astype(int).ravel()
+        g = nib.load(sph[i_h])
+        xyz, faces = np.asarray(g.darrays[0].data, dtype=float), g.darrays[1].data
+        w = _vertex_area(xyz, faces)
+        area = np.asarray(nib.load(vaavg[i_h]).darrays[0].data, dtype=float)
+        keep = v != 0
+        uniq, a_sph, rg2, l1, l2 = _shape_stats(v[keep], xyz[keep], w[keep])
+        pos = np.searchsorted(uniq, v[keep])
+        count = np.bincount(pos, minlength=len(uniq))
+        area_p = np.bincount(pos, weights=area[keep], minlength=len(uniq))
+        blocks.append((uniq, count, area_p, rg2 / (a_sph / (2 * np.pi)), np.sqrt(l1 / l2)))
+    return blocks
+
+
+def _volume_blocks(img, bilateral):
+    """(values, count, area [NaN], dispersion, elongation) of a volumetric parcellation; one
+    block, or two for bilateral images (values shared across hemispheres, split at x = 0)."""
+    data = np.rint(np.asarray(img.dataobj)).astype(int)
+    ijk = np.nonzero(data)
+    vals = data[ijk]
+    xyz = nib.affines.apply_affine(img.affine, np.column_stack(ijk))
+    vox = np.sqrt((img.affine[:3, :3] ** 2).sum(axis=0))
+    sides = [xyz[:, 0] < 0, xyz[:, 0] >= 0] if bilateral else [np.ones(len(vals), bool)]
+    blocks = []
+    for m in sides:
+        uniq, count, rg2, l1, l2 = _shape_stats(vals[m], xyz[m], np.ones(m.sum()))
+        r2 = (3 * count * np.prod(vox) / (4 * np.pi)) ** (2 / 3)
+        # + each voxel's own inertia (a²/12 per axis), relevant for tiny parcels only
+        disp = (rg2 + (vox ** 2).sum() / 12) / (0.6 * r2)
+        blocks.append((uniq, count, np.full(len(uniq), np.nan), disp, np.sqrt(l1 / l2)))
+    return blocks
+
+
+def _blocks_to_stats(blocks, pool):
+    """Rows in the parcellater's order (as get_centroids): blocks concatenated (surface: L then
+    R), or pooled by value (volumes, bilateral): counts/areas summed, shape count-weighted."""
+    if not pool:
+        return [np.concatenate([b[i] for b in blocks]) for i in range(1, 5)]
+    uniq = np.unique(np.concatenate([b[0] for b in blocks]))
+    acc = np.zeros((len(uniq), 4))
+    area_nan = all(np.isnan(b[2]).all() for b in blocks)
+    for b_vals, count, area_p, disp, elong in blocks:
+        i = np.searchsorted(uniq, b_vals)
+        acc[i, 0] += count
+        acc[i, 1] += np.nan_to_num(area_p)
+        acc[i, 2] += count * disp
+        acc[i, 3] += count * elong
+    area_p = np.full(len(uniq), np.nan) if area_nan else acc[:, 1]
+    return acc[:, 0], area_p, acc[:, 2] / acc[:, 0], acc[:, 3] / acc[:, 0]
+
+
+def _build_parcelgeom(parc, names, space=None):
+    """Parcel size and shape from the parcellation image in `space` (default: active space).
+
+    Volumes: voxel coordinates (mm). Surfaces: sphere-mesh coordinates weighted by vertex area,
+    so cortical folding does not enter the shape; ``area`` sums the population-average vertex
+    areas (``vaavg``). ``dispersion`` = R_g² / R_g²(ideal) with R_g² the mean squared distance to
+    the centroid and the ideal an equal-size ball (3/5 r²) or disc (r²/2). Bilateral
+    parcellations: computed per hemisphere, then counts/areas summed and shape averaged
+    (weighted by count). All four are log-transformed (right-skewed, ratios >= 1).
+
+    Combined parcellation with a surface `space`: cortex from the stored cortex surface,
+    subcortex from the MNI volume. Vertex and voxel values are not comparable, so the log values
+    are z-scored within each compartment (``area``: cortex only, subcortex NaN).
+    """
+    from ..io import load_img
+    space, kind = _geom_space(parc, space)
+    n = len(parc._labels)
+    if kind == "combined_surface":
+        if parc._bilateral:
+            raise AxisUnavailableError("Parcel shape from the cortex surface is not available for "
+                                       "bilateral combined parcellations; use an MNI space.")
+        entry = parc._cx_surface[space]
+        if entry.get("image") is None:
+            entry["image"] = load_img(entry["img_paths"])
+        cx = _blocks_to_stats(_surface_blocks(entry["image"], ("L", "R"), space), pool=False)
+        vol_space = parc.get_image_for_dataspace(None)
+        vol = _blocks_to_stats(_volume_blocks(parc.get_image(vol_space), False), pool=True)
+        sc_idc = np.asarray(parc.get_sc_idc(), dtype=int)
+        cx_idc = np.setdiff1d(np.arange(n), sc_idc)
+        if len(cx[0]) != len(cx_idc) or len(vol[0]) != n:
+            lgr.critical_raise(f"Parcellation '{parc._name}': {len(cx[0])} cortex surface and "
+                               f"{len(vol[0])} volume parcels for {len(cx_idc)} cortex / {n} "
+                               "labels.", ValueError)
+        lgr.info(f"Parcel shape: cortex from '{space}' surface, subcortex from '{vol_space}' "
+                 "volume; log values z-scored within each compartment.")
+        out = []
+        for i in range(4):
+            vals = np.full(n, np.nan)
+            vals[cx_idc] = np.log(cx[i])
+            vals[sc_idc] = np.log(vol[i][sc_idc])
+            for idc in (cx_idc, sc_idc):
+                v = vals[idc]
+                vals[idc] = (v - np.nanmean(v)) / np.nanstd(v) if np.isfinite(v).any() else v
+            out.append(vals)
+        stats = dict(zip(["size", "area", "dispersion", "elongation"], out))
+        return [stats[n_] for n_ in names]
+
+    img = parc.get_image(space)
+    parc._fit_space(space)
+    if kind == "surface":
+        imgs = img if isinstance(img, tuple) else (img,)
+        hemis = parc._hemi_dict[space] or ("L", "R")[:len(imgs)]
+        stats = _blocks_to_stats(_surface_blocks(imgs, hemis, space), pool=parc._bilateral)
+    else:
+        stats = _blocks_to_stats(_volume_blocks(img, parc._bilateral), pool=True)
+    if len(stats[0]) != n:
+        lgr.critical_raise(f"Parcellation '{parc._name}' ({space}): {len(stats[0])} parcel "
+                           f"values in the image but {n} labels.", ValueError)
+    stats = dict(zip(["size", "area", "dispersion", "elongation"], stats))
+    return [np.log(stats[n_]) for n_ in names]
+
+
 def _build_cxsc(parc):
     if not parc._is_combined:
         raise AxisUnavailableError("'cxsc' needs a combined cortex+subcortex parcellation.")
@@ -262,7 +458,7 @@ def _build_cortexfeatures(parc, names, verbose):
 
 
 def build_axes(parc, axes="default", columns=None, require_complete=False, verbose=False,
-               parcellate_kwargs=None):
+               parcellate_kwargs=None, space=None):
     """Build axis maps for a parcellation.
 
     Parameters
@@ -282,6 +478,13 @@ def build_axes(parc, axes="default", columns=None, require_complete=False, verbo
         Extra :func:`~nispace.io.parcellate_data` arguments for the one case that parcellates
         images: TPM axes on a custom parcellation. ``NiSpace(z=...)`` passes its own settings
         (e.g. ``resampling_target``, the z ``background_value``) so Z is built like z data.
+    space : str, optional
+        Space of the parcel-shape axes (``size``, ``area``, ``dispersion``, ``elongation``).
+        Default: the parcellation's active space, else its centroid default (MNI first). Use it
+        when the data were parcellated in another space than the active one, e.g. tables of
+        surface datasets. For a combined parcellation, a surface space takes the cortex from
+        the stored cortex surface and the subcortex from the MNI volume (log values z-scored
+        within each compartment).
 
     Returns
     -------
@@ -291,7 +494,7 @@ def build_axes(parc, axes="default", columns=None, require_complete=False, verbo
     """
     if parc is None:
         lgr.critical_raise("Axis maps require a parcellation.", ValueError)
-    names, explicit = resolve_axis_names(axes, parc)
+    names, explicit = resolve_axis_names(axes, parc, space=space)
     n = len(parc._labels)
     built, centroids = {}, None
 
@@ -314,6 +517,18 @@ def build_axes(parc, axes="default", columns=None, require_complete=False, verbo
         centroids = parc.get_centroids()
     for a in [a for a in names if _axis_kind(a) == "geometry"]:
         built[a] = _build_geometry(centroids, a)
+    pg = [a for a in names if _axis_kind(a) == "parcelgeom"]
+    if pg:
+        try:
+            g_space, g_kind = _geom_space(parc, space)
+            if "area" in pg and g_kind == "volume":
+                _unavailable(AxisUnavailableError(f"'area' needs a surface parcellation (space: "
+                                                  f"'{g_space}')."))
+                pg.remove("area")
+            if pg:
+                built.update(zip(pg, _build_parcelgeom(parc, pg, space)))
+        except AxisUnavailableError as err:
+            _unavailable(err)
     if "cxsc" in names:
         try:
             built["cxsc"] = _build_cxsc(parc)

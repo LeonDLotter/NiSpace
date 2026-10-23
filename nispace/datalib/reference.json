@@ -1000,7 +1000,7 @@
     },
     "cortexfeatures": {
         "label": "CortexFeatures",
-        "description": "The NiSpace \"CortexFeatures\" dataset consists of different features of cortical topology available via neuromaps. Many of these maps were used in Shafiei et al., 2023. The maps are fetched directly from neuromaps (space=\"fsLROriginal\" or \"fsaverageOriginal\") or downloaded from the NiSpace-data GitHub repo (space=\"fsLR\" or \"fsaverage\"; recommended). Please cite neuromaps (https://neuromaps-main.readthedocs.io/) and the original publication for each map when used.",
+        "description": "The NiSpace \"CortexFeatures\" dataset consists of different features of cortical topology, most of them available via neuromaps. Many of these maps were used in Shafiei et al., 2023. The neuromaps maps are fetched directly from neuromaps (space=\"fsLROriginal\" or \"fsaverageOriginal\") or downloaded from the NiSpace-data GitHub repo (space=\"fsLR\" or \"fsaverage\"; recommended). The structural maps of the Human Connectome Project (HCP) S1200 release (cortical thickness, T1w/T2w ratio, sulcal depth, curvature; 1096 subjects, MSMAll registration) were obtained from the S1200 group-average data on BALSA and converted to GIFTI (fsLR) and transformed to fsaverage. Note that the HCP sulcal depth and curvature maps follow the HCP sign convention (negative = sulcal, positive = gyral), which is inverted relative to FreeSurfer. Please cite neuromaps (https://neuromaps-main.readthedocs.io/) and the original publication for each map when used. For HCP maps, please include the HCP acknowledgment (\"Data were provided [in part] by the Human Connectome Project, WU-Minn Consortium (Principal Investigators David Van Essen and Kamil Ugurbil; 1U54MH091657) funded by the 16 NIH Institutes and Centers that support the NIH Blueprint for Neuroscience Research; and by the McDonnell Center for Systems Neuroscience at Washington University.\").",
         "cortex_only": true,
         "citations": [
             {
@@ -1010,6 +1010,10 @@
             {
                 "ref": "Shafiei et al., 2023",
                 "doi": "10.1038/s41467-023-41689-6"
+            },
+            {
+                "ref": "Glasser et al., 2013",
+                "doi": "10.1016/j.neuroimage.2013.04.127"
             }
         ],
         "map_info": {
@@ -1145,28 +1149,6 @@
                         "host": "github-nispace",
                         "remote": "reference/cortexfeatures/map/feature-thickness_pub-hcps1200/feature-thickness_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
                     }
-                },
-                "fsLROriginal": {
-                    "L": {
-                        "host": "neuromaps",
-                        "remote": [
-                            "hcps1200",
-                            "thickness",
-                            "fsLR",
-                            "L"
-                        ],
-                        "ext": ".surf.gii"
-                    },
-                    "R": {
-                        "host": "neuromaps",
-                        "remote": [
-                            "hcps1200",
-                            "thickness",
-                            "fsLR",
-                            "R"
-                        ],
-                        "ext": ".surf.gii"
-                    }
                 }
             },
             "feature-t1t2_pub-hcps1200": {
@@ -1189,27 +1171,49 @@
                         "host": "github-nispace",
                         "remote": "reference/cortexfeatures/map/feature-t1t2_pub-hcps1200/feature-t1t2_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
                     }
-                },
-                "fsLROriginal": {
+                }
+            },
+            "feature-sulc_pub-hcps1200": {
+                "fsaverage": {
                     "L": {
-                        "host": "neuromaps",
-                        "remote": [
-                            "hcps1200",
-                            "myelinmap",
-                            "fsLR",
-                            "L"
-                        ],
-                        "ext": ".surf.gii"
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-sulc_pub-hcps1200/feature-sulc_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
                     },
                     "R": {
-                        "host": "neuromaps",
-                        "remote": [
-                            "hcps1200",
-                            "myelinmap",
-                            "fsLR",
-                            "R"
-                        ],
-                        "ext": ".surf.gii"
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-sulc_pub-hcps1200/feature-sulc_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-sulc_pub-hcps1200/feature-sulc_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-sulc_pub-hcps1200/feature-sulc_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "feature-curv_pub-hcps1200": {
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-curv_pub-hcps1200/feature-curv_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-curv_pub-hcps1200/feature-curv_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-curv_pub-hcps1200/feature-curv_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/cortexfeatures/map/feature-curv_pub-hcps1200/feature-curv_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
                     }
                 }
             },
@@ -1257,25 +1261,25 @@
                     }
                 }
             },
-            "feature-geneexpr-abagen": {
+            "feature-geneexpr_pub-markello2021": {
                 "fsaverage": {
                     "L": {
                         "host": "github-nispace",
-                        "remote": "reference/cortexfeatures/map/feature-geneexpr-abagen/feature-geneexpr-abagen_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                        "remote": "reference/cortexfeatures/map/feature-geneexpr_pub-markello2021/feature-geneexpr_pub-markello2021_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
                     },
                     "R": {
                         "host": "github-nispace",
-                        "remote": "reference/cortexfeatures/map/feature-geneexpr-abagen/feature-geneexpr-abagen_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                        "remote": "reference/cortexfeatures/map/feature-geneexpr_pub-markello2021/feature-geneexpr_pub-markello2021_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
                     }
                 },
                 "fsLR": {
                     "L": {
                         "host": "github-nispace",
-                        "remote": "reference/cortexfeatures/map/feature-geneexpr-abagen/feature-geneexpr-abagen_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                        "remote": "reference/cortexfeatures/map/feature-geneexpr_pub-markello2021/feature-geneexpr_pub-markello2021_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
                     },
                     "R": {
                         "host": "github-nispace",
-                        "remote": "reference/cortexfeatures/map/feature-geneexpr-abagen/feature-geneexpr-abagen_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                        "remote": "reference/cortexfeatures/map/feature-geneexpr_pub-markello2021/feature-geneexpr_pub-markello2021_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
                     }
                 },
                 "fsaverageOriginal": {
@@ -1653,7 +1657,7 @@
                         "host": "neuromaps",
                         "remote": [
                             "raichle",
-                            "cbf",
+                            "cbv",
                             "fsLR",
                             "R"
                         ],
@@ -2350,6 +2354,1216 @@
         "plot": {
             "host": "github-nispace",
             "remote": "reference/grf/plot/dset-grf_plot-overview.png"
+        }
+    },
+    "hcptask": {
+        "label": "HCPTask",
+        "description": "HCP S1200 group-average task-fMRI maps (Cohen's d; 997 subjects; MSMAll, 2mm smoothing) from BALSA (reference pkXDZ); 47 conditions and contrasts (HCP's 39 sign-flipped duplicates omitted). Map images are cortical (fsLR, fsaverage); subcortical data (incl. cerebellum, brainstem) is only available as parcellated tables for subcortical parcellations. The \"Canonical\" collection selects the key contrasts from each task (Barch et al., 2013). Cite the original HCP papers and include the HCP acknowledgment if you use the maps in any publication (see HCP Open Access Data Use Terms).",
+        "default_set_collection": "All-Sets",
+        "cortex_only": false,
+        "citations": [
+            {
+                "ref": "Barch et al., 2013",
+                "doi": "10.1016/j.neuroimage.2013.05.033"
+            },
+            {
+                "ref": "Van Essen et al., 2013",
+                "doi": "10.1016/j.neuroimage.2013.05.041"
+            },
+            {
+                "ref": "Glasser et al., 2013",
+                "doi": "10.1016/j.neuroimage.2013.04.127"
+            }
+        ],
+        "license": "HCP Open Access Data Use Terms",
+        "map_info": {
+            "cite_column": "doi",
+            "display_columns": [
+                "task",
+                "label",
+                "type"
+            ]
+        },
+        "metadata": {
+            "host": "github-nispace",
+            "remote": "reference/hcptask/map_info.csv"
+        },
+        "collection": {
+            "All": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/collection-All.collect",
+                "description": "All 47 HCP task-fMRI maps (conditions vs. baseline and contrasts)."
+            },
+            "Canonical": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/collection-Canonical.collect",
+                "description": "The focused contrast of each task (Barch et al., 2013), e.g., 2-back vs. 0-back; for the motor task, each movement vs. the average of all movements (11 maps)."
+            },
+            "Conditions": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/collection-Conditions.collect",
+                "description": "All task conditions vs. baseline (31 maps)."
+            },
+            "Contrasts": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/collection-Contrasts.collect",
+                "description": "All contrasts between task conditions (16 maps)."
+            },
+            "All-Sets": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/collection-All-Sets.collect",
+                "description": "All maps in 7 sets, one per task (WorkingMemory, Gambling, Motor, Language, Social, Relational, Emotion), for set enrichment. Unweighted."
+            }
+        },
+        "tab": {
+            "AALCortical": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-AALCortical.csv.gz"
+            },
+            "AALSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-AALSubcortical.csv.gz"
+            },
+            "Aseg": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-Aseg.csv.gz"
+            },
+            "BrainnetomeCortical": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-BrainnetomeCortical.csv.gz"
+            },
+            "BrainnetomeSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-BrainnetomeSubcortical.csv.gz"
+            },
+            "DesikanKilliany": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-DesikanKilliany.csv.gz"
+            },
+            "DesikanKillianyTourville": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-DesikanKillianyTourville.csv.gz"
+            },
+            "Destrieux": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-Destrieux.csv.gz"
+            },
+            "Glasser": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-Glasser.csv.gz"
+            },
+            "HarvardOxfordCortical": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-HarvardOxfordCortical.csv.gz"
+            },
+            "HarvardOxfordSubcortical": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-HarvardOxfordSubcortical.csv.gz"
+            },
+            "Schaefer1000Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-Schaefer1000Parcels17Networks.csv.gz"
+            },
+            "Schaefer1000Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-Schaefer1000Parcels7Networks.csv.gz"
+            },
+            "Schaefer100Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-Schaefer100Parcels17Networks.csv.gz"
+            },
+            "Schaefer100Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-Schaefer100Parcels7Networks.csv.gz"
+            },
+            "Schaefer200Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-Schaefer200Parcels17Networks.csv.gz"
+            },
+            "Schaefer200Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-Schaefer200Parcels7Networks.csv.gz"
+            },
+            "Schaefer400Parcels17Networks": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-Schaefer400Parcels17Networks.csv.gz"
+            },
+            "Schaefer400Parcels7Networks": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-Schaefer400Parcels7Networks.csv.gz"
+            },
+            "TianS1": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-TianS1.csv.gz"
+            },
+            "TianS2": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-TianS2.csv.gz"
+            },
+            "TianS3": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-TianS3.csv.gz"
+            },
+            "TianS4": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-TianS4.csv.gz"
+            },
+            "Yan100": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-Yan100.csv.gz"
+            },
+            "Yan1000": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-Yan1000.csv.gz"
+            },
+            "Yan200": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-Yan200.csv.gz"
+            },
+            "Yan400": {
+                "host": "github-nispace",
+                "remote": "reference/hcptask/tab/dset-hcptask_parc-Yan400.csv.gz"
+            }
+        },
+        "map": {
+            "task-WM_contrast-2BKBODY_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKBODY_pub-hcps1200/task-WM_contrast-2BKBODY_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKBODY_pub-hcps1200/task-WM_contrast-2BKBODY_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKBODY_pub-hcps1200/task-WM_contrast-2BKBODY_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKBODY_pub-hcps1200/task-WM_contrast-2BKBODY_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-2BKFACE_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKFACE_pub-hcps1200/task-WM_contrast-2BKFACE_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKFACE_pub-hcps1200/task-WM_contrast-2BKFACE_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKFACE_pub-hcps1200/task-WM_contrast-2BKFACE_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKFACE_pub-hcps1200/task-WM_contrast-2BKFACE_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-2BKPLACE_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKPLACE_pub-hcps1200/task-WM_contrast-2BKPLACE_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKPLACE_pub-hcps1200/task-WM_contrast-2BKPLACE_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKPLACE_pub-hcps1200/task-WM_contrast-2BKPLACE_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKPLACE_pub-hcps1200/task-WM_contrast-2BKPLACE_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-2BKTOOL_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKTOOL_pub-hcps1200/task-WM_contrast-2BKTOOL_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKTOOL_pub-hcps1200/task-WM_contrast-2BKTOOL_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKTOOL_pub-hcps1200/task-WM_contrast-2BKTOOL_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKTOOL_pub-hcps1200/task-WM_contrast-2BKTOOL_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-0BKBODY_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BKBODY_pub-hcps1200/task-WM_contrast-0BKBODY_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BKBODY_pub-hcps1200/task-WM_contrast-0BKBODY_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BKBODY_pub-hcps1200/task-WM_contrast-0BKBODY_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BKBODY_pub-hcps1200/task-WM_contrast-0BKBODY_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-0BKFACE_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BKFACE_pub-hcps1200/task-WM_contrast-0BKFACE_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BKFACE_pub-hcps1200/task-WM_contrast-0BKFACE_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BKFACE_pub-hcps1200/task-WM_contrast-0BKFACE_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BKFACE_pub-hcps1200/task-WM_contrast-0BKFACE_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-0BKPLACE_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BKPLACE_pub-hcps1200/task-WM_contrast-0BKPLACE_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BKPLACE_pub-hcps1200/task-WM_contrast-0BKPLACE_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BKPLACE_pub-hcps1200/task-WM_contrast-0BKPLACE_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BKPLACE_pub-hcps1200/task-WM_contrast-0BKPLACE_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-0BKTOOL_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BKTOOL_pub-hcps1200/task-WM_contrast-0BKTOOL_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BKTOOL_pub-hcps1200/task-WM_contrast-0BKTOOL_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BKTOOL_pub-hcps1200/task-WM_contrast-0BKTOOL_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BKTOOL_pub-hcps1200/task-WM_contrast-0BKTOOL_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-2BK_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BK_pub-hcps1200/task-WM_contrast-2BK_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BK_pub-hcps1200/task-WM_contrast-2BK_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BK_pub-hcps1200/task-WM_contrast-2BK_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BK_pub-hcps1200/task-WM_contrast-2BK_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-0BK_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BK_pub-hcps1200/task-WM_contrast-0BK_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BK_pub-hcps1200/task-WM_contrast-0BK_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BK_pub-hcps1200/task-WM_contrast-0BK_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-0BK_pub-hcps1200/task-WM_contrast-0BK_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-2BKvs0BK_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKvs0BK_pub-hcps1200/task-WM_contrast-2BKvs0BK_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKvs0BK_pub-hcps1200/task-WM_contrast-2BKvs0BK_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKvs0BK_pub-hcps1200/task-WM_contrast-2BKvs0BK_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-2BKvs0BK_pub-hcps1200/task-WM_contrast-2BKvs0BK_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-BODY_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-BODY_pub-hcps1200/task-WM_contrast-BODY_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-BODY_pub-hcps1200/task-WM_contrast-BODY_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-BODY_pub-hcps1200/task-WM_contrast-BODY_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-BODY_pub-hcps1200/task-WM_contrast-BODY_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-FACE_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-FACE_pub-hcps1200/task-WM_contrast-FACE_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-FACE_pub-hcps1200/task-WM_contrast-FACE_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-FACE_pub-hcps1200/task-WM_contrast-FACE_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-FACE_pub-hcps1200/task-WM_contrast-FACE_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-PLACE_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-PLACE_pub-hcps1200/task-WM_contrast-PLACE_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-PLACE_pub-hcps1200/task-WM_contrast-PLACE_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-PLACE_pub-hcps1200/task-WM_contrast-PLACE_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-PLACE_pub-hcps1200/task-WM_contrast-PLACE_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-TOOL_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-TOOL_pub-hcps1200/task-WM_contrast-TOOL_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-TOOL_pub-hcps1200/task-WM_contrast-TOOL_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-TOOL_pub-hcps1200/task-WM_contrast-TOOL_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-TOOL_pub-hcps1200/task-WM_contrast-TOOL_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-BODYvsAVG_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-BODYvsAVG_pub-hcps1200/task-WM_contrast-BODYvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-BODYvsAVG_pub-hcps1200/task-WM_contrast-BODYvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-BODYvsAVG_pub-hcps1200/task-WM_contrast-BODYvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-BODYvsAVG_pub-hcps1200/task-WM_contrast-BODYvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-FACEvsAVG_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-FACEvsAVG_pub-hcps1200/task-WM_contrast-FACEvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-FACEvsAVG_pub-hcps1200/task-WM_contrast-FACEvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-FACEvsAVG_pub-hcps1200/task-WM_contrast-FACEvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-FACEvsAVG_pub-hcps1200/task-WM_contrast-FACEvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-PLACEvsAVG_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-PLACEvsAVG_pub-hcps1200/task-WM_contrast-PLACEvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-PLACEvsAVG_pub-hcps1200/task-WM_contrast-PLACEvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-PLACEvsAVG_pub-hcps1200/task-WM_contrast-PLACEvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-PLACEvsAVG_pub-hcps1200/task-WM_contrast-PLACEvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-WM_contrast-TOOLvsAVG_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-TOOLvsAVG_pub-hcps1200/task-WM_contrast-TOOLvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-TOOLvsAVG_pub-hcps1200/task-WM_contrast-TOOLvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-TOOLvsAVG_pub-hcps1200/task-WM_contrast-TOOLvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-WM_contrast-TOOLvsAVG_pub-hcps1200/task-WM_contrast-TOOLvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-GAMBLING_contrast-PUNISH_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-GAMBLING_contrast-PUNISH_pub-hcps1200/task-GAMBLING_contrast-PUNISH_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-GAMBLING_contrast-PUNISH_pub-hcps1200/task-GAMBLING_contrast-PUNISH_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-GAMBLING_contrast-PUNISH_pub-hcps1200/task-GAMBLING_contrast-PUNISH_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-GAMBLING_contrast-PUNISH_pub-hcps1200/task-GAMBLING_contrast-PUNISH_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-GAMBLING_contrast-REWARD_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-GAMBLING_contrast-REWARD_pub-hcps1200/task-GAMBLING_contrast-REWARD_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-GAMBLING_contrast-REWARD_pub-hcps1200/task-GAMBLING_contrast-REWARD_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-GAMBLING_contrast-REWARD_pub-hcps1200/task-GAMBLING_contrast-REWARD_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-GAMBLING_contrast-REWARD_pub-hcps1200/task-GAMBLING_contrast-REWARD_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-GAMBLING_contrast-REWARDvsPUNISH_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-GAMBLING_contrast-REWARDvsPUNISH_pub-hcps1200/task-GAMBLING_contrast-REWARDvsPUNISH_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-GAMBLING_contrast-REWARDvsPUNISH_pub-hcps1200/task-GAMBLING_contrast-REWARDvsPUNISH_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-GAMBLING_contrast-REWARDvsPUNISH_pub-hcps1200/task-GAMBLING_contrast-REWARDvsPUNISH_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-GAMBLING_contrast-REWARDvsPUNISH_pub-hcps1200/task-GAMBLING_contrast-REWARDvsPUNISH_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-MOTOR_contrast-CUE_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-CUE_pub-hcps1200/task-MOTOR_contrast-CUE_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-CUE_pub-hcps1200/task-MOTOR_contrast-CUE_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-CUE_pub-hcps1200/task-MOTOR_contrast-CUE_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-CUE_pub-hcps1200/task-MOTOR_contrast-CUE_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-MOTOR_contrast-LF_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-LF_pub-hcps1200/task-MOTOR_contrast-LF_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-LF_pub-hcps1200/task-MOTOR_contrast-LF_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-LF_pub-hcps1200/task-MOTOR_contrast-LF_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-LF_pub-hcps1200/task-MOTOR_contrast-LF_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-MOTOR_contrast-LH_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-LH_pub-hcps1200/task-MOTOR_contrast-LH_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-LH_pub-hcps1200/task-MOTOR_contrast-LH_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-LH_pub-hcps1200/task-MOTOR_contrast-LH_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-LH_pub-hcps1200/task-MOTOR_contrast-LH_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-MOTOR_contrast-RF_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-RF_pub-hcps1200/task-MOTOR_contrast-RF_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-RF_pub-hcps1200/task-MOTOR_contrast-RF_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-RF_pub-hcps1200/task-MOTOR_contrast-RF_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-RF_pub-hcps1200/task-MOTOR_contrast-RF_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-MOTOR_contrast-RH_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-RH_pub-hcps1200/task-MOTOR_contrast-RH_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-RH_pub-hcps1200/task-MOTOR_contrast-RH_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-RH_pub-hcps1200/task-MOTOR_contrast-RH_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-RH_pub-hcps1200/task-MOTOR_contrast-RH_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-MOTOR_contrast-T_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-T_pub-hcps1200/task-MOTOR_contrast-T_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-T_pub-hcps1200/task-MOTOR_contrast-T_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-T_pub-hcps1200/task-MOTOR_contrast-T_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-T_pub-hcps1200/task-MOTOR_contrast-T_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-MOTOR_contrast-AVG_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-AVG_pub-hcps1200/task-MOTOR_contrast-AVG_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-AVG_pub-hcps1200/task-MOTOR_contrast-AVG_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-AVG_pub-hcps1200/task-MOTOR_contrast-AVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-AVG_pub-hcps1200/task-MOTOR_contrast-AVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-MOTOR_contrast-CUEvsAVG_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-CUEvsAVG_pub-hcps1200/task-MOTOR_contrast-CUEvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-CUEvsAVG_pub-hcps1200/task-MOTOR_contrast-CUEvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-CUEvsAVG_pub-hcps1200/task-MOTOR_contrast-CUEvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-CUEvsAVG_pub-hcps1200/task-MOTOR_contrast-CUEvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-MOTOR_contrast-LFvsAVG_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-LFvsAVG_pub-hcps1200/task-MOTOR_contrast-LFvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-LFvsAVG_pub-hcps1200/task-MOTOR_contrast-LFvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-LFvsAVG_pub-hcps1200/task-MOTOR_contrast-LFvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-LFvsAVG_pub-hcps1200/task-MOTOR_contrast-LFvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-MOTOR_contrast-LHvsAVG_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-LHvsAVG_pub-hcps1200/task-MOTOR_contrast-LHvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-LHvsAVG_pub-hcps1200/task-MOTOR_contrast-LHvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-LHvsAVG_pub-hcps1200/task-MOTOR_contrast-LHvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-LHvsAVG_pub-hcps1200/task-MOTOR_contrast-LHvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-MOTOR_contrast-RFvsAVG_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-RFvsAVG_pub-hcps1200/task-MOTOR_contrast-RFvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-RFvsAVG_pub-hcps1200/task-MOTOR_contrast-RFvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-RFvsAVG_pub-hcps1200/task-MOTOR_contrast-RFvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-RFvsAVG_pub-hcps1200/task-MOTOR_contrast-RFvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-MOTOR_contrast-RHvsAVG_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-RHvsAVG_pub-hcps1200/task-MOTOR_contrast-RHvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-RHvsAVG_pub-hcps1200/task-MOTOR_contrast-RHvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-RHvsAVG_pub-hcps1200/task-MOTOR_contrast-RHvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-RHvsAVG_pub-hcps1200/task-MOTOR_contrast-RHvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-MOTOR_contrast-TvsAVG_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-TvsAVG_pub-hcps1200/task-MOTOR_contrast-TvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-TvsAVG_pub-hcps1200/task-MOTOR_contrast-TvsAVG_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-TvsAVG_pub-hcps1200/task-MOTOR_contrast-TvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-MOTOR_contrast-TvsAVG_pub-hcps1200/task-MOTOR_contrast-TvsAVG_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-LANGUAGE_contrast-MATH_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-LANGUAGE_contrast-MATH_pub-hcps1200/task-LANGUAGE_contrast-MATH_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-LANGUAGE_contrast-MATH_pub-hcps1200/task-LANGUAGE_contrast-MATH_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-LANGUAGE_contrast-MATH_pub-hcps1200/task-LANGUAGE_contrast-MATH_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-LANGUAGE_contrast-MATH_pub-hcps1200/task-LANGUAGE_contrast-MATH_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-LANGUAGE_contrast-STORY_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-LANGUAGE_contrast-STORY_pub-hcps1200/task-LANGUAGE_contrast-STORY_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-LANGUAGE_contrast-STORY_pub-hcps1200/task-LANGUAGE_contrast-STORY_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-LANGUAGE_contrast-STORY_pub-hcps1200/task-LANGUAGE_contrast-STORY_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-LANGUAGE_contrast-STORY_pub-hcps1200/task-LANGUAGE_contrast-STORY_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-LANGUAGE_contrast-STORYvsMATH_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-LANGUAGE_contrast-STORYvsMATH_pub-hcps1200/task-LANGUAGE_contrast-STORYvsMATH_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-LANGUAGE_contrast-STORYvsMATH_pub-hcps1200/task-LANGUAGE_contrast-STORYvsMATH_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-LANGUAGE_contrast-STORYvsMATH_pub-hcps1200/task-LANGUAGE_contrast-STORYvsMATH_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-LANGUAGE_contrast-STORYvsMATH_pub-hcps1200/task-LANGUAGE_contrast-STORYvsMATH_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-SOCIAL_contrast-RANDOM_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-SOCIAL_contrast-RANDOM_pub-hcps1200/task-SOCIAL_contrast-RANDOM_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-SOCIAL_contrast-RANDOM_pub-hcps1200/task-SOCIAL_contrast-RANDOM_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-SOCIAL_contrast-RANDOM_pub-hcps1200/task-SOCIAL_contrast-RANDOM_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-SOCIAL_contrast-RANDOM_pub-hcps1200/task-SOCIAL_contrast-RANDOM_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-SOCIAL_contrast-TOM_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-SOCIAL_contrast-TOM_pub-hcps1200/task-SOCIAL_contrast-TOM_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-SOCIAL_contrast-TOM_pub-hcps1200/task-SOCIAL_contrast-TOM_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-SOCIAL_contrast-TOM_pub-hcps1200/task-SOCIAL_contrast-TOM_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-SOCIAL_contrast-TOM_pub-hcps1200/task-SOCIAL_contrast-TOM_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-SOCIAL_contrast-TOMvsRANDOM_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-SOCIAL_contrast-TOMvsRANDOM_pub-hcps1200/task-SOCIAL_contrast-TOMvsRANDOM_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-SOCIAL_contrast-TOMvsRANDOM_pub-hcps1200/task-SOCIAL_contrast-TOMvsRANDOM_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-SOCIAL_contrast-TOMvsRANDOM_pub-hcps1200/task-SOCIAL_contrast-TOMvsRANDOM_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-SOCIAL_contrast-TOMvsRANDOM_pub-hcps1200/task-SOCIAL_contrast-TOMvsRANDOM_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-RELATIONAL_contrast-MATCH_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-RELATIONAL_contrast-MATCH_pub-hcps1200/task-RELATIONAL_contrast-MATCH_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-RELATIONAL_contrast-MATCH_pub-hcps1200/task-RELATIONAL_contrast-MATCH_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-RELATIONAL_contrast-MATCH_pub-hcps1200/task-RELATIONAL_contrast-MATCH_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-RELATIONAL_contrast-MATCH_pub-hcps1200/task-RELATIONAL_contrast-MATCH_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-RELATIONAL_contrast-REL_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-RELATIONAL_contrast-REL_pub-hcps1200/task-RELATIONAL_contrast-REL_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-RELATIONAL_contrast-REL_pub-hcps1200/task-RELATIONAL_contrast-REL_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-RELATIONAL_contrast-REL_pub-hcps1200/task-RELATIONAL_contrast-REL_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-RELATIONAL_contrast-REL_pub-hcps1200/task-RELATIONAL_contrast-REL_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-RELATIONAL_contrast-RELvsMATCH_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-RELATIONAL_contrast-RELvsMATCH_pub-hcps1200/task-RELATIONAL_contrast-RELvsMATCH_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-RELATIONAL_contrast-RELvsMATCH_pub-hcps1200/task-RELATIONAL_contrast-RELvsMATCH_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-RELATIONAL_contrast-RELvsMATCH_pub-hcps1200/task-RELATIONAL_contrast-RELvsMATCH_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-RELATIONAL_contrast-RELvsMATCH_pub-hcps1200/task-RELATIONAL_contrast-RELvsMATCH_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-EMOTION_contrast-FACES_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-EMOTION_contrast-FACES_pub-hcps1200/task-EMOTION_contrast-FACES_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-EMOTION_contrast-FACES_pub-hcps1200/task-EMOTION_contrast-FACES_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-EMOTION_contrast-FACES_pub-hcps1200/task-EMOTION_contrast-FACES_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-EMOTION_contrast-FACES_pub-hcps1200/task-EMOTION_contrast-FACES_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-EMOTION_contrast-SHAPES_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-EMOTION_contrast-SHAPES_pub-hcps1200/task-EMOTION_contrast-SHAPES_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-EMOTION_contrast-SHAPES_pub-hcps1200/task-EMOTION_contrast-SHAPES_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-EMOTION_contrast-SHAPES_pub-hcps1200/task-EMOTION_contrast-SHAPES_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-EMOTION_contrast-SHAPES_pub-hcps1200/task-EMOTION_contrast-SHAPES_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            },
+            "task-EMOTION_contrast-FACESvsSHAPES_pub-hcps1200": {
+                "fsLR": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-EMOTION_contrast-FACESvsSHAPES_pub-hcps1200/task-EMOTION_contrast-FACESvsSHAPES_pub-hcps1200_space-fsLR_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-EMOTION_contrast-FACESvsSHAPES_pub-hcps1200/task-EMOTION_contrast-FACESvsSHAPES_pub-hcps1200_space-fsLR_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                },
+                "fsaverage": {
+                    "L": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-EMOTION_contrast-FACESvsSHAPES_pub-hcps1200/task-EMOTION_contrast-FACESvsSHAPES_pub-hcps1200_space-fsaverage_desc-proc_hemi-L.surf.gii.gz"
+                    },
+                    "R": {
+                        "host": "github-nispace",
+                        "remote": "reference/hcptask/map/task-EMOTION_contrast-FACESvsSHAPES_pub-hcps1200/task-EMOTION_contrast-FACESvsSHAPES_pub-hcps1200_space-fsaverage_desc-proc_hemi-R.surf.gii.gz"
+                    }
+                }
+            }
+        },
+        "plot": {
+            "host": "github-nispace",
+            "remote": "reference/hcptask/plot/dset-hcptask_plot-overview.png"
         }
     },
     "mabaseline": {

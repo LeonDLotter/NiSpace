@@ -1865,7 +1865,7 @@ def _pair_metrics(a):
 
 def shared_axes(nsp, axes="default", method=None, X_reduction=None, Y_transform=None,
                 pooled=None, null_check=True, n_mem=15, delta_threshold=0.2,
-                loading_threshold=0.3, mem_share_threshold=0.75, verbose=None):
+                loading_threshold=0.3, mem_share_threshold=0.75, space=None, verbose=None):
     """Check whether Y and X share known spatial axes, and whether the Moran null is degenerate.
 
     Descriptive only (no p-values). Needs a fitted ``nsp``; ``colocalize()``/``permute()`` are
@@ -1922,6 +1922,9 @@ def shared_axes(nsp, axes="default", method=None, X_reduction=None, Y_transform=
         Number of MEMs per block (NiSpace's Moran null default).
     delta_threshold, loading_threshold, mem_share_threshold : float
         Flag thresholds, see above.
+    space : str, optional
+        Space for the parcel-shape axes (``size``, ``dispersion``, ...), default the active
+        space; see :func:`nispace.datasets.fetch_axes`.
     verbose : bool, optional
 
     Returns
@@ -2004,7 +2007,7 @@ def shared_axes(nsp, axes="default", method=None, X_reduction=None, Y_transform=
     pos = np.array([lab_pos[str(c)] for c in X.columns])
     n_parc = len(lab_pos)
     with _quiet():
-        A = build_axes(nsp._parc, axes, verbose=False)
+        A = build_axes(nsp._parc, axes, verbose=False, space=space)
     A = A.iloc[:, pos]
     A.columns = X.columns
     if len(A) == 0:
@@ -2141,7 +2144,7 @@ def shared_axes(nsp, axes="default", method=None, X_reduction=None, Y_transform=
                     "variance). These nulls mainly test the sign of one gradient (bimodal null "
                     "distribution); consider a spin null (cortex) or label permutation.")
 
-    settings = dict(method=method, axes=ax_names,
+    settings = dict(method=method, axes=ax_names, space=space,
                     n_parcels={a: int((keep & np.isfinite(A_arr[k])).sum())
                                for k, a in enumerate(ax_names)},
                     pooled=pooled, delta_threshold=dt, loading_threshold=lt,

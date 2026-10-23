@@ -391,10 +391,11 @@ class NiSpace:
             Covariate maps to regress out of X and/or Y before colocalization. Can be one or
             several named axes (see :func:`~nispace.datasets.fetch_axes`): tissue probability
             (``"gm"``, ``"wm"``, ``"csf"``, ``"veins"``, ``"arteries"``), geometry
-            (``"radial"``, ``"ap"``, ``"si"``, ``"lr"``, ``"medlat"``, ``"coords"``),
-            compartment (``"cxsc"``), Moran eigenvectors (``"mem1"``, ...), or cortical
-            hierarchy (``"saaxis"``, ``"fcgradient1"``, ``"fcgradient2"``, ``"t1t2"``,
-            ``"thickness"``). Axes must cover every parcel (e.g. cortical-hierarchy maps cannot
+            (``"radial"``, ``"ap"``, ``"si"``, ``"lr"``, ``"medlat"``, ``"coords"``), parcel
+            shape (``"size"``, ``"area"``, ``"dispersion"``, ``"elongation"``,
+            ``"parcelgeom"``), compartment (``"cxsc"``), Moran eigenvectors (``"mem1"``, ...),
+            or cortical hierarchy (``"saaxis"``, ``"fcgradient1"``, ``"fcgradient2"``,
+            ``"t1t2"``, ``"thickness"``, ``"sulc"``, ``"curv"``). Axes must cover every parcel (e.g. cortical-hierarchy maps cannot
             be used with cortex+subcortex parcellations). Alternatively, accepts a numpy array,
             pandas DataFrame/Series, or a list of image paths/objects. Default is None.
             When Z is provided and :meth:`colocalize` is called with its default

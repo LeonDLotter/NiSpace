@@ -1641,6 +1641,7 @@ def fetch_axes(parcellation,
                axes: Union[str, List[str]] = "default",
                hemi: Union[str, List[str]] = None,
                require_complete: bool = False,
+               space: str = None,
                verbose: bool = True) -> pd.DataFrame:
     """
     Fetch or compute named spatial axes (tissue, geometry, compartment, cortical hierarchy)
@@ -1659,18 +1660,32 @@ def fetch_axes(parcellation,
     ``ap``, ``si``, ``lr``              Centroid MNI y / z / x (+ = anterior / superior / right)
     ``medlat``                          Distance from the midline, \\|x\\| (+ = lateral)
     ``coords``                          Group: ``ap`` + ``si`` + ``lr``
+    ``size``                            log number of voxels / vertices per parcel (size and
+                                        amount of data per parcel)
+    ``area``                            log parcel surface area (surface parcellations only)
+    ``dispersion``                      log spread around the parcel centroid relative to an
+                                        equal-size ball / disc (0 = round)
+    ``elongation``                      log sqrt(lambda1 / lambda2) of the coordinate covariance
+    ``parcelgeom``                      Group: ``size`` + ``area`` (surfaces) + ``dispersion`` +
+                                        ``elongation``
     ``cxsc``                            1 = subcortex, 0 = cortex (combined parcellations)
     ``mem1``, ``mem2``, ...             Moran eigenvectors of the 1/d weight matrix between
                                         parcel centroids (smoothest patterns first)
     ``saaxis``                          Sensorimotor-association axis (Sydnor 2021)
     ``fcgradient1``, ``fcgradient2``    FC gradients 1 and 2 (Margulies 2016)
     ``t1t2``, ``thickness``             T1w/T2w ratio, cortical thickness (HCP S1200)
+    ``sulc``, ``curv``                  Sulcal depth, mean curvature (HCP S1200; HCP sign:
+                                        negative = sulcal, positive = gyral)
     ==================================  ========================================================
 
-    Geometry, compartment and Moran axes are computed from the parcellation (centroids from the
-    MNI image if available, else from the fsLR/fsaverage surface). Tissue and hierarchy maps are
-    loaded from the ``tpm``/``cortexfeatures`` datasets; ``cortexfeatures`` covers cortex
-    parcellations only.
+    Geometry, parcel-shape, compartment and Moran axes are computed from the parcellation
+    (centroids from the MNI image if available, else from the fsLR/fsaverage surface). Parcel
+    shape uses ``space`` if given, else the parcellation's active space (for ``NiSpace(z=...)``
+    the data space), else the same default as the centroids: voxel coordinates for volumes,
+    sphere-mesh coordinates for surfaces, so volumetric and surface shape values differ (folded
+    ribbon vs. cortical sheet).
+    Tissue and hierarchy maps are loaded from the ``tpm``/``cortexfeatures`` datasets;
+    ``cortexfeatures`` covers cortex parcellations only.
 
     Parameters
     ----------
@@ -1689,6 +1704,13 @@ def fetch_axes(parcellation,
     require_complete : bool, default False
         Raise if an axis is undefined for some parcels (e.g. ``saaxis`` on a combined
         parcellation, where subcortical parcels are NaN).
+    space : str, optional
+        Space for the parcel-shape axes, e.g. ``"fsLR"`` when the data were parcellated on the
+        surface (reference tables of surface datasets such as ``cortexfeatures`` or
+        ``bigbrain``). For a combined parcellation, a surface space takes the cortex from the
+        cortex surface and the subcortex from the MNI volume; their log values are z-scored
+        within each compartment (``area``: cortex only). To use such axes as covariates, pass
+        the returned table as ``NiSpace(z=...)``.
     verbose : bool, default True
 
     Returns
@@ -1710,7 +1732,8 @@ def fetch_axes(parcellation,
             f"'parcellation' must be an integrated parcellation name or a Parcellation object "
             f"(custom images: Parcellation.from_path(...)), got {parcellation!r}.", ValueError)
     lgr.info(f"Building axis maps {axes!r} for parcellation '{parc._name}'.")
-    return build_axes(parc, axes, require_complete=require_complete, verbose=verbose)
+    return build_axes(parc, axes, require_complete=require_complete, verbose=verbose,
+                      space=space)
 
 
 def fetch_map_info(dataset: str,
