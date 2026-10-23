@@ -4048,7 +4048,7 @@ class NiSpace:
               On 29 PET maps the empirical FWER was 0.07--0.14 at
               ``mc_alpha=0.05``; on the same data, the probability of two or more
               false positives stayed below 0.05. It also ignores the sign of map correlations,
-              so it is more liberal for one-sided tests (a warning is logged).
+              so it is more liberal for one-sided tests.
               For a stated guarantee in the same range, use ``"kminP"``.
             * ``"meff_li_ji"`` (alias ``"meff_liji"``, ``"meffliji"``) -- FWER:
               same Šidák scheme, with an alternative eigenvalue-based
@@ -4170,7 +4170,7 @@ class NiSpace:
         mc_key = mc_method.replace("_", "").replace("-", "").lower()
 
         p_corr = dict()
-        _meff_tail_warned = set()  # one one-sided-tail warning per null, not per stat
+        # _meff_tail_warned = set()  # one-sided Meff warning, postponed (see correct_p meff)
 
         if _is_empirical_mc(mc_method):
             for p_str in p_strs:
@@ -4211,18 +4211,23 @@ class NiSpace:
                         lgr.info(f"Meff computed on {'ranked ' if _rank else ''}X maps"
                                  f"{' with Z regressed out' if _regress_x else ''}, as in the "
                                  f"'{coloc}' colocalization.")
-                    # Meff ignores the sign of map correlations: liberal for one-sided tests
-                    _null_str = _get_df_string("null", xdimred=xdimred, ytrans=ytrans, method=coloc,
-                                               xsea=xsea, perm=perm, pooled_p=pooled)
-                    _tail = self._nulls.get(f"p_tails_{_null_str}", {}).get(stat, "two")
-                    if _tail != "two" and _null_str not in _meff_tail_warned:
-                        _meff_tail_warned.add(_null_str)
-                        lgr.warning(
-                            f"'{mc_method}' with one-sided p-values (tail='{_tail}'): Meff is "
-                            "estimated from |correlations| between X maps and ignores their sign, "
-                            "so the correction is more liberal for one-sided tests. Consider "
-                            "'kminP', 'step_minP' or 'fdr_bh'."
-                        )
+                    # TODO (postponed until the default mc_method changes): warn that Meff is
+                    # liberal for one-sided tests (it ignores the sign of map correlations).
+                    # # Meff ignores the sign of map correlations: liberal for one-sided tests
+                    # _null_str = _get_df_string("null", xdimred=xdimred, ytrans=ytrans, method=coloc,
+                    #                            xsea=xsea, perm=perm, pooled_p=pooled)
+                    # _tail = self._nulls.get(f"p_tails_{_null_str}", {}).get(stat, "two")
+                    # # sign-free statistics (XSEA with an absolute aggregation, which is why the
+                    # # test is one-sided) don't depend on the sign of map correlations
+                    # _abs_stat = xsea and "abs" in str(self._xsea_aggregation_method or "")
+                    # if _tail != "two" and not _abs_stat and _null_str not in _meff_tail_warned:
+                    #     _meff_tail_warned.add(_null_str)
+                    #     lgr.warning(
+                    #         f"'{mc_method}' with one-sided p-values (tail='{_tail}'): Meff is "
+                    #         "estimated from |correlations| between X maps and ignores their sign, "
+                    #         "so the correction is more liberal for one-sided tests. Consider "
+                    #         "'kminP', 'step_minP' or 'fdr_bh'."
+                    #     )
                     # for XSEA: use per-set mean map so Meff reflects set-level independence
                     if xsea and hasattr(self._X.index, "get_level_values"):
                         set_labels = self._X.index.get_level_values("set")

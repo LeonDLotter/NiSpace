@@ -797,6 +797,28 @@ def test_correct_p_meff_joint_xy_uses_y_as_colocalized(rng, method, zy_matched):
     assert abs(meff - compute_meff(X) * compute_meff(Y)) > 0.1  # the treatment matters here
 
 
+@pytest.mark.skip(reason="one-sided Meff warning postponed until the default mc_method changes")
+def test_correct_p_meff_no_tail_warning_for_absolute_xsea(rng, caplog):
+    """XSEA with an absolute aggregation is one-sided by construction, but its statistic is
+    sign-free: Meff's sign-blindness doesn't matter, no warning."""
+    n_parcels = 30
+    labels = [f"p{i}" for i in range(n_parcels)]
+    idx = pd.MultiIndex.from_arrays([np.repeat(["s0", "s1", "s2"], 3),
+                                     [f"g{i}" for i in range(9)]], names=["set", "gene"])
+    nsp = NiSpace(x=pd.DataFrame(rng.normal(size=(9, n_parcels)), index=idx, columns=labels),
+                  y=pd.DataFrame(rng.normal(size=(1, n_parcels)), index=["y0"], columns=labels),
+                  parcellation=None, standardize=False, n_proc=1, verbose=False,
+                  return_self=False)
+    nsp.fit()
+    nsp.colocalize(method="pearson", xsea=True, xsea_aggregation_method="absmean",
+                   verbose=False)
+    nsp.permute(what="maps", maps_method="random", n_perm=100, seed=1, verbose=False)
+    with caplog.at_level("WARNING"):
+        nsp.correct_p(mc_method="meff", verbose=False)
+    assert not any("one-sided" in r.message for r in caplog.records)
+
+
+@pytest.mark.skip(reason="one-sided Meff warning postponed until the default mc_method changes")
 def test_correct_p_meff_warns_for_one_sided_tails(rng, caplog):
     nsp, _, _ = _meff_nsp(rng, "pearson", False)
     with caplog.at_level("WARNING"):
