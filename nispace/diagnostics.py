@@ -48,7 +48,7 @@ from .core.region_contribution import (_get_region_contribution_fun, _sort_regio
 from .stats.coloc import rank2d
 from .stats.effectsize import rzscore_nan, zscore_nan
 from .stats.misc import (maxT_correction, step_maxT_correction, mc_correction, rho_to_z,
-                         z_to_rho, zscore_df, null_to_p)
+                         z_to_rho, zscore_df, null_to_p, _counts_to_p)
 from .utils.utils import set_log, _quiet, print_arg_pairs
 
 
@@ -1277,9 +1277,14 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
 
     # raw (uncorrected) p is always computed and returned -- mc_method only controls
     # whether a *second*, corrected p is additionally computed alongside it
-    p_floor = max(np.finfo(float).eps, 1.0 / n_perm)
-    p_raw_arr = np.mean(np.abs(p_null_arr) >= np.abs(p_obs_arr[:, :, np.newaxis, :]), axis=2)
-    p_raw_arr = np.clip(p_raw_arr, p_floor, 1.0 - p_floor)
+    # same per-test p as permute() (null_to_p): two-tailed equal-tail, augmented convention
+    # (the observed value is one of n_valid_null + 1 draws)
+    _obs4 = p_obs_arr[:, :, np.newaxis, :]
+    with np.errstate(invalid="ignore"):
+        ge = 1 + np.sum(p_null_arr >= _obs4, axis=2)
+        le = 1 + np.sum(p_null_arr <= _obs4, axis=2)
+    n_rep = 1 + np.sum(~np.isnan(p_null_arr), axis=2)
+    p_raw_arr = np.where(np.isnan(p_obs_arr), np.nan, _counts_to_p(ge, le, n_rep, "two"))
 
     p_raw_result = _local_to_result_dict(p_raw_arr, x_labels, p_labels, X.columns, dtype, is_joint)
 
@@ -1290,9 +1295,11 @@ def local_colocalization(nsp, k=None, radius=None, fwhm_mm=None, dist_mat=None,
         p_obs_result = _local_to_result_dict(p_obs_arr, x_labels, p_labels, X.columns, dtype, is_joint)
         for j, x_lab in enumerate(x_labels):
             obs_df = p_obs_result[x_lab] if isinstance(p_obs_result, dict) else p_obs_result
+            p_raw_df = p_raw_result[x_lab] if isinstance(p_raw_result, dict) else p_raw_result
             null_colocs = [{"rho": p_null_arr[:, j, p, :]} for p in range(n_perm)]
+            # p_raw: a corrected p is never below its own uncorrected (equal-tail) p
             p_corr, _ = corr_fun(obs_df, null_colocs, stat="rho", tail="two",
-                                 how="r", alpha=mc_alpha, dtype=dtype)
+                                 how="r", alpha=mc_alpha, dtype=dtype, p_raw=p_raw_df)
             p_corr_result[x_lab] = p_corr
         if is_joint and len(p_corr_result) == 1:
             p_corr_result = next(iter(p_corr_result.values()))

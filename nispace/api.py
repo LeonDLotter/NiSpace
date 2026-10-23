@@ -21,7 +21,8 @@ from .core.colocalize import (_get_colocalize_fun, _sort_colocs, _get_coloc_stat
                               _xsea_aggregate, _check_predictor_count, _DOMINANCE_MAX_PREDICTORS_DEFAULT)
 from .core.correlate_within_region import correlate_within_region_core, _CWR_METHODS
 from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_method,
-                               _EMPIRICAL_MC_METHODS, _MAXT_SCALE_RATIO_WARN, _resolve_permute_combo,
+                               _is_empirical_mc, _parse_kminp, _MAXT_SCALE_RATIO_WARN,
+                               _resolve_permute_combo,
                                _resolve_permute_mode_settings, _null_maps_cache_hit,
                                _null_maps_n_perm,
                                _resolve_maps_batch_size, _iter_null_map_batches)
@@ -35,7 +36,8 @@ from .stats.coloc import beta, elasticnet, lasso, mlr, partialpearson, pearson, 
 from .stats.misc import (mc_correction, residuals_nan, zscore_df, permute_groups,
                           compute_meff, meff_sidak_correction,
                           maxT_correction, step_maxT_correction,
-                          minP_correction, step_minP_correction, _family_scale_ratio,
+                          minP_correction, step_minP_correction, kminP_correction,
+                          _family_scale_ratio,
                           _null_stats_to_array,
                           null_to_p, rho_to_z, z_to_rho)
 from .stats.effectsize import rzscore_nan, zscore_nan
@@ -47,22 +49,22 @@ from .utils.utils import (set_log, _quiet, _verbose_scope, fill_nan, _get_df_str
 
 
 def _cwr_null_p(obs, null):
-    """Two-tailed empirical p per column: fraction of |null| >= |obs|, floor-clipped
-    to avoid an exact-0 p (matches null_to_p's floor convention, stats/misc.py).
-    Used for correlate_within_region()'s raw per-parcel p and, with the same floor,
-    for get_within_region_correlations()'s maxT/step_maxT correction -- so
-    'corrected p >= raw p' holds by construction, not just approximately.
+    """Two-tailed empirical p per column on |rho|, augmented convention (as null_to_p,
+    stats/misc.py): p = (1 + #{|null| >= |obs|}) / (1 + n_valid_null), never 0.
+    NaN null values are dropped from their column's reference. Used for
+    correlate_within_region()'s raw per-parcel p; get_within_region_correlations()'s
+    maxT/step_maxT correction uses the same convention, so 'corrected p >= raw p'
+    holds by construction.
 
     A NaN obs (e.g. a parcel/subject that was entirely missing, so rho itself is
     undefined) must produce a NaN p, not a fake "significant" one: `NaN >= x` is
     always False in numpy, so the naive fraction would silently evaluate to 0.0
     and get floor-clipped to `1/n_perm` -- an artificially tiny "significant"
     p-value for a statistic that was never computed. Guarded explicitly here."""
-    n_perm = null.shape[0]
     with np.errstate(invalid="ignore"):
-        p = (np.abs(null) >= np.abs(obs)[np.newaxis, :]).mean(axis=0)
-    floor = max(np.finfo(float).eps, 1.0 / n_perm)
-    p = np.clip(p, floor, 1.0 - floor)
+        count = (np.abs(null) >= np.abs(obs)[np.newaxis, :]).sum(axis=0)
+    n_rep = 1 + (~np.isnan(null)).sum(axis=0)
+    p = (1 + count) / n_rep
     return np.where(np.isnan(obs), np.nan, p)
 
 
@@ -2373,41 +2375,20 @@ class NiSpace:
                                 KeyError
                             )
                         null_dist = null_entry["null_dist"]  # (n_perm, n_parcels)
-                        obs_abs = np.abs(rho_df.values)[0]      # (n_parcels,)
-                        null_abs = np.abs(null_dist)            # (n_perm, n_parcels)
-                        # a parcel with no observed rho (entirely missing data) has no
-                        # defined statistic to correct -- exclude it from the maxT/
-                        # step_maxT family entirely (so it can't distort other parcels'
-                        # max-statistic null either) and give it NaN, not a fake p from
-                        # 'NaN >= x' silently evaluating to False everywhere
-                        valid = ~np.isnan(obs_abs)
-                        counts = np.full(obs_abs.shape, np.nan)
-                        if valid.any():
-                            obs_v = obs_abs[valid]
-                            null_v = null_abs[:, valid]
-                            if mc_method == "maxT":
-                                with np.errstate(invalid="ignore"):
-                                    null_max = np.nanmax(null_v, axis=1)   # (n_perm,)
-                                counts_v = np.mean(null_max[:, np.newaxis] >= obs_v[np.newaxis, :], axis=0)
-                            else:  # step_maxT
-                                order = np.argsort(obs_v)[::-1]
-                                obs_s = obs_v[order]
-                                # NaN would poison np.maximum.accumulate's running max for every
-                                # step after it appears -- substitute -inf so a sporadic per-
-                                # permutation NaN (too few valid pairs in that one shuffle) can
-                                # never win the max, without breaking the accumulation
-                                null_s = np.where(np.isnan(null_v[:, order]), -np.inf, null_v[:, order])
-                                null_rev_cummax = np.maximum.accumulate(null_s[:, ::-1], axis=1)[:, ::-1]
-                                p_s = np.maximum.accumulate(np.mean(null_rev_cummax >= obs_s[np.newaxis, :], axis=0))
-                                counts_v = np.empty_like(p_s)
-                                counts_v[order] = p_s
-                            counts[valid] = counts_v
-                        # same floor-clip convention as the raw per-parcel p (_cwr_null_p) so
-                        # 'corrected >= raw' holds by construction, not just approximately
-                        n_perm_used = null_entry["n_perm"]
-                        floor = max(np.finfo(float).eps, 1.0 / n_perm_used)
-                        with np.errstate(invalid="ignore"):
-                            p_corr = np.clip(counts, floor, 1.0 - floor)
+                        # shared family machinery on |rho| (tail="two"): augmented
+                        # (c + 1) / (n_perm + 1) counts; a parcel with no observed rho (entirely
+                        # missing data) is excluded from the family and gets NaN; sporadic NaN
+                        # null values never win the max; p_raw floors the result (the raw p
+                        # drops a column's NaN null values, so its denominator can be smaller)
+                        # BEFORE the step-down cumulative max
+                        fn = maxT_correction if mc_method == "maxT" else step_maxT_correction
+                        p_corr, _ = fn(
+                            np.asarray(rho_df.values, dtype=float),
+                            [{"rho": null_dist[b][np.newaxis, :]} for b in range(null_dist.shape[0])],
+                            stat="rho", tail="two", how="r",
+                            p_raw=np.asarray(p_df.values, dtype=float),
+                        )
+                        p_corr = np.asarray(p_corr)[0]
                         p_corr_df = pd.DataFrame([p_corr], index=p_df.index, columns=p_df.columns,
                                                  dtype=self._dtype)
 
@@ -4054,11 +4035,21 @@ class NiSpace:
             *Empirical methods* (computed by NiSpace itself):
 
             * ``"meff_galwey"`` (default; alias ``"meff"``, ``"meffgalwey"``) --
-              FWER: Šidák correction using an effective number of independent
-              tests estimated from the eigenvalues of X's (and, for
+              approximate FWER: Šidák correction using an effective number of
+              independent tests estimated from the eigenvalues of X's (and, for
               ``mc_dimension="array"`` with multiple Y rows, also Y's)
-              correlation matrix. For XSEA, Meff is estimated from the per-set
-              mean maps. :cite:`galwey2009`
+              correlation matrix. X is ranked for rank-based colocalization
+              methods and residualized on Z if the colocalization regressed Z
+              out. For XSEA, Meff is estimated from the per-set mean maps.
+              :cite:`galwey2009`
+
+              Meff is a heuristic and does **not** strictly control the FWER:
+              with many correlated maps it underestimates the number of tests.
+              On 29 PET maps the empirical FWER was 0.07--0.14 at
+              ``mc_alpha=0.05``; on the same data, the probability of two or more
+              false positives stayed below 0.05. It also ignores the sign of map correlations,
+              so it is more liberal for one-sided tests (a warning is logged).
+              For a stated guarantee in the same range, use ``"kminP"``.
             * ``"meff_li_ji"`` (alias ``"meff_liji"``, ``"meffliji"``) -- FWER:
               same Šidák scheme, with an alternative eigenvalue-based
               effective-N estimator. :cite:`liji2005`
@@ -4089,6 +4080,22 @@ class NiSpace:
             * ``"step_minP"`` (alias ``"step_minp"``, ``"stepminp"``) -- FWER:
               step-down variant of ``"minP"``, at least as powerful.
               :cite:`westfall1993`
+            * ``"kminP"`` (alias ``"kminp"``; ``"kminP(<n>)"`` for another
+              ``n``) -- generalized FWER: single-step min-P where each
+              permutation contributes its (n+1)-th smallest per-test p-value.
+              Controls the probability of more than ``n`` (default 1) false
+              positives (the k-FWER with k = n+1, :cite:`lehmann2005`): with
+              probability at least ``1 - mc_alpha``, at most ``n`` of the
+              significant tests are false positives -- a statement about the
+              set of significant tests, not about which one. Between FWER
+              (``"minP"`` = ``"kminP(0)"``) and FDR; each test's decision
+              depends only on its own p-value and the joint null. The
+              single-step common-quantile procedure of :cite:`dudoit2008`
+              (Procedure 3.19), i.e. the k-max procedure of :cite:`romano2007`
+              with p-values as statistics; see
+              :func:`~nispace.stats.misc.kminP_correction`. Same
+              null-availability requirement as ``"minP"``. Stored and retrieved
+              under the canonical name ``"kminP(<n>)"``.
 
             *Classical methods* (passed to
             ``statsmodels.stats.multitest.multipletests``, operate on the
@@ -4116,7 +4123,7 @@ class NiSpace:
             comparisons), ``"x"``/``"columns"`` (per X column), or
             ``"y"``/``"rows"`` (per Y row). Not all combinations are supported by
             every method -- e.g. ``"maxT"``/``"step_maxT"``/``"minP"``/
-            ``"step_minP"`` don't support per-column correction and treat
+            ``"step_minP"``/``"kminP"`` don't support per-column correction and treat
             ``"array"`` as per-Y-row, and for the ``meff`` methods with multiple Y
             rows, ``"array"`` applies a joint X x Y correction that is only
             meaningful when the Y rows are related entities examined together
@@ -4163,8 +4170,9 @@ class NiSpace:
         mc_key = mc_method.replace("_", "").replace("-", "").lower()
 
         p_corr = dict()
+        _meff_tail_warned = set()  # one one-sided-tail warning per null, not per stat
 
-        if mc_method in _EMPIRICAL_MC_METHODS:
+        if _is_empirical_mc(mc_method):
             for p_str in p_strs:
                 fields   = _parse_df_string(p_str)
                 xdimred  = _parse_bool(fields.get("xdimred", False))
@@ -4185,7 +4193,36 @@ class NiSpace:
                                     "(Meff is defined over X maps). Ignoring.")
                     meff_variant = "galwey" if mc_method == "meff_galwey" else "li_ji"
                     with _quiet():
-                        X_data = np.array(self.get_x(X_reduction=xdimred))
+                        X_data = np.array(self.get_x(X_reduction=xdimred), dtype=float)
+                    # Meff from the maps as the colocalization saw them: ranked for rank-based
+                    # methods (spearman), with Z regressed out if colocalize() did so
+                    _ckw = self._coloc_kwargs_by_method.get(coloc, {})
+                    _rank = bool(_ckw.get("rank", False))
+                    _regress_z = _ckw.get("regress_z") or ""
+                    _Z_arr = None
+                    if _regress_z and self._Z is not None:
+                        _Z_arr = np.array(self._Z, dtype=float)
+                        if _rank:
+                            _Z_arr = rank2d(_Z_arr.T).T
+                    _regress_x = "x" in _regress_z and _Z_arr is not None
+                    X_data = _rank_regress(arr=X_data, rank=_rank, regress=_regress_x, z=_Z_arr,
+                                           verbose=False)
+                    if _rank or _regress_x:
+                        lgr.info(f"Meff computed on {'ranked ' if _rank else ''}X maps"
+                                 f"{' with Z regressed out' if _regress_x else ''}, as in the "
+                                 f"'{coloc}' colocalization.")
+                    # Meff ignores the sign of map correlations: liberal for one-sided tests
+                    _null_str = _get_df_string("null", xdimred=xdimred, ytrans=ytrans, method=coloc,
+                                               xsea=xsea, perm=perm, pooled_p=pooled)
+                    _tail = self._nulls.get(f"p_tails_{_null_str}", {}).get(stat, "two")
+                    if _tail != "two" and _null_str not in _meff_tail_warned:
+                        _meff_tail_warned.add(_null_str)
+                        lgr.warning(
+                            f"'{mc_method}' with one-sided p-values (tail='{_tail}'): Meff is "
+                            "estimated from |correlations| between X maps and ignores their sign, "
+                            "so the correction is more liberal for one-sided tests. Consider "
+                            "'kminP', 'step_minP' or 'fdr_bh'."
+                        )
                     # for XSEA: use per-set mean map so Meff reflects set-level independence
                     if xsea and hasattr(self._X.index, "get_level_values"):
                         set_labels = self._X.index.get_level_values("set")
@@ -4201,7 +4238,11 @@ class NiSpace:
                     if how == "a" and n_y_rows > 1:
                         # joint correction across X and Y: meff_total = meff_X * meff_Y
                         with _quiet():
-                            Y_data = np.array(self.get_y(Y_transform=ytrans))
+                            Y_data = np.array(self.get_y(Y_transform=ytrans), dtype=float)
+                        _regress_y = "y" in _regress_z and _Z_arr is not None
+                        Y_data = _rank_regress(arr=Y_data, rank=_rank, regress=_regress_y, z=_Z_arr,
+                                               zy_matched=bool(_ckw.get("zy_matched", False)),
+                                               verbose=False)
                         meff_y = compute_meff(Y_data, method=meff_variant)
                         meff = meff_x * meff_y
                         lgr.info(f"Meff_Y ({meff_variant}) = {meff_y:.2f} "
@@ -4220,7 +4261,8 @@ class NiSpace:
                     )
 
                 # ── Max-T / Min-P family-wise corrections (+ step-down variants) ──
-                elif mc_method in {"maxT", "step_maxT", "minP", "step_minP"}:
+                elif (mc_method in {"maxT", "step_maxT", "minP", "step_minP"}
+                      or _parse_kminp(mc_method) is not None):
                     # these correct across X (columns) per Y row -- override "array" default
                     if how == "c":
                         lgr.critical_raise(
@@ -4241,7 +4283,7 @@ class NiSpace:
                             f"Null colocalizations for '{null_str}' not found. "
                             f"'{mc_method}' requires the full null distributions. "
                             "Either re-run permute(), or reload the object with save_nulls=True "
-                            "(note: correct_p() with 'maxT'/'step_maxT'/'minP'/'step_minP' "
+                            "(note: correct_p() with 'maxT'/'step_maxT'/'minP'/'step_minP'/'kminP' "
                             "should be called before saving without nulls).",
                             KeyError
                         )
@@ -4283,10 +4325,15 @@ class NiSpace:
                                 f"is unbalanced).{hint} Use mc_method='minP'/'step_minP' for a "
                                 "scale-invariant correction."
                             )
-                    correction_fn = {
-                        "maxT": maxT_correction, "step_maxT": step_maxT_correction,
-                        "minP": minP_correction, "step_minP": step_minP_correction,
-                    }[mc_method]
+                    n_false = _parse_kminp(mc_method)
+                    if n_false is not None:
+                        def correction_fn(*args, **kwargs):
+                            return kminP_correction(*args, n_false=n_false, **kwargs)
+                    else:
+                        correction_fn = {
+                            "maxT": maxT_correction, "step_maxT": step_maxT_correction,
+                            "minP": minP_correction, "step_minP": step_minP_correction,
+                        }[mc_method]
                     p_corr[p_str_mc], _ = correction_fn(
                         obs_stats, null_colocs, stat=stat,
                         tail=tail, how="r",

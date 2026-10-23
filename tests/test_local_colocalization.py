@@ -963,3 +963,21 @@ def test_pooled_noop_when_single_y_row(rng):
     assert out["pooled"] is False
     for x_lab in out["stat"]:
         assert out["stat"][x_lab].shape[0] == 1
+
+
+@pytest.mark.parametrize("mc_method", ["maxT", "step_maxT"])
+def test_local_p_corr_never_below_raw_p(rng, mc_method):
+    """The raw local p is two-tailed equal-tail (floor 2/(B+1)), local maxT is |.|-based
+    (floor 1/(B+1)): the corrected p is floored at the raw p."""
+    n_parcels = 30
+    nsp = _make_nsp(rng, n_parcels=n_parcels, n_x=2)
+    nsp.colocalize(method="pearson", verbose=False)
+    nsp.permute(what="maps", n_perm=100, maps_method="random", seed=0, verbose=False)
+    out = diagnostics.local_colocalization(nsp, k=n_parcels, dist_mat=_index_dist_mat(n_parcels),
+                                           mc_method=mc_method, verbose=False)
+    n_bind = 0
+    for x_lab in out["p"]:
+        p, p_corr = out["p"][x_lab].to_numpy(), out["p_corr"][x_lab].to_numpy()
+        assert (p_corr >= p - 1e-7).all()
+        n_bind += np.isclose(p_corr, p).sum()
+    assert n_bind > 0  # whole-brain window, strong signal: the raw-p floor binds

@@ -519,3 +519,77 @@ def test_nsp_return_self_true_returns_nispace(cwr_nsp):
     nsp._return_self = True
     out = nsp.correlate_within_region(method="pearson", n_perm=0)
     assert isinstance(out, NiSpace)
+
+
+# ── exact permutation p: augmented (c + 1) / (n + 1) convention ──
+
+def test_cwr_null_p_hand_computed():
+    from nispace.api import _cwr_null_p
+    obs = np.array([0.5, -0.2, np.nan])
+    null = np.array([[0.6, 0.1, 0.3],
+                     [-0.4, np.nan, 0.2],
+                     [0.1, 0.3, np.nan],
+                     [-0.7, 0.2, 0.1]])
+    p = _cwr_null_p(obs, null)
+    # col 0: |null| >= 0.5 twice, 4 valid -> 3/5; col 1: >= 0.2 twice, 3 valid -> 3/4
+    np.testing.assert_allclose(p[:2], [3 / 5, 3 / 4])
+    assert np.isnan(p[2])
+
+
+def _cwr_obs_null(nsp):
+    out = nsp.get_within_region_correlations(mc_method=None)
+    (entry,) = nsp._nulls["corr_within"].values()
+    return out["stat"].values[0].astype(float), out["p"].values[0].astype(float), \
+        np.asarray(entry["null_dist"], dtype=float)
+
+
+def test_nsp_maxT_hand_computed(cwr_nsp_missing_parcel):
+    nsp = cwr_nsp_missing_parcel
+    obs, p_raw, null = _cwr_obs_null(nsp)
+    p_corr = nsp.get_within_region_correlations(mc_method="maxT")["p_corr"].values[0]
+    valid = ~np.isnan(obs)
+    null_max = np.nanmax(np.abs(null[:, valid]), axis=1)
+    expected = (1 + (null_max[:, None] >= np.abs(obs[valid])[None, :]).sum(0)) / (len(null) + 1)
+    np.testing.assert_allclose(p_corr[valid], np.maximum(expected, p_raw[valid]), rtol=1e-6)
+
+
+def test_nsp_step_maxT_monotone_and_bounded(cwr_nsp_missing_parcel):
+    nsp = cwr_nsp_missing_parcel
+    obs, p_raw, _ = _cwr_obs_null(nsp)
+    p_step = nsp.get_within_region_correlations(mc_method="step_maxT")["p_corr"].values[0]
+    p_max = nsp.get_within_region_correlations(mc_method="maxT")["p_corr"].values[0]
+    valid = ~np.isnan(obs)
+    order = np.argsort(-np.abs(obs[valid]))
+    assert (np.diff(p_step[valid][order]) >= -1e-12).all()   # step-down monotone
+    assert (p_step[valid] >= p_raw[valid] - 1e-12).all()
+    assert (p_step[valid] <= p_max[valid] + 1e-12).all()
+
+
+def test_nsp_step_maxT_monotone_with_nan_nulls(rng):
+    # NaN null values shrink a parcel's raw-p denominator: the strongest parcel keeps only
+    # 50 of 200 null values (raw p 1/51), the second strongest all 200 (step p 1/201). The
+    # raw-p floor must be applied before the step-down cumulative max -- flooring
+    # afterwards gave [1/51, 1/201], breaking monotonicity
+    X, Y = make_cwr_data(rng, n_subj=12, n_parcels=6, signal_parcel=2, signal_r=0.8)
+    cols = [f"p{i}" for i in range(6)]
+    nsp = NiSpace(x=pd.DataFrame(X, columns=cols), y=pd.DataFrame(Y, columns=cols),
+                  parcellation=None, standardize=False, n_proc=1, verbose=False,
+                  return_self=False)
+    nsp.fit()
+    nsp.correlate_within_region(method="pearson", n_perm=200, seed=4)
+    from nispace.api import _cwr_null_p
+    key = next(iter(nsp._p_corr_within))
+    (entry,) = nsp._nulls["corr_within"].values()
+    obs = np.array([0.99, 0.98, 0.1, -0.2, 0.05, 0.3])
+    null = 0.2 * rng.standard_normal((200, 6))
+    null[:150, 0] = np.nan
+    entry["null_dist"] = null
+    nsp._corr_within[key] = pd.DataFrame([obs], index=nsp._corr_within[key].index,
+                                         columns=nsp._corr_within[key].columns)
+    nsp._p_corr_within[key] = pd.DataFrame([_cwr_null_p(obs, null)],
+                                           index=nsp._p_corr_within[key].index,
+                                           columns=nsp._p_corr_within[key].columns)
+    p_step = nsp.get_within_region_correlations(mc_method="step_maxT")["p_corr"].values[0]
+    np.testing.assert_allclose(p_step[:2], [1 / 51, 1 / 51])
+    order = np.argsort(-np.abs(obs))
+    assert (np.diff(p_step[order]) >= -1e-12).all()

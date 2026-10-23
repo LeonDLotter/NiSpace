@@ -17,6 +17,7 @@ import pytest
 from nispace.stats.misc import (
     null_to_p, rho_to_z, z_to_rho, residuals_nan, partial_residuals_nan, pca,
     maxT_correction, step_maxT_correction, minP_correction, step_minP_correction,
+    kminP_correction,
     _family_scale_ratio, permute_groups,
 )
 
@@ -95,18 +96,55 @@ def test_array_input_returns_array(null):
 
 # --- p clipping: never exactly 0 or 1 ---
 
-def test_p_never_zero_or_one(null):
+def test_p_never_zero(null):
     for val in [-100.0, 100.0]:
         for tail in ("upper", "lower", "two"):
             p = null_to_p(val, null, tail=tail)
-            assert p > 0.0
-            assert p < 1.0
+            assert 0.0 < p <= 1.0
 
 
-def test_p_clipped_to_1_over_n(null):
-    # minimum p = 1 / len(null) = 0.001 for n=1000
-    p = null_to_p(100.0, null, tail="upper")
-    assert p >= 1.0 / len(null)
+def test_p_floor_is_augmented(null):
+    # observed beyond the whole null: it counts as one of n + 1 draws
+    n = len(null)
+    assert null_to_p(100.0, null, tail="upper") == pytest.approx(1.0 / (n + 1))
+    assert null_to_p(-100.0, null, tail="lower") == pytest.approx(1.0 / (n + 1))
+    assert null_to_p(100.0, null, tail="two") == pytest.approx(2.0 / (n + 1))
+    # observed below the whole null, upper tail: every draw is >= it
+    assert null_to_p(-100.0, null, tail="upper") == 1.0
+
+
+@pytest.mark.parametrize("tail", ["upper", "lower", "two"])
+def test_p_valid_under_exchangeability(tail):
+    # observed exchangeable with the null: P(p <= t) <= t, also at the floor (the old
+    # count/n convention gave ~2x the nominal rate there for two tails)
+    rng = np.random.default_rng(7)
+    B, n_sim = 199, 20000
+    draws = rng.standard_normal((n_sim, B + 1))
+    p = np.array([null_to_p(d[0], d[1:], tail=tail) for d in draws])
+    se = lambda t: 3 * np.sqrt(t * (1 - t) / n_sim)
+    for t in ((2 if tail == "two" else 1) / (B + 1), 0.01, 0.05):
+        assert np.mean(p <= t + 1e-12) <= t + se(t)
+
+
+@pytest.mark.parametrize("tail", ["upper", "lower", "two"])
+def test_p_matches_minp_column_p(tail):
+    # null_to_p and the minP machinery use the same per-test p
+    from nispace.stats.misc import _augmented_column_p
+    rng = np.random.default_rng(3)
+    null = np.round(rng.standard_normal((300, 4)), 1)   # rounded: ties included
+    obs = np.array([0.0, 1.5, -2.2, 3.9])
+    expected = _augmented_column_p(obs, null, tail)[0]
+    got = np.array([null_to_p(obs[j], null[:, j], tail=tail) for j in range(4)])
+    np.testing.assert_allclose(got, expected)
+
+
+def test_p_nan_handling():
+    null = np.array([0.1, np.nan, -0.3, 0.5, np.nan])
+    # NaN null values are dropped from the reference (3 valid + observed = 4 draws)
+    assert null_to_p(1.0, null, tail="upper") == pytest.approx(1 / 4)
+    assert np.isnan(null_to_p(np.nan, null))
+    np.testing.assert_array_equal(np.isnan(null_to_p(np.array([np.nan, 0.0]), null)),
+                                  [True, False])
 
 
 # --- null median value should give p ~0.5 for upper tail ---
@@ -384,7 +422,7 @@ def _as_nulls(null_arr, stat="rho"):
 @pytest.fixture
 def fw_data():
     """Seeded family: 2 Y rows x 5 X columns with heterogeneous null scales, n_perm=200.
-    No observed value exceeds every family maximum, so the 1/n_perm floor never binds."""
+    No observed value exceeds every family maximum, so the 1/(n_perm + 1) floor never binds."""
     rng = np.random.default_rng(20260921)
     null = rng.standard_normal((200, 2, 5)) * np.array([1.0, 0.5, 2.0, 1.0, 0.8])
     obs = np.array([[0.3, -0.9, 2.5, 1.7, -0.2],
@@ -392,8 +430,9 @@ def fw_data():
     return obs, null
 
 
-# pre-refactor outputs of maxT_correction/step_maxT_correction on fw_data -- the
-# refactor onto the shared family machinery must reproduce them exactly
+# pre-refactor outputs of maxT_correction/step_maxT_correction on fw_data, on the old
+# count / n_perm scale -- the augmented convention maps each to (count + 1) / (n_perm + 1)
+# (a monotone map, so the step-down cumulative max commutes with it)
 _MAXT_PINNED = {
     ("maxT", "two", "r"): [[1., 0.91, 0.185, 0.515, 1.], [0.905, 0.995, 0.14, 1., 0.475]],
     ("step", "two", "r"): [[0.955, 0.585, 0.185, 0.215, 0.955], [0.515, 0.815, 0.14, 0.89, 0.14]],
@@ -411,8 +450,20 @@ def test_maxT_step_maxT_pinned(fw_data, key):
     obs, null = fw_data
     fn = maxT_correction if key[0] == "maxT" else step_maxT_correction
     p, reject = fn(obs, _as_nulls(null), "rho", tail=key[1], how=key[2])
-    np.testing.assert_array_equal(p, np.array(_MAXT_PINNED[key]))
-    np.testing.assert_array_equal(reject, np.array(_MAXT_PINNED[key]) <= 0.05)
+    n_perm = null.shape[0]
+    expected = (np.array(_MAXT_PINNED[key]) * n_perm + 1) / (n_perm + 1)
+    np.testing.assert_allclose(p, expected, rtol=0, atol=1e-12)
+    np.testing.assert_array_equal(reject, expected <= 0.05)
+
+
+@pytest.mark.parametrize("fn", [maxT_correction, step_maxT_correction])
+def test_maxT_floor_is_augmented(fw_data, fn):
+    # an observation beyond every family maximum gets 1 / (n_perm + 1), never 0
+    obs, null = fw_data
+    obs_ext = obs.copy()
+    obs_ext[0, 2] = 100.0
+    p, _ = fn(obs_ext, _as_nulls(null), "rho", how="r")
+    assert p[0, 2] == pytest.approx(1 / (null.shape[0] + 1))
 
 
 @pytest.mark.parametrize("fn", _FW_FUNS)
@@ -594,6 +645,90 @@ def test_family_scale_ratio_flags_heterogeneous_nulls():
     assert widest == (1, 2) and narrowest[0] == 1
     ratio_eq, _, _ = _family_scale_ratio(null[:, :1, :], "two", how="r")
     assert ratio_eq < 1.5
+
+
+# --- kminP (generalized FWER) ---
+
+@pytest.mark.parametrize("how", ["r", "a"])
+@pytest.mark.parametrize("tail", ["two", "upper"])
+def test_kminP_n_false_0_is_minP(fw_data, how, tail):
+    obs, null = fw_data
+    p_k, rej_k = kminP_correction(obs, _as_nulls(null), "rho", tail=tail, how=how, n_false=0)
+    p_m, rej_m = minP_correction(obs, _as_nulls(null), "rho", tail=tail, how=how)
+    np.testing.assert_array_equal(p_k, p_m)
+    np.testing.assert_array_equal(rej_k, rej_m)
+
+
+def test_kminP_monotone_in_n_false(fw_data):
+    obs, null = fw_data
+    prev = None
+    for n_false in range(5):
+        p, _ = kminP_correction(obs, _as_nulls(null), "rho", how="a", n_false=n_false)
+        if prev is not None:
+            assert (p <= prev + 1e-15).all()
+        prev = p
+
+
+def test_kminP_hand_computed():
+    # 3 tests, 4 permutations, upper tail. Augmented column p per draw (row 0 = observed):
+    #   obs [0.4, 0.4, 0.2], perms [1, .2, 1], [.8, .8, .4], [.6, .6, .8], [.2, 1, .6]
+    # n_false=1: 2nd smallest per permutation = 1, .8, .6, .6 -> none <= .4 -> p = 1/5
+    # n_false=0: min per permutation = .2, .4, .6, .2 -> 3 <= .4, 2 <= .2 -> p = 4/5, 3/5
+    obs = np.array([[3.0, 2.0, 1.5]])
+    null = np.array([[0.1, 2.5, 0.0], [0.2, 0.0, 1.0], [0.3, 1.0, 0.2],
+                     [4.0, -1.0, 0.3]])[:, np.newaxis, :]
+    p1, _ = kminP_correction(obs, _as_nulls(null), "rho", tail="upper", n_false=1)
+    np.testing.assert_allclose(p1, [[0.2, 0.2, 0.2]])
+    p0, _ = kminP_correction(obs, _as_nulls(null), "rho", tail="upper", n_false=0)
+    np.testing.assert_allclose(p0, [[0.8, 0.8, 0.6]])
+
+
+def test_kminP_small_family_uncorrected(fw_data):
+    # a family with <= n_false tests can't make n_false + 1 errors: returned uncorrected
+    obs, null = fw_data
+    p, _ = kminP_correction(obs[:, :2], _as_nulls(null[:, :, :2]), "rho", n_false=2)
+    p_unc, _ = kminP_correction(obs[:, :2], _as_nulls(null[:, :, :2]), "rho", n_false=0)
+    assert (p <= p_unc).all()
+    for y in range(2):
+        for x in range(2):
+            assert p[y, x] == pytest.approx(null_to_p(obs[y, x], null[:, y, x], tail="two"))
+
+
+@pytest.mark.parametrize("n_false", [1, 2])
+def test_kminP_controls_generalized_fwer(n_false):
+    # complete null with correlated tests: each permutation in turn is the "observed" data;
+    # P(>= n_false + 1 rejections) must stay <= alpha (up to Monte Carlo error)
+    rng = np.random.default_rng(11)
+    m, B, n_rep = 12, 999, 300  # B large enough that minP can reach alpha for m = 12
+    L = rng.standard_normal((m, 3))
+    cov = L @ L.T + np.eye(m)
+    chol = np.linalg.cholesky(cov / np.sqrt(np.outer(np.diag(cov), np.diag(cov))))
+    n_fail = 0
+    for _ in range(n_rep):
+        draws = (chol @ rng.standard_normal((m, B + 1))).T  # (B + 1, m)
+        p, _ = kminP_correction(draws[:1], _as_nulls(draws[1:, np.newaxis, :]), "rho",
+                                n_false=n_false)
+        n_fail += (p <= 0.05).sum() >= n_false + 1
+    rate = n_fail / n_rep
+    se = np.sqrt(0.05 * 0.95 / n_rep)
+    assert 0.05 - 3 * se < rate <= 0.05 + 3 * se  # valid, and not trivially conservative
+
+
+def test_kminP_resolution_warning(caplog):
+    # 10 two-tailed tests, 19 permutations: the column-p floor is 2/20 = 0.1 > alpha
+    rng = np.random.default_rng(1)
+    obs = rng.standard_normal((1, 10))
+    null = rng.standard_normal((19, 1, 10))
+    with caplog.at_level("WARNING"):
+        kminP_correction(obs, _as_nulls(null), "rho", n_false=1)
+    assert any("kminP(1)" in r.message and "n_perm" in r.message for r in caplog.records)
+
+
+@pytest.mark.parametrize("bad", [-1, 1.5, True, "1"])
+def test_kminP_invalid_n_false(fw_data, bad):
+    obs, null = fw_data
+    with pytest.raises(ValueError):
+        kminP_correction(obs, _as_nulls(null), "rho", n_false=bad)
 
 
 # ---------------------------------------------------------------------------

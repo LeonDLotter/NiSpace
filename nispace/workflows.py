@@ -1305,6 +1305,8 @@ def xsea(y,
         so maxT's raw-statistic comparison hands the error budget to the smallest sets.
         For very large collections (thousands of sets), ``"fdr_bh"`` is usually more
         practical, as minP needs ``n_perm`` to grow with the number of sets.
+        ``"kminP"`` (min-P tolerating one false positive, generalized FWER) lies between
+        FWER and FDR control and is scale-invariant like minP.
     normalize_colocalizations : bool, default=True
         Whether to call :meth:`NiSpace.normalize_colocalizations` after correction.
         Failures are caught and logged as a warning rather than raised.

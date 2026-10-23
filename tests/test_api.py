@@ -563,17 +563,18 @@ def test_correct_p_meff_is_at_least_as_conservative_as_uncorrected(permuted_maps
     assert (p_corr.to_numpy() >= p_raw.to_numpy() - 1e-8).all()
 
 
-_FAMILYWISE_MC = ["maxT", "step_maxT", "minP", "step_minP"]
+_FAMILYWISE_MC = ["maxT", "step_maxT", "minP", "step_minP", "kminP"]
 
 
 @pytest.mark.parametrize("mc_method", _FAMILYWISE_MC)
 def test_correct_p_familywise_requires_stored_nulls(permuted_maps_nispace, mc_method):
-    """maxT/step_maxT/minP/step_minP need the full null distribution --
+    """maxT/step_maxT/minP/step_minP/kminP need the full null distribution --
     to_pickle(save_nulls=False) drops it, and correct_p() on the reloaded object
     must raise a clear KeyError rather than silently using something else."""
     nsp = permuted_maps_nispace
     nsp.correct_p(mc_method=mc_method, verbose=False)  # works while nulls are present
-    mc_key = mc_method.replace("_", "").lower()
+    from nispace.core.permute import _get_correct_mc_method
+    mc_key = _get_correct_mc_method(mc_method).replace("_", "").lower()
     assert nsp._check_permute("pearson", "xmaps", mc_method=mc_key, raise_error=False)
 
     import tempfile, os
@@ -668,6 +669,214 @@ def test_correct_p_maxt_no_scale_warning_for_comparable_columns(permuted_maps_ni
     with caplog.at_level("WARNING"):
         permuted_maps_nispace.correct_p(mc_method="maxT", verbose=False)
     assert not any("differ in width" in r.message for r in caplog.records)
+
+
+def test_correct_p_kminp_names_and_storage(permuted_maps_nispace):
+    """kminP carries its n_false in the method string: "kminP" == "kminP(1)", stored
+    under the canonical lower-case key; other counts coexist; n_false=0 equals minP."""
+    nsp = permuted_maps_nispace
+    nsp.correct_p(mc_method="kminP", verbose=False)
+    assert any(k.endswith("_mc-kminp(1)") for k in nsp._p_colocs)
+    p1 = nsp.get_p_values(mc_method="kminP(1)", verbose=False)
+    for alias in ("kminp", "KminP", "kminp( 1 )"):
+        pd.testing.assert_frame_equal(nsp.get_p_values(mc_method=alias, verbose=False), p1)
+    nsp.correct_p(mc_method="kminP(0)", verbose=False)
+    nsp.correct_p(mc_method="minP", verbose=False)
+    pd.testing.assert_frame_equal(nsp.get_p_values(mc_method="kminP(0)", verbose=False),
+                                  nsp.get_p_values(mc_method="minP", verbose=False))
+    # n_false=1 is never more conservative than minP; last stored setting keeps the count
+    assert (p1.to_numpy() <= nsp.get_p_values(mc_method="minP", verbose=False).to_numpy()
+            + 1e-12).all()
+    nsp.correct_p(mc_method="kminP(2)", verbose=False)
+    assert nsp._last_settings["mc_method"] == "kminP(2)"
+    assert (nsp.get_corrected_p_values(verbose=False).to_numpy() <= p1.to_numpy() + 1e-12).all()
+
+
+def _meff_nsp(rng, method, with_z):
+    """8 skewed, partly Z-driven X maps; one Y; colocalize(method) + random-map permute."""
+    n_parcels = 40
+    labels = [f"p{i}" for i in range(n_parcels)]
+    z = rng.normal(size=n_parcels)
+    X = np.exp(rng.normal(size=(8, n_parcels)) + 1.5 * z)  # skewed, all loading on z
+    Y = X[0] + rng.normal(size=n_parcels)
+    nsp = NiSpace(x=pd.DataFrame(X, index=[f"x{i}" for i in range(8)], columns=labels),
+                  y=pd.DataFrame(Y[np.newaxis], index=["y0"], columns=labels),
+                  z=pd.DataFrame(z[np.newaxis], index=["z0"], columns=labels) if with_z else None,
+                  parcellation=None, standardize=False, n_proc=1, verbose=False,
+                  return_self=False)
+    nsp.fit()
+    nsp.colocalize(method=method, verbose=False)
+    nsp.permute(what="maps", maps_method="random", n_perm=100, seed=2, verbose=False)
+    return nsp, X, z
+
+
+@pytest.mark.parametrize("method,with_z", [("pearson", False), ("spearman", False),
+                                           ("partialpearson", True),
+                                           ("partialspearman", True)])
+def test_correct_p_meff_uses_maps_as_colocalized(rng, method, with_z):
+    """Meff is computed from X as the colocalization saw it: ranked for spearman methods,
+    residualized on Z for partial methods (Z ranked too for partialspearman)."""
+    from nispace.stats.coloc import rank2d
+    from nispace.stats.misc import compute_meff, residuals_nan
+    nsp, X, z = _meff_nsp(rng, method, with_z)
+    p_raw = nsp.get_p_values(verbose=False).to_numpy()
+    nsp.correct_p(mc_method="meff", verbose=False)
+    p_corr = nsp.get_corrected_p_values(verbose=False).to_numpy()
+
+    X_ref = rank2d(X.T).T if "spearman" in method else X
+    if with_z:
+        z_ref = rank2d(z[:, np.newaxis])[:, 0] if "spearman" in method else z
+        X_ref = np.vstack([residuals_nan(x=z_ref, y=row) for row in X_ref])
+    meff = compute_meff(X_ref, "galwey")
+    np.testing.assert_allclose(p_corr, 1 - (1 - p_raw) ** meff, rtol=1e-5)
+    # the maps share z: raw-scale Meff without residualization would be smaller
+    if with_z:
+        assert meff > compute_meff(X, "galwey")
+
+
+def test_correct_p_meff_xsea_ranks_before_set_mean(rng):
+    """XSEA: maps are ranked (as colocalized) before the per-set mean Meff is taken from."""
+    from nispace.stats.coloc import rank2d
+    from nispace.stats.misc import compute_meff
+    n_parcels = 40
+    labels = [f"p{i}" for i in range(n_parcels)]
+    sets = np.repeat(["s0", "s1", "s2", "s3"], 3)
+    idx = pd.MultiIndex.from_arrays([sets, [f"g{i}" for i in range(12)]], names=["set", "gene"])
+    base = rng.normal(size=(4, n_parcels))
+    X = np.exp(np.repeat(base, 3, axis=0) + 0.7 * rng.normal(size=(12, n_parcels)))
+    Y = X[:3].mean(0) + rng.normal(size=n_parcels)
+    nsp = NiSpace(x=pd.DataFrame(X, index=idx, columns=labels),
+                  y=pd.DataFrame(Y[np.newaxis], index=["y0"], columns=labels),
+                  parcellation=None, standardize=False, n_proc=1, verbose=False,
+                  return_self=False)
+    nsp.fit()
+    nsp.colocalize(method="spearman", xsea=True, xsea_aggregation_method="mean", verbose=False)
+    nsp.permute(what="maps", maps_method="random", n_perm=100, seed=1, verbose=False)
+    p_raw = nsp.get_p_values(verbose=False).to_numpy()
+    nsp.correct_p(mc_method="meff", verbose=False)
+    p_corr = nsp.get_corrected_p_values(verbose=False).to_numpy()
+    X_rank = rank2d(X.T).T
+    meff = compute_meff(np.vstack([X_rank[sets == s].mean(0) for s in ["s0", "s1", "s2", "s3"]]))
+    np.testing.assert_allclose(p_corr, 1 - (1 - p_raw) ** meff, rtol=1e-5)
+    meff_raw = compute_meff(np.vstack([X[sets == s].mean(0) for s in ["s0", "s1", "s2", "s3"]]))
+    assert abs(meff - meff_raw) > 0.05  # the ranking makes a difference here
+
+
+@pytest.mark.parametrize("method,zy_matched", [("spearman", False), ("pearson", True)])
+def test_correct_p_meff_joint_xy_uses_y_as_colocalized(rng, method, zy_matched):
+    """Joint X x Y Meff (mc_dimension="array", several Y rows): Y is ranked for spearman,
+    and residualized on its matched Z map for zy_matched (X stays untouched then)."""
+    from nispace.stats.coloc import rank2d
+    from nispace.stats.misc import compute_meff, residuals_nan
+    n_parcels, n_y = 40, 4
+    labels = [f"p{i}" for i in range(n_parcels)]
+    common = rng.normal(size=n_parcels)
+    X = np.exp(rng.normal(size=(5, n_parcels)) + common)
+    Z = rng.normal(size=(n_y, n_parcels))
+    Y = np.exp(rng.normal(size=(n_y, n_parcels)) + common) + 2 * Z
+    nsp = NiSpace(x=pd.DataFrame(X, index=[f"x{i}" for i in range(5)], columns=labels),
+                  y=pd.DataFrame(Y, index=[f"y{i}" for i in range(n_y)], columns=labels),
+                  z=pd.DataFrame(Z, index=[f"z{i}" for i in range(n_y)], columns=labels)
+                  if zy_matched else None,
+                  parcellation=None, standardize=False, n_proc=1, verbose=False,
+                  return_self=False)
+    nsp.fit()
+    nsp.colocalize(method=method, zy_matched=zy_matched, verbose=False)
+    nsp.permute(what="maps", maps_method="random", n_perm=100, seed=1, pooled_p=False,
+                verbose=False)
+    p_raw = nsp.get_p_values(verbose=False).to_numpy()
+    nsp.correct_p(mc_method="meff", mc_dimension="array", verbose=False)
+    p_corr = nsp.get_corrected_p_values(verbose=False).to_numpy()
+    if method == "spearman":
+        X_ref, Y_ref = rank2d(X.T).T, rank2d(Y.T).T
+    else:
+        X_ref = X
+        Y_ref = np.vstack([residuals_nan(x=Z[i], y=Y[i]) for i in range(n_y)])
+    meff = compute_meff(X_ref) * compute_meff(Y_ref)
+    np.testing.assert_allclose(p_corr, 1 - (1 - p_raw) ** meff, rtol=1e-5)
+    assert abs(meff - compute_meff(X) * compute_meff(Y)) > 0.1  # the treatment matters here
+
+
+def test_correct_p_meff_warns_for_one_sided_tails(rng, caplog):
+    nsp, _, _ = _meff_nsp(rng, "pearson", False)
+    with caplog.at_level("WARNING"):
+        nsp.correct_p(mc_method="meff", verbose=False)
+    assert not any("one-sided" in r.message for r in caplog.records)
+    nsp.permute(what="maps", maps_method="random", n_perm=100, seed=2, p_tails="upper",
+                verbose=False)
+    caplog.clear()
+    with caplog.at_level("WARNING"):
+        nsp.correct_p(mc_method="meff", verbose=False)
+    assert sum("one-sided" in r.message for r in caplog.records) == 1
+
+
+@pytest.mark.parametrize("n_perm,warn", [(20, True), (2000, False)])
+def test_permute_reports_p_floor(rng, caplog, n_perm, warn):
+    """Y is X0 plus a little noise: no random null map is as extreme -> p at the floor 2/(n_perm+1),
+    reported as an upper bound; a warning only when the floor is too coarse for the
+    family (floor * n_X > 0.05)."""
+    labels = [f"p{i}" for i in range(30)]
+    X = rng.normal(size=(3, 30))
+    nsp = NiSpace(x=pd.DataFrame(X, index=["x0", "x1", "x2"], columns=labels),
+                  y=pd.DataFrame(X[:1] + 0.1 * rng.normal(size=(1, 30)), index=["y0"],
+                                 columns=labels), parcellation=None,
+                  standardize=False, n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    nsp.colocalize(method="pearson", verbose=False)
+    with caplog.at_level("INFO"):
+        nsp.permute(what="maps", maps_method="random", n_perm=n_perm, seed=0, verbose=True)
+    recs = [r for r in caplog.records if "permutation floor" in r.message]
+    assert len(recs) == 1 and "1 of 3" in recs[0].message
+    assert (recs[0].levelname == "WARNING") == warn
+    assert nsp.get_p_values(verbose=False).iloc[0, 0] == pytest.approx(2 / (n_perm + 1))
+
+
+def test_permute_p_floor_one_tailed(rng, caplog):
+    labels = [f"p{i}" for i in range(30)]
+    X = rng.normal(size=(3, 30))
+    nsp = NiSpace(x=pd.DataFrame(X, index=["x0", "x1", "x2"], columns=labels),
+                  y=pd.DataFrame(X[:1] + 0.1 * rng.normal(size=(1, 30)), index=["y0"],
+                                 columns=labels), parcellation=None,
+                  standardize=False, n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    nsp.colocalize(method="pearson", verbose=False)
+    with caplog.at_level("INFO"):
+        nsp.permute(what="maps", maps_method="random", n_perm=20, seed=0, p_tails="upper",
+                    verbose=True)
+    assert nsp.get_p_values(verbose=False).iloc[0, 0] == pytest.approx(1 / 21)
+    recs = [r for r in caplog.records if "permutation floor" in r.message]
+    assert len(recs) == 1 and "0.048" in recs[0].message and recs[0].levelname == "WARNING"
+
+
+def test_exact_p_floor_counts_valid_null_values_per_cell(caplog):
+    """A cell whose null has NaN draws has a coarser floor 2/(n_valid + 1); it is still
+    reported as at the floor."""
+    from nispace.core.permute import _get_exact_p_values
+    obs = {"rho": np.array([[5.0, 5.0, 0.0]])}
+    null_vals = np.linspace(-1, 1, 10)
+    nulls = []
+    for b in range(10):
+        nulls.append({"rho": np.array([[null_vals[b],
+                                        np.nan if b < 5 else null_vals[b],
+                                        null_vals[b]]])})
+    with caplog.at_level("INFO"):
+        p, _ = _get_exact_p_values("pearson", obs, nulls, p_tails={"rho": "two"},
+                                   verbose=True, dtype=float)
+    np.testing.assert_allclose(p["rho"][0, :2], [2 / 11, 2 / 6])
+    recs = [r for r in caplog.records if "permutation floor" in r.message]
+    assert len(recs) == 1 and "2 of 3" in recs[0].message
+
+
+def test_correct_p_kminp_xsea(nsp_xsea_unequal_sets):
+    nsp = nsp_xsea_unequal_sets
+    p_raw = nsp.get_p_values(verbose=False).to_numpy()
+    nsp.correct_p(mc_method="minP", verbose=False)
+    p_minp = nsp.get_p_values(mc_method="minP", verbose=False).to_numpy()
+    nsp.correct_p(mc_method="kminP", verbose=False)
+    p_k = nsp.get_p_values(mc_method="kminP", verbose=False).to_numpy()
+    # 2 sets: a family with n_false=1 can't make 2 errors -> left uncorrected
+    np.testing.assert_allclose(p_k, p_raw, rtol=1e-6)
+    assert (p_k <= p_minp + 1e-12).all()
 
 
 def test_correct_p_store_false_does_not_persist(permuted_maps_nispace):

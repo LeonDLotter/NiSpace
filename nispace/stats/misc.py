@@ -603,31 +603,39 @@ def null_to_p(test_value, null_array, tail="two", fit_norm=False):
     
     Notes
     -----
-    P-values are clipped based on the number of elements in the null array, if fit_norm=False.
-    In this case, no p-values of 0 or 1 should be produced.
+    Empirical p-values (``fit_norm=False``) use the augmented convention: the test value
+    counts as one of ``n_null + 1`` exchangeable draws, so p = (c + 1) / (n_null + 1) for
+    one tail (c = number of null values at least as extreme) and
+    ``min(1, 2 * min(c_upper + 1, c_lower + 1) / (n_null + 1))`` for two tails. These
+    p-values are exact (valid) under exchangeability and never 0; the smallest possible
+    value is ``1 / (n_null + 1)`` (one-tailed) or ``2 / (n_null + 1)`` (two-tailed)
+    :cite:`phipson2010`. NaN values in the null are ignored; a NaN test value gives NaN.
+    The same convention is used by the min-P corrections (:func:`minP_correction`).
     """
     
     if tail not in {"two", "upper", "lower"}:
         raise ValueError('Argument "tail" must be one of ["two", "upper", "lower"]')
 
     return_first = isinstance(test_value, (float, int, np.floating, np.integer))
-    test_value = np.atleast_1d(test_value)
-    null_array = np.array(null_array)
+    test_value = np.atleast_1d(np.asarray(test_value, dtype=float))
+    null_array = np.asarray(null_array, dtype=float).ravel()
 
-    ## empirical p value
+    ## empirical p value: the observed value counts as one of n_null + 1 exchangeable draws,
+    ## as in the minP machinery (_counts_to_p); rank-based, so no centering is needed
     if not fit_norm:
-        def compute_p(t, null):
-            null = np.sort(null)
-            idx = np.searchsorted(null, t, side="left").astype(float)
-            return 1 - idx / len(null)
-    
+        null = np.sort(null_array[~np.isnan(null_array)])
+        n = null.shape[0] + 1
+        le = 1 + np.searchsorted(null, test_value, side="right")      # 1 + #{null <= t}
+        ge = n - np.searchsorted(null, test_value, side="left")       # 1 + #{null >= t}
+        result = np.asarray(_counts_to_p(ge, le, n, tail), dtype=float)
+        result[np.isnan(test_value) | (n == 1)] = np.nan
+        return result[0] if return_first else result
+
     ## fit a normal distribution and get p value
-    elif fit_norm:
-        def compute_p(t, null):
-            mu, sd = norm.fit(null)
-            return 1 - norm.cdf(t, mu, sd)
-            
-    ## calculate p
+    def compute_p(t, null):
+        mu, sd = norm.fit(null)
+        return 1 - norm.cdf(t, mu, sd)
+
     null_array_mean = np.mean(null_array)
     test_value_centered = test_value - null_array_mean
     null_array_centered = null_array - null_array_mean
@@ -639,12 +647,7 @@ def null_to_p(test_value, null_array, tail="two", fit_norm=False):
         p = compute_p(-test_value_centered, -null_array_centered)
     elif tail == "upper":
         p = compute_p(test_value_centered, null_array_centered)
-
-    # ensure p_value in the following range:
-    # smallest_value <= p_value <= (1.0 - smallest_value) or 1 if fit_norm
-    smallest_value = np.maximum(np.finfo(float).eps, 1.0 / len(null_array)) if not fit_norm else 0
-    largest_value = 1 - smallest_value
-    result = np.clip(p, a_min=smallest_value, a_max=largest_value)
+    result = np.clip(p, 0.0, 1.0)
 
     return result[0] if return_first else result
 
@@ -840,6 +843,8 @@ def _finalize_family_p(p, p_raw, floor):
 def _maxt_family(obs_1d, null_2d, tail, stepdown, p_raw_1d=None):
     """Max-T over one family: compare each test to the null distribution of the family max.
 
+    Augmented convention as in :func:`_minp_family`: p = (1 + #{null max >= obs}) / (n_perm + 1).
+
     With `stepdown`, `p_raw_1d` (uncorrected p) is applied as a floor before enforcing
     monotonicity; flooring afterwards could break the step-down order whenever p_raw
     orders the tests differently than the raw statistic does.
@@ -847,15 +852,17 @@ def _maxt_family(obs_1d, null_2d, tail, stepdown, p_raw_1d=None):
     obs_cmp, null_cmp = _signed_stats(obs_1d, null_2d, tail)
     # a sporadic per-permutation NaN can never win the max
     null_cmp = np.where(np.isnan(null_cmp), -np.inf, null_cmp)
+    # augmented convention: the observed family counts as one of n_perm + 1 draws
+    n_rep = null_cmp.shape[0] + 1
     if not stepdown:
         null_max = null_cmp.max(axis=1)  # (n_perm,)
-        return np.mean(null_max[:, np.newaxis] >= obs_cmp[np.newaxis, :], axis=0)
+        return (1 + np.sum(null_max[:, np.newaxis] >= obs_cmp[np.newaxis, :], axis=0)) / n_rep
     order = np.argsort(obs_cmp)[::-1]
     obs_s = obs_cmp[order]
     null_s = null_cmp[:, order]  # (n_perm, m)
     # step-down max: null_max_j[perm] = max(null_s[perm, j:]), via reverse cumulative max
     null_rev_cummax = np.maximum.accumulate(null_s[:, ::-1], axis=1)[:, ::-1]
-    p_s = np.mean(null_rev_cummax >= obs_s[np.newaxis, :], axis=0)
+    p_s = (1 + np.sum(null_rev_cummax >= obs_s[np.newaxis, :], axis=0)) / n_rep
     if p_raw_1d is not None:
         p_s = np.fmax(p_s, p_raw_1d[order])  # fmax: a NaN p_raw never overrides
     # enforce monotonicity (step-down)
@@ -905,7 +912,7 @@ def _augmented_column_p(obs_c, null_c, tail):
     return P
 
 
-def _minp_family(obs_1d, null_2d, tail, stepdown, p_raw_1d=None):
+def _minp_family(obs_1d, null_2d, tail, stepdown, p_raw_1d=None, k=1):
     """Min-P over one family (augmented convention).
 
     The observed value is treated as one of n_perm + 1 exchangeable draws, for its own
@@ -918,9 +925,14 @@ def _minp_family(obs_1d, null_2d, tail, stepdown, p_raw_1d=None):
     With `stepdown`, `p_raw_1d` is applied as a floor before enforcing monotonicity
     (see :func:`_maxt_family`).
 
+    With ``k > 1`` (single-step only), each replicate's k-th smallest column p replaces
+    its minimum (generalized family-wise error, see :func:`kminP_correction`).
+
     Returns (p_adj, attainable) where `attainable` is the smallest corrected p any test
     in this family could reach (an observation at the column-p floor).
     """
+    if stepdown and k > 1:
+        raise ValueError("k > 1 is only implemented for the single-step variant.")
     m = obs_1d.shape[0]
     n_rep = null_2d.shape[0] + 1  # row 0 = observed, rows 1.. = permutations
     chunk = max(1, _MINP_CHUNK_ELEMENTS // n_rep)
@@ -934,6 +946,27 @@ def _minp_family(obs_1d, null_2d, tail, stepdown, p_raw_1d=None):
         ge = 1 + (nl >= o[np.newaxis, :]).sum(axis=0)
         le = 1 + (nl <= o[np.newaxis, :]).sum(axis=0)
         p_obs[cols] = _counts_to_p(ge, le, n_col, tail)
+
+    floor_col = (2.0 if tail == "two" else 1.0) / n_rep
+    if k > 1:
+        # fewer tests than k: k false rejections are impossible, nothing to correct
+        if m < k:
+            return p_obs, floor_col
+        # k smallest column p per replicate, merged chunk by chunk (memory-bounded)
+        running_k = np.full((n_rep, 0), np.inf)
+        for start in range(0, m, chunk):
+            cols = slice(start, start + chunk)
+            P = _augmented_column_p(obs_1d[cols], null_2d[:, cols], tail)
+            P[np.isnan(P)] = np.inf
+            stack = np.hstack([running_k, P])
+            if stack.shape[1] > k:
+                stack = np.partition(stack, k - 1, axis=1)[:, :k]
+            running_k = stack
+        kth = running_k.max(axis=1)  # k-th smallest column p per replicate
+        # the observed draw always counts itself (for k=1, row 0's min does so implicitly)
+        p = (1 + np.searchsorted(np.sort(kth[1:]), p_obs, side="right")) / n_rep
+        attainable = (1 + np.sum(kth[1:] <= floor_col)) / n_rep
+        return p, attainable
 
     # pass 2: walk tests from least to most significant, carrying the running min over
     # the tests seen so far -- after test j that is min(p) over the step-down family of
@@ -958,7 +991,6 @@ def _minp_family(obs_1d, null_2d, tail, stepdown, p_raw_1d=None):
             p = np.fmax(p, p_raw_1d)
         p[order] = np.maximum.accumulate(p[order])  # enforce monotonicity
 
-    floor_col = (2.0 if tail == "two" else 1.0) / n_rep
     attainable = (1 + np.sum(running[1:] <= floor_col)) / n_rep
     return p, attainable
 
@@ -1017,7 +1049,8 @@ def maxT_correction(obs_stats, null_colocs, stat, tail="two", how="r", alpha=0.0
     """Max-T FWER correction (:cite:`westfall1993`).
 
     Each test's corrected p is the fraction of permutations whose family maximum (of
-    the raw statistic) reaches the observed statistic. This assumes the tests' null
+    the raw statistic) reaches the observed statistic, with the observed family counted
+    as one of ``n_perm + 1`` draws (as in :func:`null_to_p`). This assumes the tests' null
     distributions are on a comparable scale: otherwise the widest-null tests produce
     nearly every family maximum and the narrowest become effectively unrejectable.
     FWER control remains valid, but power is unbalanced. That is the case e.g. for XSEA
@@ -1046,7 +1079,7 @@ def maxT_correction(obs_stats, null_colocs, stat, tail="two", how="r", alpha=0.0
         Cast the DataFrame/Series outputs to this dtype.
     p_raw : DataFrame or array, shape (n_Y, n_X), optional
         Uncorrected p-values of the same tests. If given, the output is floored at
-        ``max(p_raw, 1 / n_perm)``, so a corrected p-value is never below its own
+        ``max(p_raw, 1 / (n_perm + 1))``, so a corrected p-value is never below its own
         uncorrected one nor exactly 0.
 
     Returns
@@ -1064,7 +1097,7 @@ def maxT_correction(obs_stats, null_colocs, stat, tail="two", how="r", alpha=0.0
     obs, null_arr = _prep_family(obs_stats, null_colocs, stat)
     p = _apply_family(obs, null_arr, how,
                       lambda o, n, pr: _maxt_family(o, n, tail, stepdown=False), "maxT")
-    p = _finalize_family_p(p, p_raw, floor=1.0 / null_arr.shape[0])
+    p = _finalize_family_p(p, p_raw, floor=1.0 / (null_arr.shape[0] + 1))
     reject = p <= alpha
     return _df_like(p, obs_stats, dtype), _df_like(reject, obs_stats, dtype)
 
@@ -1102,7 +1135,7 @@ def step_maxT_correction(obs_stats, null_colocs, stat, tail="two", how="r", alph
         Cast the DataFrame/Series outputs to this dtype.
     p_raw : DataFrame or array, shape (n_Y, n_X), optional
         Uncorrected p-values of the same tests. If given, the output is floored at
-        ``max(p_raw, 1 / n_perm)``.
+        ``max(p_raw, 1 / (n_perm + 1))``.
 
     Returns
     -------
@@ -1120,21 +1153,22 @@ def step_maxT_correction(obs_stats, null_colocs, stat, tail="two", how="r", alph
     p = _apply_family(obs, null_arr, how,
                       lambda o, n, pr: _maxt_family(o, n, tail, stepdown=True, p_raw_1d=pr),
                       "step_maxT", p_raw=p_raw)
-    p = _finalize_family_p(p, p_raw, floor=1.0 / null_arr.shape[0])
+    p = _finalize_family_p(p, p_raw, floor=1.0 / (null_arr.shape[0] + 1))
     reject = p <= alpha
     return _df_like(p, obs_stats, dtype), _df_like(reject, obs_stats, dtype)
 
 
 def _minp_correction(obs_stats, null_colocs, stat, tail, how, alpha, dtype, p_raw, stepdown,
-                     method_name):
-    """Shared driver of :func:`minP_correction` / :func:`step_minP_correction`."""
+                     method_name, k=1):
+    """Shared driver of :func:`minP_correction` / :func:`step_minP_correction` /
+    :func:`kminP_correction`."""
     _check_tail(tail)
     obs, null_arr = _prep_family(obs_stats, null_colocs, stat)
     n_perm = null_arr.shape[0]
     attainable = []
 
     def _family(o, n, pr):
-        p, att = _minp_family(o, n, tail, stepdown, p_raw_1d=pr)
+        p, att = _minp_family(o, n, tail, stepdown, p_raw_1d=pr, k=k)
         attainable.append(att)
         return p
 
@@ -1150,7 +1184,7 @@ def _minp_correction(obs_stats, null_colocs, stat, tail, how, alpha, dtype, p_ra
             f"~{int(np.ceil((n_perm + 1) * worst / alpha))}, or use an FDR correction (e.g. "
             f"'fdr_bh') for large families."
         )
-    p = _finalize_family_p(p, p_raw, floor=1.0 / n_perm)
+    p = _finalize_family_p(p, p_raw, floor=1.0 / (n_perm + 1))
     reject = p <= alpha
     return _df_like(p, obs_stats, dtype), _df_like(reject, obs_stats, dtype)
 
@@ -1206,7 +1240,7 @@ def minP_correction(obs_stats, null_colocs, stat, tail="two", how="r", alpha=0.0
         Cast the DataFrame/Series outputs to this dtype.
     p_raw : DataFrame or array, shape (n_Y, n_X), optional
         Uncorrected p-values of the same tests. If given, the output is floored at
-        ``max(p_raw, 1 / n_perm)``, so a corrected p-value is never below its own
+        ``max(p_raw, 1 / (n_perm + 1))``, so a corrected p-value is never below its own
         uncorrected one.
 
     Returns
@@ -1256,7 +1290,7 @@ def step_minP_correction(obs_stats, null_colocs, stat, tail="two", how="r", alph
         Cast the DataFrame/Series outputs to this dtype.
     p_raw : DataFrame or array, shape (n_Y, n_X), optional
         Uncorrected p-values of the same tests. If given, the output is floored at
-        ``max(p_raw, 1 / n_perm)``.
+        ``max(p_raw, 1 / (n_perm + 1))``.
 
     Returns
     -------
@@ -1271,6 +1305,84 @@ def step_minP_correction(obs_stats, null_colocs, stat, tail="two", how="r", alph
     """
     return _minp_correction(obs_stats, null_colocs, stat, tail, how, alpha, dtype, p_raw,
                             stepdown=True, method_name="step_minP")
+
+
+def kminP_correction(obs_stats, null_colocs, stat, tail="two", how="r", alpha=0.05, dtype=None,
+                     p_raw=None, n_false=1):
+    """Single-step k-min-P correction of the generalized family-wise error rate (k-FWER).
+
+    Controls the k-FWER with k = ``n_false + 1``, the probability of rejecting at least
+    k true null hypotheses (:cite:`lehmann2005`): ``P(V >= n_false + 1) <= alpha``. With
+    probability at least ``1 - alpha``, at most `n_false` of the significant tests are
+    false positives. The statement is about the set of significant tests, not about any
+    single one of them. ``n_false=0`` is :func:`minP_correction` (the usual FWER).
+
+    This is the single-step common-quantile P(n_false + 1) procedure of :cite:`dudoit2008`
+    (Procedure 3.19; adjusted p-values in Corollary 4.8, resampling estimate in
+    Procedure 4.20, where gFWER(n_false) = P(V > n_false)), the p-value form of the
+    single-step k-max procedure of :cite:`romano2007` (Section 2.1, with T = -p; their
+    Remark 3.1 recommends p-values for balance): the critical value is the
+    alpha-quantile of the k-th smallest per-test p-value across the family, from the
+    joint permutation null. A test's corrected p is
+    ``(1 + #{permutations whose k-th smallest p <= the test's p}) / (n_perm + 1)``,
+    i.e., the estimate of :cite:`dudoit2008` (eq. 4.42) with the observed draw counted
+    as one of the ``n_perm + 1`` draws; per-test p-values use the same augmented
+    convention (:func:`minP_correction`).
+    Counting the observed draw in its own reference keeps the procedure valid for a
+    finite number of permutations: the k-th smallest p over all tests is never larger
+    than over the true nulls alone (the monotonicity condition of :cite:`romano2007`,
+    eq. 14), so k or more false rejections imply that the true nulls' own k-th smallest
+    p ranks among the lowest ``alpha * (n_perm + 1)`` of ``n_perm + 1`` exchangeable
+    draws. As with min-P, this needs a joint null that is valid for any subset of true
+    nulls (e.g. group permutations, null maps of Y).
+
+    Each test's decision depends only on its own p-value and the joint null, not on the
+    other tests' observed values, and every test gets an equal share of the error
+    budget. The step-down version (:cite:`romano2007`, Algorithm 2.1) is more powerful
+    but not implemented. The gain over :func:`minP_correction` shrinks as the tests
+    become more correlated (:cite:`romano2007`, Section 6).
+
+    Plain numpy/pandas (no numba). Used in ``api.py`` as the ``mc_method="kminP"``
+    option of ``NiSpace.correct_p()`` (``"kminP(<n_false>)"``, default n_false 1).
+
+    Parameters
+    ----------
+    obs_stats : DataFrame or array, shape (n_Y, n_X)
+        Observed test statistics.
+    null_colocs : list[n_perm] of {stat: (n_Y, n_X) array}
+        Per-permutation null statistic dicts.
+    stat : str
+        Key to extract from each `null_colocs` dict.
+    tail : {"two", "upper", "lower"}, default="two"
+        Sidedness of the per-test p-values.
+    how : {"r", "a"}, default="r"
+        "r": family = each Y row, across X. "a": family = all Y x X cells.
+    alpha : float, default=0.05
+        Significance threshold for the `reject` output and the resolution warning.
+    dtype : optional
+        Cast the DataFrame/Series outputs to this dtype.
+    p_raw : DataFrame or array, shape (n_Y, n_X), optional
+        Uncorrected p-values of the same tests. If given, the output is floored at
+        ``max(p_raw, 1 / (n_perm + 1))``.
+    n_false : int, default=1
+        Number of false positives tolerated among the significant tests (k = n_false + 1).
+        A family with at most `n_false` tests is returned uncorrected.
+
+    Returns
+    -------
+    p, reject : same type as `obs_stats`
+        Corrected p-values and boolean rejection mask (NaN handling as in
+        :func:`minP_correction`).
+
+    Raises
+    ------
+    ValueError
+        If `tail`/`how`/`n_false` are invalid, or the null and observed shapes don't match.
+    """
+    if isinstance(n_false, bool) or not isinstance(n_false, (int, np.integer)) or n_false < 0:
+        raise ValueError(f"n_false must be a non-negative integer, not {n_false!r}.")
+    return _minp_correction(obs_stats, null_colocs, stat, tail, how, alpha, dtype, p_raw,
+                            stepdown=False, method_name=f"kminP({n_false})", k=n_false + 1)
 
 
 def mc_correction(p_array, alpha=0.05, method="fdr_bh", how="array", dtype=None):

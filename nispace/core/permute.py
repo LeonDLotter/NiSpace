@@ -3,6 +3,7 @@ import pandas as pd
 from tqdm.auto import tqdm
 
 import logging
+import re
 lgr = logging.getLogger(__name__)
 from ..nulls import generate_null_maps, _SPIN_METHODS, _parse_null_method
 from ..stats.misc import null_to_p, zscore_df
@@ -364,6 +365,30 @@ def _iter_null_map_batches(data_obs, batch_size, seed_base, nispace_nulls, stand
         row_start = row_end
 
 
+def _report_p_floor(stat, at_floor, k_floor, n_perm, alpha=0.05):
+    """Log p-values at the permutation floor k/(n_perm + 1): they are upper bounds.
+
+    Warns if the floor is too coarse for a family-wise correction across the X columns
+    (floor * n_X > alpha, i.e. even Bonferroni can't reach alpha at the floor), else info.
+    """
+    n_at = int(at_floor.sum())
+    if n_at == 0:
+        return
+    floor = k_floor / (n_perm + 1)
+    m = at_floor.shape[1]
+    msg = (f"{n_at} of {at_floor.size} '{stat}' p-values are at the permutation floor "
+           f"({floor:.2g}): no permutation was as extreme as the observed value, so report "
+           f"them as upper bounds (p <= {floor:.2g}).")
+    if floor * m > alpha:
+        n_needed = int(np.ceil(k_floor * m / alpha))
+        lgr.warning(f"{msg} With {m} tests per row, the floor exceeds alpha/m = "
+                    f"{alpha / m:.2g} (alpha = {alpha}): corrected p-values are limited by "
+                    f"n_perm = {n_perm}, not by the data. Increase n_perm to at least "
+                    f"~{n_needed}.")
+    else:
+        lgr.info(msg)
+
+
 def _get_exact_p_values(method, colocs_obs, colocs_null,
                         xsea_aggr=None, p_tails=None, 
                         verbose=True, dtype=np.float32):
@@ -415,14 +440,21 @@ def _get_exact_p_values(method, colocs_obs, colocs_null,
     p_data = dict()
     for stat in stats:
         p = np.zeros(colocs_obs[stat].shape, dtype=dtype)
+        at_floor = np.zeros(p.shape, dtype=bool)
+        k_floor = 2.0 if p_tails[stat] == "two" else 1.0
         # iterate predictors (columns)
         for x in range(p.shape[1]):
             # iterate targets (rows)
             for y in range(p.shape[0]):
                 obs = colocs_obs[stat][y, x]
-                null = [colocs_null[i][stat][y, x] for i in range(len(colocs_null))]
-                p[y, x] = null_to_p(obs, null, tail=p_tails[stat])
+                null = np.array([colocs_null[i][stat][y, x] for i in range(len(colocs_null))],
+                                dtype=float)
+                p_xy = null_to_p(obs, null, tail=p_tails[stat])
+                p[y, x] = p_xy
+                # no permutation as extreme as the observed value: smallest attainable p
+                at_floor[y, x] = p_xy <= k_floor / (np.sum(~np.isnan(null)) + 1) * (1 + 1e-9)
         p_data[stat] = p
+        _report_p_floor(stat, at_floor, k_floor, len(colocs_null))
 
     # return (also expose resolved p_tails for storage by caller)
     return p_data, p_tails
@@ -471,7 +503,30 @@ _EMPIRICAL_MC_METHODS = {"meff_galwey", "meff_li_ji", "maxT", "step_maxT", "minP
 # single maps can exceed it too (random mRNA genes 5.0, cortexfeatures 3.6)
 _MAXT_SCALE_RATIO_WARN = 3.0
 
+# kminP: single-step k-min-P (generalized FWER); the number of tolerated false positives
+# is part of the method string, "kminP" == "kminP(1)", canonical form always with count
+_KMINP_RE = re.compile(r"^k_?min_?p(?:\((\d+)\))?$", re.IGNORECASE)
+
+
+def _parse_kminp(mc_method):
+    """n_false of a kminP method string ("kminP", "kminp(2)", ...), else None."""
+    if not isinstance(mc_method, str):
+        return None
+    match = _KMINP_RE.match(re.sub(r"\s", "", mc_method))
+    if match is None:
+        return None
+    return int(match.group(1)) if match.group(1) is not None else 1
+
+
+def _is_empirical_mc(mc_method):
+    """Whether the (canonical) mc_method is computed by NiSpace, not statsmodels."""
+    return mc_method in _EMPIRICAL_MC_METHODS or _parse_kminp(mc_method) is not None
+
+
 def _get_correct_mc_method(mc_method):
+    n_false = _parse_kminp(mc_method)
+    if n_false is not None:
+        return f"kminP({n_false})"
     return _MC_METHOD_ALIASES.get(mc_method, mc_method)
 
 

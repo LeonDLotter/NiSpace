@@ -96,6 +96,21 @@ def test_p_value_annotated_after_permutation(rng, _nsp):
     assert all(len(ax.texts[0].get_text().split("\n")) == 2 for ax in axes)
 
 
+def test_p_value_annotated_with_kminp(rng, _nsp):
+    x = pd.DataFrame(rng.normal(size=(3, N_PARCELS)), index=["a", "b", "c"])
+    nsp = _nsp(x, rng.normal(size=(1, N_PARCELS)))
+    nsp.colocalize("spearman")
+    nsp.permute("maps", n_perm=50, seed=1)
+    nsp.correct_p(mc_method="kminP")
+    p_k = nsp.get_p_values("spearman", permute_what="maps", mc_method="kminP(1)").iloc[0]
+    fig, axes = nsp.plot(kind="correlation", mc_method="kminP", show=False)
+    for ax, lab in zip(axes, ["a", "b", "c"]):
+        line = ax.texts[0].get_text().split("\n")[2]
+        assert line.startswith(r"$p_{\mathrm{kminP}}$")
+        assert float(line.split("= ")[1]) == pytest.approx(p_k[lab], abs=0.0006)
+    fig, ax, _ = nsp.plot(kind="categorical", values="p", mc_method="kminP", show=False)
+
+
 # ── one regression line per Y row ────────────────────────────────────────────────────────
 
 def _case_control(rng, _nsp, n_per_group=6):

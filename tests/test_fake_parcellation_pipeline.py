@@ -84,9 +84,9 @@ def test_moran_permutation_detects_near_copy(fake_parcellation, grid, fake_maps)
     nsp.permute("maps", n_perm=n_perm, seed=3)   # default null for this parcellation: moran
     p = nsp.get_p_values("spearman").iloc[0]
     assert ((p > 0) & (p <= 1)).all()
-    # Y is X0 plus noise: no null map should beat it -> smallest possible p. Bound only:
-    # whether the floor is 1/n_perm or 1/(n_perm+1) is an open question (null_to_p).
-    assert p.iloc[0] <= 1 / n_perm + 1e-6
+    # Y is X0 plus noise: no null map should beat it -> smallest possible two-tailed p,
+    # with the observed value counted as one of n_perm + 1 draws (null_to_p)
+    assert p.iloc[0] == pytest.approx(2 / (n_perm + 1), rel=1e-5)
     assert p.iloc[0] < p.iloc[1:].min()
 
 

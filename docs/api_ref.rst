@@ -163,6 +163,7 @@ API Reference
    step_maxT_correction
    minP_correction
    step_minP_correction
+   kminP_correction
 
 
 .. _api_io:
