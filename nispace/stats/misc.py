@@ -776,32 +776,44 @@ def _prep_family(obs_stats, null_colocs, stat):
     return obs, null_arr
 
 
-def _apply_family(obs, null_arr, how, family_fn, method_name):
+def _apply_family(obs, null_arr, how, family_fn, method_name, p_raw=None):
     """Apply a 1D family routine per Y row (how="r") or across all cells (how="a").
 
     A cell with NaN observed statistic has no defined test: it is excluded from the
     family (so it can't distort the other tests' null) and returned as NaN, instead
     of a fake p from 'NaN >= x' silently evaluating to False everywhere.
+
+    `family_fn(obs_1d, null_2d, p_raw_1d)` gets the family's slice of `p_raw` (or None),
+    so step-down routines can apply the p_raw floor before enforcing monotonicity.
     """
     n_Y, n_X = obs.shape
+    if p_raw is not None:
+        p_raw = np.array(p_raw, dtype=float)
+        if p_raw.shape != obs.shape:
+            raise ValueError(f"p_raw shape {p_raw.shape} does not match the observed statistics "
+                             f"shape {obs.shape}.")
     if how == "r":
         p = np.full(obs.shape, np.nan)
         for y in range(n_Y):
             valid = ~np.isnan(obs[y])
+            pr = None if p_raw is None else p_raw[y]
             if valid.all():  # view, not a boolean-mask copy of the whole null
-                p[y] = family_fn(obs[y], null_arr[:, y, :])
+                p[y] = family_fn(obs[y], null_arr[:, y, :], pr)
             elif valid.any():
-                p[y, valid] = family_fn(obs[y, valid], null_arr[:, y, valid])
+                p[y, valid] = family_fn(obs[y, valid], null_arr[:, y, valid],
+                                        None if pr is None else pr[valid])
         return p
     elif how == "a":
         obs_flat = obs.ravel()
         null_flat = null_arr.reshape(null_arr.shape[0], -1)
+        pr = None if p_raw is None else p_raw.ravel()
         p_flat = np.full(obs_flat.shape, np.nan)
         valid = ~np.isnan(obs_flat)
         if valid.all():
-            p_flat = family_fn(obs_flat, null_flat)
+            p_flat = family_fn(obs_flat, null_flat, pr)
         elif valid.any():
-            p_flat[valid] = family_fn(obs_flat[valid], null_flat[:, valid])
+            p_flat[valid] = family_fn(obs_flat[valid], null_flat[:, valid],
+                                      None if pr is None else pr[valid])
         return p_flat.reshape(n_Y, n_X)
     raise ValueError(f"how='{how}' not supported for {method_name}. Use 'r' or 'a'.")
 
@@ -823,8 +835,13 @@ def _finalize_family_p(p, p_raw, floor):
     return p
 
 
-def _maxt_family(obs_1d, null_2d, tail, stepdown):
-    """Max-T over one family: compare each test to the null distribution of the family max."""
+def _maxt_family(obs_1d, null_2d, tail, stepdown, p_raw_1d=None):
+    """Max-T over one family: compare each test to the null distribution of the family max.
+
+    With `stepdown`, `p_raw_1d` (uncorrected p) is applied as a floor before enforcing
+    monotonicity; flooring afterwards could break the step-down order whenever p_raw
+    orders the tests differently than the raw statistic does.
+    """
     obs_cmp, null_cmp = _signed_stats(obs_1d, null_2d, tail)
     # a sporadic per-permutation NaN can never win the max
     null_cmp = np.where(np.isnan(null_cmp), -np.inf, null_cmp)
@@ -837,6 +854,8 @@ def _maxt_family(obs_1d, null_2d, tail, stepdown):
     # step-down max: null_max_j[perm] = max(null_s[perm, j:]), via reverse cumulative max
     null_rev_cummax = np.maximum.accumulate(null_s[:, ::-1], axis=1)[:, ::-1]
     p_s = np.mean(null_rev_cummax >= obs_s[np.newaxis, :], axis=0)
+    if p_raw_1d is not None:
+        p_s = np.fmax(p_s, p_raw_1d[order])  # fmax: a NaN p_raw never overrides
     # enforce monotonicity (step-down)
     p_s = np.maximum.accumulate(p_s)
     p_out = np.empty_like(p_s)
@@ -884,7 +903,7 @@ def _augmented_column_p(obs_c, null_c, tail):
     return P
 
 
-def _minp_family(obs_1d, null_2d, tail, stepdown):
+def _minp_family(obs_1d, null_2d, tail, stepdown, p_raw_1d=None):
     """Min-P over one family (augmented convention).
 
     The observed value is treated as one of n_perm + 1 exchangeable draws, for its own
@@ -893,6 +912,9 @@ def _minp_family(obs_1d, null_2d, tail, stepdown):
     reference (as in :func:`null_to_p`), an observation beyond the whole two-tailed null
     gets p=1/n_perm while no permutation can go below 2/n_perm, which inflates the
     two-tailed FWER far past alpha for large families.
+
+    With `stepdown`, `p_raw_1d` is applied as a floor before enforcing monotonicity
+    (see :func:`_maxt_family`).
 
     Returns (p_adj, attainable) where `attainable` is the smallest corrected p any test
     in this family could reach (an observation at the column-p floor).
@@ -930,6 +952,8 @@ def _minp_family(obs_1d, null_2d, tail, stepdown):
         counts = np.searchsorted(np.sort(running), p_obs, side="right").astype(float)
     p = counts / n_rep  # >= 1/n_rep: row 0 always counts itself
     if stepdown:
+        if p_raw_1d is not None:
+            p = np.fmax(p, p_raw_1d)
         p[order] = np.maximum.accumulate(p[order])  # enforce monotonicity
 
     floor_col = (2.0 if tail == "two" else 1.0) / n_rep
@@ -1037,7 +1061,7 @@ def maxT_correction(obs_stats, null_colocs, stat, tail="two", how="r", alpha=0.0
     _check_tail(tail)
     obs, null_arr = _prep_family(obs_stats, null_colocs, stat)
     p = _apply_family(obs, null_arr, how,
-                      lambda o, n: _maxt_family(o, n, tail, stepdown=False), "maxT")
+                      lambda o, n, pr: _maxt_family(o, n, tail, stepdown=False), "maxT")
     p = _finalize_family_p(p, p_raw, floor=1.0 / null_arr.shape[0])
     reject = p <= alpha
     return _df_like(p, obs_stats, dtype), _df_like(reject, obs_stats, dtype)
@@ -1092,7 +1116,8 @@ def step_maxT_correction(obs_stats, null_colocs, stat, tail="two", how="r", alph
     _check_tail(tail)
     obs, null_arr = _prep_family(obs_stats, null_colocs, stat)
     p = _apply_family(obs, null_arr, how,
-                      lambda o, n: _maxt_family(o, n, tail, stepdown=True), "step_maxT")
+                      lambda o, n, pr: _maxt_family(o, n, tail, stepdown=True, p_raw_1d=pr),
+                      "step_maxT", p_raw=p_raw)
     p = _finalize_family_p(p, p_raw, floor=1.0 / null_arr.shape[0])
     reject = p <= alpha
     return _df_like(p, obs_stats, dtype), _df_like(reject, obs_stats, dtype)
@@ -1106,12 +1131,13 @@ def _minp_correction(obs_stats, null_colocs, stat, tail, how, alpha, dtype, p_ra
     n_perm = null_arr.shape[0]
     attainable = []
 
-    def _family(o, n):
-        p, att = _minp_family(o, n, tail, stepdown)
+    def _family(o, n, pr):
+        p, att = _minp_family(o, n, tail, stepdown, p_raw_1d=pr)
         attainable.append(att)
         return p
 
-    p = _apply_family(obs, null_arr, how, _family, method_name)
+    p = _apply_family(obs, null_arr, how, _family, method_name,
+                      p_raw=p_raw if stepdown else None)
     if attainable and max(attainable) > alpha:
         worst = max(attainable)
         lgr.warning(

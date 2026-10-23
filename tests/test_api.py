@@ -475,6 +475,55 @@ def test_permute_groups_returns_p_values_distinct_from_observed_coloc(grouped_ni
     assert not np.allclose(coloc.to_numpy(), p.to_numpy())
 
 
+def test_permute_groups_does_not_resolve_null_method(grouped_nispace, caplog):
+    # the map-null default is only resolved (and logged) when maps are permuted
+    nsp, _ = grouped_nispace
+    with caplog.at_level("INFO"):
+        nsp.permute(what="groups", n_perm=50, seed=1, verbose=True)
+    assert not any("null method" in r.message for r in caplog.records)
+    # a maps permutation still resolves it (no parcellation -> 'moran' default)
+    caplog.clear()
+    with caplog.at_level("INFO"):
+        pos = np.arange(20.0)
+        nsp.permute(what="maps", dist_mat=np.abs(np.subtract.outer(pos, pos)), n_perm=20,
+                    seed=1, verbose=True)
+    assert any("defaulting null method to 'moran'" in r.message for r in caplog.records)
+
+
+def test_get_p_values_after_groups_then_maps_without_pooled_p(grouped_nispace):
+    # permute("groups") forces pooled_p="mean"; an earlier/later unpooled maps result must
+    # still be retrievable without passing pooled_p
+    nsp, _ = grouped_nispace
+    p_maps = nsp.permute(what="maps", maps_method="random", n_perm=50, seed=1, verbose=False)
+    p_groups = nsp.permute(what="groups", n_perm=50, seed=1, verbose=False)
+    assert nsp._last_settings["pooled_p"] == "mean"
+    pd.testing.assert_frame_equal(nsp.get_p_values(permute_what="maps", verbose=False), p_maps)
+    pd.testing.assert_frame_equal(nsp.get_p_values(permute_what="xmaps", verbose=False), p_maps)
+    pd.testing.assert_frame_equal(nsp.get_p_values(permute_what="groups", verbose=False),
+                                  p_groups)
+    _, nulls = nsp.get_colocalizations(get_nulls=True, nulls_permute_what="xmaps",
+                                       verbose=False)
+    assert nulls is not None
+    nsp.correct_p(mc_method="fdr_bh", verbose=False)
+    nsp.get_p_values(permute_what="xmaps", mc_method="fdr_bh", verbose=False)
+    assert "pooled_p" not in nsp._nulls
+
+
+def test_get_p_values_pooled_p_ambiguous_raises(grouped_nispace):
+    nsp, _ = grouped_nispace
+    nsp.permute(what="maps", maps_method="random", n_perm=50, seed=1, pooled_p="mean",
+                verbose=False)
+    nsp.permute(what="maps", maps_method="random", n_perm=50, seed=1, pooled_p="median",
+                verbose=False)
+    nsp.permute(what="groups", n_perm=50, seed=1, verbose=False)
+    # last pooled_p ("mean", from groups) exists for maps too -> taken
+    nsp.get_p_values(permute_what="xmaps", verbose=False)
+    nsp._last_settings["pooled_p"] = False  # no unpooled maps result: mean and median both exist
+    with pytest.raises(ValueError, match="ambiguous"):
+        nsp.get_p_values(permute_what="xmaps", verbose=False)
+    nsp.get_p_values(permute_what="xmaps", pooled_p="median", verbose=False)
+
+
 def test_permute_groups_rejects_binary_y(rng):
     n_x, n_parcels, n_subj = 2, 20, 10
     X = rng.normal(size=(n_x, n_parcels))

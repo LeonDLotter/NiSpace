@@ -214,22 +214,54 @@ _DEPR_PICKLED_COLOC_FUN = (
 )
 
 
-def _check_x_set_duplicates(X):
-    """Duplicate handling for set-indexed X (a ``"set"`` index level).
-
-    A map may belong to several sets (expected for set enrichment), but not twice to the
-    same set -- that would count it twice in the set score. Within-set duplicates
-    (same set and map label) are dropped, keeping the first entry; maps in several sets
-    are kept and reported, because analyses without ``xsea`` treat each membership as a
-    separate map. Map identity is the index without the ``"set"``/``"weight"`` levels.
-    Returns X (deduplicated if needed).
-    """
+def _x_set_map_keys(X):
+    """Index frame of a set-indexed X and the per-row map key (index without the
+    ``"set"``/``"weight"`` levels); ``(None, None)`` if there is no map level."""
     idx = X.index.to_frame(index=False)
     map_cols = [c for c in idx.columns if c not in ("set", "weight")]
     if not map_cols:
-        return X
+        return None, None
     keys = idx[map_cols].apply(tuple, axis=1) if len(map_cols) > 1 else idx[map_cols[0]]
+    return idx, keys
 
+
+def _maps_in_several_sets(X):
+    """Maps of a set-indexed X that belong to more than one set (pd.Series: map -> n sets)."""
+    if not isinstance(X, pd.DataFrame) or "set" not in X.index.names:
+        return pd.Series(dtype=int)
+    idx, keys = _x_set_map_keys(X)
+    if idx is None:
+        return pd.Series(dtype=int)
+    n_sets = (pd.DataFrame({"set": idx["set"].to_numpy(), "key": list(keys)})
+              .groupby("key", sort=False)["set"].nunique())
+    return n_sets[n_sets > 1]
+
+
+def _warn_maps_in_several_sets(X, where):
+    """Warn once per call when an analysis that treats X rows as individual maps gets a
+    set-indexed X whose sets overlap (repeated maps)."""
+    multi = _maps_in_several_sets(X)
+    if len(multi):
+        lgr.warning(f"{where}: {len(multi)} map(s) belong to several sets of X "
+                    f"(e.g. {list(multi.index[:3])}) and enter this analysis once per set "
+                    "membership -- repeated results, double weight, larger multiple-comparison "
+                    "family. Fine for set enrichment (xsea=True); otherwise use a collection "
+                    "without sets.")
+
+
+def _check_x_set_duplicates(X):
+    """Duplicate handling for set-indexed X (a ``"set"`` index level), run at fit.
+
+    A map may belong to several sets (expected for set enrichment), but not twice to the
+    same set -- that would count it twice in the set score. Within-set duplicates
+    (same set and map label) are dropped with a warning, keeping the first entry. Maps
+    in several sets are only reported (info); analyses that treat X rows as individual
+    maps (colocalize without xsea, reduce_x without mean_by_set) warn at call time.
+    Map identity is the index without the ``"set"``/``"weight"`` levels. Returns X.
+    """
+    idx, keys = _x_set_map_keys(X)
+    if idx is None:
+        return X
     within = pd.Series(list(zip(idx["set"], keys))).duplicated(keep="first").to_numpy()
     if within.any():
         examples = [f"{s}: {m}" for s, m in zip(idx["set"][within], keys[within])][:3]
@@ -237,16 +269,10 @@ def _check_x_set_duplicates(X):
                     f"were dropped (first entry kept), e.g. {examples}. A map may belong to "
                     "several sets, but only once per set.")
         X = X.loc[~within]
-        idx, keys = idx.loc[~within].reset_index(drop=True), keys[~within].reset_index(drop=True)
-
-    n_sets_per_map = (pd.DataFrame({"set": idx["set"].to_numpy(), "key": list(keys)})
-                      .groupby("key", sort=False)["set"].nunique())
-    multi = n_sets_per_map[n_sets_per_map > 1]
+    multi = _maps_in_several_sets(X)
     if len(multi):
-        lgr.warning(f"{len(multi)} map(s) belong to several sets, e.g. {list(multi.index[:3])}. "
-                    "Expected for set enrichment (xsea=True), where set resampling draws from "
-                    "the unique maps; analyses without xsea treat every set membership as a "
-                    "separate map (repeated results, larger multiple-comparison family).")
+        lgr.info(f"{len(multi)} map(s) belong to several sets, e.g. {list(multi.index[:3])} "
+                 "-- fine for set enrichment (xsea=True).")
     return X
 
 
@@ -981,7 +1007,11 @@ class NiSpace:
         
         ## get X data (so this function can be run on direct X input data)
         _X = self._X
- 
+        # maps in several sets would enter the reduction once per membership (double weight);
+        # only a set-wise mean/median handles sets as intended
+        if not (reduction.lower() in ["mean", "median"] and mean_by_set):
+            _warn_maps_in_several_sets(_X, f"reduce_x('{reduction}')")
+
         ## case mean or median
         if reduction.lower() in ["mean", "median"]:
             lgr.info(f"Calculating parcelwise{' weighted' if weighted_mean else ''} "
@@ -1758,6 +1788,8 @@ class NiSpace:
                     X = self.get_x(X_reduction=X_reduction)
         X_arr = np.array(X, dtype=dtype)
         X_weights = None
+        if not xsea:
+            _warn_maps_in_several_sets(X, "colocalize(xsea=False)")
         if xsea:
             lgr.info("Will perform X-set enrichment analysis (XSEA).")
             if not isinstance(X, pd.DataFrame):
@@ -2616,7 +2648,13 @@ class NiSpace:
             parcellation if not provided (and required by the null method).
         sets_X_background : array-like of shape (n_maps, n_parcels), optional
             Background X map pool for set permutation. If not provided, the
-            unique observed X maps are used as the background.
+            unique observed X maps are used as the background. Random sets are
+            drawn uniformly from this pool and reuse each observed set's
+            weights. If the pool holds several maps per entity (e.g., several
+            tracers per PET target, as in ``"All-Sets"``), entities with many
+            maps are drawn more often than in target-balanced observed sets.
+            The null stays valid, but its reference is "random maps", not
+            "random targets".
         p_tails : str or dict, optional
             P-value tail(s). ``"two"``, ``"upper"``, or ``"lower"``. Can be a
             dict keyed by statistic name (e.g. ``{"rho": "two"}``). Defaults to
@@ -2807,43 +2845,45 @@ class NiSpace:
         }
         for k in [k for k in kwargs.keys() if k.startswith("maps_")]:
             maps_kwargs[k.removeprefix("maps_")] = kwargs.pop(k)
-        # resolve null_method and null_space from parcellation
-        if self._parc is not None:
-            null_space_result = self._parc.get_null_space()
-            _is_split_strategy = isinstance(null_space_result[0], tuple)
-            if _is_split_strategy:
-                (cx_null_space, _), (sc_null_space, _) = null_space_result
-                # null_space = MNI sc space for image loading; cx surface handled in _get_null_maps
-                null_space = sc_null_space
-            else:
-                null_space = null_space_result[0]
-            if maps_kwargs["null_method"] is None:
+        # resolve null_method and null_space from parcellation -- only for map nulls; for
+        # groups/sets/pairs this would log a misleading default and load/fit the null space
+        if "maps" in what:
+            if self._parc is not None:
+                null_space_result = self._parc.get_null_space()
+                _is_split_strategy = isinstance(null_space_result[0], tuple)
                 if _is_split_strategy:
-                    _, cx_m = null_space_result[0]
-                    _, sc_m = null_space_result[1]
-                    maps_kwargs["null_method"] = (cx_m, sc_m)
-                    lgr.info(f"Using default split null method (cx='{cx_m}', sc='{sc_m}') "
-                             f"(cx space: '{cx_null_space}', sc space: '{sc_null_space}').")
+                    (cx_null_space, _), (sc_null_space, _) = null_space_result
+                    # null_space = MNI sc space for image loading; cx surface handled in _get_null_maps
+                    null_space = sc_null_space
                 else:
-                    maps_kwargs["null_method"] = null_space_result[1]
-                    lgr.info(f"Using default null method '{null_space_result[1]}' "
-                             f"(parcellation null space: '{null_space}').")
-            # ensure null_space is loaded and fitted so backward-compat properties work in _get_null_maps
-            self._parc._ensure_image_loaded(null_space)
-            if null_space not in self._parc._hemi_dict:
-                self._parc._fit_space(null_space)
-            if self._parc._space is None:
-                self._parc._space = null_space
-            # pass precomputed spin matrix for any spin method (generate_null_maps validates shape)
-            _cx_m = maps_kwargs["null_method"][0] if isinstance(maps_kwargs["null_method"], tuple) else maps_kwargs["null_method"]
-            if _cx_m in _SPIN_METHODS:
-                cached = self._parc_spin_mat or self._parc.get_spin_mat(null_space)
-                if cached is not None:
-                    maps_kwargs["spin_mat"] = cached
-        else:
-            if maps_kwargs["null_method"] is None:
-                maps_kwargs["null_method"] = "moran"
-                lgr.info("No parcellation set; defaulting null method to 'moran'.")
+                    null_space = null_space_result[0]
+                if maps_kwargs["null_method"] is None:
+                    if _is_split_strategy:
+                        _, cx_m = null_space_result[0]
+                        _, sc_m = null_space_result[1]
+                        maps_kwargs["null_method"] = (cx_m, sc_m)
+                        lgr.info(f"Using default split null method (cx='{cx_m}', sc='{sc_m}') "
+                                 f"(cx space: '{cx_null_space}', sc space: '{sc_null_space}').")
+                    else:
+                        maps_kwargs["null_method"] = null_space_result[1]
+                        lgr.info(f"Using default null method '{null_space_result[1]}' "
+                                 f"(parcellation null space: '{null_space}').")
+                # ensure null_space is loaded and fitted so backward-compat properties work in _get_null_maps
+                self._parc._ensure_image_loaded(null_space)
+                if null_space not in self._parc._hemi_dict:
+                    self._parc._fit_space(null_space)
+                if self._parc._space is None:
+                    self._parc._space = null_space
+                # pass precomputed spin matrix for any spin method (generate_null_maps validates shape)
+                _cx_m = maps_kwargs["null_method"][0] if isinstance(maps_kwargs["null_method"], tuple) else maps_kwargs["null_method"]
+                if _cx_m in _SPIN_METHODS:
+                    cached = self._parc_spin_mat or self._parc.get_spin_mat(null_space)
+                    if cached is not None:
+                        maps_kwargs["spin_mat"] = cached
+            else:
+                if maps_kwargs["null_method"] is None:
+                    maps_kwargs["null_method"] = "moran"
+                    lgr.info("No parcellation set; defaulting null method to 'moran'.")
         # groups permutation
         groups_kwargs = {
             "paired": "auto",
@@ -2970,7 +3010,6 @@ class NiSpace:
                 pooled_p = "mean"
             elif pooled_p not in ("mean", "median"):
                 pooled_p = "mean"
-            self._nulls["pooled_p"] = pooled_p
             # get the N×N coloc matrix (first stat key)
             _stat = next(iter(_colocs_obs))
             _mat = _colocs_obs[_stat]   # (N, N) float32 array
@@ -3088,7 +3127,6 @@ class NiSpace:
             if pooled_p:
                 lgr.info("Will calculate p values for mean colocalization across Y maps. Set "
                          "'pooled_p=False' to compute p values for each Y map individually.")
-            self._nulls["pooled_p"] = pooled_p
 
         # get average prediction values of all y if requested (no-op when there is only one
         # row to begin with, e.g. a single group-difference map from Y_transform)
@@ -4504,8 +4542,11 @@ class NiSpace:
             mc = mc_method or self._last_settings.get("mc_method")
             if isinstance(mc, str) and mc.lower() in ("uncorrected", "none", "false"):
                 mc = None
-            _perm = self._resolve_permute_what(permute_what, method, None, X_reduction,
-                                               Y_transform, self._get_last(pooled_p=None))
+            # pairwise plot of single maps: always the non-XSEA results
+            _perm = self._resolve_permute_what(
+                permute_what, method, False, X_reduction, Y_transform,
+                self._resolve_pooled_p(None, method, permute_what, False, X_reduction,
+                                       Y_transform))
             _wanted = [(None, r"$p_{\mathrm{uncorrected}}$")]
             if mc:
                 _mc_lab = mc_method or _get_correct_mc_method(mc).replace("_", "").replace("-", "")
@@ -4516,7 +4557,7 @@ class NiSpace:
                     with _quiet():
                         p_df = self.get_p_values(method=method, X_reduction=X_reduction,
                                                  Y_transform=Y_transform, permute_what=_perm,
-                                                 mc_method=_mc)
+                                                 xsea=False, mc_method=_mc)
                     p_df = next(iter(p_df.values())) if isinstance(p_df, dict) else p_df
                     p_annot.append((_lab, np.asarray(p_df.iloc[y_pos[0], x_pos], dtype=float)))
                 except Exception as e:  # no p-values for this setting: plot without
@@ -4730,7 +4771,8 @@ class NiSpace:
         if colocalizations_dict is None and permute_what:
             permute_what = self._resolve_permute_what(
                 permute_what, method, xsea, X_reduction, Y_transform,
-                self._get_last(pooled_p=None))
+                self._resolve_pooled_p(None, method, permute_what, xsea, X_reduction,
+                                       Y_transform))
 
         # TODO (first non-dev release): remove sort_colocs parameter entirely
         if sort_colocs:
@@ -5450,8 +5492,10 @@ class NiSpace:
             )
 
             if normalized:
-                perm, pooled_p = self._get_last(perm=perm, pooled_p=pooled_p)
-                perm = self._resolve_permute_what(perm, method, xsea, X_reduction, Y_transform,
+                perm = self._get_last(perm=perm)
+                pooled_p = self._resolve_pooled_p(pooled_p, method, perm, xsea, X_reduction,
+                                                  Y_transform)
+                perm =self._resolve_permute_what(perm, method, xsea, X_reduction, Y_transform,
                                                   pooled_p)
                 if stats is None:
                     stats = _get_coloc_stats(method, permuted_only=True)
@@ -5515,7 +5559,8 @@ class NiSpace:
                 get_nulls = False
 
             if get_nulls:
-                pooled_p = self._get_last(pooled_p=pooled_p)
+                pooled_p = self._resolve_pooled_p(pooled_p, method, nulls_permute_what, xsea,
+                                                  X_reduction, Y_transform)
                 nulls_permute_what = self._resolve_permute_what(
                     nulls_permute_what, method, xsea, X_reduction, Y_transform, pooled_p)
                 if nulls_permute_what not in ["groups", "groupsxmaps", "groupssets",
@@ -5658,15 +5703,16 @@ class NiSpace:
         """
         with _verbose_scope(self._verbose if verbose is None else verbose) as verbose:
 
-            method, X_reduction, Y_transform, xsea, permute_what, pooled_p = self._get_last(
+            method, X_reduction, Y_transform, xsea, permute_what = self._get_last(
                 method=method,
                 X_reduction=X_reduction,
                 Y_transform=Y_transform,
                 xsea=xsea,
                 perm=permute_what,
-                pooled_p=pooled_p,
             )
-        
+            pooled_p = self._resolve_pooled_p(pooled_p, method, permute_what, xsea, X_reduction,
+                                              Y_transform)
+
             if mc_method is not None:
                 mc_method = _get_correct_mc_method(mc_method).replace("-", "").replace("_", "")
 
@@ -6028,6 +6074,45 @@ class NiSpace:
             )
         lgr.info(f"Resolved permute_what = '{permute_what}' to '{found[0]}'.")
         return found[0]
+
+    def _resolve_pooled_p(self, pooled_p, method, permute_what, xsea=False, X_reduction=None,
+                          Y_transform=None):
+        """Resolve pooled_p=None for a getter. The last-used pooled_p belongs to the last
+        permute() call, whose permutation type may differ from the requested one (e.g.,
+        permute("groups") forces "mean", while an earlier permute("maps") may be unpooled).
+        Use the last value if results exist for it, otherwise the only stored variant;
+        raise if several variants exist. If none exists, return the last value so the
+        caller raises its usual "not found" error."""
+        if pooled_p is not None:
+            return pooled_p
+        last = self._get_last(pooled_p=None)
+        if not isinstance(permute_what, str):
+            return last
+        perm = permute_what.lower()
+        if re.search(r"(?<![xy])maps", perm):
+            perms = [re.sub(r"(?<![xy])maps", f"{w}maps", perm) for w in ("x", "y", "xy")]
+        else:
+            perms = [perm]
+
+        def _exists(pp):
+            return any(self._check_permute(method, p, xsea=xsea, xdimred=X_reduction,
+                                           ytrans=Y_transform, pooled_p=pp, raise_error=False)
+                       for p in perms)
+
+        if _exists(last):
+            return last
+        found = [pp for pp in (False, "mean", "median") if pp != last and _exists(pp)]
+        if len(found) > 1:
+            lgr.critical_raise(
+                f"pooled_p is ambiguous for permute_what = '{permute_what}': results exist "
+                f"for pooled_p = {found}. Pass one of them explicitly.",
+                ValueError
+            )
+        if found:
+            lgr.info(f"Resolved pooled_p = {found[0]!r} for permute_what = '{permute_what}' "
+                     f"(last used: {last!r}).")
+            return found[0]
+        return last
 
     # ----------------------------------------------------------------------------------------------
 

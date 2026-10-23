@@ -5,6 +5,7 @@ Called automatically from docs/conf.py during the Sphinx build.
 Can also be run standalone for quick testing:
     python docs/gen_dataset_pages.py
 """
+import html
 import json
 import re
 import sys
@@ -363,6 +364,39 @@ def _gen_parcellations(parc_lib):
 # Datasets page
 # ---------------------------------------------------------------------------
 
+def _collection_dropdown(data):
+    """RST lines for a collapsible HTML table of a dataset's collections: name (linked),
+    default markers and the description written by nispace-data (says what each is for)."""
+    colls = data.get("collection", {})
+    if not colls:
+        return []
+    default_coll = data.get("default_collection", "")
+    default_set_coll = data.get("default_set_collection", "")
+    rows_html = []
+    for name, entry in colls.items():
+        name_cell = (_cl(name, _gh_blob(entry["remote"])) if entry.get("host") == "github-nispace"
+                     else _c(name))
+        tags = [t for t, on in (("default", name == default_coll),
+                                ("default for set enrichment", name == default_set_coll)) if on]
+        if tags:
+            name_cell += "<br><em>" + ", ".join(tags) + "</em>"
+        desc = html.escape(entry.get("description", "")) or "—"
+        rows_html.append(f"<tr><td>{name_cell}</td><td>{desc}</td></tr>")
+    table = (
+        f'<table class="nispace-table">'
+        f'<thead><tr><th>Collection</th><th>Content and use</th></tr></thead>'
+        f'<tbody>{"".join(rows_html)}</tbody>'
+        f'</table>'
+    )
+    details = (
+        f'<details class="nispace-details">'
+        f'<summary><strong>Show all {len(colls)} collections</strong></summary>'
+        f'{table}'
+        f'</details>'
+    )
+    return _raw_html([details])
+
+
 def _map_dropdown(maps):
     """RST lines for a collapsible HTML table of individual maps with space links."""
     public_maps = {n: d for n, d in maps.items() if not _map_is_private(d)}
@@ -450,19 +484,11 @@ def _info_block(ds, data, n_maps):
         items.append("<strong>Precomputed for:</strong> " + ", ".join(parts))
 
     if colls:
-        coll_parts = []
-        for n, e in colls.items():
-            inner = (f"<strong>{n}</strong>" if n == default_coll else
-                     f"<em>{n}</em>" if n == default_set_coll else n)
-            if e.get("host") == "github-nispace":
-                coll_parts.append(f'<a href="{_gh_blob(e["remote"])}">{inner}</a>')
-            else:
-                coll_parts.append(inner)
-        suffix = ", ".join(
-            [t for t, on in (("bold = default", default_coll),
-                             ("italic = default for set enrichment", default_set_coll)) if on])
-        suffix = f" ({suffix})" if suffix else ""
-        items.append("<strong>Collections:</strong> " + ", ".join(coll_parts) + suffix)
+        defaults = [f"default {_c(default_coll)}" if default_coll else "",
+                    f"set enrichment {_c(default_set_coll)}" if default_set_coll else ""]
+        defaults = ", ".join(d for d in defaults if d)
+        items.append(f"<strong>Collections:</strong> {len(colls)}"
+                     + (f" ({defaults}; see table below)" if defaults else " (see table below)"))
 
     if meta and meta.get("host") == "github-nispace":
         items.append(
@@ -559,7 +585,20 @@ def _gen_datasets(ref_lib):
     lines.append(
         "   Most datasets ship with **collections** — curated subsets of maps. "
         "Pass the ``collection`` argument to :func:`~nispace.datasets.fetch_reference` "
-        "to load only the maps in a given collection:"
+        "to load only the maps in a given collection. Each dataset's collection table "
+        "below says what a collection contains and what it is for:"
+    )
+    lines.append("")
+    lines.append(
+        "   * **Without sets** (one row per map, e.g. ``OnePerTarget``): for colocalization."
+    )
+    lines.append(
+        "   * **With sets** (e.g. ``OnePerTarget-Sets``): for set enrichment (XSEA) only. "
+        "Sets may overlap, so a plain colocalization would analyze such maps once per set."
+    )
+    lines.append(
+        "   * ``fetch_reference(..., set_by=\"target\")`` groups the maps of any collection "
+        "into sets by an entity of their name (here: one set per target)."
     )
     lines.append("")
     lines.append("   .. code-block:: python")
@@ -596,6 +635,7 @@ def _gen_datasets(ref_lib):
         n_maps = len(public_maps)
 
         lines.extend(_info_block(ds, data, n_maps))
+        lines.extend(_collection_dropdown(data))
 
         if n_maps:
             lines.extend(_map_dropdown(maps))

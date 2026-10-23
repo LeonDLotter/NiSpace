@@ -1276,6 +1276,10 @@ def fetch_reference(dataset: str,
     collection : str, optional
         Name of an integrated collection to filter/group maps by (see
         :func:`fetch_collection`); ``"All"`` is equivalent to not filtering.
+        Collections without sets (one row per map) are meant for colocalization;
+        collections with sets are meant for set enrichment (``xsea=True``) only, as
+        their sets may overlap. The datasets page of the documentation lists every
+        collection with its content and intended use.
     sets : str or list of str, optional
         Restrict to specific named sets within `collection` (or within the groups
         created by `set_by`). Requires `collection` to define sets, or `set_by`.

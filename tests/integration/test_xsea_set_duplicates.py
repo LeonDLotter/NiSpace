@@ -1,4 +1,5 @@
-"""Set-indexed X: a map may belong to several sets but only once per set; set enrichment
+"""Set-indexed X: a map may belong to several sets but only once per set (overlaps warned
+where they matter: colocalize without xsea, reduce_x); set enrichment
 scores sets correctly with overlaps; random sets are drawn from unique maps (default and
 provided background); weightedmean uses the weight level."""
 
@@ -57,11 +58,35 @@ def test_within_set_duplicate_dropped_with_warning(maps, y, caplog):
     assert a == pytest.approx(np.mean([_z(y, maps, "m0"), _z(y, maps, "m1")]), abs=1e-5)
 
 
-def test_map_in_several_sets_kept_with_warning(maps, y, caplog):
+def test_map_in_several_sets_kept_no_warning_at_fit(maps, y, caplog):
+    # fit can't know whether the object is used for set enrichment -> info only
     with caplog.at_level("WARNING"):
         nsp = _fit(_set_x(maps, OVERLAP), y)
-    assert any("belong to several sets" in w for w in _warnings(caplog))
+    assert not any("several sets" in w for w in _warnings(caplog))
     assert nsp._X.shape[0] == 4
+
+
+def test_colocalize_without_xsea_warns_on_overlapping_sets(maps, y, caplog):
+    nsp = _fit(_set_x(maps, OVERLAP), y)
+    with caplog.at_level("WARNING"):
+        nsp.colocalize("spearman", xsea=False)
+    assert any("colocalize(xsea=False)" in w and "several sets" in w for w in _warnings(caplog))
+
+
+def test_colocalize_with_xsea_does_not_warn(maps, y, caplog):
+    nsp = _fit(_set_x(maps, OVERLAP), y)
+    with caplog.at_level("WARNING"):
+        nsp.colocalize("spearman", xsea=True)
+    assert not any("several sets" in w for w in _warnings(caplog))
+
+
+@pytest.mark.parametrize("reduction,kw,warns", [("pca", {}, True), ("mean", {}, True),
+                                                ("mean", {"mean_by_set": True}, False)])
+def test_reduce_x_warns_unless_set_wise(maps, y, caplog, reduction, kw, warns):
+    nsp = _fit(_set_x(maps, OVERLAP), y)
+    with caplog.at_level("WARNING"):
+        nsp.reduce_x(reduction, **kw)
+    assert any("several sets" in w for w in _warnings(caplog)) is warns
 
 
 def test_plain_duplicates_still_warned(maps, y, caplog):
@@ -72,8 +97,9 @@ def test_plain_duplicates_still_warned(maps, y, caplog):
 
 def test_no_warning_for_disjoint_sets(maps, y, caplog):
     with caplog.at_level("WARNING"):
-        _fit(_set_x(maps, [("A", "m0"), ("A", "m1"), ("B", "m2"), ("B", "m3")]), y)
-    assert not [w for w in _warnings(caplog) if "set" in w and "duplicate" not in w]
+        nsp = _fit(_set_x(maps, [("A", "m0"), ("A", "m1"), ("B", "m2"), ("B", "m3")]), y)
+        nsp.colocalize("spearman", xsea=False)
+    assert not any("several sets" in w for w in _warnings(caplog))
 
 
 def test_xsea_scores_with_overlapping_sets(maps, y):

@@ -76,9 +76,11 @@ def test_fetch_reference_set_by_entity():
                             parcellation="Yan100", print_references=False, verbose=False)
     assert multi.index.get_level_values("set").value_counts().min() >= 2
 
-    coll = fetch_reference("pet", collection="UniqueTracerSets", set_by="tracer",
+    # weighted collection with overlapping sets: only its map selection is used
+    coll = fetch_reference("pet", collection="OnePerTracer-Sets", set_by="tracer",
                            parcellation="Yan100", print_references=False, verbose=False)
     assert coll.index.names == ["set", "map"]
+    assert not coll.index.get_level_values("map").duplicated().any()
     for s, m in coll.index:
         assert f"_tracer-{s}_" in m
 

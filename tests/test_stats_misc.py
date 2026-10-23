@@ -528,6 +528,23 @@ def test_minP_single_test_family_matches_null_to_p(tail):
     np.testing.assert_allclose(p, expected, atol=2.5 / 400)
 
 
+@pytest.mark.parametrize("fn", [step_maxT_correction, step_minP_correction])
+@pytest.mark.parametrize("how", ["r", "a"])
+def test_stepdown_monotone_after_conflicting_p_raw_floor(fn, how):
+    # a p_raw that orders the tests against the step-down order (possible with null_to_p
+    # centring or fit_norm) must not break monotonicity: the floor is applied before the
+    # step-down cumulative max, not after it
+    rng = np.random.default_rng(4)
+    null = rng.standard_normal((500, 1, 4))
+    obs = np.array([[4.0, 3.0, 2.5, 0.2]])  # step-down order = column order
+    p_raw = np.array([[0.3, 0.001, 0.002, 0.9]])
+    p, _ = fn(obs, _as_nulls(null), "rho", tail="upper", how=how, p_raw=p_raw)
+    p = np.asarray(p)[0]
+    assert (np.diff(p) >= 0).all(), p
+    assert (p >= p_raw[0]).all()
+    assert p[1] >= 0.3  # pulled up by the more extreme test's floor
+
+
 def test_minP_balanced_where_maxT_is_not():
     # complete null, 8 exchangeable tests whose null scales span 2 orders of magnitude:
     # both control FWER, but raw maxT hands (nearly) all rejections to the widest test
