@@ -10,9 +10,9 @@ from nilearn.image import new_img_like, math_img
 import numpy as np
 import pandas as pd
 
+from nilearn import image as nimage
 from neuromaps.datasets import DENSITIES
 from neuromaps.images import construct_shape_gii, load_gifti, load_nifti, load_data
-from neuromaps.resampling import resample_images
 from neuromaps.transforms import _check_hemi, _estimate_density
 from neuromaps.nulls.spins import parcels_to_vertices
 
@@ -43,7 +43,110 @@ ALIAS = dict(
     FSLR='fsLR', CIVET='civet'
 )
 
-from nispace.utils.utils import get_background_value, vol_to_vect_arr, vol_to_vect_arr_stats, _resolve_bg_array
+from nispace.utils.utils import (get_background_value, vol_to_vect_arr, vol_to_vect_arr_stats, _resolve_bg_array,
+                                 _quiet)
+from nispace.core.constants import _SPACE_DEFAULT_VOL
+
+_INFO_SEEN = set()
+
+
+def _info_once(message, level="info"):
+    """Log `message` once per Python session (e.g. per-map notes in parcellation loops)."""
+    if message not in _INFO_SEEN:
+        _INFO_SEEN.add(message)
+        getattr(lgr, level)(message)
+
+
+def _mni_space_or_none(space):
+    """Canonical MNI space name for `space`, or None if it does not identify one (e.g. "MNI152").
+
+    Names other than the generic "MNI152" / "MNI" that do not resolve (typos, ambiguous names) are
+    warned about once, since they silently disable MNI-to-MNI warps.
+    """
+    from .transform import _resolve_space, _GENERIC_MNI_NAMES
+    mni = _resolve_space(space, strict=False)
+    if mni is None and space.lower() not in _GENERIC_MNI_NAMES:
+        _info_once(f"'{space}' does not identify a single supported MNI space and is treated as unspecified "
+                   f"MNI space: no MNI-to-MNI warp; {_SPACE_DEFAULT_VOL} is assumed for projections to the "
+                   "surface. Use a canonical name (see nispace.transform.mni_to_mni) to avoid this.",
+                   level="warning")
+    return mni
+
+
+def _check_not_civet(space):
+    if isinstance(space, str) and space.lower() == "civet":
+        from .transform import _CIVET_MSG
+        raise ValueError(_CIVET_MSG)
+
+
+def _is_mni(space):
+    """True for MNI volume space names (containing "mni", or a canonical MNI space such as CAT12IXI555)."""
+    from .transform import _is_mni_space_name
+    return _is_mni_space_name(space)
+
+
+def _resample_images(src, trg, src_space, trg_space, hemi=None, resampling="transform_to_src",
+                     method="linear", src_mni=None, trg_mni=None):
+    """Bring data (`src`) and parcellation (`trg`) into a common space.
+
+    Same strategies as neuromaps' ``resample_images`` (``"transform_to_src"``: `trg` is transformed to
+    the space / density of `src`; ``"transform_to_trg"``: the reverse), but surface transforms run on
+    NiSpace's hash-checked templates via :mod:`nispace.transform` (no Workbench, no neuromaps cache).
+    MNI ↔ MNI is plain grid resampling (nilearn); warps between two different specific MNI spaces are
+    done beforehand by :meth:`Parcellater.transform`. Volume ↔ surface always projects the volume onto the
+    surface from its actual MNI space (`src_mni` / `trg_mni`, canonical names; registration fusion composed
+    with the EasyReg field). If that space is unknown (generic "MNI152"), MNI152NLin6Asym is assumed, as
+    neuromaps does.
+
+    Returns
+    -------
+    (src, trg)
+        Nifti1Image for volumes, tuple of GiftiImage for surfaces.
+    """
+    from .transform import mni_to_surf, surf_to_surf
+
+    def _surf(imgs):
+        return tuple(load_gifti(img) for img, _ in _check_hemi(imgs, hemi))
+
+    def _den(imgs):
+        return _estimate_density((imgs,), hemi)[0]
+
+    src_vol, trg_vol = src_space == "MNI152", trg_space == "MNI152"
+    if src_vol and trg_vol:
+        src, trg = load_nifti(src), load_nifti(trg)
+        if resampling == "transform_to_src":
+            trg = nimage.resample_to_img(trg, src, interpolation=method, force_resample=False, copy_header=False)
+        else:
+            src = nimage.resample_to_img(src, trg, interpolation=method, force_resample=False, copy_header=False)
+        return src, trg
+    if src_vol or trg_vol:
+        if (resampling == "transform_to_src" and src_vol) or (resampling == "transform_to_trg" and trg_vol):
+            raise ValueError("Cannot transform surface data into MNI152 space; surface-to-volume "
+                             "transforms are not implemented yet.")
+        vol, surf, surf_space = (src, trg, trg_space) if src_vol else (trg, src, src_space)
+        mni_from = src_mni if src_vol else trg_mni
+        if mni_from is None:
+            _info_once(f"MNI space of the volumetric {'data' if src_vol else 'parcellation'} not specified; "
+                       f"assuming {_SPACE_DEFAULT_VOL} for the projection to {surf_space}.")
+            mni_from = _SPACE_DEFAULT_VOL
+        surf = _surf(surf)
+        hemis = None if len(surf) == 2 else hemi
+        with _quiet():  # internal call: don't change the caller's log level
+            vol = mni_to_surf(load_nifti(vol), mni_from, surf_space, den_to=_den(surf), hemi=hemis,
+                              method=method, verbose=False)
+        vol = vol if isinstance(vol, tuple) else (vol,)
+        return (vol, surf) if src_vol else (surf, vol)
+    hemis = None if hemi is None else hemi
+    with _quiet():
+        if resampling == "transform_to_src":
+            trg = surf_to_surf(_surf(trg), trg_space, src_space, den_to=_den(src), hemi=hemis, method=method,
+                               verbose=False)
+        else:
+            src = surf_to_surf(_surf(src), src_space, trg_space, den_to=_den(trg), hemi=hemis, method=method,
+                               verbose=False)
+    src = src if isinstance(src, tuple) else (src,)
+    trg = trg if isinstance(trg, tuple) else (trg,)
+    return _surf(src), _surf(trg)
 
 def _gifti_to_array(gifti):
     """ Converts tuple of `gifti` to numpy array
@@ -101,10 +204,17 @@ class Parcellater():
             ``neuromaps.datasets.DENSITIES``).
         """
         self.parcellation = parcellation
-        self.space = ALIAS.get(space, space)
+        self._volumetric = _is_mni(space)
+        # "MNI152" = any MNI volume space for the resampling logic; the specific space (canonical name, or
+        # None if not identifiable, e.g. generic "MNI152") is kept for MNI-to-MNI warps and
+        # volume-to-surface projections
+        self._mni_space = _mni_space_or_none(space) if self._volumetric else None
+        _check_not_civet(space)
+        self.space = 'MNI152' if self._volumetric else ALIAS.get(space, space)
         self.resampling_target = resampling_target
         self.hemi = hemi
-        self._volumetric = 'mni' in space.lower()
+        self._mni_transformers = {}   # fitted MNI-to-MNI SpaceTransformers, reused across maps
+        self._warped_parc = {}        # parcellation warped into a data space, reused across maps
 
         if self.resampling_target == 'parcellation':
             self._resampling = 'transform_to_trg'
@@ -233,7 +343,9 @@ class Parcellater():
 
         self._check_fitted()
 
-        space = ALIAS.get(space, space)
+        data_mni = _mni_space_or_none(space) if _is_mni(space) else None
+        _check_not_civet(space)
+        space = 'MNI152' if _is_mni(space) else ALIAS.get(space, space)
         if (self.resampling_target == 'data' and space == 'MNI152'
                 and not self._volumetric):
             raise ValueError('Cannot use resampling_target="data" when '
@@ -259,10 +371,26 @@ class Parcellater():
         else:
             resampling_method = 'linear'
         
-        data, parc = resample_images(data, self.parcellation,
-                                     space, self.space, hemi=hemi,
-                                     resampling=self._resampling,
-                                     method=resampling_method)
+        # data and parcellation in two different specific MNI spaces: warp the side that moves
+        # (resampling_target 'data': the parcellation, nearest; 'parcellation': the data, linear).
+        # The generic "MNI152" on either side never triggers a warp.
+        parcellation, parc_mni = self.parcellation, self._mni_space
+        if (self._volumetric and space == 'MNI152' and data_mni is not None
+                and parc_mni is not None and data_mni != parc_mni):
+            data = load_nifti(data)
+            if self.resampling_target == 'parcellation':
+                data = self._mni_warp(data, data_mni, parc_mni, self.parcellation, resampling_method)
+                data_mni = parc_mni
+            else:
+                parcellation = self._mni_warp(self.parcellation, parc_mni, data_mni, data,
+                                              resampling_method, cache_result=True)
+                parc_mni = data_mni
+
+        data, parc = _resample_images(data, parcellation,
+                                      space, self.space, hemi=hemi,
+                                      resampling=self._resampling,
+                                      method=resampling_method,
+                                      src_mni=data_mni, trg_mni=parc_mni)
         self._parc = parc
         self._parc_arr = load_data(parc)
         self._parc_idc = np.trim_zeros(np.unique(self._parc_arr))
@@ -316,7 +444,7 @@ class Parcellater():
                 density, = _estimate_density((data,), hemi=hemi)
                 mask_space = space if self.resampling_target in ('data', None) else self.space
                 from .datasets import fetch_template
-                _mw_L, _mw_R = fetch_template(mask_space, desc="medial", res=density, check_file_hash=False, verbose=False)
+                _mw_L, _mw_R = fetch_template(mask_space, desc="medial", res=density, verbose=False)
                 atlas_medialwall = _mw_L if hemi == 'L' else _mw_R if hemi == 'R' else (_mw_L, _mw_R)
                 nomedialwall = load_data(atlas_medialwall)
                 auto_value = np.median(darr[nomedialwall == 0])
@@ -454,6 +582,30 @@ class Parcellater():
                                     min_num_valid_datapoints=min_num_valid_datapoints,
                                     min_fraction_valid_datapoints=min_fraction_valid_datapoints,
                                     ignore_background_data=ignore_background_data)
+
+    def _mni_warp(self, img, mni_from, mni_to, reference, method, cache_result=False):
+        """Warp volume `img` from `mni_from` to `mni_to` (EasyReg, :mod:`nispace.transform`) at the template
+        resolution closest to `reference`'s voxel size. Fitted transforms are reused across maps; with
+        `cache_result` (the parcellation), the warped image is too."""
+        from .transform import SpaceTransformer, _AVAILABLE_RES
+        vox = float(np.min(np.abs(load_nifti(reference).header.get_zooms()[:3])))
+        res = min(_AVAILABLE_RES, key=lambda r: abs(r - vox))
+        order = 0 if method == "nearest" else 1
+        key = (mni_from, mni_to, res, order)
+        if cache_result and key in self._warped_parc:
+            return self._warped_parc[key]
+        if key not in self._mni_transformers:
+            lgr.info(f"{'Parcellation' if cache_result else 'Data'} in {mni_from}, "
+                     f"{'data' if cache_result else 'parcellation'} in {mni_to}: warping the "
+                     f"{'parcellation (nearest)' if cache_result else 'data (linear)'} at {res}mm with EasyReg.")
+            with _quiet():  # internal call: don't change the caller's log level
+                self._mni_transformers[key] = SpaceTransformer(mni_from, mni_to, res=res, method=order,
+                                                               verbose=False).fit()
+        with _quiet():
+            out = self._mni_transformers[key].transform(load_nifti(img))
+        if cache_result:
+            self._warped_parc[key] = out
+        return out
 
     def _check_fitted(self):
         if not hasattr(self, '_fit'):

@@ -1,6 +1,6 @@
 import copy
 import re
-from typing import List, Union, Sequence, Literal, Dict
+from typing import List, Union, Sequence, Literal, Dict, Optional
 from pathlib import Path
 
 import numpy as np
@@ -289,6 +289,22 @@ def _resolve_per_role(value, role, default="auto"):
     """
     return value.get(role, default) if isinstance(value, dict) else value
 
+
+def _unspecified_parc_space(source, data_space):
+    """Space assumed for a custom parcellation passed without `parcellation_space`.
+
+    Volumes are assumed to be in the data's space (so no MNI-to-MNI warp is triggered), or in
+    `_SPACE_DEFAULT_VOL` if the data space is not a specific MNI space. Surfaces return None, so the space
+    is inferred from the image (fsLR / fsaverage by vertex count).
+    """
+    from .transform import _resolve_space, _is_mni_space_name
+    is_vol = isinstance(source, nib.Nifti1Image) or (
+        isinstance(source, (str, Path)) and str(source).lower().endswith((".nii", ".nii.gz")))
+    if not is_vol:
+        return None
+    specific = _resolve_space(data_space, strict=False) if _is_mni_space_name(data_space) else None
+    return specific or _SPACE_DEFAULT_VOL
+
 # ==================================================================================================
 # DEFINE CLASS
 # ==================================================================================================
@@ -339,12 +355,12 @@ class NiSpace:
                  x_labels: Sequence[str] = None, 
                  y_labels: Sequence[str] = None, 
                  z_labels: Sequence[str] = None, 
-                 data_space: Literal["MNI152NLin6Asym", "MNI152NLin2009cAsym", "fsaverage", "fsLR"] = _SPACE_DEFAULT_VOL,
+                 data_space: Optional[Literal["MNI152NLin6Asym", "MNI152NLin2009cAsym", "fsaverage", "fsLR"]] = None,
                  standardize: Union[Literal["x", "y", "z", "xy", "xz", "yz", "xyz"], bool] = "xz", 
                  drop_nan: bool = False,    
                  parcellation: Union[str, Path, nib.Nifti1Image, nib.GiftiImage] = None, 
                  parcellation_labels: Sequence[str] = None, 
-                 parcellation_space: Literal["MNI152NLin6Asym", "MNI152NLin2009cAsym", "fsaverage", "fsLR"] = _SPACE_DEFAULT_VOL,
+                 parcellation_space: Optional[Literal["MNI152NLin6Asym", "MNI152NLin2009cAsym", "fsaverage", "fsLR"]] = None,
                  parcellation_hemi: Union[Literal["R", "L"], Sequence[Literal["L", "R"]]] = ["L", "R"], 
                  parcellation_symmetric: bool = False,
                  parcellation_l2rmap: pd.DataFrame = None,
@@ -413,9 +429,13 @@ class NiSpace:
         z_labels : sequence of str, optional
             Labels for the z data. Default is None. If None and len(z) == len(y) any y is DataFrame 
             or Series, the labels are taken from y's (not z's) index (DataFrame) or name (Series).
-        data_space : str, optional
-            The space in which the (x,y,z) data is defined; passed to neuromaps. Should be one of
-            "MNI152NLin6Asym", "MNI152NLin2009cAsym", "fsaverage" or "fsLR". 
+        data_space : str or list of str, optional
+            The space in which the (x,y,z) data is defined, e.g. "MNI152NLin6Asym",
+            "MNI152NLin2009cAsym" (or any MNI space accepted by :func:`~nispace.transform.mni_to_mni`),
+            "fsaverage" or "fsLR". Default None: MNI volume data with an unspecified template
+            ("MNI152"). MNI-to-MNI transforms (EasyReg) between data and parcellation are only applied
+            if both spaces are given as specific, different MNI spaces; an unspecified space never
+            triggers one.
         standardize : str or bool, optional
             Whether to standardize the parcellated (x,y,z) data within each map across parcels. 
             Default is "xz". If True, will standardize all data. If (combination of) "x", "y", 
@@ -432,7 +452,11 @@ class NiSpace:
             Labels for the parcellation. Default is None. If None and input (x,y) data is DataFrame or 
             Series, 
         parcellation_space : str, optional
-            The space in which the parcellation is defined. See data_space for details.
+            The space in which the parcellation is defined. See data_space for details. Default None:
+            integrated parcellations use the image matching `data_space` (MNI152NLin6Asym preferred for
+            unspecified MNI data); custom volumetric parcellations are assumed to be in the data space
+            (MNI152NLin6Asym if that is unspecified), custom surface parcellations are inferred from the
+            image.
         parcellation_hemi : sequence of str, optional
             The hemispheres in which the parcellation if defined if parcellation_space is 
             "fsaverage" or "fslr". Default is ["L", "R"].
@@ -471,6 +495,8 @@ class NiSpace:
         self._x_lab = x_labels
         self._y_lab = y_labels
         self._z_lab = z_labels
+        if data_space is None:
+            data_space = "MNI152"  # MNI volume space, template unspecified: never triggers MNI-to-MNI warps
         if isinstance(data_space, str):
             data_space = [data_space] * 3
         elif isinstance(data_space, (list, tuple)) & len(data_space)==1:
@@ -498,7 +524,7 @@ class NiSpace:
             # image or path → build Parcellation immediately
             self._parc = Parcellation.from_path(
                 source=parcellation,
-                space=parcellation_space,
+                space=parcellation_space or _unspecified_parc_space(parcellation, self._data_space[1]),
                 labels=parcellation_labels,
                 dist_mat=parcellation_dist_mat,
                 spin_mat=parcellation_spin_mat,
@@ -685,7 +711,8 @@ class NiSpace:
                     for d in [self._x, self._y, self._z] if d is not None
                 )
                 if needs_parcellating:
-                    active_space = parc_obj.get_image_for_dataspace(self._parc["space"])
+                    # unspecified parcellation space: use the image matching the (y) data space
+                    active_space = parc_obj.get_image_for_dataspace(self._parc["space"] or self._data_space[1])
                     parc_obj.set_active_space(active_space)
                 self._parc = parc_obj
                 # populate dist_mat dict from Parcellation — use null space explicitly
@@ -716,7 +743,7 @@ class NiSpace:
             if not isinstance(self._parc, Parcellation):
                 self._parc = Parcellation.from_path(
                     source=self._parc["parc"],
-                    space=self._parc["space"],
+                    space=self._parc["space"] or _unspecified_parc_space(self._parc["parc"], self._data_space[1]),
                     labels=self._parc["labels"],
                     dist_mat=self._parc_dist_mat["null_maps"],
                     symmetric=self._parc["symmetric"],

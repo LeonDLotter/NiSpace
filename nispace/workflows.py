@@ -7,7 +7,7 @@ import logging
 lgr = logging.getLogger(__name__)
 from . import NiSpace
 from .utils.utils import set_log
-from .core.constants import _PARC_DEFAULT, _COLOC_METHODS, _SPACE_DEFAULT_VOL
+from .core.constants import _PARC_DEFAULT, _COLOC_METHODS
 from .datasets import fetch_reference, reference_lib, _check_parcellation
 
 _DEPR_POOLED_P = (
@@ -153,7 +153,7 @@ def colocalization(y,
                    z=None,
                    x_collection=None,
                    standardize="xz",
-                   space=_SPACE_DEFAULT_VOL,
+                   space=None,
                    data_space=None,
                    parcellation_space=None,
                    parcellation=_PARC_DEFAULT,
@@ -200,9 +200,11 @@ def colocalization(y,
         enrichment (XSEA) is run.
     standardize : str, default="xz"
         Which data to standardize. Can contain "x", "y", and/or "z".
-    space : str, default=_SPACE_DEFAULT_VOL ("MNI152NLin6Asym")
+    space : str or None, default=None
         Default template space for both the data images and the parcellation. Used
-        to resolve ``data_space``/``parcellation_space`` when those are not given.
+        to resolve ``data_space``/``parcellation_space`` when those are not given. None:
+        unspecified MNI space (see :class:`~nispace.api.NiSpace`, `data_space`); MNI-to-MNI
+        transforms are then never applied.
     data_space : str or None, default=None
         Template space of the input data images. Falls back to ``space`` if falsy.
     parcellation_space : str or None, default=None
@@ -447,7 +449,7 @@ def group_colocalization(y, design,
                          z=None,
                          x_collection=None,
                          standardize="xz",
-                         space=_SPACE_DEFAULT_VOL,
+                         space=None,
                          data_space=None,
                          parcellation_space=None,
                          parcellation=_PARC_DEFAULT,
@@ -515,9 +517,11 @@ def group_colocalization(y, design,
         enrichment (XSEA) is run.
     standardize : str, default="xz"
         Which data to standardize. Can contain "x", "y", and/or "z".
-    space : str, default=_SPACE_DEFAULT_VOL ("MNI152NLin6Asym")
+    space : str or None, default=None
         Default template space for both the data images and the parcellation. Used
-        to resolve ``data_space``/``parcellation_space`` when those are not given.
+        to resolve ``data_space``/``parcellation_space`` when those are not given. None:
+        unspecified MNI space (see :class:`~nispace.api.NiSpace`, `data_space`); MNI-to-MNI
+        transforms are then never applied.
     data_space : str or None, default=None
         Template space of the input data images. Falls back to ``space`` if falsy.
     parcellation_space : str or None, default=None
@@ -846,7 +850,7 @@ def paired_colocalization(y,
                           x,
                           z=None,
                           standardize="xz",
-                          space=_SPACE_DEFAULT_VOL,
+                          space=None,
                           data_space=None,
                           parcellation_space=None,
                           parcellation=_PARC_DEFAULT,
@@ -895,8 +899,8 @@ def paired_colocalization(y,
         (``"partialspearman"``, ``"partialpearson"``); ignored otherwise.
     standardize : str, default="xz"
         Which data to z-standardize (parcels). Can contain "x", "y", "z".
-    space : str
-        Image space for parcellation and data loading.
+    space : str or None
+        Image space for parcellation and data loading (None: unspecified MNI space).
     data_space : str or None
         Override for the data image space.
     parcellation_space : str or None
@@ -1024,7 +1028,7 @@ def paired_colocalization(y,
 def correlate_within_region(x,
                             y,
                             standardize=False,
-                            space=_SPACE_DEFAULT_VOL,
+                            space=None,
                             data_space=None,
                             parcellation_space=None,
                             parcellation=_PARC_DEFAULT,
@@ -1079,8 +1083,8 @@ def correlate_within_region(x,
         Which data to z-standardize (parcels). Can contain "x", "y". Defaults to ``False``:
         this z-scores each *map* across its own parcels, which distorts the across-map axis
         this function actually correlates (see :meth:`NiSpace.correlate_within_region`). 
-    space : str
-        Image space for parcellation and data loading.
+    space : str or None
+        Image space for parcellation and data loading (None: unspecified MNI space).
     data_space : str or None
         Override for the data image space.
     parcellation_space : str or None
@@ -1202,7 +1206,7 @@ def xsea(y,
          x_collection=None,
          x_background=None,
          standardize="xz",
-         space=_SPACE_DEFAULT_VOL,
+         space=None,
          data_space=None,
          parcellation_space=None,
          parcellation=_PARC_DEFAULT,
@@ -1274,9 +1278,11 @@ def xsea(y,
         Ignored if ``permute_sets=False``.
     standardize : str, default="xz"
         Which data to standardize. Can contain "x", "y", and/or "z".
-    space : str, default=_SPACE_DEFAULT_VOL ("MNI152NLin6Asym")
+    space : str or None, default=None
         Default template space for both the data images and the parcellation. Used
-        to resolve ``data_space``/``parcellation_space`` when those are not given.
+        to resolve ``data_space``/``parcellation_space`` when those are not given. None:
+        unspecified MNI space (see :class:`~nispace.api.NiSpace`, `data_space`); MNI-to-MNI
+        transforms are then never applied.
     data_space : str or None, default=None
         Template space of the input data images. Falls back to ``space`` if falsy.
     parcellation_space : str or None, default=None
@@ -1462,7 +1468,7 @@ def group_xsea(y, design,
                z=None,
                x_collection=None,
                standardize="xz",
-               space=_SPACE_DEFAULT_VOL,
+               space=None,
                data_space=None,
                parcellation_space=None,
                parcellation=_PARC_DEFAULT,
@@ -1528,9 +1534,11 @@ def group_xsea(y, design,
         enrichment (XSEA) is run.
     standardize : str, default="xz"
         Which data to standardize. Can contain "x", "y", and/or "z".
-    space : str, default=_SPACE_DEFAULT_VOL ("MNI152NLin6Asym")
+    space : str or None, default=None
         Default template space for both the data images and the parcellation. Used
-        to resolve ``data_space``/``parcellation_space`` when those are not given.
+        to resolve ``data_space``/``parcellation_space`` when those are not given. None:
+        unspecified MNI space (see :class:`~nispace.api.NiSpace`, `data_space`); MNI-to-MNI
+        transforms are then never applied.
     data_space : str or None, default=None
         Template space of the input data images. Falls back to ``space`` if falsy.
     parcellation_space : str or None, default=None
@@ -1672,7 +1680,7 @@ def nimare_colocalization(y,
                           z=None,
                           x_collection=None,
                           standardize="xz",
-                          space=_SPACE_DEFAULT_VOL,
+                          space=None,
                           data_space=None,
                           parcellation_space=None,
                           parcellation=_PARC_DEFAULT,
@@ -1810,7 +1818,7 @@ def nimare_xsea(y,
                 x_collection=None,
                 x_background=None,
                 standardize="xz",
-                space=_SPACE_DEFAULT_VOL,
+                space=None,
                 data_space=None,
                 parcellation_space=None,
                 parcellation=_PARC_DEFAULT,

@@ -36,7 +36,9 @@ The ``NiSpace`` (NeuroImaging Spatial Colocalization Environment) toolbox aims t
 * multi-method non-parametric significance testing, 
 * and publication-ready visualization.
 
-``NiSpace`` is under development and its `documentation <https://nispace.readthedocs.io/>`_ currently is incomplete. We welcome anyone who would like to give it a try – your feedback is highly appreciated! 
+``NiSpace`` is under development and its `documentation <https://nispace.readthedocs.io/>`_ currently is incomplete. We welcome anyone who would like to give it a try – your feedback is highly appreciated!
+
+**Using an AI assistant?** Point it to `AGENTS.md <AGENTS.md>`_: a compact guide to choosing an analysis, the rules for valid inference, and how (not) to interpret colocalizations. It may be useful for humans, too.
 
 
 Installation

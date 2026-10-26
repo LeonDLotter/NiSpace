@@ -1364,9 +1364,9 @@ def _load_fslr_assets(surf_mesh="inflated", res="32k"):
             f"Choose from: {sorted(_valid_mesh)}. Falling back to 'inflated'."
         )
         surf_mesh = "inflated"
-    surf_lh, surf_rh = fetch_template("fsLR", res=res, desc=surf_mesh, check_file_hash=False, verbose=False)
-    sulc_lh_path, sulc_rh_path = fetch_template("fsLR", res=res, desc="sulc", check_file_hash=False, verbose=False)
-    medial_lh_path, medial_rh_path = fetch_template("fsLR", res=res, desc="medial", check_file_hash=False, verbose=False)
+    surf_lh, surf_rh = fetch_template("fsLR", res=res, desc=surf_mesh, verbose=False)
+    sulc_lh_path, sulc_rh_path = fetch_template("fsLR", res=res, desc="sulc", verbose=False)
+    medial_lh_path, medial_rh_path = fetch_template("fsLR", res=res, desc="medial", verbose=False)
     surf_lh = images.load_gifti(str(surf_lh))
     surf_rh = images.load_gifti(str(surf_rh))
     sulc_lh = -images.load_gifti(str(sulc_lh_path)).agg_data()
@@ -1400,9 +1400,9 @@ def _load_fsaverage_assets(surf_mesh="pial", res="41k"):
             f"Choose from: {sorted(valid)}. Falling back to 'pial'."
         )
         surf_mesh = "pial"
-    surf_lh, surf_rh = fetch_template("fsaverage", res=res, desc=surf_mesh, check_file_hash=False, verbose=False)
-    sulc_lh_path, sulc_rh_path = fetch_template("fsaverage", res=res, desc="sulc", check_file_hash=False, verbose=False)
-    medial_lh_path, medial_rh_path = fetch_template("fsaverage", res=res, desc="medial", check_file_hash=False, verbose=False)
+    surf_lh, surf_rh = fetch_template("fsaverage", res=res, desc=surf_mesh, verbose=False)
+    sulc_lh_path, sulc_rh_path = fetch_template("fsaverage", res=res, desc="sulc", verbose=False)
+    medial_lh_path, medial_rh_path = fetch_template("fsaverage", res=res, desc="medial", verbose=False)
     surf_lh = images.load_gifti(str(surf_lh))
     surf_rh = images.load_gifti(str(surf_rh))
     sulc_lh = -images.load_gifti(str(sulc_lh_path)).agg_data()

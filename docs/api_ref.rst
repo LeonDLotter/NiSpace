@@ -57,6 +57,7 @@ API Reference
    colocalization
    group_colocalization
    paired_colocalization
+   correlate_within_region
    xsea
    group_xsea
    nimare_colocalization
@@ -249,15 +250,29 @@ API Reference
 
 .. _api_transforms:
 
-:mod:`nispace.transforms` – MNI space transforms
---------------------------------------------------
-.. currentmodule:: nispace.transforms
+:mod:`nispace.transform` – MNI and surface space transforms
+-------------------------------------------------------------
+.. currentmodule:: nispace.transform
+
+.. note::
+   ``nispace.transforms`` is a deprecated alias of this module and will be removed in the first
+   non-dev release.
+
+.. autosummary::
+   :template: class.rst
+   :toctree: generated/
+
+   SpaceTransformer
 
 .. autosummary::
    :template: function.rst
    :toctree: generated/
 
+   transform
    mni_to_mni
+   surf_to_surf
+   mni_to_surf
+   surf_to_mni
    compute_transform_displacement
 
 

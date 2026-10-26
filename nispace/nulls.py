@@ -698,7 +698,7 @@ def _get_surface_atlas(parc_space, density):
         )
     atlas = {}
     for desc in [surf_key, "sphere", "medial"]:
-        L, R = fetch_template(space, desc=desc, res=density, check_file_hash=False, verbose=False)
+        L, R = fetch_template(space, desc=desc, res=density, verbose=False)
         atlas[desc] = _SurfPair(L, R)
     return atlas, surf_key
 
@@ -1297,12 +1297,19 @@ def get_distance_matrix(parc, parc_space, parc_hemi=["L", "R"],
     elif parc_space in ["fsaverage", "fsLR", "fsa", "fslr"]:
 
         if parc_resample and isinstance(parc_resample, str):
-            from neuromaps.transforms import fsaverage_to_fsaverage, fslr_to_fslr
+            from .transform import surf_to_surf
+            from .utils.utils import _quiet
             current_density = _img_density_for_neuromaps(parc[0] if isinstance(parc, tuple) else parc)
             if current_density != parc_resample:
                 lgr.info(f"Resampling surface parcellation from {current_density} to {parc_resample} density "
                          "for distance matrix generation.")
-                resample_fn = fsaverage_to_fsaverage if "fsa" in parc_space.lower() else fslr_to_fslr
+                _space = "fsaverage" if "fsa" in parc_space.lower() else "fsLR"
+
+                def resample_fn(p, den, method):
+                    with _quiet():  # internal call: don't change the caller's log level
+                        return surf_to_surf(p, _space, _space, den_to=den,
+                                            hemi=None if isinstance(p, tuple) else parc_hemi,
+                                            method=method, verbose=False)
 
                 def _parc_ids(p):
                     imgs = p if isinstance(p, tuple) else (p,)

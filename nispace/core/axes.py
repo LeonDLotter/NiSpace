@@ -293,8 +293,8 @@ def _surface_blocks(imgs, hemis, space):
     from ..datasets import fetch_template
     from neuromaps.images import load_data
     density = _img_density_for_neuromaps(imgs[0])
-    sph = fetch_template(space, desc="sphere", res=density, check_file_hash=False, verbose=False)
-    vaavg = fetch_template(space, desc="vaavg", res=density, check_file_hash=False,
+    sph = fetch_template(space, desc="sphere", res=density, verbose=False)
+    vaavg = fetch_template(space, desc="vaavg", res=density,
                            verbose=False)
     blocks = []
     for img_h, hemi in zip(imgs, hemis):

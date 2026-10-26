@@ -1,5 +1,25 @@
 {
     "MNI152NLin2009cAsym": {
+        "CAT12IXI555": {
+            "backward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin2009cAsym/from-CAT12IXI555_to-MNI152NLin2009cAsym_dir-backward_field.nii.gz"
+            },
+            "forward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin2009cAsym/from-CAT12IXI555_to-MNI152NLin2009cAsym_dir-forward_field.nii.gz"
+            }
+        },
+        "CVSavg35inMNI152": {
+            "backward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin2009cAsym/from-CVSavg35inMNI152_to-MNI152NLin2009cAsym_dir-backward_field.nii.gz"
+            },
+            "forward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin2009cAsym/from-CVSavg35inMNI152_to-MNI152NLin2009cAsym_dir-forward_field.nii.gz"
+            }
+        },
         "MNI152Lin": {
             "backward": {
                 "host": "github-nispace",
@@ -62,6 +82,26 @@
         }
     },
     "MNI152NLin6Asym": {
+        "CAT12IXI555": {
+            "backward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin6Asym/from-CAT12IXI555_to-MNI152NLin6Asym_dir-backward_field.nii.gz"
+            },
+            "forward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin6Asym/from-CAT12IXI555_to-MNI152NLin6Asym_dir-forward_field.nii.gz"
+            }
+        },
+        "CVSavg35inMNI152": {
+            "backward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin6Asym/from-CVSavg35inMNI152_to-MNI152NLin6Asym_dir-backward_field.nii.gz"
+            },
+            "forward": {
+                "host": "github-nispace",
+                "remote": "transform/MNI152NLin6Asym/from-CVSavg35inMNI152_to-MNI152NLin6Asym_dir-forward_field.nii.gz"
+            }
+        },
         "MNI152Lin": {
             "backward": {
                 "host": "github-nispace",

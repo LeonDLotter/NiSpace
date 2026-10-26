@@ -1,4 +1,4 @@
-"""Smoke test for transforms.py::mni_to_mni() against a real MNI template
+"""Smoke test for transform.py::mni_to_mni() against a real MNI template
 and the real EasyReg deformation fields shipped in the data repo. Needs the
 optional `nitransforms` dependency (installed via `pip install
 nispace[opt]`, see pyproject.toml) plus real data/network access.
@@ -19,7 +19,7 @@ import pytest
 pytest.importorskip("nitransforms")
 
 from nispace.datasets import fetch_template
-from nispace.transforms import mni_to_mni
+from nispace.transform import mni_to_mni
 
 
 @pytest.mark.parametrize("res", [1, 2, 3, 4])

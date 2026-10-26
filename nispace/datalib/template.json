@@ -316,6 +316,26 @@
                     "host": "github-nispace",
                     "remote": "template/fsLR/map/vaavg/tpl-fsLR_desc-vaavg_res-4k_hemi-R.shape.gii"
                 }
+            },
+            "sphere_space-fsaverage": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sphere_space-fsaverage/tpl-fsLR_desc-sphere_space-fsaverage_res-4k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sphere_space-fsaverage/tpl-fsLR_desc-sphere_space-fsaverage_res-4k_hemi-R.surf.gii"
+                }
+            },
+            "regfusion_space-MNI152NLin6Asym": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/regfusion_space-MNI152NLin6Asym/tpl-fsLR_desc-regfusion_space-MNI152NLin6Asym_res-4k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/regfusion_space-MNI152NLin6Asym/tpl-fsLR_desc-regfusion_space-MNI152NLin6Asym_res-4k_hemi-R.surf.gii"
+                }
             }
         },
         "8k": {
@@ -377,6 +397,26 @@
                 "R": {
                     "host": "github-nispace",
                     "remote": "template/fsLR/map/vaavg/tpl-fsLR_desc-vaavg_res-8k_hemi-R.shape.gii"
+                }
+            },
+            "sphere_space-fsaverage": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sphere_space-fsaverage/tpl-fsLR_desc-sphere_space-fsaverage_res-8k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sphere_space-fsaverage/tpl-fsLR_desc-sphere_space-fsaverage_res-8k_hemi-R.surf.gii"
+                }
+            },
+            "regfusion_space-MNI152NLin6Asym": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/regfusion_space-MNI152NLin6Asym/tpl-fsLR_desc-regfusion_space-MNI152NLin6Asym_res-8k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/regfusion_space-MNI152NLin6Asym/tpl-fsLR_desc-regfusion_space-MNI152NLin6Asym_res-8k_hemi-R.surf.gii"
                 }
             }
         },
@@ -450,6 +490,26 @@
                     "host": "github-nispace",
                     "remote": "template/fsLR/map/vaavg/tpl-fsLR_desc-vaavg_res-32k_hemi-R.shape.gii"
                 }
+            },
+            "sphere_space-fsaverage": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sphere_space-fsaverage/tpl-fsLR_desc-sphere_space-fsaverage_res-32k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sphere_space-fsaverage/tpl-fsLR_desc-sphere_space-fsaverage_res-32k_hemi-R.surf.gii"
+                }
+            },
+            "regfusion_space-MNI152NLin6Asym": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/regfusion_space-MNI152NLin6Asym/tpl-fsLR_desc-regfusion_space-MNI152NLin6Asym_res-32k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/regfusion_space-MNI152NLin6Asym/tpl-fsLR_desc-regfusion_space-MNI152NLin6Asym_res-32k_hemi-R.surf.gii"
+                }
             }
         },
         "164k": {
@@ -521,6 +581,26 @@
                 "R": {
                     "host": "github-nispace",
                     "remote": "template/fsLR/map/vaavg/tpl-fsLR_desc-vaavg_res-164k_hemi-R.shape.gii"
+                }
+            },
+            "sphere_space-fsaverage": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sphere_space-fsaverage/tpl-fsLR_desc-sphere_space-fsaverage_res-164k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/sphere_space-fsaverage/tpl-fsLR_desc-sphere_space-fsaverage_res-164k_hemi-R.surf.gii"
+                }
+            },
+            "regfusion_space-MNI152NLin6Asym": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/regfusion_space-MNI152NLin6Asym/tpl-fsLR_desc-regfusion_space-MNI152NLin6Asym_res-164k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsLR/map/regfusion_space-MNI152NLin6Asym/tpl-fsLR_desc-regfusion_space-MNI152NLin6Asym_res-164k_hemi-R.surf.gii"
                 }
             }
         }
@@ -596,6 +676,16 @@
                     "host": "github-nispace",
                     "remote": "template/fsaverage/map/vaavg/tpl-fsaverage_desc-vaavg_res-3k_hemi-R.shape.gii"
                 }
+            },
+            "regfusion_space-MNI152NLin6Asym": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/regfusion_space-MNI152NLin6Asym/tpl-fsaverage_desc-regfusion_space-MNI152NLin6Asym_res-3k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/regfusion_space-MNI152NLin6Asym/tpl-fsaverage_desc-regfusion_space-MNI152NLin6Asym_res-3k_hemi-R.surf.gii"
+                }
             }
         },
         "10k": {
@@ -667,6 +757,16 @@
                 "R": {
                     "host": "github-nispace",
                     "remote": "template/fsaverage/map/vaavg/tpl-fsaverage_desc-vaavg_res-10k_hemi-R.shape.gii"
+                }
+            },
+            "regfusion_space-MNI152NLin6Asym": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/regfusion_space-MNI152NLin6Asym/tpl-fsaverage_desc-regfusion_space-MNI152NLin6Asym_res-10k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/regfusion_space-MNI152NLin6Asym/tpl-fsaverage_desc-regfusion_space-MNI152NLin6Asym_res-10k_hemi-R.surf.gii"
                 }
             }
         },
@@ -740,6 +840,16 @@
                     "host": "github-nispace",
                     "remote": "template/fsaverage/map/vaavg/tpl-fsaverage_desc-vaavg_res-41k_hemi-R.shape.gii"
                 }
+            },
+            "regfusion_space-MNI152NLin6Asym": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/regfusion_space-MNI152NLin6Asym/tpl-fsaverage_desc-regfusion_space-MNI152NLin6Asym_res-41k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/regfusion_space-MNI152NLin6Asym/tpl-fsaverage_desc-regfusion_space-MNI152NLin6Asym_res-41k_hemi-R.surf.gii"
+                }
             }
         },
         "164k": {
@@ -811,6 +921,16 @@
                 "R": {
                     "host": "github-nispace",
                     "remote": "template/fsaverage/map/vaavg/tpl-fsaverage_desc-vaavg_res-164k_hemi-R.shape.gii"
+                }
+            },
+            "regfusion_space-MNI152NLin6Asym": {
+                "L": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/regfusion_space-MNI152NLin6Asym/tpl-fsaverage_desc-regfusion_space-MNI152NLin6Asym_res-164k_hemi-L.surf.gii"
+                },
+                "R": {
+                    "host": "github-nispace",
+                    "remote": "template/fsaverage/map/regfusion_space-MNI152NLin6Asym/tpl-fsaverage_desc-regfusion_space-MNI152NLin6Asym_res-164k_hemi-R.surf.gii"
                 }
             }
         }

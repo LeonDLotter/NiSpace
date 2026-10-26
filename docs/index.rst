@@ -21,6 +21,7 @@
    :caption: Usage
 
    introduction
+   beyond
    examples
    benchmarks
 

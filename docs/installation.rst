@@ -12,8 +12,9 @@ Requirements
 ------------
 
 ``NiSpace`` requires Python 3.9+. We recommend installation in a dedicated environment (e.g., via `Mamba <https://mamba.readthedocs.io/en/latest/>`_).  
-The implemented imaging space transformations rely on `neuromaps <https://github.com/netneurolab/neuromaps>`_, which in turn uses `Connectome Workbench <https://www.humanconnectome.org/software/connectome-workbench>`_ to transform data from volume to surface spaces or resample surface files.
-If you use this functionality, make sure that you have Workbench installed (see `neuromaps installation instructions <https://netneurolab.github.io/neuromaps/installation.html>`_).
+The imaging space transformations (:mod:`nispace.transform`: MNI ↔ MNI, MNI → fsLR / fsaverage, surface ↔ surface) run in pure Python on templates that NiSpace hosts and hash-checks; `Connectome Workbench <https://www.humanconnectome.org/software/connectome-workbench>`_ is not required.
+`neuromaps <https://github.com/netneurolab/neuromaps>`_ is still installed as a dependency (e.g., for null models and image loading).
+Workbench is only needed to run the optional validation tests against ``wb_command`` (``tests/integration/test_transform_surface_real.py``).
 
 
 .. _installation_github:

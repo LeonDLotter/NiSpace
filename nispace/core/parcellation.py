@@ -1319,8 +1319,9 @@ class Parcellation:
         template), preferring the default volumetric space among several MNI
         candidates. A specific MNI template is never silently swapped for
         another one: if the requested template is not registered, the
-        fallback template is used with a warning (no template-to-template
-        transformation is applied when parcellating).
+        fallback template is used with a warning; when data images are then
+        parcellated, the parcellation is warped into the data's MNI space
+        (EasyReg, see :class:`~nispace.parcellate.Parcellater`).
 
         Parameters
         ----------
@@ -1360,8 +1361,8 @@ class Parcellation:
         if _is_specific_mni(data_space) and _is_specific_mni(chosen):
             lgr.warning(
                 f"Parcellation '{self._name}': space '{data_space}' not available; using the "
-                f"'{chosen}' image instead (no template transformation is applied). "
-                f"Available: {self.spaces}."
+                f"'{chosen}' image instead, warped to '{data_space}' (EasyReg) when data images are "
+                f"parcellated. Available: {self.spaces}."
             )
         return chosen
 

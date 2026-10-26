@@ -8,6 +8,12 @@ They are designed to be read in order, but each notebook can also be used as a s
 
 The notebooks are available as downloadable Jupyter notebooks (links at the top of each page).
 
+For a broader introduction to contextualizing brain maps with reference data, including its
+pitfalls, we recommend the review by Royer et al. :cite:`royer2026`. The repository's
+`AGENTS.md <https://github.com/LeonDLotter/NiSpace/blob/dev/AGENTS.md>`__, written as a guide for
+AI assistants, summarizes how to choose an analysis, the rules for valid inference, and how
+(not) to interpret colocalizations.
+
 .. toctree::
    :maxdepth: 1
 
