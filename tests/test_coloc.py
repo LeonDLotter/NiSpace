@@ -141,6 +141,29 @@ def test_partialcorr_2d_z_matches_pingouin(method):
         assert np.isclose(partialpearson(x, y, z), expected)
 
 
+@pytest.mark.parametrize("rank", [False, True])
+def test_partialcorr_degenerate_z_equals_dropping_columns(rng, rank):
+    # Constant and collinear covariate columns (e.g. site dummies in a subsample)
+    # used to raise LinAlgError from inverting a NaN/singular correlation matrix.
+    # They add nothing to the column space of [z, 1], so the result must equal
+    # the one without them.
+    n = 200
+    z0 = rng.normal(size=n)
+    d = (rng.random(n) > 0.5).astype(float)
+    x = z0 + rng.normal(size=n)
+    y = x + 0.5 * d + rng.normal(size=n)
+    expected = partialcorr(x, y, np.column_stack([z0, d]), rank=rank)
+    for z in (np.column_stack([z0, d, np.zeros(n)]),   # constant 0
+              np.column_stack([z0, d, np.ones(n)]),    # constant 1 (= intercept)
+              np.column_stack([z0, d, 1 - d])):        # full set of dummies
+        assert np.isclose(partialcorr(x, y, z, rank=rank), expected)
+
+
+def test_partialcorr_constant_x_returns_nan(rng):
+    z = rng.normal(size=50)
+    assert np.isnan(partialcorr(np.ones(50), rng.normal(size=50), z))
+
+
 def test_partialpearson_with_nan_matches_pingouin_on_complete_cases():
     # partialpearson itself doesn't handle NaN (must pre-mask) -- verify
     # against pingouin computed on the same listwise-complete subset.

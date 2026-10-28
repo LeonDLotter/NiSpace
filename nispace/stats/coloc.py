@@ -170,10 +170,9 @@ def pearson(x, y):
 
 @njit(cache=True, nogil=True)
 def partialcorr(x, y, z, rank=False):
-    """Closed-form partial correlation between `x` and `y`, controlling for `z`.
+    """Partial correlation between `x` and `y`, controlling for `z`.
 
-    Computed via inversion of the joint correlation matrix of `x`, `y` and
-    the column(s) of `z`, not by residualization.
+    Ranks the inputs if requested, then calls `partialpearson`.
 
     Parameters
     ----------
@@ -189,35 +188,33 @@ def partialcorr(x, y, z, rank=False):
     Returns
     -------
     rp : float
-        (Ranked) partial correlation coefficient between `x` and `y`.
+        (Ranked) partial correlation coefficient between `x` and `y`. NaN if
+        `x` or `y` has zero variance after removing `z`.
 
     Notes
     -----
-    Not on NiSpace's live `colocalize()` code path: `method="partialpearson"`/
-    `"partialspearman"` there is computed by residualizing X/Y against Z
-    first (`core/colocalize.py`'s `_rank_regress` -> `residuals_nan`) and
-    then correlating the residuals with plain `pearson`, not by this
-    closed-form formula. Provided as a standalone utility.
+    Not on NiSpace's live `colocalize()` code path, which handles NaN and
+    residualizes via `core/colocalize.py`'s `_rank_regress` ->
+    `residuals_nan`. The computation is the same (see `partialpearson`).
+    Provided as a standalone utility.
     """
-    
+
     if rank:
         x = rank1d(x)
         y = rank1d(y)
         z = rank2d(z)
-    
-    C = np.column_stack((x, y, z))
-    corr = np.corrcoef(C, rowvar=False)
-    corr_inv = np.linalg.inv(corr) # the (multiplicative) inverse of a matrix.
-    rp = -corr_inv[0,1] / (np.sqrt(corr_inv[0,0] * corr_inv[1,1]))
-    
-    return rp
+
+    return partialpearson(x, y, z)
 
 
 @njit(cache=True, nogil=True)
 def partialpearson(x, y, z):
-    """Closed-form partial Pearson correlation between `x` and `y`, controlling for `z`.
+    """Partial Pearson correlation between `x` and `y`, controlling for `z`.
 
-    Equivalent to `partialcorr(x, y, z, rank=False)`, without the branch.
+    Regresses `x` and `y` on `[z, 1]` (projection via `eigh` of the Gram
+    matrix, as in `_ols_beta_via_eigh`) and correlates the residuals. Constant or collinear columns of `z` are
+    allowed (minimum-norm fit; the residuals do not depend on them).
+    Same result as `partialcorr(x, y, z, rank=False)`.
 
     Parameters
     ----------
@@ -230,24 +227,36 @@ def partialpearson(x, y, z):
     Returns
     -------
     rp : float
-        Partial correlation coefficient between `x` and `y`.
+        Partial correlation coefficient between `x` and `y`. NaN if `x` or
+        `y` has zero variance after removing `z`.
 
     Notes
     -----
     Not on NiSpace's live `colocalize()` code path: `method="partialpearson"`
-    there is computed by residualizing X/Y against Z first
-    (`core/colocalize.py`'s `_rank_regress` -> `residuals_nan`) and then
-    correlating the residuals with plain `pearson`, not by this closed-form
-    formula. Imported into `api.py`'s namespace but not called there either
-    -- provided as a standalone utility.
+    there residualizes X/Y against Z with NaN handling
+    (`core/colocalize.py`'s `_rank_regress` -> `residuals_nan`), then
+    correlates the residuals with plain `pearson` -- the same computation.
+    Imported into `api.py`'s namespace but not called there either --
+    provided as a standalone utility.
     """
-    
-    C = np.column_stack((x, y, z))
-    corr = np.corrcoef(C, rowvar=False)
-    corr_inv = np.linalg.inv(corr) # the (multiplicative) inverse of a matrix.
-    rp = -corr_inv[0,1] / (np.sqrt(corr_inv[0,0] * corr_inv[1,1]))
-    
-    return rp
+
+    n = x.shape[0]
+    Z = np.column_stack((z.astype(np.float64), np.ones(n)))
+    XY = np.empty((n, 2))
+    XY[:, 0] = x
+    XY[:, 1] = y
+    # orthonormal basis of the column space of Z from one eigh of the Gram
+    # matrix (same cutoff as _ols_beta_via_eigh); residualize x and y together
+    eigvals, eigvecs = np.linalg.eigh(Z.T.dot(Z))
+    keep = eigvals > np.max(np.abs(eigvals)) * 1e-10
+    Q = Z.dot(eigvecs[:, keep] / np.sqrt(eigvals[keep]))
+    R = XY - Q.dot(Q.T.dot(XY))
+    # x or y fully explained by Z: residuals are rounding noise, not data
+    for j in range(2):
+        if np.sum(R[:, j] ** 2) <= 1e-20 * np.sum(XY[:, j] ** 2):
+            return np.nan
+
+    return pearson(R[:, 0], R[:, 1])
 
 
 def mutualinfo(x, y, n_neighbors=3, seed=None):

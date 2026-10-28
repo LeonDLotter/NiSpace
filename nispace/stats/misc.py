@@ -72,8 +72,8 @@ def residuals_nan(x, y, decenter=False):
     and by ``core/colocalize.py``'s ``_rank_regress`` to residualize X/Y
     against Z before correlating (the real mechanism behind
     ``method="partialpearson"/"partialspearman"`` in ``colocalize()`` — see
-    :func:`nispace.stats.coloc.partialcorr` for the closed-form alternative
-    that is *not* on this code path).
+    :func:`nispace.stats.coloc.partialcorr` for the standalone version
+    without NaN handling that is *not* on this code path).
 
     Coefficients come from :func:`nispace.stats.coloc._ols_beta_via_eigh` (``eigh`` on the
     Gram matrix, not ``np.linalg.pinv`` -- see its docstring for why).
