@@ -172,17 +172,19 @@ def pearson(x, y):
 def partialcorr(x, y, z, rank=False):
     """Closed-form partial correlation between `x` and `y`, controlling for `z`.
 
-    Computed via inversion of the 3-variable correlation matrix, not by
-    residualization.
+    Computed via inversion of the joint correlation matrix of `x`, `y` and
+    the column(s) of `z`, not by residualization.
 
     Parameters
     ----------
-    x, y, z : np.ndarray, shape (n,), dtype float
+    x, y : np.ndarray, shape (n,), dtype float
         Numba-jitted: must be plain 1D ``np.ndarray`` instances of equal length.
         **Does not handle NaN** -- strip/mask NaN entries before calling.
+    z : np.ndarray, shape (n,) or (n, k), dtype float
+        Covariate(s); same requirements as `x`/`y`.
     rank : bool, default False
-        If True, rank `x`/`y`/`z` via `rank1d` first (partial Spearman); if
-        False, use raw values (partial Pearson).
+        If True, rank `x`/`y` via `rank1d` and `z` column-wise via `rank2d`
+        first (partial Spearman); if False, use raw values (partial Pearson).
 
     Returns
     -------
@@ -201,7 +203,7 @@ def partialcorr(x, y, z, rank=False):
     if rank:
         x = rank1d(x)
         y = rank1d(y)
-        z = rank1d(z)
+        z = rank2d(z)
     
     C = np.column_stack((x, y, z))
     corr = np.corrcoef(C, rowvar=False)
@@ -219,9 +221,11 @@ def partialpearson(x, y, z):
 
     Parameters
     ----------
-    x, y, z : np.ndarray, shape (n,), dtype float
+    x, y : np.ndarray, shape (n,), dtype float
         Numba-jitted: must be plain 1D ``np.ndarray`` instances of equal length.
         **Does not handle NaN** -- strip/mask NaN entries before calling.
+    z : np.ndarray, shape (n,) or (n, k), dtype float
+        Covariate(s); same requirements as `x`/`y`.
 
     Returns
     -------

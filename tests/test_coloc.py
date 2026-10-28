@@ -121,6 +121,26 @@ def test_partial_spearman_matches_pingouin():
     assert np.isclose(partialcorr(x, y, z, rank=True), expected, atol=1e-6)
 
 
+@pytest.mark.parametrize("method", ["pearson", "spearman"])
+def test_partialcorr_2d_z_matches_pingouin(method):
+    # 2D z (several covariates): rank=True used to fail numba typing because
+    # z was ranked with the 1D-only rank1d.
+    pg = pytest.importorskip("pingouin")
+    rng = np.random.default_rng(0)
+    n = 300
+    z = rng.normal(size=(n, 2))
+    x = z @ [1.0, 1.0] + rng.normal(size=n)
+    y = np.exp(z @ [1.0, -1.0] + 0.3 * x + rng.normal(size=n))
+
+    df = pd.DataFrame({"x": x, "y": y, "z1": z[:, 0], "z2": z[:, 1]})
+    expected = pg.partial_corr(data=df, x="x", y="y", covar=["z1", "z2"], method=method)["r"].iloc[0]
+
+    rank = method == "spearman"
+    assert np.isclose(partialcorr(x, y, z, rank=rank), expected, atol=1e-6)
+    if not rank:
+        assert np.isclose(partialpearson(x, y, z), expected)
+
+
 def test_partialpearson_with_nan_matches_pingouin_on_complete_cases():
     # partialpearson itself doesn't handle NaN (must pre-mask) -- verify
     # against pingouin computed on the same listwise-complete subset.

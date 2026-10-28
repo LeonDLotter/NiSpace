@@ -38,7 +38,7 @@ The ``NiSpace`` (NeuroImaging Spatial Colocalization Environment) toolbox aims t
 
 ``NiSpace`` is under development and its `documentation <https://nispace.readthedocs.io/>`_ currently is incomplete. We welcome anyone who would like to give it a try – your feedback is highly appreciated!
 
-**Using an AI assistant?** Point it to `AGENTS.md <AGENTS.md>`_: a compact guide to choosing an analysis, the rules for valid inference, and how (not) to interpret colocalizations. It may be useful for humans, too.
+**Using an AI assistant?** Point it to `AGENTS.md <https://github.com/LeonDLotter/NiSpace/blob/dev/AGENTS.md>`__: a compact guide to choosing an analysis, the rules for valid inference, and how (not) to interpret colocalizations. It may be useful for humans, too.
 
 
 Installation

@@ -61,8 +61,8 @@ First find out what the user has and what they want to know. Then:
 | Data and question | Function | What the p-value tests | Example |
 |---|---|---|---|
 | One or a few maps (group effect map, meta-analysis, single subject) vs. reference maps | `nispace.colocalization` | Spatial null maps: is the association stronger than with maps of similar spatial autocorrelation? | intro02, intro05 |
-| Subject-level maps from two groups or two sessions | `nispace.group_colocalization` | Group-label permutation: is the group-difference map more aligned than for random group splits? | intro04, FreeSurfer 2–4, drug challenge |
-| A map vs. *sets* of reference maps (e.g. genes of a cell type, receptors of a system) | `nispace.xsea`, `nispace.group_xsea` | Set enrichment against random maps or random sets | intro10, ABIDE |
+| Subject-level maps from two groups or two sessions | `nispace.group_colocalization` | Group-label permutation: is the group-difference map more aligned than for random group splits? | intro04 |
+| A map vs. *sets* of reference maps (e.g. genes of a cell type, receptors of a system) | `nispace.xsea`, `nispace.group_xsea` | Set enrichment against null maps of Y (or group-label permutation); not against random sets (see below) | intro10 |
 | N matched map pairs (e.g. two modalities per subject) | `nispace.paired_colocalization` | Pair-label permutation (SPICE): is within-pair similarity higher than between-pair? | intro13 |
 | Per region, across subjects: does X track Y, or a map track a score? | `nispace.correlate_within_region` | Subject-label permutation per region | intro13 |
 | Coordinate-based meta-analysis results (NiMARE) | `nispace.nimare_colocalization`, `nispace.nimare_xsea` | Meta-analysis-specific null maps | intro12 |
@@ -71,6 +71,14 @@ First find out what the user has and what they want to know. Then:
 
 Use the workflows for standard cases and the `NiSpace` class for anything custom (several
 transforms, covariates, mixing null models, multivariate methods).
+
+**Do not use set resampling** (`permute_sets=True` in the XSEA workflows, `permute("sets")` in
+the `NiSpace` class) unless the user has a specific hypothesis that pure set resampling answers:
+"is this set more aligned with Y than random sets of the same size drawn from the background
+maps?" It does not account for the correlations between the maps within a set, the effective
+dimensionality of the set, or the spatial autocorrelation of Y, so it does not test whether Y
+is aligned with the set beyond chance. These controls are not implemented. For the usual
+question, keep the default null (Y permuted or group labels permuted).
 
 ---
 
@@ -119,7 +127,9 @@ transforms, covariates, mixing null models, multivariate methods).
       show where the full list comes from.
     - Also cite the parcellation, NiSpace itself, and the methods used (null-map methods,
       SPICE, etc.); docstrings name the references. See the docs'
-      [citation page](https://nispace.readthedocs.io/en/latest/citation.html).
+      [citation page](https://nispace.readthedocs.io/en/latest/citation.html). BibTeX entries
+      for the references cited in the code and documentation are in
+      [`docs/references.bib`](docs/references.bib).
 
 ---
 
@@ -148,7 +158,18 @@ one target, and mRNA is not protein. Before interpreting a single map, look deep
   the reference maps share known axes. `nispace.datasets.fetch_axes()` provides the axes;
   `NiSpace(z=...)` with a partial method (`colocalize("partialspearman")`) controls for them.
 - **Unique vs. shared contributions:** multivariate methods, e.g. `colocalize("dominance")`
-  (how much each map adds beyond the others) or `"mlr"`.
+  (how much each map adds beyond the others) or `"mlr"`. They help, but cannot fully separate
+  intercorrelated maps: shared variance has to be assigned somehow (dominance analysis splits
+  it, regression weights become unstable), and a map that adds little may still be the more
+  relevant one.
+- **Cortex vs. subcortex:** after a whole-brain analysis, always check whether the result holds
+  within the cortex alone (re-run with a cortex-only parcellation), and within the subcortex
+  alone if the subcortical parcellation has enough regions. Many maps differ strongly in their
+  mean level between cortex and subcortex (e.g. most PET maps). With few subcortical regions
+  far from the cortical values, this offset alone can produce a strong whole-brain correlation.
+  Some null models account for the offset partly or fully, e.g. spatial nulls that
+  randomize cortex and subcortex separately, or group-label permutation, which keeps the data's
+  structure. A cortex-only analysis is fine when it fits the question.
 - **Set overlap and similarity:** `nispace.diagnostics.compare_sets()` tests whether sets
   (e.g. gene sets of two cell types) actually differ in members and in their mean maps. NiSpace
   also warns when maps belong to several sets.
@@ -335,9 +356,11 @@ Overview with links to the API reference: [Beyond spatial correlation](https://n
   plotting, workflows, XSEA, advanced topics, NiMARE meta-analyses, paired colocalization
   (SPICE, within-region correlation), binary maps, regional diagnostics.
 - [`docs/nb_examples/`](docs/nb_examples/): applied examples (ABIDE cell types, drug challenge,
-  ENIGMA, FreeSurfer cross-sectional and longitudinal series).
+  ENIGMA, FreeSurfer cross-sectional and longitudinal series). Not available yet: work in
+  progress, not part of the rendered documentation; do not rely on them.
 - [`docs/nb_benchmarks/`](docs/nb_benchmarks/): evidence for the methods and defaults
-  (false-positive rates and power of null models and corrections).
+  (false-positive rates and power of null models and corrections). More benchmarks will be
+  added.
 - Rendered versions: https://nispace.readthedocs.io/
 
 ## 11. Related resources
