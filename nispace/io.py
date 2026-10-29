@@ -4,7 +4,7 @@ import json
 import dill, pickle, blosc, gzip
 from pathlib import Path
 from joblib import Parallel, delayed
-from tqdm.auto import tqdm
+from .utils.utils import tqdm
 import numpy as np
 import pandas as pd
 

@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from tqdm.auto import tqdm
+from ..utils.utils import tqdm
 
 import logging
 import re

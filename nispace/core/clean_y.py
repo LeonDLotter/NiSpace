@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from joblib import Parallel, delayed
 from nilearn.plotting import plot_design_matrix
-from tqdm.auto import tqdm
+from ..utils.utils import tqdm
 
 import logging
 lgr = logging.getLogger(__name__)

@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from joblib import Parallel, delayed
-from tqdm.auto import tqdm
+from ..utils.utils import tqdm
 
 import logging
 lgr = logging.getLogger(__name__)

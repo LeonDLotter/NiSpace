@@ -204,16 +204,25 @@ def test_rzscore_nan_fast_matches_rzscore_nan(rng):
 def test_prc_matches_manual_formula(rng):
     a = rng.uniform(1, 10, size=(5, 3))
     b = rng.uniform(1, 10, size=(5, 3))
-    expected = (a - b) / a * 100
+    expected = (a - b) / b * 100
     assert np.allclose(prc(a, b), expected)
 
 
-def test_prc_zero_a_is_nan():
-    a = np.array([[0.0, 10.0]])
-    b = np.array([[5.0, 5.0]])
+def test_prc_is_change_relative_to_b():
+    # b is the reference: 10 -> 15 is +50 %, 10 -> 5 is -50 %
+    a = np.array([[15.0, 5.0]])
+    b = np.array([[10.0, 10.0]])
+    assert np.allclose(prc(a, b), [[50.0, -50.0]])
+    assert np.allclose(prc_fast(a, b), [[50.0, -50.0]])
+
+
+def test_prc_zero_b_is_nan():
+    a = np.array([[5.0, 5.0]])
+    b = np.array([[0.0, 10.0]])
     result = prc(a, b)
     assert np.isnan(result[0, 0])
-    assert np.isclose(result[0, 1], 50.0)
+    assert np.isclose(result[0, 1], -50.0)
+    assert np.isnan(prc_fast(a, b)[0, 0])
 
 
 def test_prc_shape_mismatch_raises():

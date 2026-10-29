@@ -4,7 +4,7 @@ from numba import njit
 from sklearn.linear_model import ElasticNetCV, LassoCV, RidgeCV
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.feature_selection import mutual_info_regression
-from tqdm.auto import tqdm
+from ..utils.utils import tqdm
 
 import logging
 lgr = logging.getLogger(__name__)

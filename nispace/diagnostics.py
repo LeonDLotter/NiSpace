@@ -34,7 +34,7 @@ import pandas as pd
 from scipy.sparse import csr_matrix
 from scipy.stats import rankdata, hypergeom
 from joblib import Parallel, delayed
-from tqdm import tqdm
+from .utils.utils import tqdm
 from contextlib import contextmanager
 
 import logging

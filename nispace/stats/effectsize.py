@@ -573,18 +573,18 @@ def rzscore_nan_fast(a, b=None):
 # Percent change 
 # ---------------------------------------------------
 def prc(a, b):
-    """Percent change `(a - b) / a * 100`, element-wise.
+    """Percent change of `a` relative to `b`, `(a - b) / b * 100`, element-wise.
 
     Parameters
     ----------
     a, b : array_like, shape (n_obs, n_features)
-        Paired values (`a` is the reference/denominator); must have
-        identical shape.
+        Paired values (`b` is the reference/denominator, e.g. baseline); must
+        have identical shape.
 
     Returns
     -------
     p : np.ndarray, shape (n_obs, n_features)
-        NaN where `a == 0` (avoids division by zero).
+        NaN where `b == 0` (avoids division by zero).
 
     Raises
     ------
@@ -593,7 +593,7 @@ def prc(a, b):
 
     Notes
     -----
-    NaN in `a`/`b` (other than the `a == 0` guard) is not explicitly masked
+    NaN in `a`/`b` (other than the `b == 0` guard) is not explicitly masked
     -- it propagates through the arithmetic like any other float NaN; there
     is no separate `prc_nan` variant. Not called anywhere in NiSpace's
     internal pipeline: `Y_transform="prc(a,b)"` dispatches to the
@@ -606,7 +606,8 @@ def prc(a, b):
 
     # Calculate percentage change
     # Use np.where to avoid division by zero
-    p = np.where(a != 0, (a - b) / a * 100, np.nan)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        p = np.where(b != 0, (a - b) / b * 100, np.nan)
 
     return p
 
@@ -616,8 +617,8 @@ def prc_fast(a, b):
     result = np.empty((n_rows, n_cols), dtype=np.float64)
     for i in range(n_rows):
         for j in range(n_cols):
-            ai = a[i, j]
-            result[i, j] = np.nan if ai == 0.0 else (ai - b[i, j]) / ai * 100.0
+            bi = b[i, j]
+            result[i, j] = np.nan if bi == 0.0 else (a[i, j] - bi) / bi * 100.0
     return result
 
 

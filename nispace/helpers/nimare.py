@@ -7,7 +7,7 @@ import nibabel as nib
 import numpy as np
 from joblib import Parallel, delayed
 from scipy.ndimage import label as nd_label
-from tqdm.auto import tqdm
+from ..utils.utils import tqdm
 
 from ..utils.utils import vol_to_vect_arr
 

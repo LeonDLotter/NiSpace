@@ -287,6 +287,38 @@ def test_group_colocalization_paired_end_to_end(prefit_nispace_groups_paired):
     assert list(out.get_colocalizations().index) == ["pairedcohen"]
 
 
+def test_group_colocalization_group_labels_set_direction(rng):
+    # "control" sorts first -> a; "hedges(patient,control)" must flip the sign of
+    # "hedges(a,b)" and leave two-sided group-permutation p-values unchanged
+    n_x, n_parcels, n_per_group = 2, 20, 8
+    X = rng.normal(size=(n_x, n_parcels))
+    Y = rng.normal(size=(2 * n_per_group, n_parcels))
+    Y[n_per_group:] += X[0]
+    design = np.array(["control"] * n_per_group + ["patient"] * n_per_group)
+    parcel_labels = [f"parcel{i}" for i in range(n_parcels)]
+    x_df = pd.DataFrame(X, index=[f"x{i}" for i in range(n_x)], columns=parcel_labels)
+    y_df = pd.DataFrame(Y, index=[f"y{i}" for i in range(2 * n_per_group)], columns=parcel_labels)
+
+    out = {}
+    for formula in ["hedges(a,b)", "hedges(Patient,Control)", "hedges(patient \u2013 control)"]:
+        nsp = NiSpace(x=x_df, y=y_df, parcellation=None, standardize=False,
+                      n_proc=1, verbose=False, return_self=False)
+        nsp.fit()
+        out[formula] = group_colocalization(
+            y=list(range(2 * n_per_group)), design=design, nispace_object=nsp,
+            comparison_method=formula, colocalization_method="pearson",
+            n_perm=200, seed=1, plot=False, verbose=False, return_nispace_only=True,
+        )
+    c_ab = out["hedges(a,b)"].get_colocalizations().to_numpy()
+    c_pc = out["hedges(Patient,Control)"].get_colocalizations().to_numpy()
+    assert c_pc[0, 0] > 0
+    np.testing.assert_allclose(c_pc, -c_ab, rtol=1e-5)
+    np.testing.assert_allclose(out["hedges(Patient,Control)"].get_p_values().to_numpy(),
+                               out["hedges(a,b)"].get_p_values().to_numpy())
+    np.testing.assert_array_equal(
+        out["hedges(patient \u2013 control)"].get_colocalizations().to_numpy(), c_pc)
+
+
 def test_group_colocalization_design_length_mismatch_raises(prefit_nispace_groups):
     nsp, groups = prefit_nispace_groups
     with pytest.raises(ValueError):

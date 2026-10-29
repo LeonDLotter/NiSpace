@@ -27,6 +27,9 @@ from nispace.core.transform_y import (
     _get_transform_fun,
     _FUN_MAP,
     _PAIRED_FORMULAS,
+    _group_levels,
+    _resolve_group_labels,
+    _describe_transform,
 )
 
 
@@ -126,6 +129,11 @@ def test_center0_with_b_centers_on_b():
     ("a - mean(b)", "center(a,b)", "center(*,*)"),
     ("mean(y)", "mean(y)", "mean(*)"),
     ("cohen(a,b)", "cohen(a,b)", "cohen(*,*)"),
+    # minus between the arguments of a function = comma; en dash/minus sign = "-"
+    ("hedges(b-a)", "hedges(b,a)", "hedges(*,*)"),
+    ("hedges(b \u2013 a)", "hedges(b,a)", "hedges(*,*)"),
+    ("zscore(a\u2212b)", "zscore(a,b)", "zscore(*,*)"),
+    ("b \u2013 a", "elemdiff(b,a)", "elemdiff(*,*)"),
 ])
 def test_normalize_formula(formula, expected_formula, expected_wildcard):
     out_formula, out_wildcard = _normalize_formula(formula)
@@ -255,3 +263,157 @@ def test_get_transform_fun_ignore_nan_warnings_suppresses_empty_slice_warning():
         warnings.simplefilter("always")
         fun_quiet(y=y, groups=groups)
     assert not any(issubclass(w.category, RuntimeWarning) for w in rec_quiet)
+
+
+# ── group labels in formulas (_resolve_group_labels) ─────────────────────────
+
+@pytest.mark.parametrize("formula, levels, expected", [
+    # labels in place of a/b set the direction explicitly
+    ("hedges(an,hc)", ["AN", "HC"], "hedges(a,b)"),
+    ("hedges(hc,an)", ["AN", "HC"], "hedges(b,a)"),
+    ("hedges(patient,control)", ["control", "patient"], "hedges(b,a)"),
+    ("zscore(an,hc)", ["AN", "HC"], "zscore(a,b)"),
+    ("centile(hc)", ["AN", "HC"], "centile(b)"),
+    # aliases of the formula DSL
+    ("an-hc", ["AN", "HC"], "a-b"),
+    ("mean(hc)-mean(an)", ["AN", "HC"], "mean(b)-mean(a)"),
+    # labels containing "-" (BIDS sessions), spaces, numbers
+    ("elemdiff(ses-2,ses-1)", ["ses-1", "ses-2"], "elemdiff(b,a)"),
+    ("ses-2-ses-1", ["ses-1", "ses-2"], "b-a"),
+    ("prc(followup,baseline)", ["base line", "follow up"], "prc(b,a)"),
+    ("hedges(1,0)", [0, 1], "hedges(b,a)"),
+    ("hedges(1,0)", [0.0, 1.0], "hedges(b,a)"),
+    # placeholders keep working
+    ("hedges(a,b)", ["AN", "HC"], "hedges(a,b)"),
+    ("hedges(b,a)", ["a", "b"], "hedges(b,a)"),
+    ("mean(y)", ["AN", "HC"], "mean(y)"),
+    # minus as separator (resolved to a,b by _normalize_formula)
+    ("hedges(patient-control)", ["control", "patient"], "hedges(b-a)"),
+    ("hedges(ses-2-ses-1)", ["ses-1", "ses-2"], "hedges(b-a)"),
+])
+def test_resolve_group_labels(formula, levels, expected):
+    assert _resolve_group_labels(formula, levels) == expected
+
+
+@pytest.mark.parametrize("formula, levels, match", [
+    ("hedges(an,xx)", ["AN", "HC"], "neither a group label"),
+    ("hedges(ses-1,ses-3)", ["ses-1", "ses-2"], "neither a group label"),
+    # label "b" is group a: "hedges(a,b)" would be ambiguous
+    ("hedges(a,b)", ["b", "c"], "placeholder"),
+    ("mean(y)", ["x", "y"], "placeholder"),
+    ("hedges(an,hc)", ["AN", "an"], "identical"),
+])
+def test_resolve_group_labels_raises(formula, levels, match):
+    with pytest.raises(ValueError, match=match):
+        _resolve_group_labels(formula, levels)
+
+
+def test_group_levels_matches_dummy_coding():
+    groups = ["patient", "control", "patient", "control"]
+    levels = _group_levels(groups)
+    coded = _dummy_code_groups(groups)
+    assert [levels[c] for c in coded] == groups
+
+
+def _toy_nispace_groups(rng, labels):
+    from nispace import NiSpace
+    n = 8
+    Y = rng.normal(size=(2 * n, 10))
+    Y[n:] += 1.0
+    y_df = pd.DataFrame(Y, index=[f"s{i}" for i in range(2 * n)],
+                        columns=[f"p{i}" for i in range(10)])
+    nsp = NiSpace(x=y_df.iloc[:2], y=y_df, parcellation=None, standardize=False,
+                  n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    return nsp, np.array([labels[0]] * n + [labels[1]] * n)
+
+
+def test_transform_y_group_labels_set_direction(rng):
+    # second group ("patient") is shifted up; "control" sorts first -> a
+    nsp, groups = _toy_nispace_groups(rng, ["control", "patient"])
+    ab = nsp.transform_y("hedges(a,b)", groups=groups)
+    pc = nsp.transform_y("hedges(Patient, Control)", groups=groups)
+    assert (ab.to_numpy() < 0).mean() > 0.5
+    np.testing.assert_allclose(pc.to_numpy(), -ab.to_numpy(), rtol=1e-6)
+    # stored under the name as written, retrievable in any case/spacing
+    np.testing.assert_allclose(nsp.get_y(Y_transform="hedges(patient,control)").to_numpy(),
+                               pc.to_numpy())
+
+
+def test_resolve_group_labels_return_used():
+    assert _resolve_group_labels("hedges(an,hc)", ["AN", "HC"], return_used=True) == ("hedges(a,b)", True)
+    assert _resolve_group_labels("hedges(a,b)", ["AN", "HC"], return_used=True) == ("hedges(a,b)", False)
+
+
+@pytest.mark.parametrize("formula, expected", [
+    ("hedges(a,b)", "positive where 'AN'>'HC'"),
+    ("hedges(b-a)", "positive where 'HC'>'AN'"),
+    ("a-b", "positive where 'AN'>'HC'"),
+    ("mean(b)-mean(a)", "positive where 'HC'>'AN'"),
+    ("prc(b,a)", "positive where 'HC'>'AN'"),
+    ("zscore(a,b)", "one map per 'AN' subject, relative to the 'HC' distribution"),
+    ("centile(b,a)", "one map per 'HC' subject, relative to the 'AN' distribution"),
+    ("zscore(b)", "uses group 'HC' only"),
+    ("mean(y)", None),
+])
+def test_describe_transform(formula, expected):
+    assert _describe_transform(formula, ["AN", "HC"]) == expected
+
+
+def test_transform_y_placeholders_warn_with_group_mapping(rng, caplog):
+    import logging
+    nsp, groups = _toy_nispace_groups(rng, ["HC", "AN"])
+    with caplog.at_level(logging.INFO, logger="nispace"):
+        nsp.transform_y("hedges(a,b)", groups=groups, verbose=True)
+    warn = [r.getMessage() for r in caplog.records
+            if r.levelno == logging.WARNING and "placeholders" in r.getMessage()]
+    assert warn == ["Formula 'hedges(a,b)' uses placeholders a/b. Use group labels to set "
+                    "the direction explicitly, e.g. 'hedges(HC-AN)'."]
+    assert "Groups: a='AN' (n=8), b='HC' (n=8)." in caplog.text
+    assert "positive where 'AN'>'HC'" in caplog.text
+
+
+def test_transform_y_labels_do_not_warn(rng, caplog):
+    import logging
+    nsp, groups = _toy_nispace_groups(rng, ["HC", "AN"])
+    with caplog.at_level(logging.INFO, logger="nispace"):
+        nsp.transform_y("hedges(HC - AN)", groups=groups, verbose=True)
+    assert not [r for r in caplog.records if "placeholders" in r.getMessage()]
+    assert "Groups: a='AN' (n=8), b='HC' (n=8)." in caplog.text
+    assert "positive where 'HC'>'AN'" in caplog.text
+
+
+@pytest.mark.parametrize("formula", [
+    " Hedges ( Patient Group , Control ) ",
+    "hedges(patient group - control)",
+    "hedges(patient group,\tcontrol)",
+    "hedges(patient group, control)",   # non-breaking space (copied text)
+    "hedges(patient group,\ncontrol)",
+])
+def test_transform_y_whitespace_ignored(rng, formula):
+    nsp, groups = _toy_nispace_groups(rng, ["control", "Patient Group"])
+    ref = nsp.transform_y("hedges(patientgroup,control)", groups=groups).to_numpy()
+    np.testing.assert_array_equal(nsp.transform_y(formula, groups=groups).to_numpy(), ref)
+
+
+def test_transform_y_minus_and_dash_equal_comma(rng):
+    nsp, groups = _toy_nispace_groups(rng, ["control", "patient"])
+    comma = nsp.transform_y("hedges(patient,control)", groups=groups).to_numpy()
+    for formula in ["hedges(patient-control)", "hedges(Patient \u2013 Control)"]:
+        np.testing.assert_array_equal(nsp.transform_y(formula, groups=groups).to_numpy(), comma)
+    # stored under the hyphen form, whichever dash was typed
+    np.testing.assert_array_equal(nsp.get_y(Y_transform="hedges(patient-control)").to_numpy(), comma)
+
+
+def test_transform_y_reference_group_size_follows_formula(rng, caplog):
+    # rzscore(b,a): the reference is a (n = 8 -> small-sample warning), not b (n = 30)
+    import logging
+    from nispace import NiSpace
+    Y = pd.DataFrame(rng.normal(size=(38, 10)), columns=[f"p{i}" for i in range(10)])
+    groups = np.array(["a"] * 8 + ["b"] * 30)
+    nsp = NiSpace(x=Y.iloc[:2], y=Y, parcellation=None, standardize=False,
+                  n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    with caplog.at_level(logging.INFO, logger="nispace"):
+        nsp.transform_y("rzscore(b,a)", groups=groups, verbose=True)
+    assert "reference group has only n=8" in caplog.text

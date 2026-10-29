@@ -3,6 +3,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
+from ..utils.utils import _lower_strip_ws
 from ..stats.effectsize import (cohen_nan_fast, cohen_paired_nan_fast, hedges_nan_fast,
                                 zscore_nan_fast, rzscore_nan_fast,
                                 prc_fast, logfc_fast, centile_fast)
@@ -15,7 +16,7 @@ def _dummy_code_groups(groups):
     if pd.Series(groups).isnull().any():
         raise ValueError("Input contains nan's!")
 
-    unique_elements = sorted(list(set(groups)))
+    unique_elements = _group_levels(groups)
 
     if len(unique_elements) > 2:
         raise ValueError("Input contains more than two unique elements.")
@@ -27,6 +28,100 @@ def _dummy_code_groups(groups):
     # Map the first (smallest or alphabetically first) unique element to 0 and the second to 1.
     mapping = {unique_elements[0]: 0, unique_elements[1]: 1}
     return np.array([mapping[item] for item in groups])
+
+
+def _group_levels(groups):
+    """Sorted unique group labels; `_dummy_code_groups` codes them 0 (= a), 1 (= b)."""
+    return sorted(list(set(groups)))
+
+
+def _label_tokens(label):
+    """Strings by which a group label can be written in a formula (lower-case, no spaces)."""
+    tokens = {_lower_strip_ws(str(label))}
+    # 1.0 can be written as "1"
+    if isinstance(label, (float, np.floating)) and float(label).is_integer():
+        tokens.add(str(int(label)))
+    return tokens
+
+
+def _resolve_group_labels(formula, levels, return_used=False):
+    """Replace group labels used as formula arguments by the placeholders a/b.
+
+    Lets users write the direction explicitly, e.g. ``"hedges(AN,HC)"`` instead of
+    ``"hedges(a,b)"``, whose meaning depends on the sort order of the labels.
+
+    Parameters
+    ----------
+    formula : str
+        Lower-case formula without whitespace (as from `_lower_strip_ws`).
+    levels : list
+        Sorted group labels (`_group_levels`): ``levels[0]`` -> a, ``levels[1]`` -> b.
+    return_used : bool, default False
+        Also return whether the formula contains group labels.
+
+    Returns
+    -------
+    str
+        The formula with placeholders only. Unchanged if it contains no labels.
+    bool
+        Only if ``return_used``: True if any argument was a group label.
+    """
+    used = []
+    lookup = {}
+    for placeholder, label in zip("ab", levels):
+        for token in _label_tokens(label):
+            lookup.setdefault(token, set()).add(placeholder)
+
+    # arguments are delimited by "(", ")", ",", "-" or the string ends; labels come first in
+    # the alternation so that labels containing "-" (e.g. "ses-1") are matched as a whole
+    alts = "|".join(re.escape(t) for t in sorted(lookup, key=len, reverse=True))
+    pattern = re.compile(rf"(?<![^(,\-])({alts + '|' if alts else ''}[^(),\-]+)(?![^),\-])")
+
+    def _sub(match):
+        token = match.group(1)
+        if token in lookup:
+            if len(lookup[token]) > 1:
+                raise ValueError(f"Group labels {levels} are identical after lower-casing and "
+                                 f"removing whitespace and cannot be used in the formula "
+                                 f"'{formula}'. Use 'a' and 'b' or rename the groups.")
+            placeholder = next(iter(lookup[token]))
+            if token in ("a", "b", "y") and token != placeholder:
+                raise ValueError(f"Group label '{token}' in formula '{formula}' is also a formula "
+                                 f"placeholder (a, b, y) with a different meaning: '{token}' is "
+                                 f"group {placeholder}. Rename the groups.")
+            used.append(token)
+            return placeholder
+        if token in ("a", "b", "y"):
+            return token
+        raise ValueError(f"'{token}' in formula '{formula}' is neither a group label "
+                         f"({', '.join(map(str, levels))}) nor a placeholder (a, b, y).")
+
+    formula_ab = pattern.sub(_sub, formula)
+    return (formula_ab, len(used) > 0) if return_used else formula_ab
+
+
+# formulas that return one map per subject of the first argument, relative to the second
+_RELATIVE_FORMULAS = {"zscore", "rzscore", "centile"}
+
+
+def _describe_transform(formula, levels):
+    """Plain-language direction of a two-group formula, e.g. "positive where 'AN'>'HC'".
+
+    ``formula`` uses placeholders only (after `_resolve_group_labels`). Returns None for
+    formulas that do not involve groups a/b.
+    """
+    formula, formula_wildcard = _normalize_formula(formula)
+    name = formula_wildcard.split("(")[0]
+    args = [arg for arg in _args_to_tuple(formula) if arg is not None]
+    if not set(args) & {"a", "b"} or len(levels) < 2:
+        return None
+    lab = {"a": f"'{levels[0]}'", "b": f"'{levels[1]}'"}
+    if len(args) == 1:
+        return f"uses group {lab[args[0]]} only"
+    first, second = lab[args[0]], lab[args[1]]
+    if name in _RELATIVE_FORMULAS:
+        return f"one map per {first} subject, relative to the {second} distribution"
+    return f"positive where {first}>{second}"
 
 
 def _num_code_subjects(subjects):
@@ -86,7 +181,9 @@ def center0(a, b=None):
 
 def _normalize_formula(formula):
     
-    formula = formula.lower().replace(" ", "")
+    formula = _lower_strip_ws(formula)
+    # "-" between the two arguments of a function: "hedges(a-b)" = "hedges(a,b)"
+    formula = re.sub(r"^(\w+)\(([aby])-([aby])\)$", r"\1(\2,\3)", formula)
     formula_wildcard = re.sub(r"\b[yab]\b", "*", formula)
     
     if formula_wildcard in ["*-*", "mean(*)-mean(*)", "*-mean(*)"]:

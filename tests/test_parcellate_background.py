@@ -501,3 +501,15 @@ def test_input_kwargs_z_independent_of_x():
     Z = nsp.get_z()
     # z uses background_value=False -> p3 (all-zero raw) stays real 0.0
     assert Z.loc["zmap", "p3"] == 0.0
+
+
+def test_volume_resampling_does_not_emit_nilearn_copy_header_warning():
+    # nilearn 0.12 warns on every resample_to_img(copy_header=False) call; we keep False on purpose
+    import warnings
+    p = _fitted_parcellater()
+    img = nib.Nifti1Image(np.ones((6, 8, 8)), np.diag([0.5, 0.5, 0.5, 1]))  # different grid
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        out = p.transform(img, "mni152")
+    assert not [x for x in w if "copy_header" in str(x.message)]
+    assert np.asarray(out).shape[-1] == 3

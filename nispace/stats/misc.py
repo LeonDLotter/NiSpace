@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from numba import njit
 from itertools import permutations
-from tqdm.auto import tqdm
+from ..utils.utils import tqdm
 from joblib import Parallel, delayed
 
 from scipy.stats import zscore, norm, rankdata

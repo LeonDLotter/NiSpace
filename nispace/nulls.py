@@ -10,7 +10,7 @@ from collections import namedtuple
 from neuromaps.points import make_surf_graph
 from scipy.sparse.csgraph import dijkstra
 from scipy.spatial.distance import cdist
-from tqdm.auto import tqdm
+from .utils.utils import tqdm
 
 _SurfPair = namedtuple("_SurfPair", ["L", "R"])
 

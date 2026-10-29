@@ -4,6 +4,7 @@ Functionality for parcellating data, copied from neuromaps 0.0.4 and
 adapted for convenient use in NiSpace
 """
 
+import warnings
 import nibabel as nib
 from nilearn.maskers import NiftiLabelsMasker
 from nilearn.image import new_img_like, math_img
@@ -85,6 +86,18 @@ def _is_mni(space):
     return _is_mni_space_name(space)
 
 
+def _resample_to_img(img, target, method):
+    """nilearn resample_to_img with a fresh header (dtype follows the array, no on-disk scaling).
+
+    nilearn 0.12 warns about the copy_header default changing in 0.13 on every call with
+    copy_header=False, also when nothing is resampled; we keep False on purpose.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="From release 0.13.0 onwards", category=FutureWarning)
+        return nimage.resample_to_img(img, target, interpolation=method, force_resample=False,
+                                      copy_header=False)
+
+
 def _resample_images(src, trg, src_space, trg_space, hemi=None, resampling="transform_to_src",
                      method="linear", src_mni=None, trg_mni=None):
     """Bring data (`src`) and parcellation (`trg`) into a common space.
@@ -115,9 +128,9 @@ def _resample_images(src, trg, src_space, trg_space, hemi=None, resampling="tran
     if src_vol and trg_vol:
         src, trg = load_nifti(src), load_nifti(trg)
         if resampling == "transform_to_src":
-            trg = nimage.resample_to_img(trg, src, interpolation=method, force_resample=False, copy_header=False)
+            trg = _resample_to_img(trg, src, method)
         else:
-            src = nimage.resample_to_img(src, trg, interpolation=method, force_resample=False, copy_header=False)
+            src = _resample_to_img(src, trg, method)
         return src, trg
     if src_vol or trg_vol:
         if (resampling == "transform_to_src" and src_vol) or (resampling == "transform_to_trg" and trg_vol):

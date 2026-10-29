@@ -9,6 +9,7 @@ import logging
 from contextlib import contextmanager
 from colorlog import ColoredFormatter
 from numba import njit
+from tqdm import tqdm as _tqdm
 
 import nibabel as nib
 from nilearn import image
@@ -45,6 +46,26 @@ def _init_lgr(lgr_name="nispace", datefmt="%d/%m/%y %H:%M:%S"):
         logger.propagate = False
 
     return logger
+
+
+class tqdm(_tqdm):
+    """tqdm that writes to stdout (like the nispace logger) and flushes its closing newline.
+
+    Default tqdm writes to stderr and does not flush the final ``'\\n'``. In Jupyter,
+    stdout and stderr are separate outputs: log lines overtook the unflushed newline
+    (glued to the end of the bar) and every stream switch added a blank line.
+    """
+    def __init__(self, *args, **kwargs):
+        # resolved at call time: Jupyter replaces sys.stdout
+        kwargs.setdefault("file", sys.stdout)
+        super().__init__(*args, **kwargs)
+
+    def close(self):
+        super().close()
+        try:
+            self.fp.flush()
+        except (AttributeError, ValueError):
+            pass
 
 
 _quiet_ctx = threading.local()
@@ -141,7 +162,9 @@ def _rm_ext(path, ext=[".txt", ".csv", ".nii", ".gii", ".gz"]):
     
 def _lower_strip_ws(string):
     if isinstance(string, str):
-        return string.lower().replace(" ", "")
+        # any whitespace (incl. tabs, non-breaking spaces); en dash, em dash, minus sign
+        # (e.g. from autocorrect or copied text) -> hyphen-minus
+        return re.sub("[–—−]", "-", re.sub(r"\s+", "", string.lower()))
     else:
         raise TypeError("Provide string input!")
     

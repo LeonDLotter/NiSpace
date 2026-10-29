@@ -496,8 +496,9 @@ def group_colocalization(y, design,
         Group (and, if ``paired=True``, subject) labels, one row per row of ``y``
         (row count must match ``len(y)``, else raises ``ValueError``). Accepted forms:
 
-        - 1-D list/array/Series: dummy-coded group labels. Raises ``ValueError`` if
-          ``paired=True`` (a 1-D input cannot carry subject IDs).
+        - 1-D list/array/Series: group labels (any two values, e.g. 0/1 or
+          ``"HC"``/``"AN"``). Raises ``ValueError`` if ``paired=True`` (a 1-D input
+          cannot carry subject IDs).
         - 2-D ``ndarray``: columns ``["groups"(, "subjects"), V0, V1, ...]``
           (subjects column only if ``paired=True``).
         - ``DataFrame``: must have a ``"groups"`` column (and a ``"subjects"``
@@ -545,6 +546,14 @@ def group_colocalization(y, design,
         if ``paired=False``, otherwise ``"pairedcohen(a,b)"``. This transform is then
         reused as ``Y_transform`` for colocalization, permutation, plotting, and
         result retrieval.
+
+        **Direction:** ``a`` is the smaller or alphabetically first group label in
+        ``design``, so with 0 = control and 1 = patient, ``"hedges(a,b)"`` is
+        control minus patient. Write the group labels in place of ``a``/``b`` to set
+        the direction explicitly, e.g. ``"hedges(patient,control)"``,
+        ``"hedges(patient-control)"`` or ``"hedges(1,0)"``. The log lists which label
+        is ``a`` and which is ``b``; with ``a``/``b`` placeholders, it also warns. See
+        :meth:`NiSpace.transform_y`.
     mc_method : str or list, default="meff"
         Multiple-comparisons correction method(s), forwarded to :meth:`NiSpace.correct_p`.
         If a list, each method is applied and stored separately. An explicit
@@ -674,7 +683,7 @@ def group_colocalization(y, design,
             lgr.critical_raise("If paired==True, design must have two columns: 'group' and 'subjects'.",
                                ValueError)
         else:
-            lgr.info("1d array provided for design. Assuming this to be dummy-coded groups!")
+            lgr.info("1d array provided for design. Assuming this to be group labels.")
             design = pd.DataFrame(
                 {"groups": np.array(design)}, 
                 index=nsp._y_lab
@@ -1555,7 +1564,9 @@ def group_xsea(y, design,
     comparison_method : str or None, default=None
         Formula passed to :meth:`NiSpace.transform_y` to reduce Y to a single
         group-comparison effect-size map. Defaults to ``"hedges(a,b)"`` (unpaired) or
-        ``"pairedcohen(a,b)"`` (paired).
+        ``"pairedcohen(a,b)"`` (paired). ``a`` is the smaller or alphabetically first
+        group label; write the labels instead to set the direction explicitly, e.g.
+        ``"hedges(patient,control)"`` (see :func:`group_colocalization`).
     mc_method : str or list, default="meff"
         Multiple-comparisons correction method(s), forwarded to :meth:`NiSpace.correct_p`.
         As for :func:`xsea`, prefer ``"minP"``/``"step_minP"`` over ``"maxT"``/

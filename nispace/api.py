@@ -8,7 +8,7 @@ import pandas as pd
 import nibabel as nib
 import matplotlib.pyplot as plt
 from joblib import Parallel, delayed
-from tqdm import tqdm
+from .utils.utils import tqdm
 
 import logging
 lgr = logging.getLogger(__name__)
@@ -16,7 +16,9 @@ from .io import parcellate_data, to_pickle, from_pickle
 from .core.parcellation import Parcellation
 from .core.axes import build_axes, is_axis_name, resolve_axis_names
 from .core.reduce_x import _reduce_dimensions
-from .core.transform_y import _dummy_code_groups, _num_code_subjects, _get_transform_fun
+from .core.transform_y import (_dummy_code_groups, _num_code_subjects, _get_transform_fun,
+                               _group_levels, _resolve_group_labels, _parse_transform_formula,
+                               _describe_transform, _normalize_formula)
 from .core.colocalize import (_get_colocalize_fun, _sort_colocs, _get_coloc_stats, _rank_regress,
                               _xsea_aggregate, _check_predictor_count, _DOMINANCE_MAX_PREDICTORS_DEFAULT)
 from .core.correlate_within_region import correlate_within_region_core, _CWR_METHODS
@@ -1302,9 +1304,26 @@ class NiSpace:
         ----------
         transform : str
             Formula string, e.g. ``"hedges(a,b)"``, ``"zscore(a,b)"``,
-            ``"mean(y)"``. Supported formulas (``y`` = the whole input; ``a``/
-            ``b`` = the two groups defined by ``groups``, smaller/
-            alphabetically-first value -> ``a``):
+            ``"mean(y)"``. ``y`` is the whole input; ``a`` and ``b`` are the two
+            groups defined by ``groups``. In every two-group formula, ``a`` is the
+            group of interest and ``b`` the reference (e.g. ``hedges(a,b)`` is
+            positive where ``a > b``; ``zscore(a,b)`` maps ``a`` relative to ``b``).
+
+            **Direction.** ``a`` is the smaller or alphabetically first group label:
+            with labels 0/1, ``a`` = 0; with ``"control"``/``"patient"``, ``a`` =
+            ``"control"``, so ``"hedges(a,b)"`` is control minus patient. To set
+            the direction explicitly, write the group labels in place of ``a``
+            and ``b`` (case-insensitive), e.g. ``"hedges(patient,control)"``,
+            ``"zscore(AN,HC)"``, ``"elemdiff(ses-2,ses-1)"``, ``"hedges(1,0)"``.
+            The two arguments can also be separated by a minus sign:
+            ``"hedges(patient-control)"`` is ``"hedges(patient,control)"`` (en
+            dashes and minus signs are read as ``-``). The formula is stored and
+            retrieved under the name as written (e.g.
+            ``get_y(Y_transform="hedges(patient,control)")``). The log lists which
+            label is ``a`` and which is ``b`` and states the direction in words; a
+            formula with ``a``/``b`` placeholders also logs a warning.
+
+            Supported formulas:
 
             * ``y`` -- identity (no-op passthrough)
             * ``mean(y)``, ``median(y)``, ``std(y)``, ``var(y)`` -- summary
@@ -1321,8 +1340,9 @@ class NiSpace:
               or against reference group ``b``
             * ``rzscore(a)`` / ``rzscore(a,b)`` -- robust (median/MAD) z-score;
               warns if the reference group has few observations (n<20/n<30)
-            * ``prc(a,b)`` -- percent change ``(a-b)/a*100`` (paired, requires
-              ``subjects``)
+            * ``prc(a,b)`` -- percent change of ``a`` relative to ``b``,
+              ``(a-b)/b*100`` (paired, requires ``subjects``; e.g.
+              ``prc(followup,baseline)``)
             * ``logfc(a,b)`` -- log fold-change (auto-shifted to stay defined for
               data that can be negative, e.g. already z-scored/residualized)
             * ``centile(a)`` / ``centile(a,b)`` -- percentile rank of ``a``
@@ -1333,7 +1353,7 @@ class NiSpace:
             ``ValueError``.
         groups : array-like, optional
             2-level grouping vector, one entry per Y row. Required by any formula
-            referencing ``a``/``b``; not needed for ``y``-only formulas (e.g.
+            referencing ``a``/``b`` or group labels; not needed for ``y``-only formulas (e.g.
             ``"mean(y)"``). Rows with NaN group labels are dropped with a
             warning.
         subjects : array-like, optional
@@ -1390,7 +1410,6 @@ class NiSpace:
         
         ## prepare groups
         if groups is not None:
-            lgr.info("Groups/sessions vector provided, ensuring dummy-coding.")
             groups = np.array(groups).squeeze()
             # check if right length
             if len(groups) != _Y.shape[0]:
@@ -1404,14 +1423,19 @@ class NiSpace:
                 lgr.warning(f"Variable 'group' contains {groups_nanidc.sum()} NaN values. "
                             f"These {Y_name} data will be dropped.")
             # get dummy-coded group variable
-            groups_nonan_dummy = _dummy_code_groups(groups_nonan)
-            
+            groups_nonan_dummy = np.asarray(_dummy_code_groups(groups_nonan))
+            groups_levels = _group_levels(groups_nonan)
+            groups_info = ", ".join(
+                f"{ab}='{level}' (n={(groups_nonan_dummy == i).sum()})"
+                for i, (ab, level) in enumerate(zip("ab", groups_levels))
+            )
+
             # prepare Y
             _Y_nonan = _Y.loc[~groups_nanidc, :]
-            
+
         else:
             _Y_nonan = _Y
-            groups_nanidc, groups_nonan_dummy = None, None
+            groups_nanidc, groups_nonan_dummy, groups_levels = None, None, None
             
         ## prepare subjects
         if subjects is not None and groups is not None:
@@ -1428,16 +1452,38 @@ class NiSpace:
                 
         ## prepare formula
         transform = _lower_strip_ws(transform)
-            
+        # group labels -> a/b placeholders; the transform is still stored under its own name
+        if groups_levels is not None:
+            transform_ab, uses_labels = _resolve_group_labels(transform, groups_levels,
+                                                              return_used=True)
+            transform_desc = _describe_transform(transform_ab, groups_levels)
+        else:
+            transform_ab, transform_desc = transform, None
+
         ## apply the transform formula to the Y data
-        lgr.info(f"Applying {Y_name} transform '{transform}'.")
+        lgr.info(f"Applying {Y_name} transform '{transform}'"
+                 f"{f': {transform_desc}' if transform_desc else ''}.")
+        if groups_levels is not None:
+            lgr.info(f"Groups: {groups_info}.")
+            if transform_desc is not None and not uses_labels:
+                # direction depends on the sort order of the labels: make it hard to miss.
+                # Example = the reversed formula, written with labels and "-"
+                lab = dict(zip("ab", map(str, groups_levels)))
+                example = re.sub(r"\b[ab]\b", lambda m: lab["b" if m.group(0) == "a" else "a"],
+                                 _normalize_formula(transform_ab)[0]).replace(",", "-")
+                (lgr.warning if Y is None else lgr.info)(
+                    f"Formula '{transform}' uses placeholders a/b. Use group labels to set the "
+                    f"direction explicitly, e.g. '{example}'."
+                )
         # get formula interpreter to evaluate string formulas and output dataframes
-        apply_transform, paired = _get_transform_fun(transform, return_df=True, return_paired=True,
+        apply_transform, paired = _get_transform_fun(transform_ab, return_df=True, return_paired=True,
                                                      dtype=self._dtype, ignore_nan_warnings=True)
         # small-sample warnings for reference-group-normed transforms
-        if any(t in transform for t in ("rzscore", "rzscores", "centile", "centiles")):
-            if groups_nonan_dummy is not None:
-                n_ref = (groups_nonan_dummy == 1).sum()
+        if any(t in transform_ab for t in ("rzscore", "rzscores", "centile", "centiles")):
+            # reference = last formula argument: b in zscore(a,b), a in zscore(b,a) and zscore(a)
+            ref = _parse_transform_formula(transform_ab)[3][-1]
+            if groups_nonan_dummy is not None and ref in ("a", "b"):
+                n_ref = (groups_nonan_dummy == "ab".index(ref)).sum()
             else:
                 n_ref = len(_Y_nonan)
             if "centile" in transform:
@@ -1480,6 +1526,7 @@ class NiSpace:
             self._groups = groups
             self._groups_nan_idc = groups_nanidc
             self._groups_no_nan = groups_nonan_dummy
+            self._groups_levels = groups_levels
             if subjects is not None:
                 self._subjects = subjects
                 self._subjects_no_nan = subjects_nonan_num
@@ -3390,7 +3437,10 @@ class NiSpace:
 
                 ## prepare formula & transform function
                 # TODO: get stored transform function
-                apply_transform, paired = _get_transform_fun(Y_transform, return_df=False,
+                Y_transform_ab = Y_transform
+                if getattr(self, "_groups_levels", None) is not None:
+                    Y_transform_ab = _resolve_group_labels(Y_transform, self._groups_levels)
+                apply_transform, paired = _get_transform_fun(Y_transform_ab, return_df=False,
                                                              return_paired=True, dtype=dtype,
                                                              ignore_nan_warnings=True)
 
