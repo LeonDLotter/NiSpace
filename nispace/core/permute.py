@@ -253,7 +253,7 @@ def _get_null_maps(data_obs, nispace_nulls, null_maps=None, use_existing=True, s
             n_proc=n_proc,
             seed=seed,
             verbose=verbose,
-            warn_large_nullmaps=warn_large_nullmaps,
+            warn_large_nullmaps=warn_large_nullmaps and memmap_path is None,
             **kwargs
         )
 

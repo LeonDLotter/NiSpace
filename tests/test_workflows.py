@@ -818,3 +818,27 @@ def test_xsea_falls_back_to_default_collection(monkeypatch, _mock_pet_defaults):
 
 def test_explicit_x_collection_wins(monkeypatch, _mock_pet_defaults):
     assert _fetch_x_kwargs_seen(monkeypatch, xsea, x_collection="Mine")["collection"] == "Mine"
+
+
+def test_group_colocalization_memmap_path(rng, tmp_path):
+    n_x, n_parcels, n_per_group = 2, 20, 8
+    X = rng.normal(size=(n_x, n_parcels))
+    Y = rng.normal(size=(2 * n_per_group, n_parcels))
+    design = np.array(["control"] * n_per_group + ["patient"] * n_per_group)
+    parcel_labels = [f"parcel{i}" for i in range(n_parcels)]
+    x_df = pd.DataFrame(X, index=[f"x{i}" for i in range(n_x)], columns=parcel_labels)
+    y_df = pd.DataFrame(Y, index=[f"y{i}" for i in range(2 * n_per_group)], columns=parcel_labels)
+    p = {}
+    for mm in [None, tmp_path / "groups.npy"]:
+        nsp = NiSpace(x=x_df, y=y_df, parcellation=None, standardize=False,
+                      n_proc=1, verbose=False, return_self=False)
+        nsp.fit()
+        nsp = group_colocalization(
+            y=list(range(2 * n_per_group)), design=design, nispace_object=nsp,
+            comparison_method="hedges(patient,control)", colocalization_method="pearson",
+            n_perm=100, seed=1, plot=False, verbose=False, return_nispace_only=True,
+            memmap_path=mm,
+        )
+        p[mm is None] = nsp.get_p_values()
+    assert nsp._nulls["groups_null"].is_memmap
+    pd.testing.assert_frame_equal(p[True], p[False])

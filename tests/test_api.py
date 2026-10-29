@@ -1030,3 +1030,28 @@ def test_from_pickle_replaces_stale_pickled_closures(synthetic_nispace, tmp_path
     assert any("spearman" in w and "colocalize()" in w for w in warnings)
     nsp_reloaded.permute(what="maps", maps_method="random", n_perm=20, seed=1, verbose=False)
     assert nsp_reloaded.get_p_values(verbose=False).notna().all().all()
+
+
+def test_permute_groups_memmap_path_gives_same_p_values(grouped_nispace, tmp_path):
+    nsp, _ = grouped_nispace
+    p_ram = nsp.permute(what="groups", n_perm=50, seed=1, verbose=False)
+    nsp._nulls.pop("groups_null")
+    p_disk = nsp.permute(what="groups", n_perm=50, seed=1, verbose=False,
+                         memmap_path=tmp_path / "groups.npy")
+    pd.testing.assert_frame_equal(p_ram, p_disk)
+    assert nsp._nulls["groups_null"].is_memmap
+    assert (tmp_path / "groups.npy").exists()
+
+
+def test_permute_maps_memmap_path_separate_files_for_x_and_y(grouped_nispace, tmp_path):
+    nsp, _ = grouped_nispace
+    nsp.permute(what="maps", maps_which=["X", "Y"], maps_method="random", n_perm=20, seed=1,
+                verbose=False, memmap_path=tmp_path / "nulls.npy")
+    assert (tmp_path / "nulls_X.npy").exists() and (tmp_path / "nulls_Y.npy").exists()
+
+
+def test_permute_groups_and_maps_memmap_path_separate_files(grouped_nispace, tmp_path):
+    nsp, _ = grouped_nispace
+    nsp.permute(what=["groups", "maps"], maps_method="random", n_perm=20, seed=1,
+                verbose=False, memmap_path=tmp_path / "nulls.npy")
+    assert (tmp_path / "nulls.npy").exists() and (tmp_path / "nulls_groups.npy").exists()

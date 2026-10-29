@@ -26,6 +26,7 @@ _DEPR_FUNC_NAME = (
 )
 
 
+
 def _workflow_base(x, y, z, x_collection, #x_load_nulls,
                    space,
                    data_space,
@@ -171,6 +172,7 @@ def colocalization(y,
                    n_perm="auto",
                    seed=None,
                    n_proc=1,
+                   memmap_path=None,
                    verbose=True,
                    nispace_object=None,
                    fetch_x_kwargs=None,
@@ -265,6 +267,11 @@ def colocalization(y,
         Random seed for reproducibility.
     n_proc : int, default=1
         Number of processes for parallel computation.
+    memmap_path : str, Path, True, or None, default=None
+        Keep the permutation null maps on disk (``.npy`` memmap) instead of in RAM:
+        a file path, or ``True`` for a new temporary file. Use it when NiSpace warns
+        that the null maps take a lot of memory. Passed to
+        :meth:`~nispace.NiSpace.permute` (``permute_kwargs`` takes precedence).
     verbose : bool, default=True
         Whether to print progress messages.
     nispace_object : NiSpace or None, default=None
@@ -378,6 +385,7 @@ def colocalization(y,
                 pooled_p=pooled_p,
                 n_perm=n_perm,
                 seed=seed,
+                memmap_path=memmap_path,
             ) | permute_kwargs
             nsp.permute(**permute_kwargs_curr)
         permuted = nsp._get_last(perm=None)
@@ -468,6 +476,7 @@ def group_colocalization(y, design,
                          n_perm=10000,
                          seed=None,
                          n_proc=1,
+                         memmap_path=None,
                          verbose=True,
                          nispace_object=None,
                          fetch_x_kwargs=None,
@@ -593,6 +602,11 @@ def group_colocalization(y, design,
         Random seed for reproducibility.
     n_proc : int, default=1
         Number of processes for parallel computation.
+    memmap_path : str, Path, True, or None, default=None
+        Keep the permutation null maps on disk (``.npy`` memmap) instead of in RAM:
+        a file path, or ``True`` for a new temporary file. Use it when NiSpace warns
+        that the null maps take a lot of memory. Passed to
+        :meth:`~nispace.NiSpace.permute` (``permute_kwargs`` takes precedence).
     verbose : bool, default=True
         Whether to print progress messages.
     nispace_object : NiSpace or None, default=None
@@ -787,6 +801,7 @@ def group_colocalization(y, design,
                 n_perm=n_perm,
                 seed=seed,
                 verbose=verbose,
+                memmap_path=memmap_path,
             ) | permute_kwargs | {"what": "groups"}
             nsp.permute(**permute_kwargs_curr)
         permute_what = "groups"
@@ -1235,6 +1250,7 @@ def xsea(y,
          n_perm="auto",
          seed=None,
          n_proc=1,
+         memmap_path=None,
          verbose=True,
          nispace_object=None,
          fetch_x_kwargs=None,
@@ -1362,6 +1378,11 @@ def xsea(y,
         Random seed for reproducibility.
     n_proc : int, default=1
         Number of processes for parallel computation.
+    memmap_path : str, Path, True, or None, default=None
+        Keep the permutation null maps on disk (``.npy`` memmap) instead of in RAM:
+        a file path, or ``True`` for a new temporary file. Use it when NiSpace warns
+        that the null maps take a lot of memory. Passed to
+        :meth:`~nispace.NiSpace.permute` (``permute_kwargs`` takes precedence).
     verbose : bool, default=True
         Whether to print progress messages.
     nispace_object : NiSpace or None, default=None
@@ -1451,6 +1472,7 @@ def xsea(y,
         n_perm=n_perm,
         seed=seed,
         n_proc=n_proc,
+        memmap_path=memmap_path,
         verbose=verbose,
         nispace_object=nispace_object,
         fetch_x_kwargs=fetch_x_kwargs,
@@ -1496,6 +1518,7 @@ def group_xsea(y, design,
                n_perm=10000,
                seed=None,
                n_proc=1,
+               memmap_path=None,
                verbose=True,
                nispace_object=None,
                fetch_x_kwargs=None,
@@ -1603,6 +1626,11 @@ def group_xsea(y, design,
         Random seed for reproducibility.
     n_proc : int, default=1
         Number of processes for parallel computation.
+    memmap_path : str, Path, True, or None, default=None
+        Keep the permutation null maps on disk (``.npy`` memmap) instead of in RAM:
+        a file path, or ``True`` for a new temporary file. Use it when NiSpace warns
+        that the null maps take a lot of memory. Passed to
+        :meth:`~nispace.NiSpace.permute` (``permute_kwargs`` takes precedence).
     verbose : bool, default=True
         Whether to print progress messages.
     nispace_object : NiSpace or None, default=None
@@ -1670,6 +1698,7 @@ def group_xsea(y, design,
         n_perm=n_perm,
         seed=seed,
         n_proc=n_proc,
+        memmap_path=memmap_path,
         verbose=verbose,
         nispace_object=nispace_object,
         fetch_x_kwargs=fetch_x_kwargs,
@@ -1708,6 +1737,7 @@ def nimare_colocalization(y,
                           n_perm="auto",
                           seed=None,
                           n_proc=1,
+                          memmap_path=None,
                           verbose=True,
                           nispace_object=None,
                           fetch_x_kwargs=None,
@@ -1809,6 +1839,7 @@ def nimare_colocalization(y,
         n_perm=n_perm,
         seed=seed,
         n_proc=n_proc,
+        memmap_path=memmap_path,
         verbose=verbose,
         nispace_object=nispace_object,
         fetch_x_kwargs=fetch_x_kwargs,
@@ -1848,6 +1879,7 @@ def nimare_xsea(y,
                 n_perm="auto",
                 seed=None,
                 n_proc=1,
+                memmap_path=None,
                 verbose=True,
                 nispace_object=None,
                 fetch_x_kwargs=None,
@@ -1941,6 +1973,7 @@ def nimare_xsea(y,
         n_perm=n_perm,
         seed=seed,
         n_proc=n_proc,
+        memmap_path=memmap_path,
         verbose=verbose,
         nispace_object=nispace_object,
         fetch_x_kwargs=fetch_x_kwargs,

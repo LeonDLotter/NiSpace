@@ -320,3 +320,29 @@ def test_subset_does_not_rewarn(caplog):
     with caplog.at_level(logging.WARNING):
         nm.subset(nm.labels[:5])
     assert "GB in memory" not in caplog.text
+
+
+def test_large_warning_points_to_memmap_path(caplog):
+    for null_type in ["group", "spatial"]:
+        caplog.clear()
+        with caplog.at_level(logging.WARNING):
+            data = _make_large(warn_large=False).data
+            NullMaps(data, [f"map{i}" for i in range(data.shape[0])], null_type=null_type)
+        assert "memmap_path=True" in caplog.text
+
+
+def test_construction_with_memmap_path_does_not_warn(caplog, tmp_path):
+    data = _make_large(warn_large=False).data
+    labels = [f"map{i}" for i in range(data.shape[0])]
+    with caplog.at_level(logging.WARNING):
+        nm = NullMaps(data, labels, memmap_path=tmp_path / "n.npy")
+    assert "GB in memory" not in caplog.text
+    assert nm.is_memmap
+
+
+def test_memmap_true_uses_new_temp_file_each_time():
+    a, b = _make(), _make(seed=1)
+    a.to_memmap(True)
+    b.to_memmap(True)
+    assert a.data.filename != b.data.filename
+    assert not np.array_equal(np.asarray(a.data), np.asarray(b.data))

@@ -8,6 +8,24 @@ lgr = logging.getLogger(__name__)
 _NULLMAPS_WARN_BYTES = 1_000_000_000  # 1 GB
 
 
+def _memmap_file(path):
+    """File path for a null-map memmap: ``True`` -> new unique temp file, else str(path)."""
+    if path is True:
+        import os, tempfile
+        fd, path = tempfile.mkstemp(prefix="nispace_nullmaps_", suffix=".npy")
+        os.close(fd)
+    return str(path)
+
+
+def open_null_memmap(path, shape, dtype):
+    """Allocate an empty (n_maps, n_perm, n_parcels) array, on disk if `path` is given."""
+    if path is None:
+        return np.empty(shape, dtype=dtype)
+    path = _memmap_file(path)
+    lgr.info(f"Writing null maps to {path} ({np.prod(shape) * np.dtype(dtype).itemsize / 1e9:.2f} GB).")
+    return np.lib.format.open_memmap(path, mode="w+", dtype=dtype, shape=shape)
+
+
 class NullMaps:
     """
     Container for null map arrays.
@@ -129,16 +147,15 @@ class NullMaps:
         self.null_type = null_type
         self.null_which = null_which  # "X" | "Y" | None — identifies which maps these nulls are for
 
-        if warn_large and not isinstance(data, np.memmap) and data.nbytes > _NULLMAPS_WARN_BYTES:
+        if (warn_large and memmap_path is None and not isinstance(data, np.memmap)
+                and data.nbytes > _NULLMAPS_WARN_BYTES):
             lgr.warning(
-                f"NullMaps is {data.nbytes / 1e9:.1f} GB in memory. "
-                f"Consider passing memmap_path=True or a file path to reduce RAM usage."
+                f"Null maps take {data.nbytes / 1e9:.1f} GB in memory. To keep them on disk, "
+                f"pass memmap_path=True or a file path to the workflow function or to "
+                f"NiSpace.permute()."
             )
 
         if memmap_path is not None:
-            if memmap_path is True:
-                import os, tempfile
-                memmap_path = os.path.join(tempfile.gettempdir(), "nispace_nullmaps.npy")
             self.to_memmap(memmap_path)
 
     # ------------------------------------------------------------------
@@ -419,12 +436,10 @@ class NullMaps:
         Write the current array to a .npy memmap file at *path* and replace
         the internal backing array with the memmap view (in-place).
 
-        Pass ``True`` to use an automatically-created temp file instead.
+        Pass ``True`` to use an automatically-created temp file instead (a new file per
+        call, so X, Y and group nulls never share one).
         """
-        if path is True:
-            import os, tempfile
-            path = os.path.join(tempfile.gettempdir(), "nispace_nullmaps.npy")
-        path = str(path)
+        path = _memmap_file(path)
         mm = np.lib.format.open_memmap(
             path, mode="w+", dtype=self._data.dtype, shape=self._data.shape
         )

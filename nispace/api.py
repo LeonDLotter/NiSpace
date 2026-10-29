@@ -28,7 +28,7 @@ from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_
                                _resolve_permute_mode_settings, _null_maps_cache_hit,
                                _null_maps_n_perm,
                                _resolve_maps_batch_size, _iter_null_map_batches)
-from .core.nullmaps import NullMaps, _NULLMAPS_WARN_BYTES
+from .core.nullmaps import NullMaps, _NULLMAPS_WARN_BYTES, open_null_memmap
 from .core.plot import (_plot_categorical, _plot_correlation, _plot_correlation_lines,
                         _clean_map_label, _LINE_LABEL_MAX_MAPS)
 from .core.constants import _COLOC_METHODS, _SPACE_DEFAULT_VOL, _COLOC_METHODS_UNIVARIATE
@@ -2629,6 +2629,7 @@ class NiSpace:
     def permute(self, what, method=None, X_reduction=None, Y_transform=None, xsea=None,
                 n_perm=None,
                 maps_which="X", maps_nulls=None, maps_method=None, maps_batch_size=None,
+                memmap_path=None,
                 dist_mat=None,
                 sets_X_background=None,
                 p_tails=None, pooled_p="auto", p_from_average_y_coloc=None,
@@ -2700,6 +2701,15 @@ class NiSpace:
             path); needed if you require :meth:`local_colocalization`'s
             ``null=True`` afterward, since the batched path does not cache a
             full null-map cube (a warning is logged when this matters).
+        memmap_path : str, Path, or True, optional
+            Keep the null maps on disk (``.npy`` memmap) instead of in RAM: a file
+            path, or ``True`` for a new temporary file. Group-permutation nulls are
+            written to disk as they are generated; spatial null maps are generated in
+            memory and then moved to disk (map-batched generation, see
+            ``maps_batch_size``, does not use it: it already bounds memory). If one
+            run creates several null sets from one path, ``_X``/``_Y`` (X and Y map
+            nulls) or ``_groups`` (group nulls next to map nulls) is appended to the
+            file name. Default None (in RAM).
         dist_mat : array-like of shape (n_parcels, n_parcels), optional
             Pre-computed geodesic distance matrix. Generated from the
             parcellation if not provided (and required by the null method).
@@ -2948,6 +2958,12 @@ class NiSpace:
         }
         for k in [k for k in kwargs.keys() if k.startswith("groups_")]:
             groups_kwargs[k.removeprefix("groups_")] = kwargs.pop(k)
+        # memmap: map nulls get _X/_Y per side below; group nulls next to map nulls get _groups
+        maps_kwargs.setdefault("memmap_path", memmap_path)
+        groups_memmap_path = memmap_path
+        if "maps" in what and memmap_path is not None and memmap_path is not True:
+            groups_memmap_path = Path(memmap_path).with_name(
+                f"{Path(memmap_path).stem}_groups{Path(memmap_path).suffix}")
         # colocalization
         coloc_kwargs = {
             "xsea": xsea,
@@ -3237,6 +3253,12 @@ class NiSpace:
                 # factored out so the main loop and the double-batching fallback (below)
                 # share exactly the same logic instead of two copies that could drift.
                 nonlocal maps_nulls, dist_mat, _X_null, _Y_null
+                # X and Y nulls must not share one memmap file
+                _mm_kwargs = {}
+                _mm = maps_kwargs.get("memmap_path")
+                if len(maps_which) > 1 and _mm is not None and _mm is not True:
+                    _mm = Path(_mm)
+                    _mm_kwargs["memmap_path"] = _mm.with_name(f"{_mm.stem}_{XY}{_mm.suffix}")
                 _maps_nulls, new_spin_mat = _get_null_maps(
                     data_obs=data_obs,
                     dist_mat=dist_mat,
@@ -3248,7 +3270,7 @@ class NiSpace:
                     dtype=dtype,
                     verbose=verbose,
                     permute_which=XY,
-                    **maps_kwargs
+                    **{**maps_kwargs, **_mm_kwargs}
                 )
                 maps_nulls = _maps_nulls
                 # tag null maps with X/Y identity and store
@@ -3471,23 +3493,33 @@ class NiSpace:
                     # apply transform with random groups
                     Y_null = apply_transform(y=_Y_obs_arr_nonan, groups=group_null, subjects=subjects)
                     return Y_null
-                # run in parallel
-                _Y_null = Parallel(n_jobs=n_proc)(
+                # run in parallel; each result (n_contrasts, n_parcels) goes straight into one
+                # (n_contrasts, n_perm, n_parcels) cube (on disk with memmap_path), so
+                # no list of n_perm arrays is held next to it
+                _Y_null_cube = None
+                for i, Y_null_i in enumerate(Parallel(n_jobs=n_proc, return_as="generator")(
                     delayed(par_fun)(g) for g in tqdm(
                         groups_null,
                         desc=f"Null transformations ({method}, {n_proc} proc)", disable=not verbose
                     )
-                )
+                )):
+                    if _Y_null_cube is None:
+                        _Y_null_cube = open_null_memmap(
+                            groups_memmap_path,
+                            (Y_null_i.shape[0], len(groups_null), Y_null_i.shape[1]),
+                            Y_null_i.dtype,
+                        )
+                    _Y_null_cube[:, i, :] = Y_null_i
 
                 # wrap in NullMaps and cache for reuse across coloc method changes
-                # _Y_null is list of n_perm arrays, each (n_contrasts, n_parcels)
-                # stack → (n_perm, n_contrasts, n_parcels); transpose → NullMaps invariant
                 self._nulls["groups_null"] = NullMaps(
-                    np.stack(_Y_null).transpose(1, 0, 2),
+                    _Y_null_cube,
                     labels=list(_Y_trans_obs.index),
                     null_method=Y_transform,
                     null_type="group",
                 )
+                # views into the cached cube, no copy
+                _Y_null = self._nulls["groups_null"].perm_list(dtype=self._dtype)
         
         # case permute Y groups but no comparison is provided
         elif ("groups" in what) & (not Y_transform):
