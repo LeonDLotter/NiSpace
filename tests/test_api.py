@@ -966,6 +966,21 @@ def test_pickle_roundtrip_preserves_colocalizations(synthetic_nispace, tmp_path)
     )
 
 
+def test_save_load_aliases(synthetic_nispace, tmp_path):
+    nsp = synthetic_nispace
+    nsp.colocalize(method="pearson", verbose=False)
+    f = tmp_path / "nsp.pkl"
+
+    nsp.save(str(f), save_nulls=False, verbose=False)
+    nsp_reloaded = NiSpace.load(str(f), verbose=False)
+
+    assert isinstance(nsp_reloaded, NiSpace)
+    pd.testing.assert_frame_equal(
+        nsp_reloaded.get_colocalizations(verbose=False),
+        nsp.get_colocalizations(verbose=False),
+    )
+
+
 def test_pickle_roundtrip_save_nulls_false_drops_nulls(permuted_maps_nispace, tmp_path):
     nsp = permuted_maps_nispace
     f = tmp_path / "nsp_no_nulls.pkl"

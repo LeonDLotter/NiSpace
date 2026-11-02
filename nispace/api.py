@@ -332,8 +332,8 @@ class NiSpace:
        :meth:`normalize_colocalizations` against the null distribution.
     6. Retrieve results with the `get_*` methods (`get_x`, `get_y`, `get_z`,
        `get_colocalizations`, `get_p_values`, ...), visualize with :meth:`plot` /
-       :meth:`plot_brain`, and persist the object with :meth:`to_pickle` /
-       :meth:`from_pickle` / :meth:`copy`.
+       :meth:`plot_brain`, and persist the object with :meth:`save` / :meth:`load`
+       (aliases of :meth:`to_pickle` / :meth:`from_pickle`) / :meth:`copy`.
 
     Attributes
     ----------
@@ -6222,6 +6222,21 @@ class NiSpace:
 
             # return
             return nispace_object
+
+    # ----------------------------------------------------------------------------------------------
+
+    def save(self, filepath, save_nulls=True, verbose=None):
+        """
+        Save the NiSpace object to a pickle file. Alias of :meth:`to_pickle`.
+        """
+        self.to_pickle(filepath, save_nulls=save_nulls, verbose=verbose)
+
+    @staticmethod
+    def load(filepath, verbose=True):
+        """
+        Load a NiSpace object from a pickle file. Alias of :meth:`from_pickle`.
+        """
+        return NiSpace.from_pickle(filepath, verbose=verbose)
 
     # ----------------------------------------------------------------------------------------------
 
