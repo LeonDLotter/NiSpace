@@ -6,7 +6,29 @@ from matplotlib.legend_handler import HandlerTuple
 
 import logging
 lgr = logging.getLogger(__name__)
-from ..plotting import catplot, nullplot, nice_stats_labels, nice_target_label, print_significance
+from ..plotting import (catplot, nullplot, nice_stats_labels, nice_target_label, print_significance,
+                        _pet_map_label)
+
+
+def _set_size_labels(X):
+    """Set-size suffix per set of a set-indexed X: ``"$(n=k)$"`` (k maps), or ``"$(n=k/t)$"``
+    when all maps of the set are PET maps (t unique targets). None if X has no sets."""
+    if not isinstance(X, pd.DataFrame) or "set" not in X.index.names:
+        return None
+    idx = X.index.to_frame(index=False)
+    map_cols = [c for c in idx.columns if c not in ("set", "weight")]
+    if not map_cols:
+        return None
+    out = {}
+    for set_name, set_idx in idx.groupby("set", sort=False):
+        maps = set_idx[map_cols[0]].astype(str)
+        n = maps.nunique()
+        if all(all(s in m for s in ["target-", "tracer-", "pub-"]) for m in maps):
+            n_targets = maps.str.extract(r"target-([^_]+)")[0].nunique()
+            out[set_name] = f"$(n={n}/{n_targets})$"
+        else:
+            out[set_name] = f"$(n={n})$"
+    return out
 
 
 def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
@@ -14,7 +36,8 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
                       sort=False, sort_order=None,
                       annot_p=True, z_method="robust",
                       title=None, fig=None, ax=None, figsize=None,
-                      kwargs=None, null_kwargs=None, clean_labels=True, rho_is_z=False):
+                      kwargs=None, null_kwargs=None, clean_labels=True, rho_is_z=False,
+                      set_sizes=None):
 
     # kwargs
     kwargs = {} if kwargs is None else kwargs
@@ -74,12 +97,7 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
             # check if pet labels, if yes make nice string
             # str(): labels may be non-strings (e.g. integer positions of an unnamed X index)
             if all([s in str(X_labels[0]) for s in ["target-", "tracer-", "pub-"]]):
-                tmp = []
-                for l in X_labels:
-                    l_split = l.split("_")
-                    tmp.append(f"{nice_target_label(l_split[0].split('-')[1])} ({l_split[4].split('-')[1].capitalize()}, "
-                               f"n = {l_split[2].split('-')[1]})")
-                X_labels = tmp
+                X_labels = [_pet_map_label(l) or l for l in X_labels]
             else:  # plain labels that are target names (e.g. "5HT2a") get the display form too
                 X_labels = [nice_target_label(l) if isinstance(l, str) else l for l in X_labels]
             # check if brainmap labels, if yes make nice string
@@ -93,7 +111,12 @@ def _plot_categorical(colocs_df, stat, nulls_dict=None, p_df=None, pc_df=None,
         # if labels are not to be cleaned, convert potential multi-idc to string
         else:
             X_labels = colocs_df.columns.to_flat_index()
-            
+
+        # XSEA: set sizes after the set names, e.g. "Dopamine $(n=11/5)$"
+        if set_sizes:
+            X_labels = [f"{l} {set_sizes[c]}" if c in set_sizes else l
+                        for l, c in zip(X_labels, colocs_df.columns)]
+
         # set new column names but keep the set->map assignment as indices (!)
         new_cols = [str(l) for l in X_labels]
         colocs_df.columns = new_cols
@@ -380,13 +403,15 @@ _COMPARTMENT_COLORS = {"Cortex": "#4C72B0", "Subcortex": "#DD8452"}
 
 def _clean_map_label(label):
     """Readable map label: 'target-D23_tracer-flb457_n-55_..._pub-sandiego2015' -> 'D23
-    (Sandiego2015, n = 55)' (same convention as the categorical plot); else the label itself."""
+    (Sandiego2015, n=55)' (same convention as the categorical plot); else the label itself."""
     lab = str(label[-1] if isinstance(label, tuple) else label)
-    if all(s in lab for s in ["target-", "tracer-", "pub-"]):
-        parts = dict(p.split("-", 1) for p in lab.split("_") if "-" in p)
-        return (f"{nice_target_label(parts['target'])} ({parts['pub'].capitalize()}, "
-                f"n = {parts.get('n', '?')})")
-    return nice_target_label(lab)
+    return _pet_map_label(lab) or nice_target_label(lab)
+
+
+def _wrap_label(label):
+    """Two-line version of a map label: the bracket part on the second line."""
+    s = str(label)
+    return s.replace(" $(", "\n$(", 1) if " $(" in s else s.replace(" (", "\n(", 1)
 
 
 def _format_p(p):
@@ -483,7 +508,7 @@ def _plot_correlation(x_vals, y_vals, x_labels, y_label, r_values, stat_label,
 
     fig, axes, ncols = _correlation_panels(n, fig, ax, figsize, ncols, kwargs.pop("sharey", True),
                                            kwargs.pop("box_aspect", 1),
-                                           any(" (" in str(l) for l in x_labels))
+                                           any(" (" in str(l) or " $(" in str(l) for l in x_labels))
 
     groups = None if groups is None else np.asarray(groups)
     for i in range(n):
@@ -511,10 +536,10 @@ def _plot_correlation(x_vals, y_vals, x_labels, y_label, r_values, stat_label,
                ha="right" if right else "left", fontsize=9,
                bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="none", alpha=0.8))
         # "MOR (Kantonen2020, n = 204)" -> two lines: compact panels would let labels collide
-        a.set_xlabel(x_axis_label or str(x_labels[i]).replace(" (", "\n(", 1),
+        a.set_xlabel(x_axis_label or _wrap_label(x_labels[i]),
                      linespacing=_LABEL_LINESPACING)
         if n > 1 and x_axis_label:  # "MOR (Kantonen2020, n = 204)" -> two lines, as the x labels
-            a.set_title(str(x_labels[i]).replace(" (", "\n(", 1), fontsize=10,
+            a.set_title(_wrap_label(x_labels[i]), fontsize=10,
                         linespacing=_LABEL_LINESPACING)
         if i % (len(axes) if ax is not None else (ncols or 1)) == 0 or ax is not None:
             a.set_ylabel(y_axis_label or y_label)
@@ -602,7 +627,7 @@ def _plot_correlation_lines(x_vals, y_vals, r_values, x_labels, stat_label, grou
 
     fig, axes, ncols = _correlation_panels(n, fig, ax, figsize, ncols, kwargs.pop("sharey", True),
                                            kwargs.pop("box_aspect", 1),
-                                           any(" (" in str(l) for l in x_labels))
+                                           any(" (" in str(l) or " $(" in str(l) for l in x_labels))
     for i in range(n):
         a = axes[i]
         txt = []
@@ -638,10 +663,10 @@ def _plot_correlation_lines(x_vals, y_vals, r_values, x_labels, stat_label, grou
         a.text(0.97 if right else 0.03, 0.97, "\n".join(txt), transform=a.transAxes, va="top",
                ha="right" if right else "left", fontsize=9,
                bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="none", alpha=0.8))
-        a.set_xlabel(x_axis_label or str(x_labels[i]).replace(" (", "\n(", 1),
+        a.set_xlabel(x_axis_label or _wrap_label(x_labels[i]),
                      linespacing=_LABEL_LINESPACING)
         if n > 1 and x_axis_label:  # "MOR (Kantonen2020, n = 204)" -> two lines, as the x labels
-            a.set_title(str(x_labels[i]).replace(" (", "\n(", 1), fontsize=10,
+            a.set_title(_wrap_label(x_labels[i]), fontsize=10,
                         linespacing=_LABEL_LINESPACING)
         if i % (len(axes) if ax is not None else (ncols or 1)) == 0 or ax is not None:
             a.set_ylabel(y_axis_label or "Y")

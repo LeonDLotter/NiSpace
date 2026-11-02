@@ -91,7 +91,8 @@ def test_p_value_annotated_after_permutation(rng, _nsp):
         lines = ax.texts[0].get_text().split("\n")
         assert lines[1].startswith(r"$p_{\mathrm{uncorrected}}$")
         assert float(lines[1].split("= ")[1]) == pytest.approx(p_unc[lab], abs=0.0006)
-        assert lines[2].startswith(r"$p_{\mathrm{fdr-bh}}$")
+        # "_" becomes a text hyphen (U+2010): math-text renders "-" as a minus sign
+        assert lines[2].startswith("$p_{\\mathrm{fdr‐bh}}$")
     fig, axes = nsp.plot(kind="correlation", mc_method="uncorrected", show=False)
     assert all(len(ax.texts[0].get_text().split("\n")) == 2 for ax in axes)
 

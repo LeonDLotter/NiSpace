@@ -30,7 +30,7 @@ from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_
                                _resolve_maps_batch_size, _iter_null_map_batches)
 from .core.nullmaps import NullMaps, _NULLMAPS_WARN_BYTES, open_null_memmap
 from .core.plot import (_plot_categorical, _plot_correlation, _plot_correlation_lines,
-                        _clean_map_label, _LINE_LABEL_MAX_MAPS)
+                        _clean_map_label, _set_size_labels, _LINE_LABEL_MAX_MAPS)
 from .core.constants import _COLOC_METHODS, _SPACE_DEFAULT_VOL, _COLOC_METHODS_UNIVARIATE
 from .datasets import fetch_parcellation, _check_parcellation
 from .nulls import get_distance_matrix, _SPIN_METHODS, _DISTMAT_FREE_METHODS, _parse_null_method
@@ -44,7 +44,7 @@ from .stats.misc import (mc_correction, residuals_nan, zscore_df, permute_groups
                           null_to_p, rho_to_z, z_to_rho)
 from .stats.effectsize import rzscore_nan, zscore_nan
 from .cv import _get_dist_dep_splits, _get_rand_splits
-from .plotting import nice_stats_labels, brainplot
+from .plotting import nice_stats_labels, brainplot, _p_label
 from .utils.utils import (set_log, _quiet, _verbose_scope, fill_nan, _get_df_string, _lower_strip_ws,
                           mean_by_set_df, get_column_names, lower, print_arg_pairs,
                           _parse_df_string, _parse_bool, dedupe_rows)
@@ -4741,11 +4741,11 @@ class NiSpace:
                 permute_what, method, False, X_reduction, Y_transform,
                 self._resolve_pooled_p(None, method, permute_what, False, X_reduction,
                                        Y_transform))
-            _wanted = [(None, r"$p_{\mathrm{uncorrected}}$")]
+            _wanted = [(None, _p_label())]
             if mc:
                 _mc_lab = mc_method or _get_correct_mc_method(mc).replace("_", "").replace("-", "")
                 _wanted.append((_get_correct_mc_method(mc).replace("_", "").replace("-", ""),
-                                rf"$p_{{\mathrm{{{_mc_lab.replace('_', '-')}}}}}$"))
+                                _p_label(_mc_lab)))
             for _mc, _lab in _wanted:
                 try:
                     with _quiet():
@@ -4924,7 +4924,9 @@ class NiSpace:
         method, X_reduction, Y_transform, xsea : optional
             Identify which stored :meth:`colocalize` result to plot; see
             :meth:`colocalize`. Default to the last-used values. Ignored if
-            ``colocalizations_dict`` is given directly.
+            ``colocalizations_dict`` is given directly. In XSEA plots, each set label
+            shows the set size: ``(n=k)`` for k maps, or ``(n=k/t)`` for PET maps from
+            t molecular targets.
         stats : str or list of str, optional
             Which statistic(s) to plot, one figure each. Defaults to all stats
             found for ``method``.
@@ -5095,6 +5097,9 @@ class NiSpace:
         # r_to_z of the stored result. Unknown for a passed-in result -> labelled plain "Rho".
         _rho_is_z = colocalizations_dict is None and (
             bool(xsea) or self._coloc_kwargs_by_method.get(method, {}).get("r_to_z", True))
+        # XSEA: set sizes for the category labels, from the X the sets were built from
+        _set_sizes = (_set_size_labels(self._X)
+                      if xsea and colocalizations_dict is None and not X_reduction else None)
 
         # get colocalization results
         _z_method = self._last_settings.get("z_method", "robust")
@@ -5272,12 +5277,7 @@ class NiSpace:
                     if values == "z":
                         _title += f"\n(permutation of {_perm_str} | normalized)"
                     elif values == "p":
-                        if mc_method:
-                            _mc_sub = mc_method.replace("_", "-")
-                            _p_suffix = rf"$p_{{\mathrm{{{_mc_sub}}}}}$"
-                        else:
-                            _p_suffix = r"$p_{\mathrm{uncorrected}}$"
-                        _title += f"\n(permutation of {_perm_str} | {_p_suffix})"
+                        _title += f"\n(permutation of {_perm_str} | {_p_label(mc_method)})"
                     else:
                         _title += f"\n(permutation of {_perm_str})"
             else:
@@ -5374,6 +5374,7 @@ class NiSpace:
                     kwargs=plot_kwargs,
                     null_kwargs=nullplot_kwargs,
                     rho_is_z=_rho_is_z,
+                    set_sizes=_set_sizes,
                 )
 
             if show:

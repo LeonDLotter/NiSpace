@@ -23,6 +23,16 @@ from ._patches import apply_surface_plot_patches
 apply_surface_plot_patches()
 
 
+def _p_label(mc_method=None):
+    """Math-text label for a p-value, e.g. "$p_{\\mathrm{fdr‐bh}}$". "_" and "-" in
+    `mc_method` become a Unicode hyphen (U+2010): math-text renders "-" as a minus sign,
+    even inside \\mathrm."""
+    if not mc_method:
+        return r"$p_{\mathrm{uncorrected}}$"
+    sub = mc_method.replace("_", "‐").replace("-", "‐")
+    return rf"$p_{{\mathrm{{{sub}}}}}$"
+
+
 def nice_stats_labels(string, add_dollars=True):
     """Map an internal stat/method name (e.g. "pearson", "cohen") to a nicely
     formatted display label (e.g. "Pearson's Rho"), optionally wrapped in
@@ -79,7 +89,7 @@ def nice_stats_labels(string, add_dollars=True):
 # listed here (mGluR5, rCPS, SV2A, COX1, CMRglu, ...) are already in their usual style and stay.
 _TARGET_LABELS = {
     "GABAa": r"GABA$_\mathrm{A}$",
-    "GABAa5": r"GABA$_\mathrm{A}$ $\alpha$5",
+    "GABAa5": r"GABA$_\mathrm{A}$ α5",
     "5HT1a": r"5HT$_\mathrm{1A}$",
     "5HT1b": r"5HT$_\mathrm{1B}$",
     "5HT2a": r"5HT$_\mathrm{2A}$",
@@ -90,8 +100,33 @@ _TARGET_LABELS = {
     "M1": r"M$_\mathrm{1}$",
     "H3": r"H$_\mathrm{3}$",
     "CB1": r"CB$_\mathrm{1}$",
-    "A4B2": r"$\alpha_\mathrm{4}\beta_\mathrm{2}$",
+    "A4B2": r"α$_\mathrm{4}$β$_\mathrm{2}$",
 }
+# Greek letters are plain Unicode text, not math: math text ignores the font weight, so only
+# text letters turn bold with the rest of a label (math subscripts: see _bold_math()).
+
+
+def _bold_math(label):
+    """Bold version of a label's math subscripts (``_\\mathrm{...}`` -> ``_\\mathbf{...}``), for
+    labels drawn in bold: math text does not follow the font weight. Other math (e.g. the
+    "$(...)$" brackets of map and set labels) stays regular."""
+    return str(label).replace(r"_\mathrm{", r"_\mathbf{")
+
+
+def _pet_map_label(name):
+    """Display label for a PET map ID: 'target-D23_tracer-flb457_n-55_..._pub-sandiego2015' ->
+    'D$_\\mathrm{2/3}$ $(\\mathrm{Sandiego2015},\\ n=55)$' (bracket in math text, so it stays
+    regular when the label is bold). None if `name` is not a PET map ID."""
+    s = str(name)
+    if not all(k in s for k in ("target-", "tracer-", "pub-")):
+        return None
+    parts = dict(p.split("-", 1) for p in s.split("_") if "-" in p)
+    try:
+        pub = parts["pub"].capitalize()
+        return (f"{nice_target_label(parts['target'])} "
+                rf"$(\mathrm{{{pub}}},\ n={parts.get('n', '?')})$")
+    except KeyError:
+        return None
 
 
 def nice_target_label(name):
@@ -287,6 +322,7 @@ def print_significance(ax, p_values, q_values=None, coloc_values=None,
     _any_open   = False  # any ☆ drawn
     _any_filled = False  # any ★ drawn
     _any_text   = False  # any number drawn
+    _bold_math_texts = {}  # label text -> its bold-math version (significant labels with math)
 
     _mc_str = f"p_{mc_method}" if mc_method else "p_corrected"
     _q_str = f"{_n_q_sig}/{_n_total} {_mc_str} < 0.05" if has_q else f"0/{_n_total} {_mc_str} < 0.05 (no correction applied)"
@@ -307,7 +343,10 @@ def print_significance(ax, p_values, q_values=None, coloc_values=None,
 
         # bold tick label — only for MC-corrected significance
         if bold_labels:
-            lab.set_weight("bold" if (has_q and q < 0.05) else "normal")
+            _bold = has_q and q < 0.05
+            lab.set_weight("bold" if _bold else "normal")
+            if _bold and r"_\mathrm{" in txt:
+                _bold_math_texts[txt] = _bold_math(txt)
 
         ann_parts = []
         if mode in ("stars", "both"):
@@ -358,13 +397,21 @@ def print_significance(ax, p_values, q_values=None, coloc_values=None,
             ax.text(cat_coord, pos, ann_str, ha="center",
                     va="bottom" if mean >= 0 else "top", size=size, clip_on=False)
 
+    # bold labels: math text ignores the font weight -> bold math in the label text itself
+    # (set via set_*ticks, which re-creates the tick labels, so the weights are re-applied)
+    if _bold_math_texts:
+        _weights = [lab.get_weight() for lab in labs]
+        _texts = [_bold_math_texts.get(lab.get_text(), lab.get_text()) for lab in labs]
+        _set_ticks = ax.set_yticks if categorical_axis == "y" else ax.set_xticks
+        _get_ticks = ax.get_yticks if categorical_axis == "y" else ax.get_xticks
+        _set_ticks(_get_ticks(), _texts)
+        _new_labs = ax.get_yticklabels() if categorical_axis == "y" else ax.get_xticklabels()
+        for lab, w in zip(_new_labs, _weights):
+            lab.set_weight(w)
+
     # build legend proxy handles using Line2D with custom math-text markers
-    _p_unc = r"$p_{\mathrm{uncorrected}}$"
-    if mc_method:
-        _mc_sub = mc_method.replace("_", "-")
-        _p_mc = rf"$p_{{\mathrm{{{_mc_sub}}}}}$"
-    else:
-        _p_mc = _p_unc
+    _p_unc = _p_label()
+    _p_mc = _p_label(mc_method)
     _star_size = symbol_size * 0.75
     if mode in ("stars", "both"):
         if _any_open:
@@ -2434,16 +2481,7 @@ def brainplot(
     def _fmt_label(lbl):
         """Format a single label string; prettify PET-style keys."""
         s = str(lbl)
-        if all(k in s for k in ("target-", "tracer-", "pub-")):
-            p = s.split("_")
-            try:
-                target = p[0].split("-")[1]
-                n      = p[2].split("-")[1]
-                pub    = p[4].split("-")[1].capitalize()
-                return f"{nice_target_label(target)} ({pub}, n = {n})"
-            except (IndexError, ValueError):
-                pass
-        return nice_target_label(s)
+        return _pet_map_label(s) or nice_target_label(s)
 
     # Normalise title to a per-map list (or None to disable).
     if title in (False, None, ""):
@@ -2891,6 +2929,8 @@ def brainplot(
             _content_tops = {}
     _title_pad = mtransforms.offset_copy(fig.transFigure, fig=fig, y=6, units="points")
     for (_tax, _tstr) in _pending_titles:
+        if str(_title_kw.get("fontweight", "")) in ("bold", "heavy", "extra bold", "black"):
+            _tstr = _bold_math(_tstr)
         _pos = _tax.get_position()
         _top = _content_tops.get(id(_tax))
         if _top is not None:
