@@ -751,8 +751,8 @@ def group_colocalization(y, design,
             combat_protect = design[["groups"]]
         else:
             y_covariates = design.iloc[:, 2:]       # exclude groups and subjects
-            # subjects as strings: one-hot encoded (subject effects), not one numeric column
-            combat_protect = design[["groups", "subjects"]].astype({"subjects": str})
+            # clean_y one-hot encodes "groups"/"subjects" columns (subject effects) whatever their dtype
+            combat_protect = design[["groups", "subjects"]]
         clean_y_kwargs = dict(
             how="between",
             covariates_between=y_covariates,

@@ -1182,19 +1182,28 @@ class NiSpace:
         covariates_between : array-like, Series, or DataFrame, optional
             Subject/map-level covariate(s) to regress out across parcels. Only
             used if ``"between" in how``; ignored if ``None``. Categorical columns
-            (object/string/categorical dtype, or a column literally named
-            ``"site"``) are one-hot encoded; continuous columns are used as-is.
+            (object/string/categorical dtype, or a column named ``"site"``,
+            ``"groups"``, ``"subjects"`` or a common variant of these, whatever
+            its dtype; case, ``_``, ``-`` and spaces in names are ignored) are
+            one-hot encoded; continuous columns are used as-is. A categorical
+            column with a different value in every row (e.g. subject IDs) raises
+            a ``ValueError``. Rows with a missing value in any column are excluded
+            from the fit and are NaN in the cleaned data.
         protect : array-like, Series, or DataFrame, optional
             Covariates to hold constant (partial out) while regressing
             ``covariates_between``, without themselves being removed from Y --
             typically group/subject design columns that should not be regressed
-            away. Only relevant with ``"between"``.
+            away. Only relevant with ``"between"``. Encoded as
+            ``covariates_between``: name the columns ``"groups"`` and, for
+            paired designs, ``"subjects"`` so that numeric codes are one-hot
+            encoded (one column per subject models within-subject effects).
         within_y_specific : bool, default False
             If True, ``covariates_within`` supplies one covariate map per Y row
             instead of a single map broadcast to all rows.
         combat : bool, default False
             Apply ComBat harmonization during the between-subject step. Requires
-            a ``"site"`` column in ``covariates_between``; otherwise silently
+            a ``"site"`` column in ``covariates_between`` (case-insensitive; other
+            names such as ``"scanner"`` are regressed, not harmonized); otherwise
             disabled with a warning. Requires the optional ``neuroHarmonize``
             package.
         combat_protect : array-like, Series, or DataFrame, optional

@@ -82,6 +82,28 @@ def test_detect_categoricals_site_always_categorical_even_if_numeric(rng):
     assert cont == ["age"]
 
 
+def test_detect_categoricals_groups_subjects_always_categorical(rng):
+    # numeric group/subject codes are labels: integer subject IDs as one continuous column
+    # would not model subject effects
+    df = pd.DataFrame({"age": rng.normal(size=4), "groups": [0, 1, 0, 1], "subjects": [1, 1, 2, 2]})
+    cat, cont = _detect_categoricals(df)
+    assert cat == ["groups", "subjects"]
+    assert cont == ["age"]
+
+
+@pytest.mark.parametrize("name", ["subject_id", "SubjectID", "participant-id", "Subject ID",
+                                  "sub", "scanner", "Centre", "dx", "ses", "time_point"])
+def test_detect_categoricals_name_variants_forced(name):
+    cat, cont = _detect_categoricals(pd.DataFrame({name: [1, 2, 1, 2]}))
+    assert cat == [name] and cont == []
+
+
+@pytest.mark.parametrize("name", ["age", "time", "id", "run", "dose", "subscore"])
+def test_detect_categoricals_other_numeric_names_continuous(name):
+    cat, cont = _detect_categoricals(pd.DataFrame({name: [1, 2, 1, 2]}))
+    assert cat == [] and cont == [name]
+
+
 # ── _encode ───────────────────────────────────────────────────────────────────
 
 def test_encode_one_hot_drop_first_prepends_continuous(rng):
@@ -89,6 +111,15 @@ def test_encode_one_hot_drop_first_prepends_continuous(rng):
     enc = _encode(df, ["age"], ["site"])
     assert enc.columns.tolist() == ["age", "site_b"]
     assert np.array_equal(enc["site_b"].values, [0, 0, 1, 1])
+
+
+@pytest.mark.parametrize("values", [["a", None, "b", "c"], [0.0, np.nan, 1.0, 2.0]])
+def test_encode_missing_categorical_stays_nan(values):
+    # a missing label must not become the reference level
+    enc = _encode(pd.DataFrame({"groups": values}), [], ["groups"])
+    assert enc.shape == (4, 2)
+    assert np.isnan(enc.iloc[1]).all()
+    assert not np.isnan(enc.drop(index=1).values).any()
 
 
 # ── _clean_y_between ──────────────────────────────────────────────────────────
@@ -145,6 +176,91 @@ def test_clean_y_between_protect_preserves_protected_effect(between_setup):
         for i in range(n_parcels)
     ]).T
     assert np.allclose(Y_out, expected, atol=1e-5)
+
+
+def test_clean_y_between_numeric_subjects_protect_matches_string(rng):
+    # paired design: integer subject IDs (any column-name case) are one-hot encoded like
+    # string IDs, so the covariate effect is estimated within subjects
+    n_subj, n_parcels = 6, 4
+    subj = np.tile(np.arange(n_subj), 2)
+    session = np.repeat(["pre", "post"], n_subj)
+    Y = rng.normal(size=(2 * n_subj, n_parcels)) + rng.normal(size=(n_subj, n_parcels))[subj]
+    cov = pd.DataFrame({"motion": rng.normal(size=2 * n_subj)})
+
+    def clean(subjects, name="subjects"):
+        protect = pd.DataFrame({"groups": session, name: subjects})
+        return _clean_y_between(Y.copy(), cov, 2 * n_subj,
+                                **_default_between_kwargs(protect=protect))[0]
+
+    Y_int = clean(subj, name="Subjects")
+    Y_str = clean(subj.astype(str))
+    assert np.allclose(Y_int, Y_str, atol=1e-5)
+
+    # reference: OLS with subject dummies, session and intercept; only motion removed
+    X = np.column_stack([cov["motion"], session == "post",
+                         (subj[:, None] == np.arange(1, n_subj)).astype(float), np.ones(2 * n_subj)])
+    beta = np.linalg.lstsq(X, Y, rcond=None)[0]
+    assert np.allclose(Y_int, Y - np.outer(cov["motion"], beta[0]), atol=1e-4)
+
+
+@pytest.mark.parametrize("ids", [np.arange(8), [f"s{i}" for i in range(8)]])
+def test_clean_y_between_id_per_row_covariate_raises(between_setup, ids):
+    Y, _, n_subjects, _ = between_setup
+    cov = pd.DataFrame({"age": np.arange(n_subjects, dtype=float), "participant_id": ids})
+    with pytest.raises(ValueError, match="different value in every row"):
+        _clean_y_between(Y.copy(), cov, n_subjects, **_default_between_kwargs())
+
+
+def test_clean_y_between_repeated_subjects_covariate_allowed(between_setup):
+    # paired design: two rows per subject -> subject effects can be regressed
+    Y, _, n_subjects, _ = between_setup
+    cov = pd.DataFrame({"subjects": np.tile(np.arange(n_subjects // 2), 2)})
+    Y_out, _, _ = _clean_y_between(Y.copy(), cov, n_subjects, **_default_between_kwargs())
+    assert np.isfinite(Y_out).all()
+
+
+def test_clean_y_between_combat_only_on_site_column(between_setup):
+    # "scanner" is forced categorical but not a ComBat batch -> ComBat disabled with a warning
+    Y, _, n_subjects, _ = between_setup
+    cov = pd.DataFrame({"scanner": [1, 2] * (n_subjects // 2)})
+    Y_out, combat_model, _ = _clean_y_between(Y.copy(), cov, n_subjects,
+                                              **_default_between_kwargs(combat=True))
+    assert combat_model is None
+
+
+def test_clean_y_between_numeric_groups_three_levels_categorical(between_setup):
+    Y, _, n_subjects, _ = between_setup
+    cov = pd.DataFrame({"age": np.random.default_rng(3).normal(size=n_subjects)})
+    groups = np.array([0, 0, 1, 1, 2, 2, 0, 1])
+    Y_num, _, _ = _clean_y_between(
+        Y.copy(), cov, n_subjects,
+        **_default_between_kwargs(protect=pd.DataFrame({"groups": groups})))
+    Y_str, _, _ = _clean_y_between(
+        Y.copy(), cov, n_subjects,
+        **_default_between_kwargs(protect=pd.DataFrame({"groups": groups.astype(str)})))
+    assert np.allclose(Y_num, Y_str, atol=1e-5)
+
+
+def test_clean_y_between_missing_group_row_excluded(between_setup):
+    # a subject without a group label is excluded from the fit (NaN), string or numeric labels
+    Y, _, n_subjects, _ = between_setup
+    cov = pd.DataFrame({"age": np.random.default_rng(4).normal(size=n_subjects)})
+    groups_str = pd.Series(["a", "b"] * 4, dtype=object)
+    groups_str[3] = None
+    groups_num = pd.Series([0.0, 1.0] * 4)
+    groups_num[3] = np.nan
+    outs = [
+        _clean_y_between(Y.copy(), cov, n_subjects,
+                         **_default_between_kwargs(protect=pd.DataFrame({"groups": g})))[0]
+        for g in (groups_str, groups_num)
+    ]
+    keep = np.arange(n_subjects) != 3
+    expected = Y[keep] - np.outer(cov["age"][keep], np.linalg.lstsq(
+        np.column_stack([cov["age"][keep], groups_num[keep], np.ones(keep.sum())]),
+        Y[keep], rcond=None)[0][0])
+    for out in outs:
+        assert np.isnan(out[3]).all()
+        assert np.allclose(out[keep], expected, atol=1e-4)
 
 
 def test_clean_y_between_combat_disabled_without_site_column(between_setup):

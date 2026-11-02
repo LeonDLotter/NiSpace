@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -33,24 +35,51 @@ def _normalize_cov_df(cov, n_subjects, name="covariates"):
     return df
 
 
+# columns one-hot encoded regardless of dtype: numeric site, subject, group or session codes are
+# labels, not quantities (integer subject IDs as one continuous column would not model subject
+# effects). Names are matched after `_norm_col_name`. Only a column named "site" is the ComBat batch.
+_FORCE_CATEGORICAL = frozenset({
+    # site / batch
+    "site", "sites", "scanner", "scanners", "center", "centre", "centers", "centres", "batch",
+    "cohort", "study", "dataset",
+    # subject / ID
+    "subject", "subjects", "subj", "sub", "subjectid", "subid",
+    "participant", "participants", "participantid", "family", "familyid",
+    # group / condition
+    "group", "groups", "diagnosis", "dx", "condition", "conditions",
+    # session / time
+    "session", "sessions", "ses", "visit", "visits", "timepoint", "timepoints",
+})
+
+
+def _norm_col_name(name):
+    """Lowercase and drop everything but letters and digits ("Subject_ID" -> "subjectid")."""
+    return re.sub(r"[^0-9a-z]", "", str(name).lower())
+
+
 def _detect_categoricals(df):
-    """Return (cat_cols, cont_cols); 'site' is always categorical."""
+    """Return (cat_cols, cont_cols); columns named as in `_FORCE_CATEGORICAL` are always categorical."""
     cat_cols = [
         c for c in df.columns
         if (pd.api.types.is_object_dtype(df[c]) or
             pd.api.types.is_string_dtype(df[c]) or
             isinstance(df[c].dtype, pd.CategoricalDtype) or
-            c == "site")
+            _norm_col_name(c) in _FORCE_CATEGORICAL)
     ]
     cont_cols = [c for c in df.columns if c not in cat_cols]
     return cat_cols, cont_cols
 
 
 def _encode(df, cont_cols, cols_to_encode, dtype=np.float32):
-    """One-hot encode cols_to_encode (drop_first=True), prepend continuous cols."""
+    """One-hot encode cols_to_encode (drop_first=True), prepend continuous cols.
+
+    Missing values stay NaN in all dummy columns (row excluded from the fit, as for continuous
+    columns) instead of becoming the reference level.
+    """
     parts = [df[cont_cols]] if cont_cols else []
     for col in cols_to_encode:
         dummies = pd.get_dummies(df[col], prefix=col, drop_first=True, dtype=dtype)
+        dummies.loc[df[col].isna().values] = np.nan
         parts.append(dummies)
     return pd.concat(parts, axis=1) if parts else pd.DataFrame(index=df.index)
 
@@ -90,6 +119,14 @@ def _clean_y_between(Y_arr, covariates_between, n_subjects,
     has_site = "site" in bcov_df.columns
     lgr.info(f"Detected categorical covariates: {cat_cols or 'none'}; "
              f"continuous: {cont_cols or 'none'}.")
+    # a label per row (e.g. subject IDs in an unpaired design) is fitted perfectly by its dummies
+    for c in cat_cols:
+        labels = bcov_df[c].dropna()
+        if len(labels) > 1 and labels.nunique() == len(labels):
+            lgr.critical_raise(f"Covariate '{c}' has a different value in every row (e.g. subject "
+                               "IDs); regressing it out would remove all differences between "
+                               "subjects. In paired designs, pass subject IDs in 'protect'.",
+                               ValueError)
 
     # --- check site for combat ---
     if combat and not has_site:
