@@ -1,5 +1,6 @@
 import copy
 import re
+import warnings
 from typing import List, Union, Sequence, Literal, Dict, Optional
 from pathlib import Path
 
@@ -27,8 +28,11 @@ from .core.permute import (_get_null_maps, _get_exact_p_values, _get_correct_mc_
                                _resolve_permute_combo,
                                _resolve_permute_mode_settings, _null_maps_cache_hit,
                                _null_maps_n_perm,
-                               _resolve_maps_batch_size, _iter_null_map_batches)
-from .core.nullmaps import NullMaps, _NULLMAPS_WARN_BYTES, open_null_memmap
+                               _resolve_maps_batch_size, _iter_null_map_batches,
+                               _report_p_floor)
+from .core.nullmaps import NullMaps, _NULLMAPS_WARN_BYTES
+from .core.group_nulls import (_hash_arrays, _between_steps_hash, _FreedmanLane,
+                               generate_group_nulls)
 from .core.plot import (_plot_categorical, _plot_correlation, _plot_correlation_lines,
                         _clean_map_label, _set_size_labels, _LINE_LABEL_MAX_MAPS)
 from .core.constants import _COLOC_METHODS, _SPACE_DEFAULT_VOL, _COLOC_METHODS_UNIVARIATE
@@ -41,7 +45,7 @@ from .stats.misc import (mc_correction, residuals_nan, zscore_df, permute_groups
                           minP_correction, step_minP_correction, kminP_correction,
                           _family_scale_ratio,
                           _null_stats_to_array,
-                          null_to_p, rho_to_z, z_to_rho)
+                          null_to_p, rho_to_z, z_to_rho, _augmented_column_p)
 from .stats.effectsize import rzscore_nan, zscore_nan
 from .cv import _get_dist_dep_splits, _get_rand_splits
 from .plotting import nice_stats_labels, brainplot, _p_label
@@ -571,6 +575,7 @@ class NiSpace:
         self._X_dimred = {}
         self._dimred = {}
         self._Y_trans = {}
+        self._Y_trans_design = {}
         self._colocs = {}
         self._colocs_fun = {}
         self._coloc_kwargs_by_method = {}
@@ -582,6 +587,11 @@ class NiSpace:
         self._z_colocs = {}
         self._corr_within = {}
         self._p_corr_within = {}
+        self._cmp_within = {}
+        self._p_cmp_within = {}
+        # between-subject regressions done by clean_y(), replayed by Freedman-Lane group nulls
+        self._clean_y_between_steps = []
+        self._clean_y_fl_valid = True
 
         # defaults for get functions (IMPORTANT: this determines what coloc and get function will do!)
         self._last_settings = {
@@ -597,6 +607,7 @@ class NiSpace:
             "z_method": "robust",
             "pooled_p": False,
             "cwr_method": None,
+            "cwc_transform": None,
         }
         
         # deprecation adjustment
@@ -953,6 +964,10 @@ class NiSpace:
                     lgr.warning(f"{_n_dup} duplicate row(s) found in '{_name}' data -- if "
                                 "unintended, check your input for accidentally repeated maps.")
 
+        ## fresh Y: no covariate regressions recorded yet
+        self._clean_y_between_steps = []
+        self._clean_y_fl_valid = True
+
         ## return complete object
         return self
 
@@ -1240,6 +1255,14 @@ class NiSpace:
 
         # within: regression across parcels per map
         if "within" in how and covariates_within is not None:
+            if replace and getattr(self, "_clean_y_between_steps", None):
+                # group nulls replay only the between steps (Freedman-Lane, see permute()); a
+                # within step applied after them can't be replayed
+                self._clean_y_fl_valid = False
+                lgr.warning("Within-map regression after a between-subject regression: group "
+                            "permutation nulls can't account for the between-subject covariates "
+                            "(Freedman-Lane) anymore. Regress 'within' before 'between' (one "
+                            "clean_y(how=['within', 'between']) call does this).")
             lgr.info("Performing covariate regression within map/subjects (e.g., grey matter maps).")
             Y_arr, used_z, did_within = _clean_y_within(
                 Y_arr=Y_arr,
@@ -1258,7 +1281,7 @@ class NiSpace:
         # between: ComBat harmonization and/or regression across subjects
         if "between" in how and covariates_between is not None:
             lgr.info("Performing covariate regression between maps/subjects (e.g., age, sex, site).")
-            Y_arr, combat_model, combat_covariates = _clean_y_between(
+            Y_arr, combat_model, combat_covariates, between_design = _clean_y_between(
                 Y_arr=Y_arr,
                 covariates_between=covariates_between,
                 n_subjects=Y.shape[0],
@@ -1272,8 +1295,17 @@ class NiSpace:
                 n_proc=n_proc,
                 dtype=self._dtype,
                 verbose=verbose,
+                return_design=True,
             )
             did_between = True
+            # record the regression for Freedman-Lane group nulls (see permute())
+            if replace:
+                steps = getattr(self, "_clean_y_between_steps", None) or []
+                if steps:
+                    # the data before the first between step is what the nulls start from
+                    between_design.pop("Y_pre")
+                steps.append(between_design)
+                self._clean_y_between_steps = steps
             if combat_model is not None:
                 self._clean_y_combat_model = combat_model
                 self._clean_y_combat_cov = combat_covariates
@@ -1343,8 +1375,15 @@ class NiSpace:
             * ``prc(a,b)`` -- percent change of ``a`` relative to ``b``,
               ``(a-b)/b*100`` (paired, requires ``subjects``; e.g.
               ``prc(followup,baseline)``)
-            * ``logfc(a,b)`` -- log fold-change (auto-shifted to stay defined for
-              data that can be negative, e.g. already z-scored/residualized)
+            * ``logfc(a,b)`` -- log fold-change, ``log(a/b)`` per subject (paired,
+              requires ``subjects``; auto-shifted to stay defined for data that can be
+              negative, e.g. already z-scored/residualized)
+
+            ``prc`` and ``logfc`` need data on a positive ratio scale. A warning is
+            logged when Y has values <= 0, was z-scored per map
+            (``standardize`` containing ``"y"``), or had between-subject covariates
+            regressed out (:meth:`clean_y`): the ratios then have no clear meaning;
+            ``meandiff``/``elemdiff``/``pairedcohen`` do not need a ratio scale.
             * ``centile(a)`` / ``centile(a,b)`` -- percentile rank of ``a``
               within the reference distribution
 
@@ -1502,6 +1541,21 @@ class NiSpace:
                 elif n_ref < 30:
                     lgr.info(f"rzscore: reference group has n={n_ref} subjects. "
                              f"MAD estimates can be variable at this sample size.")
+        # ratio transforms need a positive ratio scale
+        if _parse_transform_formula(transform_ab)[1] in ("prc(*,*)", "logfc(*,*)"):
+            reasons = []
+            if Y is None and getattr(self, "_clean_y_between_steps", None):
+                reasons.append("between-subject covariates were regressed out (clean_y)")
+            if Y is None and isinstance(self._zscore, str) and "y" in self._zscore:
+                reasons.append("each map was z-scored (standardize contains 'y')")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                if np.nanmin(np.asarray(_Y_nonan, dtype=float)) <= 0:
+                    reasons.append(f"{Y_name} has values <= 0")
+            if reasons:
+                lgr.warning(f"'{transform}' computes ratios, which need data on a positive ratio "
+                            f"scale, but {'; '.join(reasons)}. The ratios have no clear meaning "
+                            "here; consider 'meandiff', 'elemdiff' or 'pairedcohen'.")
         # paired comparison but no subjects vector
         if paired and subjects is None:
             lgr.warning("The transform performs a paired comparison but argument 'subjects' was not "
@@ -1529,10 +1583,24 @@ class NiSpace:
             self._groups_levels = groups_levels
             if subjects is not None:
                 self._subjects = subjects
+            if subjects_nonan_num is not None:
+                # also the subject order assumed above for a paired transform without subjects
                 self._subjects_no_nan = subjects_nonan_num
-            # save transformed y
+            # save transformed y, and the design it came from (group nulls and
+            # compare_within_region() use the groups of each transform, and check that Y did
+            # not change since)
             df_str = _get_df_string("ytrans", ytrans=transform)
             self._Y_trans[df_str] = _Y_trans
+            if not hasattr(self, "_Y_trans_design"):
+                self._Y_trans_design = {}
+            self._Y_trans_design[df_str] = {
+                "groups_no_nan": groups_nonan_dummy,
+                "groups_nan_idc": groups_nanidc,
+                "groups_levels": groups_levels,
+                "subjects_no_nan": subjects_nonan_num,
+                "paired": paired,
+                "y_hash": _hash_arrays(np.asarray(_Y, dtype=self._dtype)),
+            }
             self._set_last(Y_transform=transform)
 
             ## return
@@ -2624,6 +2692,296 @@ class NiSpace:
 
             return out
 
+    # ----------------------------------------------------------------------------------------------
+
+    def compare_within_region(self, Y_transform=None, n_perm=None, p_tails="two", n_proc=None,
+                              seed=None, memmap_path=None, store=True, verbose=None, **kwargs):
+        """
+        Per-parcel group comparison: does each parcel differ between two groups or two
+        sessions? A mass-univariate permutation test -- the equivalent of a t-test, or with
+        covariates an ANCOVA, in every parcel -- run on the Y data before, or without, any
+        colocalization.
+
+        The statistic is the Y transform (see :meth:`transform_y`), e.g. Hedges' g for
+        ``"hedges(patient,control)"`` or the paired Cohen's d for
+        ``"pairedcohen(post,pre)"``. Transforms that give one map per subject (e.g.
+        ``"zscore(patient,control)"``, ``"centile(a,b)"``, ``"elemdiff(post,pre)"``,
+        ``"prc(post,pre)"``) are averaged across subjects: the mean z-score of the patients
+        relative to the controls, the mean change, and so on. The log names the tested
+        statistic.
+
+        **Null model.** The p-values come from the group-permutation null maps that
+        :meth:`permute` with ``what="groups"`` also uses: the transform is recomputed
+        after shuffling group labels (unpaired) or swapping sessions within subjects
+        (paired). Both methods share one cache, so after
+        ``permute(what="groups")`` -- or a :func:`~nispace.workflows.group_colocalization`
+        run -- no new permutations are needed, and vice versa. Without covariates this is the
+        classical two-sample (or paired) permutation test; with Hedges' g or Cohen's d it
+        gives the same per-parcel p-values as a permutation test on Student's t.
+
+        **Covariates.** If between-subject covariates were regressed out with
+        :meth:`clean_y`, the Freedman-Lane procedure is used
+        :cite:`freedman1983,anderson1999,winkler2014`: the residuals of the covariates-only
+        model are permuted, the fitted values added back, the covariate regression repeated
+        and the transform recomputed with the original labels. Shuffling labels on the
+        cleaned data instead gives too small p-values whenever the covariates are associated
+        with group. In paired designs, covariates that are constant within subjects (e.g.
+        sex, baseline age) drop out of the comparison; covariates that change between
+        sessions (e.g. head motion) are accounted for. ComBat harmonization is treated as
+        fixed preprocessing (a warning is logged): if site is associated with group, the
+        p-values can be too small.
+
+        Multiple-comparison correction across parcels is applied by
+        :meth:`get_within_region_comparisons` (default ``"step_minP"``).
+
+        Do not use the significant parcels to select the data for a later colocalization
+        analysis (circular analysis). A colocalization does not need significant parcels:
+        it tests the spatial pattern of the whole map.
+
+        Parameters
+        ----------
+        Y_transform : str, optional
+            A two-group or two-session transform (see :meth:`transform_y`). Defaults to the
+            last one used. Transforms without a group comparison (e.g. ``"mean(y)"``) and
+            transforms of one group relative to itself (``"zscore(a)"``, ``"centile(a)"``)
+            raise an error; one-sample tests are not supported yet.
+        n_perm : int, optional
+            Number of permutations. ``None`` (default): the number of cached group
+            permutations if they match this transform and design, else 10000 (the default of
+            :meth:`permute`, so a later :meth:`permute` reuses them). With many parcels,
+            family-wise corrections need many permutations (the smallest attainable corrected
+            p-value is logged as a warning when it can't reach 0.05).
+        p_tails : {"two", "upper", "lower"}, default "two"
+            Sidedness. "upper": the statistic is larger than expected (e.g. ``a > b`` for
+            ``hedges(a,b)``).
+        n_proc : int, optional
+            Number of parallel processes. Defaults to the value set at init.
+        seed : int, optional
+            Random seed. Defaults to the seed set at init. Cached permutations are reused for
+            any seed unless one is given here.
+        memmap_path : str, Path, or True, optional
+            Keep newly generated null maps on disk (see :meth:`permute`).
+        store : bool, default True
+            Store the results (see :meth:`get_within_region_comparisons`).
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+        **kwargs
+            ``groups_paired`` and ``groups_strategy``, as in :meth:`permute`. With
+            covariates, only ``groups_strategy="shuffle"`` is supported.
+
+        Returns
+        -------
+        NiSpace or pandas.DataFrame
+            ``self`` if ``self._return_self`` (default), else the observed statistic per
+            parcel as a one-row DataFrame.
+
+        See Also
+        --------
+        get_within_region_comparisons : p-values and corrected p-values.
+        correlate_within_region : per-parcel correlation across subjects.
+
+        References
+        ----------
+        :cite:`freedman1983`, :cite:`anderson1999`, :cite:`winkler2014`,
+        :cite:`westfall1993`.
+        """
+        with _verbose_scope(self._verbose if verbose is None else verbose) as verbose:
+            lgr.info("*** NiSpace.compare_within_region() - per-parcel group comparison. ***")
+            self._check_fit()
+            if self._binary_y:
+                lgr.critical_raise("binary_y=True: a per-parcel group comparison is not "
+                                   "defined for binary Y maps.", ValueError)
+            if p_tails not in ("two", "upper", "lower"):
+                lgr.critical_raise(f"'p_tails' must be 'two', 'upper' or 'lower', not "
+                                   f"'{p_tails}'.", ValueError)
+            groups_kwargs = {k.removeprefix("groups_"): kwargs.pop(k)
+                             for k in [k for k in kwargs if k.startswith("groups_")]}
+            if kwargs:
+                lgr.critical_raise(f"Unknown argument(s): {list(kwargs)}.", TypeError)
+
+            Y_transform = self._get_last(Y_transform=Y_transform)
+            if not Y_transform:
+                lgr.critical_raise("No Y transform: run transform_y() with a two-group or "
+                                   "two-session comparison first (e.g. 'hedges(a,b)').",
+                                   ValueError)
+            Y_transform = _lower_strip_ws(Y_transform)
+            self._check_transform(Y_transform)
+            design = self._get_transform_design(Y_transform)
+            transform_ab = Y_transform
+            if design["groups_levels"] is not None:
+                transform_ab = _resolve_group_labels(Y_transform, design["groups_levels"])
+            _, wildcard, _, args, _ = _parse_transform_formula(transform_ab)
+            if design["groups_no_nan"] is None or sorted(args) != ["a", "b"]:
+                lgr.critical_raise(
+                    f"compare_within_region() needs a comparison of two groups or sessions "
+                    f"(e.g. 'hedges(a,b)', 'pairedcohen(post,pre)'), not '{Y_transform}'. "
+                    "One-sample tests are not supported yet.", ValueError)
+            if isinstance(self._zscore, str) and "y" in self._zscore:
+                lgr.warning("Y was z-scored per map (standardize contains 'y'): every subject's "
+                            "map was rescaled across its own parcels before the group "
+                            "comparison, so each parcel is compared relative to the subject's "
+                            "whole map (a global difference disappears, parcels can change "
+                            "sign). Use NiSpace(standardize=...) without 'y' to compare "
+                            "absolute values.")
+
+            # null maps (shared with permute(what="groups"))
+            if n_perm is None:
+                cached = self._nulls.get("groups_null")
+                info = self._nulls.get("groups_null_info") or {}
+                n_perm = 10000
+                if cached is not None and info.get("transform") == Y_transform:
+                    n_perm = cached.n_perm
+            group_nulls = self._get_group_nulls(
+                Y_transform, n_perm=n_perm, seed=seed, n_proc=n_proc, groups_kwargs=groups_kwargs,
+                memmap_path=memmap_path, require_valid_covariates=True, verbose=verbose,
+                desc="Null transformations",
+            )
+            seed_used = self._nulls["groups_null_info"]["seed"]
+
+            # observed statistic; one map per subject -> mean across subjects
+            with _quiet():
+                Y_trans_obs = self.get_y(Y_transform=Y_transform)
+            stat_name = _CBAR_LABELS_Y.get(wildcard.split("(")[0], wildcard.split("(")[0])
+            obs = np.asarray(Y_trans_obs, dtype=float)
+            null = np.asarray(group_nulls.data, dtype=float)       # (n_rows, n_perm, n_parcels)
+            if obs.shape[0] > 1:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", RuntimeWarning)
+                    obs = np.nanmean(obs, axis=0)
+                    null = np.nanmean(null, axis=0)
+                stat_name = f"Mean {stat_name[0].lower() + stat_name[1:]} across {Y_trans_obs.shape[0]} maps"
+            else:
+                obs, null = obs[0], null[0]
+            levels = design["groups_levels"]
+            lgr.info(f"Statistic: {stat_name} ('{Y_transform}'"
+                     f"{f'; {_describe_transform(transform_ab, levels)}' if levels is not None else ''}), "
+                     f"{null.shape[0]} permutations, p-values {p_tails}-tailed.")
+
+            # raw p per parcel: augmented convention, NaN-safe
+            p = _augmented_column_p(obs, null, p_tails)[0]
+            p = np.where(np.isnan(obs), np.nan, p)
+            k_floor = 2 if p_tails == "two" else 1
+            _report_p_floor(Y_transform, (p <= k_floor / (null.shape[0] + 1))[np.newaxis, :],
+                            k_floor, null.shape[0])
+
+            stat_df = pd.DataFrame([obs], index=[Y_transform], columns=self._Y.columns,
+                                   dtype=self._dtype)
+            if store:
+                if not hasattr(self, "_cmp_within"):        # objects pickled before this method
+                    self._cmp_within, self._p_cmp_within = {}, {}
+                key = _get_df_string("compwithin", ytrans=Y_transform)
+                self._cmp_within[key] = stat_df
+                self._p_cmp_within[key] = pd.DataFrame([p], index=[Y_transform],
+                                                       columns=self._Y.columns, dtype=self._dtype)
+                self._nulls.setdefault("cmp_within", {})[key] = {
+                    "null_dist": null.astype(self._dtype),
+                    "n_perm": null.shape[0],
+                    "seed": seed_used,
+                    "p_tails": p_tails,
+                    "stat_name": stat_name,
+                }
+                self._set_last(cwc_transform=Y_transform)
+                if self._return_self:
+                    return self
+            return stat_df
+
+    def get_within_region_comparisons(self, Y_transform=None, mc_method="step_minP",
+                                      verbose=None):
+        """
+        Retrieve per-parcel group comparison results from :meth:`compare_within_region`,
+        optionally corrected for multiple comparisons across parcels.
+
+        Parameters
+        ----------
+        Y_transform : str, optional
+            Defaults to the transform of the last :meth:`compare_within_region` call.
+        mc_method : str or None, default "step_minP"
+            Correction across parcels. Family-wise (all use the same permutations as the raw
+            p-values, so the correlation between parcels is accounted for
+            :cite:`westfall1993`):
+
+            * ``"step_minP"`` (default), ``"minP"`` -- compare each parcel's p-value with the
+              distribution of the smallest p-value across parcels. Valid and balanced for any
+              statistic, also when its null spread differs between parcels (e.g. mean
+              differences in raw units).
+            * ``"step_maxT"``, ``"maxT"`` -- compare each statistic with the distribution of
+              the largest statistic across parcels. Assumes comparable null spread across
+              parcels (standardized statistics such as Hedges' g); otherwise high-variance
+              parcels dominate.
+
+            False discovery rate / p-value based: ``"fdr_bh"``, ``"bonferroni"``,
+            ``"holm"``. ``"meff"`` is not supported: it needs a parcel-by-parcel correlation
+            matrix estimated from the subjects, which is unreliable with fewer subjects than
+            parcels. ``None``: uncorrected p-values only (``"p_corr"`` is None).
+        verbose : bool, optional
+            Print progress messages. Defaults to the value set at init.
+
+        Returns
+        -------
+        dict
+            ``{"stat_type": str, "mc_method": mc_method, "stat": DataFrame, "p": DataFrame,
+            "p_corr": DataFrame or None}``, each DataFrame with one row and one column per
+            parcel. ``"stat_type"`` names the tested statistic.
+        """
+        with _verbose_scope(self._verbose if verbose is None else verbose) as verbose:
+            if Y_transform is None:
+                Y_transform = self._last_settings.get("cwc_transform")
+            if Y_transform is None:
+                lgr.critical_raise("No compare_within_region() results. Run "
+                                   "NiSpace.compare_within_region() first.", KeyError)
+            Y_transform = _lower_strip_ws(Y_transform)
+            key = _get_df_string("compwithin", ytrans=Y_transform)
+            cmp_within = getattr(self, "_cmp_within", {})
+            if key not in cmp_within:
+                available = "\n".join(k.replace("_compwithin", "").replace("ytrans-", "")
+                                      for k in cmp_within)
+                lgr.critical_raise(f"No compare_within_region() result for Y_transform="
+                                   f"'{Y_transform}'. Available:\n{available}", KeyError)
+            stat_df = cmp_within[key]
+            p_df = self._p_cmp_within[key]
+            null_entry = self._nulls.get("cmp_within", {}).get(key)
+            stat_type = null_entry["stat_name"] if null_entry else Y_transform
+
+            p_corr_df = None
+            if mc_method is not None:
+                p_raw = np.asarray(p_df.values, dtype=float)
+                if mc_method in ("maxT", "step_maxT", "minP", "step_minP"):
+                    if null_entry is None:
+                        lgr.critical_raise(f"No null distribution stored for '{Y_transform}' "
+                                           "(saved without nulls?): family-wise corrections need "
+                                           "it. Re-run compare_within_region().", KeyError)
+                    fn = {"maxT": maxT_correction, "step_maxT": step_maxT_correction,
+                          "minP": minP_correction, "step_minP": step_minP_correction}[mc_method]
+                    null_dist = null_entry["null_dist"]
+                    p_corr, _ = fn(
+                        np.asarray(stat_df.values, dtype=float),
+                        [{"stat": null_dist[b][np.newaxis, :]} for b in range(null_dist.shape[0])],
+                        stat="stat", tail=null_entry["p_tails"], how="r", p_raw=p_raw,
+                    )
+                    p_corr = np.asarray(p_corr, dtype=float)
+                elif mc_method == "meff":
+                    lgr.critical_raise(
+                        "'meff' correction is not supported for compare_within_region(): it "
+                        "needs a parcel-by-parcel correlation matrix estimated from the "
+                        "subjects, which is unreliable (anti-conservative) with fewer subjects "
+                        "than parcels. Use 'step_minP' or 'step_maxT'.", ValueError)
+                else:
+                    # statsmodels NaNs out every output if one input is NaN: mask, reinsert
+                    p_vals = p_raw[0]
+                    nan_mask = np.isnan(p_vals)
+                    p_corr = np.full(p_raw.shape, np.nan)
+                    if not nan_mask.all():
+                        p_corr_valid, _ = mc_correction(p_vals[~nan_mask], alpha=0.05,
+                                                        method=mc_method, dtype=self._dtype)
+                        p_corr[0, ~nan_mask] = p_corr_valid
+                p_corr_df = pd.DataFrame(p_corr, index=p_df.index, columns=p_df.columns,
+                                         dtype=self._dtype)
+
+            lgr.info(f"Returning compare_within_region results: \n"
+                     f"{print_arg_pairs(Y_transform=Y_transform, mc_method=mc_method)}")
+            return {"stat_type": stat_type, "mc_method": mc_method, "stat": stat_df, "p": p_df,
+                    "p_corr": p_corr_df}
+
     # PERMUTE ======================================================================================
 
     def permute(self, what, method=None, X_reduction=None, Y_transform=None, xsea=None,
@@ -2643,7 +3001,14 @@ class NiSpace:
         what : str or list of str
             What to permute. One or more of:
             ``"maps"`` — spatially constrained null maps for X and/or Y brain maps;
-            ``"groups"`` — Y group labels (requires ``Y_transform``); :cite:`dukart2021`
+            ``"groups"`` — Y group labels (requires ``Y_transform``); :cite:`dukart2021`.
+            The transform is recomputed after shuffling labels (unpaired) or swapping
+            sessions within subjects (paired). If between-subject covariates were regressed
+            out with :meth:`clean_y`, the Freedman-Lane procedure is used instead
+            :cite:`freedman1983,winkler2014`: residuals of the covariates-only model are
+            permuted and the covariate regression is repeated for every permutation, so
+            covariates associated with group are accounted for. The null maps are cached and
+            shared with :meth:`compare_within_region`.
             ``"sets"`` — X set membership labels (requires XSEA);
             ``"pairs"`` — within-pair colocalization against a between-pair null
             (SPICE test; requires N matched maps in both X and Y). :cite:`weinstein2021` Pairs can
@@ -2807,6 +3172,7 @@ class NiSpace:
         """
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.permute() - Estimate exact non-parametric p values. ***")
+        _seed_requested = seed  # cached group nulls are reused for any seed unless one is given
         seed = seed if seed is not None else self._seed
 
         ## check if fit was run
@@ -3434,93 +3800,16 @@ class NiSpace:
         # case permute Y groups
         if ("groups" in what) and Y_transform:
             lgr.info(f"Generating permuted Y groups.")
-
-            # clean transform name early so cache comparison is consistent
             Y_transform = _lower_strip_ws(Y_transform)
+            group_nulls = self._get_group_nulls(
+                Y_transform, n_perm=n_perm, seed=_seed_requested, n_proc=n_proc,
+                groups_kwargs=groups_kwargs, memmap_path=groups_memmap_path,
+                use_existing=maps_kwargs.get("use_existing", True), verbose=verbose,
+                desc=f"Null transformations ({method})",
+            )
+            # views into the cached cube, no copy
+            _Y_null = group_nulls.subset(list(_Y_trans_obs.index)).perm_list(dtype=self._dtype)
 
-            # check for cached group permutation null maps
-            _groups_null_cached = self._nulls.get("groups_null")
-            if (_groups_null_cached is not None and maps_kwargs.get("use_existing", True)
-                    and _groups_null_cached.null_method == Y_transform
-                    and _groups_null_cached.n_perm >= n_perm):
-                lgr.info("Using cached group permutation null maps.")
-                _needed_labels = list(_Y_trans_obs.index)
-                _Y_null = _groups_null_cached.subset(_needed_labels).perm_list(dtype=self._dtype)
-            else:
-                # get groups without nan values
-                groups = self._groups_no_nan
-                if hasattr(self, "_subjects_no_nan"):
-                    subjects = self._subjects_no_nan
-                else:
-                    subjects = None
-
-                # Y values without nan values in group vector
-                _Y_obs_arr_nonan = _Y_obs_arr[~self._groups_nan_idc, :]
-
-                ## prepare formula & transform function
-                # TODO: get stored transform function
-                Y_transform_ab = Y_transform
-                if getattr(self, "_groups_levels", None) is not None:
-                    Y_transform_ab = _resolve_group_labels(Y_transform, self._groups_levels)
-                apply_transform, paired = _get_transform_fun(Y_transform_ab, return_df=False,
-                                                             return_paired=True, dtype=dtype,
-                                                             ignore_nan_warnings=True)
-
-                # paired permutations?
-                if groups_kwargs["paired"] not in ["auto", True, False]:
-                    lgr.warning("Argument 'groups_paired' must be of boolean type or 'auto' not "
-                                f"'{groups_kwargs['paired']}'! Setting to 'auto'.")
-                    groups_kwargs["paired"] = "auto"
-                if groups_kwargs["paired"] == "auto":
-                    groups_kwargs["paired"] = paired
-
-                # get list of permuted group labels
-                lgr.info(f"Permuting groups/sessions vector, strategy: "
-                         f"{'paired' if groups_kwargs['paired'] else 'unpaired'}, {groups_kwargs['strategy']}.")
-                groups_null = permute_groups(
-                    groups=groups,
-                    subjects=subjects,
-                    n_perm=n_perm,
-                    n_proc=n_proc,
-                    seed=seed,
-                    verbose=verbose,
-                    **groups_kwargs
-                )
-
-                # get permuted group comparison results
-                # parallelization function
-                def par_fun(group_null):
-                    # apply transform with random groups
-                    Y_null = apply_transform(y=_Y_obs_arr_nonan, groups=group_null, subjects=subjects)
-                    return Y_null
-                # run in parallel; each result (n_contrasts, n_parcels) goes straight into one
-                # (n_contrasts, n_perm, n_parcels) cube (on disk with memmap_path), so
-                # no list of n_perm arrays is held next to it
-                _Y_null_cube = None
-                for i, Y_null_i in enumerate(Parallel(n_jobs=n_proc, return_as="generator")(
-                    delayed(par_fun)(g) for g in tqdm(
-                        groups_null,
-                        desc=f"Null transformations ({method}, {n_proc} proc)", disable=not verbose
-                    )
-                )):
-                    if _Y_null_cube is None:
-                        _Y_null_cube = open_null_memmap(
-                            groups_memmap_path,
-                            (Y_null_i.shape[0], len(groups_null), Y_null_i.shape[1]),
-                            Y_null_i.dtype,
-                        )
-                    _Y_null_cube[:, i, :] = Y_null_i
-
-                # wrap in NullMaps and cache for reuse across coloc method changes
-                self._nulls["groups_null"] = NullMaps(
-                    _Y_null_cube,
-                    labels=list(_Y_trans_obs.index),
-                    null_method=Y_transform,
-                    null_type="group",
-                )
-                # views into the cached cube, no copy
-                _Y_null = self._nulls["groups_null"].perm_list(dtype=self._dtype)
-        
         # case permute Y groups but no comparison is provided
         elif ("groups" in what) & (not Y_transform):
             lgr.critical_raise("Provide a comparison ('Y_transform') to perform group permutation!",
@@ -6100,7 +6389,7 @@ class NiSpace:
 
         Parameters
         ----------
-        filepath : str
+        filepath : str or path-like
             Filepath to save the NiSpace object to.
         save_nulls : bool, optional
             Whether to save the null distributions. Defaults to True. If False, null
@@ -6165,7 +6454,7 @@ class NiSpace:
 
         Parameters
         ----------
-        filepath : str
+        filepath : str or path-like
             Filepath to load the NiSpace object from.
         verbose : bool, optional
             Whether to print verbose output. Defaults to True.
@@ -6269,6 +6558,165 @@ class NiSpace:
     
     # ----------------------------------------------------------------------------------------------
     
+    def _get_transform_design(self, Y_transform):
+        """Groups/subjects a stored Y transform was computed with (see transform_y()).
+
+        Objects pickled before the design was stored per transform fall back to the
+        object-level attributes of the last transform_y() call."""
+        df_str = _get_df_string("ytrans", ytrans=Y_transform)
+        design = getattr(self, "_Y_trans_design", {}).get(df_str)
+        if design is None:
+            design = {
+                "groups_no_nan": getattr(self, "_groups_no_nan", None),
+                "groups_nan_idc": getattr(self, "_groups_nan_idc", None),
+                "groups_levels": getattr(self, "_groups_levels", None),
+                "subjects_no_nan": getattr(self, "_subjects_no_nan", None),
+                "paired": None,
+                "y_hash": None,
+            }
+        return design
+
+    def _get_group_nulls(self, Y_transform, n_perm, seed=None, n_proc=None, groups_kwargs=None,
+                         memmap_path=None, use_existing=True, require_valid_covariates=False,
+                         verbose=None, desc="Null transformations"):
+        """Group-permutation null maps of a Y transform, shared by permute(what="groups") and
+        compare_within_region().
+
+        Labels are shuffled (swapped within subjects for paired designs); after between-subject
+        covariate regression in clean_y(), the Freedman-Lane permutation is used instead (see
+        nispace.core.group_nulls). Cached in ``self._nulls["groups_null"]`` and reused when the
+        transform, its groups/subjects, Y, the covariates, the permutation settings and -- if
+        `seed` is given -- the seed match, and the cache has at least `n_perm` permutations.
+
+        Returns
+        -------
+        NullMaps
+            (n_contrasts, n_perm, n_parcels); the first `n_perm` permutations of the cache.
+        """
+        Y_transform = _lower_strip_ws(Y_transform)
+        n_proc = self._n_proc if n_proc is None else n_proc
+        verbose = self._verbose if verbose is None else verbose
+        groups_kwargs = {"paired": "auto", "strategy": "shuffle"} | (groups_kwargs or {})
+        self._check_transform(Y_transform)
+        design = self._get_transform_design(Y_transform)
+        groups = design["groups_no_nan"]
+        if groups is None:
+            lgr.critical_raise(f"Y transform '{Y_transform}' was computed without groups; group "
+                               "permutation needs a two-group or two-session comparison (e.g. "
+                               "'hedges(a,b)') and the 'groups' passed to transform_y().",
+                               ValueError)
+        nan_idc = design["groups_nan_idc"]
+        keep = ~np.asarray(nan_idc, dtype=bool)
+        subjects = design["subjects_no_nan"]
+
+        # observed transform and current Y must belong together
+        y_hash = _hash_arrays(np.asarray(self._Y, dtype=self._dtype))
+        if design["y_hash"] is not None and design["y_hash"] != y_hash:
+            lgr.critical_raise(f"Y changed after transform_y('{Y_transform}') (e.g. by clean_y()). "
+                               "The observed transform no longer matches Y; re-run transform_y().",
+                               ValueError)
+
+        # transform function and pairing
+        Y_transform_ab = Y_transform
+        if design["groups_levels"] is not None:
+            Y_transform_ab = _resolve_group_labels(Y_transform, design["groups_levels"])
+        apply_transform, paired = _get_transform_fun(Y_transform_ab, return_df=False,
+                                                     return_paired=True, dtype=self._dtype,
+                                                     ignore_nan_warnings=True)
+        if groups_kwargs["paired"] not in ["auto", True, False]:
+            lgr.warning("Argument 'groups_paired' must be of boolean type or 'auto' not "
+                        f"'{groups_kwargs['paired']}'! Setting to 'auto'.")
+            groups_kwargs["paired"] = "auto"
+        if groups_kwargs["paired"] == "auto":
+            groups_kwargs["paired"] = paired
+        paired = groups_kwargs["paired"]
+        strategy = groups_kwargs["strategy"]
+
+        # null scheme: label shuffling, or Freedman-Lane after between-subject covariates
+        steps = getattr(self, "_clean_y_between_steps", None) or []
+        scheme = "labels"
+        if steps:
+            if getattr(self, "_clean_y_fl_valid", True):
+                scheme = "freedman-lane"
+            elif require_valid_covariates:
+                lgr.critical_raise("A within-map regression was applied after the between-subject "
+                                   "covariate regression, so the group permutation can't account "
+                                   "for the covariates. Regress 'within' before 'between' (one "
+                                   "clean_y(how=['within', 'between']) call does this).",
+                                   ValueError)
+            else:
+                lgr.warning("Group permutation shuffles labels of the covariate-cleaned Y: a "
+                            "within-map regression after the between-subject regression can't be "
+                            "replayed. Per-parcel p-values would be too small if covariates are "
+                            "associated with group.")
+
+        seed_used = seed if seed is not None else self._seed
+        fingerprint = {
+            "transform": Y_transform,
+            "design": _hash_arrays(groups, nan_idc, subjects),
+            "y_hash": y_hash,
+            "paired": bool(paired),
+            "strategy": strategy,
+            "scheme": scheme,
+            "covariates": _between_steps_hash(steps) if scheme == "freedman-lane" else "none",
+        }
+
+        # cache
+        cached = self._nulls.get("groups_null")
+        info = self._nulls.get("groups_null_info")
+        if (use_existing and cached is not None and info is not None
+                and all(info.get(k) == v for k, v in fingerprint.items())
+                and (seed is None or info.get("seed") == seed)
+                and cached.n_perm >= n_perm):
+            lgr.info(f"Using cached group permutation null maps ({cached.n_perm} permutations"
+                     f"{f', using the first {n_perm}' if cached.n_perm > n_perm else ''}).")
+            if cached.n_perm == n_perm:
+                return cached
+            return NullMaps(cached.data[:, :n_perm, :], cached.labels, null_method=cached.null_method,
+                            null_type="group", warn_large=False)
+
+        # generate
+        Y_obs = np.asarray(self._Y, dtype=self._dtype)[keep]
+        fl = None
+        if scheme == "freedman-lane":
+            names = [n for st in steps for n in st["nuisance_names"]]
+            fl = _FreedmanLane(steps[0]["Y_pre"], steps, keep,
+                               subjects=subjects if paired else None, dtype=self._dtype)
+            lgr.info(f"Freedman-Lane group permutation: residuals of Y ~ covariates "
+                     f"({', '.join(names) if names else 'none'}) are permuted"
+                     f"{' within subjects' if paired else ''} and the covariate regression is "
+                     "repeated for every permutation.")
+            if paired and names:
+                N_keep = np.column_stack([st["nuisance"] for st in steps])[keep]
+                const = [n for n, col in zip(names, N_keep.T)
+                         if all(np.unique(col[subjects == s_]).size <= 1 for s_ in np.unique(subjects))]
+                if const:
+                    lgr.info(f"Covariates constant within subjects drop out of the paired "
+                             f"comparison: {', '.join(const)}.")
+            if any(st.get("combat") for st in steps):
+                lgr.warning("ComBat harmonization is treated as fixed preprocessing in the group "
+                            "permutation (only the linear covariates are permuted with "
+                            "Freedman-Lane). If site is associated with group, the p-values can "
+                            "be too small.")
+            if fl.perm_pos.size < keep.sum():
+                lgr.info(f"{keep.sum() - fl.perm_pos.size} map(s) with missing covariates are "
+                         "left out of the permutation.")
+        else:
+            lgr.info(f"Group permutation: {'paired' if paired else 'unpaired'}, {strategy}.")
+        if paired and subjects is None:
+            lgr.critical_raise("Paired group permutation requires 'subjects' in transform_y().",
+                               ValueError)
+        cube = generate_group_nulls(
+            Y_obs, groups, subjects, apply_transform, n_perm=n_perm,
+            seed=seed_used, n_proc=n_proc, paired=paired, strategy=strategy, fl=fl,
+            memmap_path=memmap_path, desc=desc, verbose=verbose,
+        )
+        labels = list(self._Y_trans[_get_df_string("ytrans", ytrans=Y_transform)].index)
+        null_maps = NullMaps(cube, labels=labels, null_method=Y_transform, null_type="group")
+        self._nulls["groups_null"] = null_maps
+        self._nulls["groups_null_info"] = fingerprint | {"seed": seed_used}
+        return null_maps
+
     def _check_transform(self, ytrans=False, raise_error=True):
         y_str = _get_df_string("ytrans", ytrans=ytrans)
         lgr.debug(y_str)

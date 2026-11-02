@@ -65,6 +65,7 @@ First find out what the user has and what they want to know. Then:
 | A map vs. *sets* of reference maps (e.g. genes of a cell type, receptors of a system) | `nispace.xsea`, `nispace.group_xsea` | Set enrichment against null maps of Y (or group-label permutation); not against random sets (see below) | intro10 |
 | N matched map pairs (e.g. two modalities per subject) | `nispace.paired_colocalization` | Pair-label permutation (SPICE): is within-pair similarity higher than between-pair? | intro13 |
 | Per region, across subjects: does X track Y, or a map track a score? | `nispace.correlate_within_region` | Subject-label permutation per region | intro13 |
+| Per region: do two groups or two sessions differ (t-test / ANCOVA equivalent, before or without colocalization)? | `nispace.NiSpace.compare_within_region` | Group-label permutation per region, shared with `permute("groups")` | intro04 |
 | Coordinate-based meta-analysis results (NiMARE) | `nispace.nimare_colocalization`, `nispace.nimare_xsea` | Meta-analysis-specific null maps | intro12 |
 | Binary maps (clusters, masks) | workflows with `binary_y=True` | as above | intro14 |
 | Which regions drive a result? | `nispace.diagnostics.regional_influence`, `regional_contribution`, `local_colocalization` | Descriptive | intro15 |
@@ -92,6 +93,9 @@ question, keep the default null (Y permuted or group labels permuted).
    smoothness, and depending on the method also e.g. the offset between cortex and subcortex
    (when cortex and subcortex are randomized separately) or a dominant gradient. When the
    conclusion depends on the null, check it with a second null method and report both.
+   With between-subject covariates (`clean_y()` or the workflows' `design`), group-label
+   permutation uses the Freedman–Lane procedure, so covariates associated with group are
+   accounted for; ComBat is treated as fixed preprocessing (NiSpace warns).
 3. **Fix the family of tested reference maps before seeing results, and correct across all of
    them.** Report the correction method and state its guarantee in words: FDR controls the
    expected *proportion* of false positives among significant results; family-wise methods
@@ -109,7 +113,7 @@ question, keep the default null (Y permuted or group labels permuted).
 7. **Check the inputs.** User data and reference data must be in compatible spaces and the same
    parcellation. Decide whether zeros are background or real data (e.g. 0 % overlap in a binary
    map is data). Z-scoring each map across regions is right for colocalization but wrong for
-   analyses across subjects (`correlate_within_region`).
+   analyses across subjects (`correlate_within_region`, `compare_within_region`).
 8. **Do not suppress NiSpace warnings.** They flag real problems (too few permutations, tiny
    sets, standardization on the wrong axis, degenerate nulls). Pass them on to the user.
 9. **Record what is needed to reproduce the analysis:** NiSpace version and commit, seed,
@@ -189,6 +193,9 @@ informative.
 - With few regions or very smooth maps, the effective number of independent observations is
   small: a large correlation can be non-significant, and that is correct.
 - A non-significant result is not evidence of no relationship.
+- Do not use parcels found significant by `compare_within_region` to select data for a
+  colocalization (circular analysis). A colocalization tests the pattern of the whole map
+  and does not need significant parcels.
 - A larger correlation for map A than map B does not show that A is more related unless the
   difference was tested.
 

@@ -58,7 +58,7 @@ def _encode(df, cont_cols, cols_to_encode, dtype=np.float32):
 def _clean_y_between(Y_arr, covariates_between, n_subjects,
                      protect,
                      combat, combat_protect, combat_train, combat_model, combat_kwargs,
-                     plot_design_between, n_proc, dtype, verbose):
+                     plot_design_between, n_proc, dtype, verbose, return_design=False):
     """
     Between-subjects covariate regression (and optional ComBat harmonization).
 
@@ -70,6 +70,11 @@ def _clean_y_between(Y_arr, covariates_between, n_subjects,
         Fitted ComBat model (None if not used).
     combat_covariates : pd.DataFrame or None
         Covariates passed to ComBat (None if not used).
+    design : dict
+        Only if `return_design`: what the regression step needs to be replayed on other data
+        (Freedman-Lane group nulls): ``"Y_pre"`` (data after ComBat, before regression),
+        ``"nuisance"`` (encoded covariates, n_subjects x k), ``"nuisance_names"``,
+        ``"protect"`` (encoded protected variables, n_subjects x q), ``"combat"`` (bool).
     """
     # defensive cast: reg_arr/protect_arr are always cast to `dtype` below, but
     # Y_arr wasn't -- a caller passing e.g. float64 Y_arr with default
@@ -202,6 +207,14 @@ def _clean_y_between(Y_arr, covariates_between, n_subjects,
                      f"{list(prot_encoded.columns)}.")
 
     # --- regression (after ComBat if both requested) ---
+    design = {
+        "Y_pre": Y_arr.copy(),
+        "nuisance": (bcov_encoded.values.astype(dtype) if not bcov_encoded.empty
+                     else np.zeros((n_subjects, 0), dtype=dtype)),
+        "nuisance_names": list(bcov_encoded.columns),
+        "protect": protect_arr,
+        "combat": bool(combat),
+    }
     if not bcov_encoded.empty:
         reg_arr = bcov_encoded.values.astype(dtype)
         n_protect = protect_arr.shape[1]
@@ -215,6 +228,8 @@ def _clean_y_between(Y_arr, covariates_between, n_subjects,
             ))
         Y_arr = np.array(Y_partial, dtype=dtype).T
 
+    if return_design:
+        return Y_arr, combat_model, combat_covariates, design
     return Y_arr, combat_model, combat_covariates
 
 

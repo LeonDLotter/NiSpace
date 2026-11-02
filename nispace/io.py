@@ -703,7 +703,7 @@ def to_pickle(obj, filepath, use_dill=False):
     ----------
     obj : object
         Any python object to be pickled.
-    filepath : str
+    filepath : str or path-like
         File path destination; must end in ``.pkl``, ``.pkl.gz``, or ``.pkl.blosc``
         (determines the compression method used).
     use_dill : bool, default False
@@ -723,6 +723,7 @@ def to_pickle(obj, filepath, use_dill=False):
         pkl = pickle
         
     # save
+    filepath = os.fspath(filepath)
     if filepath.endswith(".pkl"):
         with open(filepath, "wb") as f:
             pkl.dump(obj, f)
@@ -748,7 +749,7 @@ def from_pickle(filepath, use_dill=False):
 
     Parameters
     ----------
-    filepath : str
+    filepath : str or path-like
         Path to a ``.pkl``, ``.pkl.gz``, or ``.pkl.blosc`` file (extension
         determines the decompression method used).
     use_dill : bool, default False
@@ -773,6 +774,7 @@ def from_pickle(filepath, use_dill=False):
         pkl = pickle
         
     # load
+    filepath = os.fspath(filepath)
     if filepath.endswith(".pkl"):
         with open(filepath, "rb") as f:
             return pkl.load(f)

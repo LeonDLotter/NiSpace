@@ -417,3 +417,70 @@ def test_transform_y_reference_group_size_follows_formula(rng, caplog):
     with caplog.at_level(logging.INFO, logger="nispace"):
         nsp.transform_y("rzscore(b,a)", groups=groups, verbose=True)
     assert "reference group has only n=8" in caplog.text
+
+
+# ── logfc pairing, ratio-scale warnings, design per transform ────────────────
+
+def test_parse_transform_formula_logfc_is_paired():
+    # logfc is computed per subject (log(a/b) of matched rows), like prc
+    _, wildcard, _, _, paired = _parse_transform_formula("logfc(a,b)")
+    assert wildcard in _PAIRED_FORMULAS and paired is True
+
+
+@pytest.mark.parametrize("condition", ["between", "standardize", "nonpositive"])
+@pytest.mark.parametrize("formula", ["prc(post,pre)", "logfc(post,pre)"])
+def test_transform_y_ratio_scale_warnings(rng, caplog, condition, formula):
+    import logging
+    from nispace import NiSpace
+    n = 8
+    Y = rng.normal(size=(2 * n, 10)) + 10            # positive ratio scale
+    if condition == "nonpositive":
+        Y[0, 0] = -1.0
+    y_df = pd.DataFrame(Y, columns=[f"p{i}" for i in range(10)])
+    nsp = NiSpace(x=y_df.iloc[:2], y=y_df, parcellation=None,
+                  standardize="y" if condition == "standardize" else False,
+                  n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    if condition == "between":
+        nsp.clean_y("between", covariates_between=pd.DataFrame({"age": rng.normal(size=2 * n)}))
+    groups = np.array(["pre"] * n + ["post"] * n)
+    subjects = np.r_[np.arange(n), np.arange(n)].astype(str)
+    with caplog.at_level(logging.WARNING, logger="nispace"):
+        nsp.transform_y(formula, groups=groups, subjects=subjects, verbose=False)
+    expected = {"between": "covariates were regressed out", "standardize": "z-scored",
+                "nonpositive": "values <= 0"}[condition]
+    assert "computes ratios" in caplog.text and expected in caplog.text
+
+
+def test_transform_y_ratio_no_warning_on_positive_raw_data(rng, caplog):
+    import logging
+    from nispace import NiSpace
+    n = 8
+    y_df = pd.DataFrame(rng.normal(size=(2 * n, 10)) + 10, columns=[f"p{i}" for i in range(10)])
+    nsp = NiSpace(x=y_df.iloc[:2], y=y_df, parcellation=None, standardize=False,
+                  n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    with caplog.at_level(logging.WARNING, logger="nispace"):
+        nsp.transform_y("prc(post,pre)", groups=np.array(["pre"] * n + ["post"] * n),
+                        subjects=np.r_[np.arange(n), np.arange(n)].astype(str), verbose=False)
+    assert "computes ratios" not in caplog.text
+
+
+def test_transform_y_stores_design_per_transform(rng):
+    nsp, groups = _toy_nispace_groups(rng, ["control", "patient"])
+    other = np.array(["control", "patient"] * 8)
+    nsp.transform_y("hedges(patient,control)", groups=groups)
+    nsp.transform_y("cohen(patient,control)", groups=other)
+    d1 = nsp._get_transform_design("hedges(patient,control)")
+    d2 = nsp._get_transform_design("cohen(patient,control)")
+    assert (d1["groups_no_nan"] == (groups == "patient")).all()
+    assert (d2["groups_no_nan"] == (other == "patient")).all()
+    assert d1["y_hash"] == d2["y_hash"] and d1["paired"] is False
+
+
+def test_transform_y_paired_without_subjects_stores_subject_order(rng):
+    nsp, groups = _toy_nispace_groups(rng, ["pre", "post"])
+    nsp.transform_y("pairedcohen(post,pre)", groups=groups)
+    d = nsp._get_transform_design("pairedcohen(post,pre)")
+    assert d["paired"] is True
+    np.testing.assert_array_equal(d["subjects_no_nan"], np.r_[np.arange(8), np.arange(8)])

@@ -267,6 +267,9 @@ def _get_df_string(kind, xdimred=None, ytrans=None, method=None, stat=None, xsea
         else:
             raise ValueError("Provide method, stat, and perm!")
 
+    elif kind=="compwithin":
+        df_str = f"ytrans-{ytrans}_compwithin"
+
     elif kind=="corrwithin":
         if method is not None:
             df_str = f"xdimred-{xdimred}_ytrans-{ytrans}_corrwithin-{method}"

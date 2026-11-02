@@ -540,6 +540,88 @@ def test_permute_groups_rejects_binary_y(rng):
         nsp.permute(what="groups", n_perm=50, verbose=False)
 
 
+def _golden_groups_nispace(paired):
+    rng = np.random.default_rng(0)
+    n_x, n_parcels, n_subj = 2, 20, 16
+    X = rng.normal(size=(n_x, n_parcels))
+    Y = rng.normal(size=(n_subj, n_parcels))
+    groups = np.array(["a"] * 8 + ["b"] * 8)
+    Y[groups == "b"] += 1.0
+    subjects = np.r_[np.arange(8), np.arange(8)].astype(str) if paired else None
+    cols = [f"parcel{i}" for i in range(n_parcels)]
+    x_df = pd.DataFrame(X, index=[f"x{i}" for i in range(n_x)], columns=cols)
+    y_df = pd.DataFrame(Y, index=[f"y{i}" for i in range(n_subj)], columns=cols)
+    nsp = NiSpace(x=x_df, y=y_df, z=None, parcellation=None, standardize=False,
+                  n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    nsp.colocalize(method="pearson", Y_transform="pairedcohen(b,a)" if paired else "cohen(b,a)",
+                   groups=groups, subjects=subjects, verbose=False)
+    return nsp
+
+
+@pytest.mark.parametrize("paired, p_expected, cube_sum", [
+    (False, [0.6666666865348816, 0.5490196347236633], 56.02353258442599),
+    (True, [0.5882353186607361, 0.9019607901573181], -25.954174087848514),
+])
+def test_permute_groups_unchanged_without_covariates(paired, p_expected, cube_sum):
+    # golden values from the label-shuffle implementation before group nulls moved to
+    # core/group_nulls.py (2026-11-02): without covariates, results must not change
+    nsp = _golden_groups_nispace(paired)
+    p = nsp.permute(what="groups", n_perm=50, seed=1, verbose=False)
+    np.testing.assert_allclose(p.to_numpy().ravel(), p_expected, rtol=1e-6)
+    cube = nsp._nulls["groups_null"].data
+    assert float(cube.astype(np.float64).sum()) == pytest.approx(cube_sum, rel=1e-6)
+    assert nsp._nulls["groups_null_info"]["scheme"] == "labels"
+
+
+def test_permute_groups_uses_groups_of_its_own_transform(rng):
+    nsp, groups = _grouped_nispace_data(rng)
+    other = np.array(["a", "b"] * 8)
+    nsp.transform_y("cohen(a,b)", groups=groups, verbose=False)
+    nsp.transform_y("hedges(a,b)", groups=other, verbose=False)      # last-stored groups
+    nsp.colocalize(method="pearson", Y_transform="cohen(a,b)", verbose=False)
+    nsp.permute(what="groups", Y_transform="cohen(a,b)", n_perm=20, verbose=False)
+    from nispace.core.group_nulls import _hash_arrays
+
+    def design_hash(transform):
+        d = nsp._get_transform_design(transform)
+        return _hash_arrays(d["groups_no_nan"], d["groups_nan_idc"], d["subjects_no_nan"])
+
+    assert (nsp._get_transform_design("cohen(a,b)")["groups_no_nan"] == (groups == "b")).all()
+    assert nsp._nulls["groups_null_info"]["design"] == design_hash("cohen(a,b)")
+    assert design_hash("cohen(a,b)") != design_hash("hedges(a,b)")
+
+
+def test_permute_groups_paired_without_subjects(rng):
+    # transform_y assumes matching subject order when subjects are missing; permute() needs
+    # that order too (it used to raise "Paired permutation requires argument 'subjects'")
+    nsp, groups = _grouped_nispace_data(rng)
+    nsp.colocalize(method="pearson", Y_transform="pairedcohen(b,a)", groups=groups,
+                   verbose=False)
+    p = nsp.permute(what="groups", n_perm=20, verbose=False)
+    assert np.isfinite(p.to_numpy()).all()
+    assert nsp._nulls["groups_null_info"]["paired"] is True
+
+
+def test_permute_groups_raises_if_y_changed_after_transform(rng):
+    nsp, groups = _grouped_nispace_data(rng)
+    nsp.colocalize(method="pearson", Y_transform="cohen(a,b)", groups=groups, verbose=False)
+    nsp.clean_y("between", covariates_between=pd.DataFrame({"age": np.arange(16.0)}))
+    with pytest.raises(ValueError, match="Y changed after transform_y"):
+        nsp.permute(what="groups", n_perm=20, verbose=False)
+
+
+def _grouped_nispace_data(rng):
+    n_x, n_parcels, n_subj = 2, 20, 16
+    cols = [f"parcel{i}" for i in range(n_parcels)]
+    x_df = pd.DataFrame(rng.normal(size=(n_x, n_parcels)), columns=cols)
+    y_df = pd.DataFrame(rng.normal(size=(n_subj, n_parcels)), columns=cols)
+    nsp = NiSpace(x=x_df, y=y_df, z=None, parcellation=None, standardize=False,
+                  n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    return nsp, np.array(["a"] * 8 + ["b"] * 8)
+
+
 # ── correct_p() ───────────────────────────────────────────────────────────────
 
 def test_correct_p_fdr_bh_matches_statsmodels(permuted_maps_nispace):

@@ -111,6 +111,6 @@
             }
         },
         "label": "Toy dataset simulated from ENIGMA AN maps.",
-        "description": "Simulated gray matter data for 50 patients with acute anorexia nervosa (acAN) and 50 healthy controls, parcellated across all NiSpace parcellations. Patient data are constructed as GM probability (TPM) + scaled ENIGMA acAN cortical volume effect (Cohen's d, dx-an_subtype-acAN_pub-walton2022, estimated as thickness × area in DesikanKilliany + subcortical volume in Aseg) + Gaussian noise; controls are GM probability + noise only (seed 42, n=50 per group). Intended as a toy dataset for NiSpace tutorials. NOT FOR SCIENTIFIC USE!\n"
+        "description": "Simulated gray matter data for 50 patients with acute anorexia nervosa (acAN) and 50 healthy controls, parcellated across all NiSpace parcellations. Patient data are constructed as GM probability (TPM) + scaled ENIGMA acAN cortical volume effect (Cohen's d, dx-an_subtype-acAN_pub-walton2022, estimated as thickness d + area d in DesikanKilliany + subcortical volume in Aseg) + Gaussian noise; controls are GM probability + noise only (seed 42, n=50 per group). Intended as a toy dataset for NiSpace tutorials. NOT FOR SCIENTIFIC USE!\n"
     }
 }

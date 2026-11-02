@@ -104,12 +104,14 @@ def test_load_distmat_tuple_of_two():
 
 # ── to_pickle / from_pickle (raw io.py functions, plain objects) ─────────
 
+@pytest.mark.parametrize("as_path", [False, True])
 @pytest.mark.parametrize("suffix", [".pkl", ".pkl.gz", ".pkl.blosc"])
-def test_to_pickle_from_pickle_roundtrip(tmp_path, suffix):
+def test_to_pickle_from_pickle_roundtrip(tmp_path, suffix, as_path):
     obj = {"a": np.arange(10), "b": pd.DataFrame({"x": [1, 2, 3]})}
     f = tmp_path / f"obj{suffix}"
-    to_pickle(obj, str(f))
-    loaded = from_pickle(str(f))
+    f = f if as_path else str(f)        # str or pathlib.Path
+    to_pickle(obj, f)
+    loaded = from_pickle(f)
     np.testing.assert_array_equal(loaded["a"], obj["a"])
     pd.testing.assert_frame_equal(loaded["b"], obj["b"])
 

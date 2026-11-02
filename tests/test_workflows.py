@@ -842,3 +842,46 @@ def test_group_colocalization_memmap_path(rng, tmp_path):
         p[mm is None] = nsp.get_p_values()
     assert nsp._nulls["groups_null"].is_memmap
     pd.testing.assert_frame_equal(p[True], p[False])
+
+
+def _covariate_design_data(rng, paired=False):
+    n_x, n_parcels, n_per_group = 2, 20, 8
+    cols = [f"parcel{i}" for i in range(n_parcels)]
+    x_df = pd.DataFrame(rng.normal(size=(n_x, n_parcels)), columns=cols)
+    y_df = pd.DataFrame(rng.normal(size=(2 * n_per_group, n_parcels)), columns=cols)
+    nsp = NiSpace(x=x_df, y=y_df, parcellation=None, standardize=False,
+                  n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    design = pd.DataFrame({"groups": ["pre"] * n_per_group + ["post"] * n_per_group})
+    if paired:
+        design["subjects"] = list(range(n_per_group)) * 2         # integer subject IDs
+    design["motion"] = rng.normal(size=2 * n_per_group) + (design["groups"] == "post")
+    return nsp, design
+
+
+def test_group_colocalization_covariates_freedman_lane_shared_with_compare(rng, caplog):
+    import logging
+    nsp, design = _covariate_design_data(rng)
+    with caplog.at_level(logging.INFO, logger="nispace"):
+        nsp = group_colocalization(
+            y=list(range(16)), design=design, nispace_object=nsp,
+            comparison_method="hedges(post,pre)", colocalization_method="pearson",
+            n_perm=100, seed=1, plot=False, plot_design_between=False, verbose=True,
+            return_nispace_only=True,
+        )
+    assert "Freedman-Lane group permutation" in caplog.text
+    cached = nsp._nulls["groups_null"]
+    nsp.compare_within_region(verbose=False)
+    assert nsp._nulls["groups_null"] is cached
+
+
+def test_group_colocalization_paired_integer_subjects_are_categorical(rng):
+    nsp, design = _covariate_design_data(rng, paired=True)
+    nsp = group_colocalization(
+        y=list(range(16)), design=design, nispace_object=nsp, paired=True,
+        comparison_method="pairedcohen(post,pre)", colocalization_method="pearson",
+        n_perm=20, seed=1, plot=False, plot_design_between=False, verbose=False,
+        return_nispace_only=True,
+    )
+    # protected: 1 group indicator + 7 subject indicators (not one numeric subject column)
+    assert nsp._clean_y_between_steps[0]["protect"].shape[1] == 8

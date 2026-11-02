@@ -403,3 +403,56 @@ def test_irrelevant_covariate_does_not_destroy_colocalization(rng):
     # previously this collapsed to near 0 (>95% drop); an irrelevant covariate should
     # leave colocalization essentially unchanged
     assert coloc_after > 0.9 * coloc_before
+
+
+# ── recorded between design (Freedman-Lane group nulls) ──────────────────────
+
+def test_clean_y_between_return_design(between_setup):
+    Y, cov, n_subjects, _ = between_setup
+    protect = pd.DataFrame({"group": ["a", "b"] * (n_subjects // 2)})
+    Y_out, _, _, design = _clean_y_between(
+        Y.copy(), cov, n_subjects, **_default_between_kwargs(protect=protect),
+        return_design=True,
+    )
+    np.testing.assert_allclose(design["Y_pre"], Y.astype(np.float32))
+    assert design["nuisance_names"] == ["age", "sex_m"]
+    assert design["nuisance"].shape == (n_subjects, 2) and design["protect"].shape == (n_subjects, 1)
+    assert design["combat"] is False
+
+
+def _nsp_for_steps(rng, n=8, n_parcels=5):
+    y_df = pd.DataFrame(rng.normal(size=(n, n_parcels)), columns=[f"p{i}" for i in range(n_parcels)])
+    nsp = NiSpace(x=y_df.iloc[:2], y=y_df, parcellation=None, standardize=False,
+                  n_proc=1, verbose=False, return_self=False)
+    nsp.fit()
+    return nsp
+
+
+def test_clean_y_records_between_steps(rng):
+    nsp = _nsp_for_steps(rng)
+    Y_before = nsp._Y.to_numpy().copy()
+    nsp.clean_y("between", covariates_between=pd.DataFrame({"age": rng.normal(size=8)}))
+    nsp.clean_y("between", covariates_between=pd.DataFrame({"motion": rng.normal(size=8)}))
+    steps = nsp._clean_y_between_steps
+    assert len(steps) == 2
+    np.testing.assert_allclose(steps[0]["Y_pre"], Y_before)
+    assert "Y_pre" not in steps[1] and steps[1]["nuisance_names"] == ["motion"]
+    assert nsp._clean_y_fl_valid is True
+
+
+def test_clean_y_replace_false_records_nothing(rng):
+    nsp = _nsp_for_steps(rng)
+    nsp.clean_y("between", covariates_between=pd.DataFrame({"age": rng.normal(size=8)}),
+                replace=False)
+    assert nsp._clean_y_between_steps == []
+
+
+def test_clean_y_within_after_between_invalidates_steps_and_fit_resets(rng):
+    nsp = _nsp_for_steps(rng)
+    nsp.clean_y(["within", "between"], covariates_within=rng.normal(size=5),
+                covariates_between=pd.DataFrame({"age": rng.normal(size=8)}))
+    assert nsp._clean_y_fl_valid is True          # within before between: fine
+    nsp.clean_y("within", covariates_within=rng.normal(size=5))
+    assert nsp._clean_y_fl_valid is False
+    nsp.fit()
+    assert nsp._clean_y_between_steps == [] and nsp._clean_y_fl_valid is True
