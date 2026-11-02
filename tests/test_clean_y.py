@@ -300,9 +300,11 @@ def test_clean_y_between_handles_dtype_mismatch(between_setup):
 
 # ── _clean_y_within ───────────────────────────────────────────────────────────
 
+# TODO (first non-dev release): remove the ComBat tests together with clean_y(combat=...)
 @pytest.fixture
 def combat_setup(rng):
     """24 subjects at 3 sites with additive site offsets and an age effect."""
+    pytest.importorskip("neuroHarmonize")   # optional dependency since the deprecation
     n_subjects, n_parcels = 24, 20
     site = np.repeat(["s1", "s2", "s3"], 8)
     age = rng.normal(size=n_subjects)
@@ -310,6 +312,15 @@ def combat_setup(rng):
          + np.repeat([0.0, 2.0, -1.0], 8)[:, None] * rng.uniform(0.5, 1.5, n_parcels)
          + 0.5 * age[:, None])
     return Y, site, age, n_subjects
+
+
+def test_clean_y_combat_deprecation_warning(combat_setup, caplog):
+    Y, site, _, n = combat_setup
+    nsp = NiSpace(x=pd.DataFrame(Y[:1]), y=pd.DataFrame(Y), standardize="x", verbose=False)
+    nsp.fit()
+    with caplog.at_level(logging.WARNING, logger="nispace"):
+        nsp.clean_y(how="between", covariates_between=pd.DataFrame({"site": site}), combat=True)
+    assert "('combat=True') is deprecated" in caplog.text
 
 
 def _combat(Y, cov, n_subjects, **overrides):

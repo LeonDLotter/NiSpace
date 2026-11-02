@@ -95,7 +95,8 @@ question, keep the default null (Y permuted or group labels permuted).
    conclusion depends on the null, check it with a second null method and report both.
    With between-subject covariates (`clean_y()` or the workflows' `design`), group-label
    permutation uses the Freedman–Lane procedure, so covariates associated with group are
-   accounted for; ComBat is treated as fixed preprocessing (NiSpace warns).
+   accounted for. Pass the site as a categorical covariate; data harmonized before NiSpace
+   (e.g. with ComBat) is treated as given.
 3. **Fix the family of tested reference maps before seeing results, and correct across all of
    them.** Report the correction method and state its guarantee in words: FDR controls the
    expected *proportion* of false positives among significant results; family-wise methods

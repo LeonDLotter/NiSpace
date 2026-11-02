@@ -42,8 +42,6 @@ dependencies = [
     "scipy>=1.6.0",
     "statsmodels>=0.14.0",
     "scikit-learn>=1.5.0",
-    "neurocombat>=0.2.12",
-    "neuroHarmonize>=2.4.5",
     "matplotlib>=3.6.0,<=3.10.0",
     "seaborn>=0.13.0",
 ]
@@ -55,6 +53,7 @@ opt = [
     "scikit-learn<1.8.0",  # factor-analyzer 0.5.1 (latest) calls check_array(force_all_finite=...), removed in sklearn 1.8.0
     "nitransforms>=24.0.0",
     "nimare",
+    "neuroHarmonize>=2.4.5",  # deprecated clean_y(combat=True); remove at the first non-dev release
 ]
 data = [
     "abagen",
@@ -68,6 +67,7 @@ test = [
     "pytest-cov",
     "pytest-xdist",
     "pingouin",
+    "neuroHarmonize>=2.4.5",  # tests of the deprecated ComBat wiring; remove with it
 ]
 
 [project.urls]

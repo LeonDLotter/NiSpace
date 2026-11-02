@@ -244,6 +244,8 @@ def colocalization(y,
         Whether to generate visualization plots.
     combat : bool, default=False
         Whether to apply ComBat harmonization. Only relevant if ``y_covariates`` is given.
+        Deprecated: will be removed in the first non-dev release;
+        harmonize before NiSpace or pass the site as a covariate (see :meth:`NiSpace.clean_y`).
     binary_y : bool, default=False
         Set if Y is binary (e.g. binary lesion/cluster masks). Forces
         ``NiSpace(binary_y=True)``, which prevents Y from being z-scored regardless
@@ -589,6 +591,8 @@ def group_colocalization(y, design,
     combat : bool, default=False
         Whether to apply ComBat harmonization. Only relevant when ``design`` has
         covariate columns that trigger :meth:`NiSpace.clean_y`.
+        Deprecated: will be removed in the first non-dev release;
+        harmonize before NiSpace or pass the site as a covariate (see :meth:`NiSpace.clean_y`).
     plot : bool, default=True
         Whether to generate visualization plots.
     n_perm : int, default=10000
@@ -1368,6 +1372,8 @@ def xsea(y,
         Whether to generate visualization plots.
     combat : bool, default=False
         Whether to apply ComBat harmonization. Only relevant if ``y_covariates`` is given.
+        Deprecated: will be removed in the first non-dev release;
+        harmonize before NiSpace or pass the site as a covariate (see :meth:`NiSpace.clean_y`).
     binary_y : bool, default=False
         Set if Y is binary. Forces ``NiSpace(binary_y=True)`` and drives the
         ``colocalization_method=None`` dynamic default toward ``"pearson"``. See
@@ -1619,6 +1625,8 @@ def group_xsea(y, design,
         Whether to plot the between-subject design matrix (diagnostic only).
     combat : bool, default=False
         Whether to apply ComBat harmonization.
+        Deprecated: will be removed in the first non-dev release;
+        harmonize before NiSpace or pass the site as a covariate (see :meth:`NiSpace.clean_y`).
     plot : bool, default=True
         Whether to generate visualization plots.
     n_perm : int, default=10000

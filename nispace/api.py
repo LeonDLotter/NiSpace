@@ -198,6 +198,13 @@ _DEPR_COMBAT_KEEP = (
     "'combat_keep' is deprecated and will be ignored. All regression covariates "
     "are now automatically protected during ComBat harmonization."
 )
+_DEPR_COMBAT = (
+    "ComBat harmonization in clean_y() ('combat=True') is deprecated and will be removed in "
+    "the first non-dev release. Harmonize the data before NiSpace (e.g. with neuroHarmonize, "
+    "on voxels/vertices or parcels, with your own model), or pass the site as a categorical "
+    "covariate in 'covariates_between'. Site regression is accounted for exactly in group "
+    "permutation (Freedman-Lane); ComBat is not."
+)
 _DEPR_P_FROM_AVERAGE_Y_COLOC = (
     "'p_from_average_y_coloc' is deprecated and will be removed in the first "
     "non-dev release. Use 'pooled_p' instead."
@@ -1157,7 +1164,7 @@ class NiSpace:
         """
         Regress covariates out of Y, "within" (across parcels, per map) and/or
         "between" (across maps/subjects, per parcel), with optional ComBat site
-        harmonization for the between-subject case.
+        harmonization for the between-subject case (deprecated).
 
         "Within" regression removes a per-parcel confound from each Y map
         individually -- e.g. regressing a grey-matter probability map out of an
@@ -1201,28 +1208,34 @@ class NiSpace:
             If True, ``covariates_within`` supplies one covariate map per Y row
             instead of a single map broadcast to all rows.
         combat : bool, default False
-            Apply ComBat harmonization during the between-subject step. Requires
-            a ``"site"`` column in ``covariates_between`` (case-insensitive; other
-            names such as ``"scanner"`` are regressed, not harmonized); otherwise
-            disabled with a warning. Requires the optional ``neuroHarmonize``
-            package.
+            Deprecated; will be removed in the first non-dev release, together
+            with the other ``combat_*`` parameters. Harmonize the data before
+            NiSpace instead, or pass the site as a categorical covariate in
+            ``covariates_between`` (accounted for exactly in group permutation,
+            unlike ComBat). Applies ComBat harmonization during the
+            between-subject step. Requires a ``"site"`` column in
+            ``covariates_between`` (case-insensitive; other names such as
+            ``"scanner"`` are regressed, not harmonized); otherwise disabled with
+            a warning. Requires the optional ``neuroHarmonize`` package.
         combat_protect : array-like, Series, or DataFrame, optional
-            Additional covariates ComBat should protect (preserve biological
-            variance for) without using them as regression covariates.
+            Deprecated (see ``combat``). Additional covariates ComBat should
+            protect (preserve biological variance for) without using them as
+            regression covariates.
         combat_keep : optional
             Deprecated and ignored; all regression covariates are now
             automatically protected during ComBat harmonization.
         combat_train : array-like of bool, optional
-            Boolean vector marking a training subset: if valid, ComBat is fit only
-            on this subset and applied to the rest. Ignored (full-sample fit) if
-            the length doesn't match or values aren't boolean-like.
+            Deprecated (see ``combat``). Boolean vector marking a training subset:
+            if valid, ComBat is fit only on this subset and applied to the rest.
+            Ignored (full-sample fit) if the length doesn't match or values
+            aren't boolean-like.
         combat_model : optional
-            A previously fitted ComBat model to apply (rather than refit). If
-            ``None``, a fresh model is fit and stored (together with the
-            covariates used) on the object for later reuse.
+            Deprecated (see ``combat``). A previously fitted ComBat model to apply
+            (rather than refit). If ``None``, a fresh model is fit and stored
+            (together with the covariates used) on the object for later reuse.
         combat_kwargs : dict, optional
-            Additional keyword arguments forwarded to neuroHarmonize's
-            ``harmonizationLearn``.
+            Deprecated (see ``combat``). Additional keyword arguments forwarded to
+            neuroHarmonize's ``harmonizationLearn``.
         plot_design_between : bool, default False
             Plot the between-subject design matrix (diagnostic only, no effect on
             the result).
@@ -1248,6 +1261,11 @@ class NiSpace:
         # TODO (first non-dev release): remove combat_keep parameter entirely
         if combat_keep is not None:
             lgr.warning(_DEPR_COMBAT_KEEP)
+        # TODO (first non-dev release): remove combat, combat_protect, combat_train, combat_model,
+        # combat_kwargs (here, in core/clean_y.py and the workflows), the ComBat note in the group
+        # nulls, and neuroHarmonize from the optional dependencies
+        if combat:
+            lgr.warning(_DEPR_COMBAT)
         n_proc = self._n_proc if n_proc is None else n_proc
         combat_kwargs = {} if combat_kwargs is None else combat_kwargs
 

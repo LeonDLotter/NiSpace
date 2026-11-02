@@ -202,7 +202,11 @@ def _clean_y_between(Y_arr, covariates_between, n_subjects,
                 lgr.warning(f"'combat_train' must be a boolean vector of length {n_subjects}. "
                             "Ignoring.")
         # apply
-        from neuroHarmonize import harmonizationLearn, harmonizationApply
+        try:
+            from neuroHarmonize import harmonizationLearn, harmonizationApply
+        except ImportError:
+            lgr.critical_raise("ComBat harmonization (deprecated) requires the optional package "
+                               "'neuroHarmonize': pip install neuroHarmonize.", ImportError)
         if combat_model is None:
             if idx_train is None:
                 combat_model, Y_arr = harmonizationLearn(
