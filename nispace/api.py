@@ -1405,14 +1405,14 @@ class NiSpace:
             * ``logfc(a,b)`` -- log fold-change, ``log(a/b)`` per subject (paired,
               requires ``subjects``; auto-shifted to stay defined for data that can be
               negative, e.g. already z-scored/residualized)
+            * ``centile(a)`` / ``centile(a,b)`` -- percentile rank of ``a``
+              within the reference distribution
 
             ``prc`` and ``logfc`` need data on a positive ratio scale. A warning is
             logged when Y has values <= 0, was z-scored per map
             (``standardize`` containing ``"y"``), or had between-subject covariates
             regressed out (:meth:`clean_y`): the ratios then have no clear meaning;
             ``meandiff``/``elemdiff``/``pairedcohen`` do not need a ratio scale.
-            * ``centile(a)`` / ``centile(a,b)`` -- percentile rank of ``a``
-              within the reference distribution
 
             Note: ``"pairedhedges(a,b)"`` (paired/bias-corrected analogue of
             ``"hedges(a,b)"``) is not implemented -- calling it raises
