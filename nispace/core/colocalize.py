@@ -11,6 +11,23 @@ from ..stats.misc import rho_to_z, z_to_rho, residuals_nan
 from .constants import _COLOC_METHODS, _COLOC_METHODS_DROPOPT, _COLOC_METHODS_PERM
 
 
+def _zero_explained_rows(resid, arr):
+    """Set residual rows of maps fully explained by Z to exactly 0 (NaN parcels stay NaN).
+
+    Their residuals are rounding noise, not data: correlating them gives arbitrary values (or a
+    spurious r = 1 between two such maps). As constants, correlations with them are NaN.
+    """
+    # relative residual norm below which only rounding noise is left (as in partialpearson for
+    # float64; float32 rounding noise is larger)
+    tol = max(1e-10, np.finfo(resid.dtype).eps * 1e3) ** 2
+    ss_in = np.nansum((arr - np.nanmean(arr, axis=1, keepdims=True)) ** 2, axis=1)
+    ss_res = np.nansum(resid ** 2, axis=1)
+    explained = ss_res <= tol * ss_in
+    if explained.any():
+        resid[explained] = np.where(np.isnan(resid[explained]), np.nan, 0)
+    return resid
+
+
 def _rank_regress(arr, rank, regress, z=None, zy_matched=False, n_proc=1, verbose=True):
     
     if arr is None or (not rank and not regress):
@@ -19,11 +36,12 @@ def _rank_regress(arr, rank, regress, z=None, zy_matched=False, n_proc=1, verbos
     def regress_z_fun(arr, z, zy_matched):
         z = z.astype(arr.dtype)
         if z.shape[0] == 1:
-            return np.row_stack([residuals_nan(x=z[0], y=arr[i]) for i in range(arr.shape[0])])
+            resid = np.row_stack([residuals_nan(x=z[0], y=arr[i]) for i in range(arr.shape[0])])
         elif zy_matched:
-            return np.row_stack([residuals_nan(x=z[i], y=arr[i]) for i in range(arr.shape[0])])
+            resid = np.row_stack([residuals_nan(x=z[i], y=arr[i]) for i in range(arr.shape[0])])
         else:
-            return np.row_stack([residuals_nan(x=z.T, y=arr[i]) for i in range(arr.shape[0])])
+            resid = np.row_stack([residuals_nan(x=z.T, y=arr[i]) for i in range(arr.shape[0])])
+        return _zero_explained_rows(resid, arr)
     
     # case 1: arr is array, e.g. X or Y arrays
     if isinstance(arr, np.ndarray):

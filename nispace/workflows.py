@@ -162,7 +162,7 @@ def colocalization(y,
                    parcellation_hemi=["L", "R"],
                    y_covariates=None,
                    colocalization_method=None,
-                   mc_method="meff",
+                   mc_method="fdr_bh",
                    normalize_colocalizations=True,
                    pooled_p=False,
                    p_from_average_y=None,  # TODO (first non-dev release): remove
@@ -225,7 +225,7 @@ def colocalization(y,
         Method(s) to use for colocalization. When ``None``, defaults to
         ``"pearson"`` if ``binary_y=True``, otherwise ``"spearman"``. See
         :meth:`NiSpace.colocalize` for the full list of supported methods.
-    mc_method : str or list, default="meff"
+    mc_method : str or list, default="fdr_bh"
         Multiple-comparisons correction method(s), forwarded to :meth:`NiSpace.correct_p`.
         If a list, each method is applied and stored separately. An explicit
         ``"mc_method"`` key inside ``correct_p_kwargs`` overrides this entirely.
@@ -467,7 +467,7 @@ def group_colocalization(y, design,
                          parcellation_hemi=["L", "R"],
                          colocalization_method="spearman",
                          comparison_method=None,
-                         mc_method="meff",
+                         mc_method="fdr_bh",
                          normalize_colocalizations=True,
                          pooled_p=False,
                          p_from_average_y=None,  # TODO (first non-dev release): remove
@@ -565,7 +565,7 @@ def group_colocalization(y, design,
         ``"hedges(patient-control)"`` or ``"hedges(1,0)"``. The log lists which label
         is ``a`` and which is ``b``; with ``a``/``b`` placeholders, it also warns. See
         :meth:`NiSpace.transform_y`.
-    mc_method : str or list, default="meff"
+    mc_method : str or list, default="fdr_bh"
         Multiple-comparisons correction method(s), forwarded to :meth:`NiSpace.correct_p`.
         If a list, each method is applied and stored separately. An explicit
         ``"mc_method"`` key inside ``correct_p_kwargs`` overrides this entirely.
@@ -1243,7 +1243,7 @@ def xsea(y,
          parcellation_hemi=["L", "R"],
          y_covariates=None,
          colocalization_method=None,
-         mc_method="meff",
+         mc_method="fdr_bh",
          normalize_colocalizations=True,
          xsea_aggregation_method=None,
          permute_sets=False,
@@ -1333,7 +1333,7 @@ def xsea(y,
         (better calibrated under set-membership permutation than ``"spearman"``, though still
         not fully calibrated once set sizes approach or exceed the parcel count -- see
         ``permute_sets`` below); otherwise ``"spearman"``.
-    mc_method : str or list, default="meff"
+    mc_method : str or list, default="fdr_bh"
         Multiple-comparisons correction method(s), forwarded to :meth:`NiSpace.correct_p`.
         An explicit ``"mc_method"`` key inside ``correct_p_kwargs`` overrides this entirely.
         For permutation-based FWER control across sets, prefer ``"minP"``/``"step_minP"``
@@ -1514,7 +1514,7 @@ def group_xsea(y, design,
                parcellation_hemi=["L", "R"],
                colocalization_method="spearman",
                comparison_method=None,
-               mc_method="meff",
+               mc_method="fdr_bh",
                normalize_colocalizations=True,
                xsea_aggregation_method=None,
                pooled_p=False,
@@ -1597,7 +1597,7 @@ def group_xsea(y, design,
         ``"pairedcohen(a,b)"`` (paired). ``a`` is the smaller or alphabetically first
         group label; write the labels instead to set the direction explicitly, e.g.
         ``"hedges(patient,control)"`` (see :func:`group_colocalization`).
-    mc_method : str or list, default="meff"
+    mc_method : str or list, default="fdr_bh"
         Multiple-comparisons correction method(s), forwarded to :meth:`NiSpace.correct_p`.
         As for :func:`xsea`, prefer ``"minP"``/``"step_minP"`` over ``"maxT"``/
         ``"step_maxT"`` for permutation-based FWER control across sets of different sizes,
@@ -1737,7 +1737,7 @@ def nimare_colocalization(y,
                           parcellation_hemi=["L", "R"],
                           y_covariates=None,
                           colocalization_method=None,
-                          mc_method="meff",
+                          mc_method="fdr_bh",
                           normalize_colocalizations=True,
                           pooled_p=False,
                           plot=True,
@@ -1877,7 +1877,7 @@ def nimare_xsea(y,
                 parcellation_hemi=["L", "R"],
                 y_covariates=None,
                 colocalization_method=None,
-                mc_method="meff",
+                mc_method="fdr_bh",
                 normalize_colocalizations=True,
                 xsea_aggregation_method=None,
                 permute_sets=False,
@@ -2007,7 +2007,7 @@ def simple_colocalization(y, x="PET", z=None, x_collection=None, standardize="xz
                           parcellation_space=None, parcellation=_PARC_DEFAULT,
                           parcellation_labels=None, parcellation_hemi=["L", "R"],
                           y_covariates=None, colocalization_method="spearman",
-                          mc_method="meff", normalize_colocalizations=True,
+                          mc_method="fdr_bh", normalize_colocalizations=True,
                           p_from_average_y=False, plot=True, combat=False,
                           n_perm="auto", seed=None, n_proc=1, verbose=True,
                           nispace_object=None, fetch_x_kwargs=None, init_kwargs=None,
@@ -2042,7 +2042,7 @@ def group_comparison(y, design, x="PET", z=None, x_collection=None, standardize=
                      parcellation_space=None, parcellation=_PARC_DEFAULT,
                      parcellation_labels=None, parcellation_hemi=["L", "R"],
                      colocalization_method="spearman", comparison_method=None,
-                     mc_method="meff", normalize_colocalizations=True, p_from_average_y=True,
+                     mc_method="fdr_bh", normalize_colocalizations=True, p_from_average_y=True,
                      paired=False, plot_design_between=True, combat=False,
                      plot=True, n_perm=10000, seed=None, n_proc=1, verbose=True,
                      nispace_object=None, fetch_x_kwargs=None, init_kwargs=None,
@@ -2078,7 +2078,7 @@ def simple_xsea(y, x="mRNA", z=None, x_collection=None, x_background=None,
                 parcellation_space=None, parcellation=_PARC_DEFAULT,
                 parcellation_labels=None, parcellation_hemi=["L", "R"],
                 y_covariates=None, colocalization_method="spearman",
-                mc_method="meff", normalize_colocalizations=True,
+                mc_method="fdr_bh", normalize_colocalizations=True,
                 xsea_aggregation_method=None, permute_sets=False,
                 p_from_average_y=False, plot=True, combat=False,
                 n_perm="auto", seed=None, n_proc=1, verbose=True,

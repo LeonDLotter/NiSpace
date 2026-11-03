@@ -1816,7 +1816,9 @@ class NiSpace:
         regress_z : bool, default True
             Regress Z out of X and/or Y before colocalizing (requires Z to have
             been provided at :meth:`fit`; a no-op otherwise). Forced on for
-            ``partial*`` methods. Defaults to the last value used.
+            ``partial*`` methods. Defaults to the last value used. A map fully
+            explained by Z becomes constant (its residuals would be rounding
+            noise), so its correlations are NaN.
         zy_matched : bool, default False
             Treat Z as having one map per Y row (rather than a single/shared Z
             used for every Y row) -- e.g. per-subject nuisance maps matched to
@@ -4444,7 +4446,7 @@ class NiSpace:
     
     # CORRECT ======================================================================================
 
-    def correct_p(self, mc_method="meff",
+    def correct_p(self, mc_method="fdr_bh",
                   mc_alpha=0.05, mc_dimension="array", coloc_method=None, store=True, verbose=None):
         """
         Apply a multiple-comparisons correction to the uncorrected p-values
@@ -4455,12 +4457,12 @@ class NiSpace:
 
         Parameters
         ----------
-        mc_method : str, default "meff"
+        mc_method : str, default "fdr_bh"
             Correction method; the aliases in parentheses are accepted too.
 
             *Empirical methods* (computed by NiSpace itself):
 
-            * ``"meff_galwey"`` (default; alias ``"meff"``, ``"meffgalwey"``) --
+            * ``"meff_galwey"`` (alias ``"meff"``, ``"meffgalwey"``) --
               approximate FWER: Šidák correction using an effective number of
               independent tests estimated from the eigenvalues of X's (and, for
               ``mc_dimension="array"`` with multiple Y rows, also Y's)
@@ -4533,8 +4535,10 @@ class NiSpace:
             * ``"holm-sidak"`` (alias ``"holmsidak"``) -- FWER, step-down Šidák.
             * ``"simes-hochberg"`` (alias ``"simeshochberg"``) -- FWER, step-up.
             * ``"hommel"`` -- FWER.
-            * ``"fdr_bh"`` (alias ``"fdr"``, ``"fdrbh"``) -- FDR,
-              Benjamini-Hochberg. :cite:`benjamini1995`
+            * ``"fdr_bh"`` (default; alias ``"fdr"``, ``"fdrbh"``) -- FDR,
+              Benjamini-Hochberg. :cite:`benjamini1995` Controls the expected
+              proportion of false positives among the significant tests, and the
+              FWER when no test has a true effect.
             * ``"fdr_by"`` (alias ``"fdrby"``) -- FDR, Benjamini-Yekutieli
               (valid under arbitrary dependence).
             * ``"fdr_tsbh"`` (alias ``"fdrtsbh"``) -- FDR, two-stage
@@ -4596,7 +4600,6 @@ class NiSpace:
         mc_key = mc_method.replace("_", "").replace("-", "").lower()
 
         p_corr = dict()
-        # _meff_tail_warned = set()  # one-sided Meff warning, postponed (see correct_p meff)
 
         if _is_empirical_mc(mc_method):
             for p_str in p_strs:
@@ -4637,23 +4640,6 @@ class NiSpace:
                         lgr.info(f"Meff computed on {'ranked ' if _rank else ''}X maps"
                                  f"{' with Z regressed out' if _regress_x else ''}, as in the "
                                  f"'{coloc}' colocalization.")
-                    # TODO (postponed until the default mc_method changes): warn that Meff is
-                    # liberal for one-sided tests (it ignores the sign of map correlations).
-                    # # Meff ignores the sign of map correlations: liberal for one-sided tests
-                    # _null_str = _get_df_string("null", xdimred=xdimred, ytrans=ytrans, method=coloc,
-                    #                            xsea=xsea, perm=perm, pooled_p=pooled)
-                    # _tail = self._nulls.get(f"p_tails_{_null_str}", {}).get(stat, "two")
-                    # # sign-free statistics (XSEA with an absolute aggregation, which is why the
-                    # # test is one-sided) don't depend on the sign of map correlations
-                    # _abs_stat = xsea and "abs" in str(self._xsea_aggregation_method or "")
-                    # if _tail != "two" and not _abs_stat and _null_str not in _meff_tail_warned:
-                    #     _meff_tail_warned.add(_null_str)
-                    #     lgr.warning(
-                    #         f"'{mc_method}' with one-sided p-values (tail='{_tail}'): Meff is "
-                    #         "estimated from |correlations| between X maps and ignores their sign, "
-                    #         "so the correction is more liberal for one-sided tests. Consider "
-                    #         "'kminP', 'step_minP' or 'fdr_bh'."
-                    #     )
                     # for XSEA: use per-set mean map so Meff reflects set-level independence
                     if xsea and hasattr(self._X.index, "get_level_values"):
                         set_labels = self._X.index.get_level_values("set")

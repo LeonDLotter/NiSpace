@@ -279,6 +279,19 @@ def test_pls_wrapper_matches_direct_sklearn_plsregression(regression_data):
     assert np.allclose(out["beta"], np.squeeze(reg.coef_.T))
 
 
+def test_fast_pls1_constant_predictor_matches_sklearn(regression_data):
+    # a constant column (e.g. a map fully explained by Z, after Z regression) gets beta 0
+    # instead of NaN everywhere, as in sklearn
+    from sklearn.cross_decomposition import PLSRegression
+    X, y = regression_data
+    X = np.column_stack([X, np.full(X.shape[0], 3.0)])
+    out = fast_pls1(X, y, n_components=2)
+    reg = PLSRegression(n_components=2).fit(X, y)
+    assert np.isclose(out["r2"], reg.score(X, y))
+    assert np.allclose(out["beta"], np.squeeze(reg.coef_.T))
+    assert out["beta"][-1] == 0
+
+
 def _align_sign(nispace_vector, reference_vector):
     # nispace intentionally uses its own (Y-blind "module eigengene") sign
     # convention, not sklearn's -- align via dominant-direction dot product

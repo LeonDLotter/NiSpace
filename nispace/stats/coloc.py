@@ -744,8 +744,10 @@ def pcr(x, y, adj_r2=True, n_components=2):
     # the desired sign and flip only on a mismatch.
     xc = x - x.mean(axis=0)  # cheap to recompute (O(n*p)); _pca_via_eigh's own xc is internal
     yc = y - y.mean()
-    per_pred_r = (xc.T @ yc) / (np.sqrt((xc ** 2).sum(axis=0)) * np.sqrt((yc ** 2).sum()))
-    desired_sign = 1.0 if np.median(per_pred_r) >= 0.0 else -1.0
+    with np.errstate(invalid="ignore", divide="ignore"):
+        per_pred_r = (xc.T @ yc) / (np.sqrt((xc ** 2).sum(axis=0)) * np.sqrt((yc ** 2).sum()))
+    # constant predictors (NaN r) don't vote
+    desired_sign = 1.0 if np.nanmedian(per_pred_r) >= 0.0 else -1.0
     raw_sign = 1.0 if pearson(x_pcs[:, 0], y) >= 0.0 else -1.0
     if raw_sign != desired_sign:
         x_pcs[:, 0] *= -1.0
@@ -768,7 +770,8 @@ def elasticnet(x, y, cv=None, seed=None, **kwargs):
     cv : int, cross-validation generator, or None
         Passed to `ElasticNetCV` for selecting `alpha`/`l1_ratio`.
     seed : int, optional
-        Passed as `ElasticNetCV`'s `random_state`.
+        Passed as `ElasticNetCV`'s `random_state`, unless ``random_state`` is given in
+        `kwargs`.
     **kwargs
         Forwarded to `ElasticNetCV`.
 
@@ -787,9 +790,9 @@ def elasticnet(x, y, cv=None, seed=None, **kwargs):
     predictors at once before calling this function.
     """
 
+    kwargs.setdefault("random_state", seed)
     regCV = ElasticNetCV(
         cv=cv,
-        random_state=seed,
         **kwargs
     )
     regCV.fit(X=x, y=y)
@@ -804,7 +807,7 @@ def elasticnet(x, y, cv=None, seed=None, **kwargs):
     return out
 
 
-def lasso(x, y, cv=None, seed=None, kwargs={}):
+def lasso(x, y, cv=None, seed=None, **kwargs):
     """Lasso-regularized regression of `x` on `y` via `sklearn.linear_model.LassoCV`.
 
     Parameters
@@ -815,8 +818,8 @@ def lasso(x, y, cv=None, seed=None, kwargs={}):
     cv : int, cross-validation generator, or None
         Passed to `LassoCV` for selecting `alpha`.
     seed : int, optional
-        Passed as `LassoCV`'s `random_state`.
-    kwargs : dict, default {}
+        Passed as `LassoCV`'s `random_state`, unless ``random_state`` is given in `kwargs`.
+    **kwargs
         Forwarded to `LassoCV`.
 
     Returns
@@ -832,9 +835,9 @@ def lasso(x, y, cv=None, seed=None, kwargs={}):
     calling this function.
     """
 
+    kwargs.setdefault("random_state", seed)
     regCV = LassoCV(
         cv=cv,
-        random_state=seed,
         **kwargs
     )
     regCV.fit(X=x, y=y)
@@ -848,7 +851,7 @@ def lasso(x, y, cv=None, seed=None, kwargs={}):
     return out
     
 
-def ridge(x, y, cv=None, seed=None, kwargs={}):
+def ridge(x, y, cv=None, seed=None, **kwargs):
     """Ridge-regularized regression of `x` on `y` via `sklearn.linear_model.RidgeCV`.
 
     Parameters
@@ -861,7 +864,7 @@ def ridge(x, y, cv=None, seed=None, kwargs={}):
     seed : int, optional
         Unused by `RidgeCV` (which has no `random_state`); accepted for a
         uniform signature with `lasso`/`elasticnet`.
-    kwargs : dict, default {}
+    **kwargs
         Forwarded to `RidgeCV`.
 
     Returns
@@ -1037,6 +1040,7 @@ def fast_pls1(
     yc = y - y_mean
 
     x_std = xc.std(axis=0, ddof=1)
+    x_std[x_std == 0.0] = 1.0  # constant predictors stay 0 (as in sklearn)
     y_std = yc.std(ddof=1)
     xc /= x_std
     yc /= y_std

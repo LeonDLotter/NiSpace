@@ -120,3 +120,38 @@ def test_rank_and_regress_correct_list_of_dicts(rng):
         expected_fixed = np.row_stack(
             [residuals_nan(x=z[0], y=ranked[i]) for i in range(set_arr.shape[0])])
         np.testing.assert_allclose(result["setA"], expected_fixed, equal_nan=True)
+
+
+# ── maps fully explained by Z ────────────────────────────────────────────────
+# Their residuals are rounding noise (~eps relative to the map); correlating that noise gave
+# arbitrary partial correlations, or a spurious r = 1 between two such maps (partialspearman
+# raised "colocalization equal to 1"). They are now set to exactly constant -> NaN correlations.
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_fully_explained_rows_become_constant(rng, dtype):
+    z = rng.normal(size=(1, 30)).astype(dtype)
+    arr = np.vstack([2 * z[0] + 1, rng.normal(size=30)]).astype(dtype)
+    arr[0, 3] = np.nan
+    out = _rank_regress(arr=arr.copy(), rank=False, regress=True, z=z, verbose=False)
+    assert np.isnan(out[0, 3])
+    assert (np.delete(out[0], 3) == 0).all()
+    # the other row is untouched by the fix
+    assert np.allclose(out[1], residuals_nan(x=z[0], y=arr[1]), equal_nan=True)
+
+
+@pytest.mark.parametrize("method", ["partialpearson", "partialspearman"])
+def test_partial_coloc_nan_for_maps_explained_by_z(rng, method):
+    import pandas as pd
+    from nispace import NiSpace
+    n = 40
+    cols = [f"p{i}" for i in range(n)]
+    z = rng.normal(size=(1, n))
+    x = pd.DataFrame(np.vstack([2 * z[0] + 1, rng.normal(size=n)]), index=["x_z", "x"], columns=cols)
+    y = pd.DataFrame(np.vstack([rng.normal(size=n), 3 * z[0] - 2]), index=["y", "y_z"], columns=cols)
+    nsp = NiSpace(x=x, y=y, z=pd.DataFrame(z, columns=cols), parcellation=None,
+                  standardize=False, verbose=False).fit()
+    nsp.colocalize(method)
+    colocs = nsp.get_colocalizations(method)
+    assert np.isfinite(colocs.loc["y", "x"])
+    assert colocs.drop(index="y", columns="x").isna().all().all()
+    assert np.isnan(colocs.loc["y", "x_z"])
