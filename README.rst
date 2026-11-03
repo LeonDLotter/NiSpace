@@ -44,25 +44,26 @@ The ``NiSpace`` (NeuroImaging Spatial Colocalization Environment) toolbox aims t
 Installation
 ------------
 
-You can install the development version of ``NiSpace`` in a Python 3.9+ environment via command line using pip:
+You can install the latest release of ``NiSpace`` (`0.1.0b1 <https://github.com/LeonDLotter/NiSpace/releases>`__, a beta version) in a Python 3.9+ environment (recommended: Python 3.12; support for 3.9 will end) via command line using pip:
 
 .. code-block:: bash
 
-   pip install git+https://github.com/LeonDLotter/NiSpace.git@dev
+   pip install git+https://github.com/LeonDLotter/NiSpace.git@v0.1.0b1
 
-For reproducibility, consider installing a specific commit:
+The development version (``@dev`` instead of ``@v0.1.0b1``) has the newest changes, but its behaviour can change without a release.
+For reproducibility, note the installed version (``nispace.__version__``), or install a specific commit:
 
 .. code-block:: bash
 
    pip install git+https://github.com/LeonDLotter/NiSpace.git@{commit_hash}
 
-``NiSpace`` by default generates null maps using the Moran randomization method. Spin-nulls are also natively supported.  
-However, some functions, including BrainSMASH/variogram null maps need optional dependences.    
+``NiSpace`` by default generates null maps using the Moran randomization method. Spin-nulls are also natively supported.
+However, some functions, including BrainSMASH/variogram null maps need optional dependences.
 Install optional dependencies directly with:
 
 .. code-block:: bash
 
-   pip install "git+https://github.com/LeonDLotter/NiSpace.git@dev#egg=nispace[opt]"
+   pip install "nispace[opt] @ git+https://github.com/LeonDLotter/NiSpace.git@v0.1.0b1"
 
 
 Use & Attribution of third-party data
