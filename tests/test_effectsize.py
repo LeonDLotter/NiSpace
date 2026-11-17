@@ -340,7 +340,9 @@ def test_cohen_paired_matches_pingouin_cohen_dz(rng):
     # other paired Y_transform options (prc/logfc/diff are all pure functions of
     # the paired observations alone; d_avg would break that by pulling in each
     # condition's *unpaired* variance instead).
-    pg = pytest.importorskip("pingouin")
+    # eftype="cohen_dz" exists since pingouin 0.7 (needs numpy>=2.2), above the floors
+    # tested in the lowest-direct CI job
+    pg = pytest.importorskip("pingouin", minversion="0.7")
     a = rng.normal(size=(20, 2))
     b = a + rng.normal(scale=0.3, size=(20, 2))
     result = cohen_paired(a, b)
