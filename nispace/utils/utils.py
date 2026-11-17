@@ -169,7 +169,32 @@ def _lower_strip_ws(string):
         raise TypeError("Provide string input!")
     
 
-_DF_STRING_FIELDS = ["xdimred", "ytrans", "coloc", "stat", "xsea", "perm", "pooled", "mc"]
+_DF_STRING_FIELDS = ["xdimred", "ytrans", "coloc", "stat", "xsea", "perm", "null", "pooled", "mc"]
+
+
+def _null_label(null):
+    """Key fragment for a maps null method: lower case, only [a-z0-9+] (so it never contains
+    the "_" that separates key fields), tuples joined with "+". None -> None."""
+    if null is None:
+        return None
+    if isinstance(null, (tuple, list)):
+        null = "+".join(str(m) for m in null if m is not None)
+    label = re.sub(r"[^a-z0-9+]", "", str(null).lower())
+    return label or "custom"
+
+
+def _strip_null_field(df_str):
+    """Remove the "_null-<label>" field from a key (wildcard comparison across null methods)."""
+    return re.sub(r"_null-[a-z0-9+]+", "", df_str)
+
+
+def _add_null_field(df_str, null):
+    """Insert "_null-<label>" after the perm field of a key that has none (legacy keys)."""
+    if null is None or "_null-" in df_str or "_perm-" not in df_str:
+        return df_str
+    return re.sub(r"(_perm-[^_]+)", lambda m: f"{m.group(1)}_null-{_null_label(null)}",
+                  df_str, count=1)
+
 
 def _parse_df_string(df_str):
     """Reverse of _get_df_string: parse a key string back into its component fields.
@@ -203,7 +228,14 @@ def _parse_bool(s):
 
 
 def _get_df_string(kind, xdimred=None, ytrans=None, method=None, stat=None, xsea=False,
-                   perm=None, pooled_p=False, mc=None, engine=None, pooled=False, signed=False):
+                   perm=None, pooled_p=False, mc=None, engine=None, pooled=False, signed=False,
+                   null=None):
+    """Storage key for NiSpace results. For "null"/"p"/"z" keys, ``null`` (the maps null
+    method, e.g. "moran" or ("cornblath", "moran")) adds a "_null-<label>" field after the
+    perm field, so results of different null methods coexist; None (groups, sets, pairs)
+    adds nothing."""
+    null = _null_label(null)
+    null_part = f"_null-{null}" if null is not None else ""
 
     if kind=="ytrans":
         df_str = f"ytrans-{ytrans}"
@@ -238,7 +270,8 @@ def _get_df_string(kind, xdimred=None, ytrans=None, method=None, stat=None, xsea
         if (method is not None) & (perm is not None):
             if "sets" in perm:
                 xsea = True
-            df_str = f"xdimred-{xdimred}_ytrans-{ytrans}_coloc-{method}_xsea-{xsea}_perm-{perm}"
+            df_str = (f"xdimred-{xdimred}_ytrans-{ytrans}_coloc-{method}_xsea-{xsea}_perm-{perm}"
+                      f"{null_part}")
             if pooled_p:
                 df_str += f"_pooled-{pooled_p}"
         else:
@@ -249,7 +282,7 @@ def _get_df_string(kind, xdimred=None, ytrans=None, method=None, stat=None, xsea
             if "sets" in perm:
                 xsea = True
             df_str = (f"xdimred-{xdimred}_ytrans-{ytrans}_coloc-{method}_stat-{stat}_xsea-{xsea}_"
-                      f"perm-{perm}")
+                      f"perm-{perm}{null_part}")
             if pooled_p:
                 df_str += f"_pooled-{pooled_p}"
             df_str += f"_mc-{mc}"
@@ -261,7 +294,7 @@ def _get_df_string(kind, xdimred=None, ytrans=None, method=None, stat=None, xsea
             if "sets" in perm:
                 xsea = True
             df_str = (f"xdimred-{xdimred}_ytrans-{ytrans}_coloc-{method}_stat-{stat}_xsea-{xsea}_"
-                      f"perm-{perm}")
+                      f"perm-{perm}{null_part}")
             if pooled_p:
                 df_str += f"_pooled-{pooled_p}"
         else:

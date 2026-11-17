@@ -51,7 +51,23 @@ from .cv import _get_dist_dep_splits, _get_rand_splits
 from .plotting import nice_stats_labels, brainplot, _p_label
 from .utils.utils import (set_log, _quiet, _verbose_scope, fill_nan, _get_df_string, _lower_strip_ws,
                           mean_by_set_df, get_column_names, lower, print_arg_pairs,
-                          _parse_df_string, _parse_bool, dedupe_rows)
+                          _parse_df_string, _parse_bool, dedupe_rows,
+                          _null_label, _strip_null_field, _add_null_field)
+
+
+def _maps_null_label(null_method, null_maps=None):
+    """Key label of the maps null method of a permute() call: the canonical method name
+    ("spin" -> "cornblath", a cx/sc tuple -> "cx+sc"), or for user-provided null maps their
+    NullMaps.null_method, else "custom"."""
+    if null_maps is not None:
+        return _null_label(getattr(null_maps, "null_method", None) or "custom")
+    if null_method is None:
+        return None
+    try:
+        cx, sc = _parse_null_method(null_method)
+        return _null_label(cx if sc is None else (cx, sc))
+    except Exception:  # noqa: BLE001 -- unknown names are labelled as given
+        return _null_label(null_method)
 
 
 def _cwr_null_p(obs, null):
@@ -613,6 +629,7 @@ class NiSpace:
             "mc_method": None,
             "z_method": "robust",
             "pooled_p": False,
+            "maps_method": None,
             "cwr_method": None,
             "cwc_transform": None,
         }
@@ -3074,7 +3091,10 @@ class NiSpace:
             not set (default: ``"moran"`` for all parcellation types). Options:
             ``"moran"`` / ``"msr"``, ``"variomoran"`` / ``"variomsr"``,
             ``"cornblath"`` / ``"spin"`` (surface only), ``"alexander_bloch"``,
-            ``"burt2018"``, ``"burt2020"``, ``"random"``.
+            ``"burt2018"``, ``"burt2020"``, ``"random"``. Results are stored per
+            null method, so calls with different methods coexist; getters
+            (:meth:`get_p_values`, :meth:`plot`, ...) take ``maps_method`` to
+            choose and default to the last-used method.
         maps_batch_size : int, False, or None, optional
             Bounds peak memory for large ``maps_which`` sides (e.g. a
             full-transcriptome X with thousands of gene rows) by generating and
@@ -4394,6 +4414,17 @@ class NiSpace:
         # save and return
         if store:    
             perm = "".join(what).replace("maps", "".join(maps_which)+"maps")
+            # maps null method as key field, so results of several null methods coexist
+            null_label = None
+            if "maps" in what:
+                _nm = maps_kwargs["null_method"]
+                # a cx/sc tuple is collapsed to one side for non-combined parcellations
+                # (as in _get_null_maps)
+                if maps_nulls is None and isinstance(_nm, tuple) and \
+                    not (self._parc is not None and self._parc._is_combined):
+                    _lvl = self._parc._level if self._parc is not None else None
+                    _nm = _nm[1] if _lvl == "subcortex" else _nm[0]
+                null_label = _maps_null_label(_nm, null_maps=maps_nulls)
             for stat in p_data:
                 df_str = _get_df_string(
                     "p",
@@ -4403,6 +4434,7 @@ class NiSpace:
                     stat=stat,
                     xsea=xsea,
                     perm=perm,
+                    null=null_label,
                     pooled_p=pooled_p,
                 )
                 self._p_colocs[df_str] = p_data[stat]
@@ -4413,6 +4445,7 @@ class NiSpace:
                 method=method,
                 xsea=xsea,
                 perm=perm,
+                null=null_label,
                 pooled_p=pooled_p,
             )
             self._nulls["_colocs"][df_str] = _colocs_null
@@ -4428,6 +4461,8 @@ class NiSpace:
                 perm=perm,
                 pooled_p=pooled_p,
             )
+            if null_label is not None:
+                self._set_last(maps_method=null_label)
             ## return
             if self._return_self:
                 return self
@@ -4693,7 +4728,8 @@ class NiSpace:
                     # get null key and null colocs
                     null_str = _get_df_string(
                         "null", xdimred=xdimred, ytrans=ytrans,
-                        method=coloc, xsea=xsea, perm=perm, pooled_p=pooled,
+                        method=coloc, xsea=xsea, perm=perm, null=fields.get("null"),
+                        pooled_p=pooled,
                     )
                     if null_str not in self._nulls["_colocs"]:
                         lgr.critical_raise(
@@ -4904,7 +4940,7 @@ class NiSpace:
                         "z",
                         xdimred=xdimred, ytrans=ytrans,
                         method=coloc, stat=stat,
-                        xsea=xsea, perm=perm, pooled_p=pooled,
+                        xsea=xsea, perm=perm, null=fields.get("null"), pooled_p=pooled,
                     )
                     self._z_colocs[z_str] = z_df
                     lgr.info(f"Stored normalized colocalizations: {z_str}")
@@ -4919,7 +4955,8 @@ class NiSpace:
     _CORRELATION_PLOT_METHODS = ("spearman", "pearson", "partialspearman", "partialpearson")
 
     def _plot_correlation(self, method, X_reduction, Y_transform, Y_maps, X_maps, permute_what,
-                          mc_method, annot_p, title, fig, ax, figsize, show, plot_kwargs):
+                          mc_method, annot_p, title, fig, ax, figsize, show, plot_kwargs,
+                          maps_method=None):
         """plot(kind="correlation"): parcel-wise scatter of one Y row vs. selected X maps, or one
         regression line per Y row if several are selected."""
         from scipy.stats import rankdata
@@ -5053,7 +5090,8 @@ class NiSpace:
                     with _quiet():
                         p_df = self.get_p_values(method=method, X_reduction=X_reduction,
                                                  Y_transform=Y_transform, permute_what=_perm,
-                                                 xsea=False, mc_method=_mc)
+                                                 xsea=False, mc_method=_mc,
+                                                 maps_method=maps_method)
                     p_df = next(iter(p_df.values())) if isinstance(p_df, dict) else p_df
                     p_annot.append((_lab, np.asarray(p_df.iloc[y_pos[0], x_pos], dtype=float)))
                 except Exception as e:  # no p-values for this setting: plot without
@@ -5162,7 +5200,7 @@ class NiSpace:
              Y_labels=None, X_labels=None,
              Y_maps=None, X_maps=None,
              values="coloc", mc_method=None,
-             plot_nulls=True, annot_p=True, permute_what=None,
+             plot_nulls=True, annot_p=True, permute_what=None, maps_method=None,
              title="auto",
              sort_by=None,        # None | 'coloc'|'abs_coloc'|'z'|'abs_z'|'p' — also enables truncation when n_categories is exceeded
              sort_colocs=False,
@@ -5265,6 +5303,9 @@ class NiSpace:
             :meth:`get_p_values`. The special value ``"pairs"`` collapses an N x N
             colocalization matrix to its diagonal (matched-pair SPICE-style
             results) before plotting.
+        maps_method : str or tuple, optional
+            Null method of a map permutation to pull results from; resolves as
+            in :meth:`get_p_values`.
         title : str, default "auto"
             Plot title. ``"auto"`` builds one from the method/context (recomputed
             for each statistic when multiple ``stats`` are plotted in one call).
@@ -5323,7 +5364,8 @@ class NiSpace:
                 Y_maps=Y_maps if Y_maps is not None else Y_labels,
                 X_maps=X_maps if X_maps is not None else X_labels,
                 permute_what=permute_what, mc_method=mc_method, annot_p=annot_p, title=title,
-                fig=fig, ax=ax, figsize=figsize, show=show, plot_kwargs=plot_kwargs)
+                fig=fig, ax=ax, figsize=figsize, show=show, plot_kwargs=plot_kwargs,
+                maps_method=maps_method)
         if kind != "categorical":
             lgr.critical_raise(f"Unknown kind '{kind}'; use 'categorical' or 'correlation'.",
                                ValueError)
@@ -5393,7 +5435,7 @@ class NiSpace:
         check_kwargs = dict(method=method, stats=stats, xdimred=X_reduction,
                             ytrans=Y_transform, xsea=xsea)
         get_kwargs = dict(method=method, stats=stats, X_reduction=X_reduction,
-                          Y_transform=Y_transform, xsea=xsea)
+                          Y_transform=Y_transform, xsea=xsea, maps_method=maps_method)
 
         # "rho" on the Fisher-z scale? XSEA always pools on it (forced for correlations); else the
         # r_to_z of the stored result. Unknown for a passed-in result -> labelled plain "Rho".
@@ -6004,7 +6046,7 @@ class NiSpace:
                             X_reduction=None, Y_transform=None, xsea=None,
                             normalized=False, perm=None,
                             get_nulls=False, nulls_permute_what=None, pooled_p=None,
-                            force_dict=False, verbose=None, copy=True):
+                            maps_method=None, force_dict=False, verbose=None, copy=True):
         """
         Retrieve a stored :meth:`colocalize` result (or, with
         ``normalized=True``, a stored :meth:`normalize_colocalizations`
@@ -6043,6 +6085,10 @@ class NiSpace:
         pooled_p : bool or str, optional
             Pooling mode used for the stored null distribution being
             retrieved; see :meth:`permute`. Defaults to the last-used value.
+        maps_method : str or tuple, optional
+            Null method of the map permutation whose normalized
+            colocalizations or nulls to fetch; resolves as in
+            :meth:`get_p_values`.
         force_dict : bool, default False
             Always return a dict even when only one statistic is retrieved.
         verbose : bool, optional
@@ -6078,6 +6124,8 @@ class NiSpace:
                                                   Y_transform)
                 perm =self._resolve_permute_what(perm, method, xsea, X_reduction, Y_transform,
                                                   pooled_p)
+                null = self._resolve_null(maps_method, method, perm, xsea, X_reduction,
+                                          Y_transform, pooled_p)
                 if stats is None:
                     stats = _get_coloc_stats(method, permuted_only=True)
                 elif isinstance(stats, str):
@@ -6090,7 +6138,7 @@ class NiSpace:
                         "z",
                         xdimred=X_reduction, ytrans=Y_transform,
                         method=method, stat=stat,
-                        xsea=xsea, perm=perm, pooled_p=pooled_p,
+                        xsea=xsea, perm=perm, null=null, pooled_p=pooled_p,
                     )
                     if z_str not in self._z_colocs:
                         lgr.critical_raise(
@@ -6144,6 +6192,8 @@ class NiSpace:
                                                   X_reduction, Y_transform)
                 nulls_permute_what = self._resolve_permute_what(
                     nulls_permute_what, method, xsea, X_reduction, Y_transform, pooled_p)
+                null = self._resolve_null(maps_method, method, nulls_permute_what, xsea,
+                                          X_reduction, Y_transform, pooled_p)
                 if nulls_permute_what not in ["groups", "groupsxmaps", "groupssets",
                                               "xmaps", "ymaps", "xymaps", "ymapssets",
                                               "sets", "pairs"]:
@@ -6184,6 +6234,7 @@ class NiSpace:
                         method=method,
                         xsea=xsea,
                         perm=nulls_permute_what,
+                        null=null,
                         pooled_p=pooled_p,
                     )
                     if null_str not in self._nulls["_colocs"].keys():
@@ -6197,7 +6248,7 @@ class NiSpace:
                         with _quiet():
                             idx = self.get_p_values(method, nulls_permute_what, _COLOC_METHODS[method][0],
                                                     xsea,
-                                                    pooled_p=pooled_p,
+                                                    pooled_p=pooled_p, maps_method=null,
                                                     X_reduction=X_reduction,
                                                     Y_transform=Y_transform).index
                         for stat in stats:
@@ -6232,7 +6283,7 @@ class NiSpace:
     # ----------------------------------------------------------------------------------------------
     
     def get_p_values(self, method=None, permute_what=None, stats=None, xsea=None,
-                     mc_method=None, pooled_p=None,
+                     mc_method=None, pooled_p=None, maps_method=None,
                      X_reduction=None, Y_transform=None, force_dict=False, verbose=None, copy=True):
         """
         Retrieve p-values computed by :meth:`permute`, uncorrected by default,
@@ -6262,6 +6313,13 @@ class NiSpace:
         pooled_p : bool or str, optional
             Pooling mode used for the stored result being retrieved; see
             :meth:`permute`. Defaults to the last-used value.
+        maps_method : str or tuple, optional
+            Null method of a map permutation, as passed to
+            ``permute(maps_method=...)`` (aliases accepted, e.g. ``"spin"``).
+            Results of different null methods are stored side by side.
+            Defaults to the last-used method if results exist for it, else the
+            only one stored; raises if several exist. Ignored for permutations
+            without maps (groups, sets, pairs).
         force_dict : bool, default False
             Always return a dict even when only one statistic is retrieved.
         verbose : bool, optional
@@ -6299,8 +6357,10 @@ class NiSpace:
 
             permute_what = self._resolve_permute_what(permute_what, method, xsea, X_reduction,
                                                       Y_transform, pooled_p)
+            null = self._resolve_null(maps_method, method, permute_what, xsea, X_reduction,
+                                      Y_transform, pooled_p, mc_method, stats)
             self._check_permute(method, permute_what, mc_method, xsea, stats, X_reduction, Y_transform,
-                                pooled_p=pooled_p)
+                                pooled_p=pooled_p, null=null)
 
             if stats is None:
                 stats = _get_coloc_stats(method, permuted_only=True)
@@ -6317,6 +6377,7 @@ class NiSpace:
                     stat=stat,
                     xsea=xsea,
                     perm=permute_what,
+                    null=null,
                     pooled_p=pooled_p,
                     mc=mc_method,
                 )
@@ -6335,7 +6396,7 @@ class NiSpace:
                     out = out[list(out.keys())[0]]
         
             string = print_arg_pairs(method=method, permute_what=permute_what, xsea=xsea,
-                                     mc_method=mc_method,
+                                     maps_method=null, mc_method=mc_method,
                                      X_reduction=X_reduction, Y_transform=Y_transform)
             lgr.info(f"Returning p values: \n{string}")
             return out
@@ -6506,6 +6567,33 @@ class NiSpace:
             ]:
                 if not hasattr(nispace_object, attr):
                     setattr(nispace_object, attr, default)
+            nispace_object._last_settings.setdefault("maps_method", None)
+
+            # migrate result keys of map permutations written before the null method became
+            # a key field ("..._perm-xmaps_null-moran_..."): insert the method of the stored
+            # null maps, else "unknown"
+            # TODO (first non-dev release): remove this migration
+            _mn = nispace_object._nulls.get("maps_null")
+            _legacy_null = _maps_null_label(getattr(_mn, "null_method", None)) or "unknown"
+
+            def _migrate(key):
+                perm = _parse_df_string(key).get("perm") or ""
+                return _add_null_field(key, _legacy_null) if "maps" in perm else key
+
+            _n_migrated = 0
+            for _store in (nispace_object._p_colocs, nispace_object._z_colocs,
+                           nispace_object._nulls["_colocs"]):
+                for _k in [k for k in _store if _migrate(k) != k]:
+                    _store[_migrate(_k)] = _store.pop(_k)
+                    _n_migrated += 1
+            for _k in [k for k in nispace_object._nulls
+                       if k.startswith("p_tails_") and _migrate(k) != k]:
+                nispace_object._nulls[_migrate(_k)] = nispace_object._nulls.pop(_k)
+            if _n_migrated:
+                lgr.info(f"Migrated {_n_migrated} stored map-permutation results to keys with "
+                         f"the null method ('{_legacy_null}').")
+                if nispace_object._last_settings.get("maps_method") is None:
+                    nispace_object._last_settings["maps_method"] = _legacy_null
 
             # rebuild colocalization closures with the current code. Older pickles contain
             # them as dill-serialized bytecode, which breaks when loaded under a different
@@ -6772,29 +6860,86 @@ class NiSpace:
     # ----------------------------------------------------------------------------------------------
     
     def _check_permute(self, method, permute_what, mc_method=None, xsea=False,
-                       stats=None, xdimred=False, ytrans=False, pooled_p=False, raise_error=True):
+                       stats=None, xdimred=False, ytrans=False, pooled_p=False, raise_error=True,
+                       null=None):
+        """Do p-values exist for this context? ``null=None`` matches any maps null method
+        (and keys without one), a label matches only that null method."""
         if stats is None:
             stats = _get_coloc_stats(method, drop_optional=True, permuted_only=True)
         elif isinstance(stats, str):
             stats = [stats]
 
+        stored_any_null = None
         for stat in stats:
             p_str = _get_df_string("p", xdimred=xdimred, ytrans=ytrans, method=method, stat=stat,
-                                    perm=permute_what, pooled_p=pooled_p, mc=mc_method, xsea=xsea).lower()
+                                    perm=permute_what, pooled_p=pooled_p, mc=mc_method, xsea=xsea,
+                                    null=null).lower()
             lgr.debug(p_str)
-            if p_str not in self._p_colocs:
+            if null is None:
+                if stored_any_null is None:
+                    stored_any_null = {_strip_null_field(k) for k in self._p_colocs}
+                found = p_str in stored_any_null
+            else:
+                found = p_str in self._p_colocs
+            if not found:
                 if raise_error:
                     lgr.critical_raise(
                         f"P values for permute_what = '{permute_what}', method = '{method}', "
                         f"stat = '{stat}', xsea = {xsea}, X dimensionality reduction = '{xdimred}', "
-                        f"Y transform = '{ytrans}', and mc_method = '{mc_method}' not found. "
-                        "Did you run NiSpace.permute()?!",
+                        f"Y transform = '{ytrans}', maps null method = '{null}', and "
+                        f"mc_method = '{mc_method}' not found. Did you run NiSpace.permute()?!",
                         KeyError
                     )
                 else:
                     return False
                 
         return True
+
+    def _resolve_null(self, maps_method, method, permute_what, xsea=False, X_reduction=None,
+                      Y_transform=None, pooled_p=False, mc_method=None, stats=None):
+        """Resolve the maps null method label of stored results (the "null" key field) for a
+        getter. Permutations without maps (groups, sets, pairs) have none -> None. Otherwise:
+        the requested method if results exist for it; for maps_method=None the last-used
+        method if results exist for it, else the only stored one; raise if several exist."""
+        if not isinstance(permute_what, str) or "maps" not in permute_what:
+            return None
+        if stats is None:
+            stats = _get_coloc_stats(method, drop_optional=True, permuted_only=True)
+        elif isinstance(stats, str):
+            stats = [stats]
+        p_str = _get_df_string("p", xdimred=X_reduction, ytrans=Y_transform, method=method,
+                               stat=stats[0], perm=permute_what, pooled_p=pooled_p,
+                               mc=mc_method, xsea=xsea).lower()
+        found = []
+        for k in self._p_colocs:
+            if _strip_null_field(k) == p_str:
+                lbl = _parse_df_string(k).get("null")
+                if lbl is not None and lbl not in found:
+                    found.append(lbl)
+        if maps_method is not None:
+            label = _maps_null_label(maps_method)
+            if label not in found:
+                lgr.critical_raise(
+                    f"No results for maps null method '{maps_method}' (permute_what = "
+                    f"'{permute_what}', method = '{method}'). Available: {found or 'none'}.",
+                    KeyError
+                )
+            return label
+        last = self._last_settings.get("maps_method")
+        if last in found:
+            return last
+        if len(found) > 1:
+            lgr.critical_raise(
+                f"maps null method is ambiguous for permute_what = '{permute_what}', method = "
+                f"'{method}': results exist for {found}. Pass maps_method explicitly.",
+                ValueError
+            )
+        if found:
+            if last is not None:
+                lgr.info(f"Resolved maps null method '{found[0]}' for permute_what = "
+                         f"'{permute_what}' (last used: '{last}').")
+            return found[0]
+        return None
 
     def _resolve_permute_what(self, permute_what, method, xsea=False, X_reduction=None,
                               Y_transform=None, pooled_p=False):
