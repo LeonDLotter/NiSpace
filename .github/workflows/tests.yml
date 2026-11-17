@@ -8,8 +8,10 @@ on:
 
 jobs:
   pytest:
-    runs-on: ubuntu-latest
+    # pinned: ubuntu-latest moved to 26.04, which has no Python 3.9 build for setup-python
+    runs-on: ubuntu-24.04
     strategy:
+      fail-fast: false  # one Python version failing must not cancel the others
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
 
