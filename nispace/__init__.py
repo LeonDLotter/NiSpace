@@ -10,14 +10,6 @@ except ImportError:
     __version__ = "unknown"
     __commit__ = "unknown"
 
-# hide nilearn deprecation warnings
-# TODO: update to nilearn 0.13.0, will require dropping support for python 3.9
-import os
-import warnings
-# Allow opt-in via environment variable
-if not os.environ.get("NISPACE_SHOW_FUTURE_WARNINGS"):
-    warnings.filterwarnings("ignore", category=FutureWarning, module=r"^neuromaps(\.|$)")
-    
 # Public API
 from .api import NiSpace
 from .workflows import (colocalization, group_colocalization, paired_colocalization,

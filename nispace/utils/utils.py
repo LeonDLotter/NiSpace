@@ -1047,7 +1047,7 @@ def merge_parcellations(parcellations, labels=None, quick=False):
         raise ValueError("all parcellations must have the same shape")
     
     arr_merged = np.zeros_like(parcellations[0].get_fdata(), dtype=np.int32)
-    labels_merged = pd.Series(dtype=str)
+    labels_merged = pd.Series(dtype=object)  # labels can be str or, if not given, numeric indices
     
     if quick:
         # arrays

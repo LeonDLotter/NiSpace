@@ -36,7 +36,7 @@ def test_regress_only_ndarray_single_z(rng):
     z = rng.normal(size=(1, 30))
     out = _rank_regress(arr=arr.copy(), rank=False, regress=True, z=z.copy(),
                         zy_matched=False, verbose=False)
-    expected = np.row_stack([residuals_nan(x=z[0], y=arr[i]) for i in range(arr.shape[0])])
+    expected = np.vstack([residuals_nan(x=z[0], y=arr[i]) for i in range(arr.shape[0])])
     np.testing.assert_allclose(out, expected, equal_nan=True)
 
 
@@ -47,7 +47,7 @@ def test_regress_only_ndarray_multi_z_not_matched(rng):
     z = rng.normal(size=(3, 30))
     out = _rank_regress(arr=arr.copy(), rank=False, regress=True, z=z.copy(),
                         zy_matched=False, verbose=False)
-    expected = np.row_stack([residuals_nan(x=z.T, y=arr[i]) for i in range(arr.shape[0])])
+    expected = np.vstack([residuals_nan(x=z.T, y=arr[i]) for i in range(arr.shape[0])])
     np.testing.assert_allclose(out, expected, equal_nan=True)
 
 
@@ -57,7 +57,7 @@ def test_regress_zy_matched(rng):
     z = rng.normal(size=(3, 30))
     out = _rank_regress(arr=arr.copy(), rank=False, regress=True, z=z.copy(),
                         zy_matched=True, verbose=False)
-    expected = np.row_stack([residuals_nan(x=z[i], y=arr[i]) for i in range(arr.shape[0])])
+    expected = np.vstack([residuals_nan(x=z[i], y=arr[i]) for i in range(arr.shape[0])])
     np.testing.assert_allclose(out, expected, equal_nan=True)
 
 
@@ -70,8 +70,8 @@ def test_rank_and_regress_chains_correctly_ndarray(rng):
                         zy_matched=False, verbose=False)
 
     ranked = rank2d(arr.T).T
-    expected_fixed = np.row_stack([residuals_nan(x=z[0], y=ranked[i]) for i in range(arr.shape[0])])
-    expected_buggy = np.row_stack([residuals_nan(x=z[0], y=arr[i]) for i in range(arr.shape[0])])
+    expected_fixed = np.vstack([residuals_nan(x=z[0], y=ranked[i]) for i in range(arr.shape[0])])
+    expected_buggy = np.vstack([residuals_nan(x=z[0], y=arr[i]) for i in range(arr.shape[0])])
 
     np.testing.assert_allclose(out, expected_fixed, equal_nan=True)
     assert not np.allclose(out, expected_buggy, equal_nan=True)
@@ -86,9 +86,9 @@ def test_rank_and_regress_chains_correctly_dict(rng):
 
     for set_name, set_arr in arr.items():
         ranked = rank2d(set_arr.T).T
-        expected_fixed = np.row_stack(
+        expected_fixed = np.vstack(
             [residuals_nan(x=z[0], y=ranked[i]) for i in range(set_arr.shape[0])])
-        expected_buggy = np.row_stack(
+        expected_buggy = np.vstack(
             [residuals_nan(x=z[0], y=set_arr[i]) for i in range(set_arr.shape[0])])
         np.testing.assert_allclose(out[set_name], expected_fixed, equal_nan=True)
         assert not np.allclose(out[set_name], expected_buggy, equal_nan=True)
@@ -104,7 +104,7 @@ def test_rank_and_regress_correct_list_of_arrays(rng):
 
     for arr, result in zip(arrs, out):
         ranked = rank2d(arr.T).T
-        expected_fixed = np.row_stack([residuals_nan(x=z[0], y=ranked[i]) for i in range(arr.shape[0])])
+        expected_fixed = np.vstack([residuals_nan(x=z[0], y=ranked[i]) for i in range(arr.shape[0])])
         np.testing.assert_allclose(result, expected_fixed, equal_nan=True)
 
 
@@ -117,7 +117,7 @@ def test_rank_and_regress_correct_list_of_dicts(rng):
     for arr, result in zip(arrs, out):
         set_arr = arr["setA"]
         ranked = rank2d(set_arr.T).T
-        expected_fixed = np.row_stack(
+        expected_fixed = np.vstack(
             [residuals_nan(x=z[0], y=ranked[i]) for i in range(set_arr.shape[0])])
         np.testing.assert_allclose(result["setA"], expected_fixed, equal_nan=True)
 

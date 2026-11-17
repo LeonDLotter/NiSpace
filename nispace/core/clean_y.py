@@ -37,7 +37,7 @@ def _normalize_cov_df(cov, n_subjects, name="covariates"):
 
 # columns one-hot encoded regardless of dtype: numeric site, subject, group or session codes are
 # labels, not quantities (integer subject IDs as one continuous column would not model subject
-# effects). Names are matched after `_norm_col_name`. Only a column named "site" is the ComBat batch.
+# effects). Names are matched after `_norm_col_name`.
 _FORCE_CATEGORICAL = frozenset({
     # site / batch
     "site", "sites", "scanner", "scanners", "center", "centre", "centers", "centres", "batch",
@@ -84,26 +84,20 @@ def _encode(df, cont_cols, cols_to_encode, dtype=np.float32):
     return pd.concat(parts, axis=1) if parts else pd.DataFrame(index=df.index)
 
 
-def _clean_y_between(Y_arr, covariates_between, n_subjects,
-                     protect,
-                     combat, combat_protect, combat_train, combat_model, combat_kwargs,
+def _clean_y_between(Y_arr, covariates_between, n_subjects, protect,
                      plot_design_between, n_proc, dtype, verbose, return_design=False):
     """
-    Between-subjects covariate regression (and optional ComBat harmonization).
+    Between-subjects covariate regression (per parcel, across maps/subjects).
 
     Returns
     -------
     Y_arr : np.ndarray
         Cleaned data array.
-    combat_model : object or None
-        Fitted ComBat model (None if not used).
-    combat_covariates : pd.DataFrame or None
-        Covariates passed to ComBat (None if not used).
     design : dict
         Only if `return_design`: what the regression step needs to be replayed on other data
-        (Freedman-Lane group nulls): ``"Y_pre"`` (data after ComBat, before regression),
-        ``"nuisance"`` (encoded covariates, n_subjects x k), ``"nuisance_names"``,
-        ``"protect"`` (encoded protected variables, n_subjects x q), ``"combat"`` (bool).
+        (Freedman-Lane group nulls): ``"Y_pre"`` (data before regression), ``"nuisance"``
+        (encoded covariates, n_subjects x k), ``"nuisance_names"``, ``"protect"`` (encoded
+        protected variables, n_subjects x q).
     """
     # defensive cast: reg_arr/protect_arr are always cast to `dtype` below, but
     # Y_arr wasn't -- a caller passing e.g. float64 Y_arr with default
@@ -115,8 +109,6 @@ def _clean_y_between(Y_arr, covariates_between, n_subjects,
     # --- normalize input ---
     bcov_df = _normalize_cov_df(covariates_between, n_subjects, "covariates_between")
     cat_cols, cont_cols = _detect_categoricals(bcov_df)
-    non_site_cat_cols = [c for c in cat_cols if c != "site"]
-    has_site = "site" in bcov_df.columns
     lgr.info(f"Detected categorical covariates: {cat_cols or 'none'}; "
              f"continuous: {cont_cols or 'none'}.")
     # a label per row (e.g. subject IDs in an unpaired design) is fitted perfectly by its dummies
@@ -128,109 +120,18 @@ def _clean_y_between(Y_arr, covariates_between, n_subjects,
                                "subjects. In paired designs, pass subject IDs in 'protect'.",
                                ValueError)
 
-    # --- check site for combat ---
-    if combat and not has_site:
-        lgr.warning("ComBat requested but no 'site' column found in covariates_between. "
-                    "Disabling ComBat.")
-        combat = False
-
-    # --- encode ---
-    if combat:
-        # regression matrix: continuous + non-site categoricals; site stays raw for ComBat
-        bcov_encoded = _encode(bcov_df, cont_cols, non_site_cat_cols, dtype=dtype)
-        # combat_protect: protect-only columns (not regressed)
-        protect_encoded = None
-        if combat_protect is not None:
-            cp_df = _normalize_cov_df(combat_protect, n_subjects, "combat_protect")
-            cp_cat, cp_cont = _detect_categoricals(cp_df)
-            protect_encoded = _encode(cp_df, cp_cont, cp_cat, dtype=dtype)
-            lgr.info(f"ComBat protection-only covariates: {list(cp_df.columns)}.")
-        # ComBat covariates: SITE + regression covariates + protect-only covariates; site always first
-        combat_covariates = pd.concat(
-            [p for p in [
-                bcov_df[["site"]].rename(columns={"site": "SITE"}),
-                bcov_encoded if not bcov_encoded.empty else None,
-                protect_encoded,
-            ] if p is not None],
-            axis=1
-        )
-    else:
-        # encode everything; site one-hot last
-        bcov_encoded = _encode(bcov_df, cont_cols,
-                               non_site_cat_cols + (["site"] if has_site else []),
-                               dtype=dtype)
-        combat_covariates = None
+    # --- encode: continuous first, then categoricals one-hot, site last ---
+    cat_order = [c for c in cat_cols if c != "site"] + (["site"] if "site" in cat_cols else [])
+    bcov_encoded = _encode(bcov_df, cont_cols, cat_order, dtype=dtype)
 
     # --- plot design matrix ---
     if plot_design_between:
-        if combat:
-            site_int = pd.Categorical(bcov_df["site"]).codes
-            plot_df = pd.concat(
-                [bcov_encoded, pd.Series(site_int, name="ComBat: site")],
-                axis=1
-            )
-        else:
-            plot_df = bcov_encoded  # site already last
-        plot_design_matrix(plot_df.astype(float))
+        plot_design_matrix(bcov_encoded.astype(float))
         plt.title("$Between$ design matrix")
         plt.ylabel("Y maps / subjects")
         plt.show()
 
-    # --- ComBat first ---
-    if combat:
-        n_prot = protect_encoded.shape[1] if protect_encoded is not None else 0
-        lgr.info(f"Performing ComBat harmonization with {bcov_encoded.shape[1]} protected "
-                 f"covariate(s) for regression and {n_prot} protect-only covariate(s).")
-        Y_arr_isnan = np.isnan(Y_arr)
-        if Y_arr_isnan.any():
-            lgr.warning("Detected missing values in Y data, which is not supported with "
-                        "ComBat harmonization. Missing values will be imputed with "
-                        "map-wise medians and replaced by nan after harmonization. "
-                        "CAVE: experimental feature!")
-            Y_arr = np.apply_along_axis(
-                lambda x: np.where(np.isnan(x), np.nanmedian(x), x),
-                axis=1, arr=Y_arr,
-            )
-        # validate combat_train
-        idx_train = None
-        if combat_train is not None:
-            if (isinstance(combat_train, (list, tuple, np.ndarray, pd.Series))
-                    and len(combat_train) == n_subjects
-                    and all(i in {True, False, 0, 1} for i in combat_train)):
-                idx_train = np.array(combat_train).astype(bool)
-            else:
-                lgr.warning(f"'combat_train' must be a boolean vector of length {n_subjects}. "
-                            "Ignoring.")
-        # apply
-        try:
-            from neuroHarmonize import harmonizationLearn, harmonizationApply
-        except ImportError:
-            lgr.critical_raise("ComBat harmonization (deprecated) requires the optional package "
-                               "'neuroHarmonize': pip install neuroHarmonize.", ImportError)
-        if combat_model is None:
-            if idx_train is None:
-                combat_model, Y_arr = harmonizationLearn(
-                    data=Y_arr, covars=combat_covariates, **combat_kwargs)
-            else:
-                lgr.info(f"Training ComBat on {idx_train.sum()} subjects, "
-                         f"applying to {(~idx_train).sum()}.")
-                temp = np.zeros(Y_arr.shape)
-                combat_model, temp[idx_train, :] = harmonizationLearn(
-                    data=Y_arr[idx_train, :],
-                    covars=combat_covariates.iloc[idx_train],
-                    **combat_kwargs)
-                temp[~idx_train, :] = harmonizationApply(
-                    data=Y_arr[~idx_train, :],
-                    covars=combat_covariates.iloc[~idx_train],
-                    model=combat_model)
-                Y_arr = temp
-        else:
-            Y_arr = harmonizationApply(
-                data=Y_arr, covars=combat_covariates, model=combat_model)
-        Y_arr[Y_arr_isnan] = np.nan
-        Y_arr = Y_arr.astype(dtype)
-
-    # --- encode protect for OLS (analogous to combat_protect for ComBat) ---
+    # --- encode protect for OLS ---
     # protect_arr always has n_subjects rows, defaulting to zero columns when no 'protect' is
     # given -- this routes regression through partial_residuals_nan unconditionally below, which
     # only ever removes the covariate-attributable component and never the per-parcel intercept.
@@ -247,14 +148,13 @@ def _clean_y_between(Y_arr, covariates_between, n_subjects,
             lgr.info(f"Protecting {protect_arr.shape[1]} variable(s) during regression: "
                      f"{list(prot_encoded.columns)}.")
 
-    # --- regression (after ComBat if both requested) ---
+    # --- regression ---
     design = {
         "Y_pre": Y_arr.copy(),
         "nuisance": (bcov_encoded.values.astype(dtype) if not bcov_encoded.empty
                      else np.zeros((n_subjects, 0), dtype=dtype)),
         "nuisance_names": list(bcov_encoded.columns),
         "protect": protect_arr,
-        "combat": bool(combat),
     }
     if not bcov_encoded.empty:
         reg_arr = bcov_encoded.values.astype(dtype)
@@ -270,8 +170,8 @@ def _clean_y_between(Y_arr, covariates_between, n_subjects,
         Y_arr = np.array(Y_partial, dtype=dtype).T
 
     if return_design:
-        return Y_arr, combat_model, combat_covariates, design
-    return Y_arr, combat_model, combat_covariates
+        return Y_arr, design
+    return Y_arr
 
 
 def _clean_y_within(Y_arr, covariates_within, Z, n_maps, n_parcels,
@@ -324,7 +224,7 @@ def _clean_y_within(Y_arr, covariates_within, Z, n_maps, n_parcels,
     if wcov_arr is not None:
         if wcov_arr.shape[0] == 1:
             lgr.info("Got one covariate map. Using this for each Y map.")
-            wcov_arr = np.row_stack([wcov_arr] * n_maps)
+            wcov_arr = np.vstack([wcov_arr] * n_maps)
         elif within_y_specific and wcov_arr.shape[0] == n_maps:
             lgr.info("Got as many covariate maps as Y maps. Running y-specific regression.")
         else:

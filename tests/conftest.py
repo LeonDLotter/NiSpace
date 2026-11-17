@@ -33,11 +33,15 @@ def _skip_nilearn_forced_gc():
     """nilearn's ``safe_get_data`` forces ``gc.collect()`` on every call (to free memory
     before copying image data). In a long test session the heap is large, so each call
     costs ~0.1 s and plotting/parcellation tests make dozens of them. Tests don't need
-    the memory back, so stub out that one call site."""
+    the memory back, so stub out that one call site (nilearn < 0.14; later versions no
+    longer collect there)."""
     import types
     try:
         from nilearn._utils import niimg
     except ImportError:
+        yield
+        return
+    if not hasattr(niimg, "gc"):
         yield
         return
     with pytest.MonkeyPatch.context() as mp:

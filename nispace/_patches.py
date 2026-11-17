@@ -122,52 +122,15 @@ def _fast_mix_colormaps(fg, bg):
 
 
 # ---------------------------------------------------------------------------
-# Patch 3 — _get_cmap  (nilearn.plotting.surface._matplotlib_backend)
-# ---------------------------------------------------------------------------
-# Replaces [cmap(i) for i in range(N)] (256 Python calls) with a single
-# vectorised lookup.
-
-def _make_fast_get_cmap(original_fn):
-    import warnings
-    from matplotlib.colors import LinearSegmentedColormap, Normalize
-    from matplotlib import pyplot as plt
-    try:
-        from nilearn._utils.logger import find_stack_level
-    except ImportError:
-        def find_stack_level():
-            return 2
-
-    def _fast_get_cmap(cmap, vmin, vmax, cbar_tick_format, threshold=None):
-        our_cmap = plt.get_cmap(cmap)
-        norm = Normalize(vmin=vmin, vmax=vmax)
-        # Vectorised: one call with an integer array instead of N scalar calls.
-        # matplotlib maps integer i to position i/N, matching the original loop.
-        cmaplist = list(our_cmap(np.arange(our_cmap.N)))
-        if threshold is not None:
-            if cbar_tick_format == "%i" and int(threshold) != threshold:
-                warnings.warn(
-                    "You provided a non integer threshold "
-                    "but configured the colorbar to use integer formatting.",
-                    stacklevel=find_stack_level(),
-                )
-            istart = int(norm(-threshold, clip=True) * (our_cmap.N - 1))
-            istop  = int(norm( threshold, clip=True) * (our_cmap.N - 1))
-            for i in range(istart, istop):
-                cmaplist[i] = (0.5, 0.5, 0.5, 1.0)
-        our_cmap = LinearSegmentedColormap.from_list(
-            "Custom cmap", cmaplist, our_cmap.N
-        )
-        return our_cmap, norm
-
-    return _fast_get_cmap
-
-
-# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 def apply_surface_plot_patches():
-    """Apply all three patches.  Idempotent — safe to call multiple times."""
+    """Apply both patches.  Idempotent — safe to call multiple times.
+
+    A third patch (nilearn's ``_get_cmap``) was dropped with nilearn >= 0.13, which
+    removed that function; surface plots are faster there without it.
+    """
     global _PATCHES_APPLIED
     if _PATCHES_APPLIED:
         return
@@ -194,13 +157,5 @@ def apply_surface_plot_patches():
     except Exception as exc:
         import warnings
         warnings.warn(f"NiSpace: could not patch mix_colormaps: {exc}")
-
-    # 3 — _get_cmap
-    try:
-        import nilearn.plotting.surface._matplotlib_backend as _mpl_be
-        _mpl_be._get_cmap = _make_fast_get_cmap(_mpl_be._get_cmap)
-    except Exception as exc:
-        import warnings
-        warnings.warn(f"NiSpace: could not patch _get_cmap: {exc}")
 
     _PATCHES_APPLIED = True

@@ -113,7 +113,7 @@ class _FreedmanLane:
     Parameters
     ----------
     Y_pre : ndarray (n_all, n_parcels)
-        Y before the first recorded between-subject regression (after ComBat, if any).
+        Y before the first recorded between-subject regression.
     steps : list of dict
         Recorded between steps (``"nuisance"`` (n_all, k), ``"protect"`` (n_all, q)), in the
         order clean_y() applied them.

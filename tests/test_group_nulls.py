@@ -254,28 +254,6 @@ def test_paired_constant_covariates_are_reported(rng, caplog):
         in caplog.text
 
 
-def test_combat_is_treated_as_fixed_with_warning(rng, caplog):
-    pytest.importorskip("neuroHarmonize")
-    n = 40
-    g = np.r_[np.zeros(20), np.ones(20)].astype(int)
-    Y = rng.normal(size=(n, 20)) + 5
-    cov_df = pd.DataFrame({"site": np.tile(["s1", "s2"], 20), "age": rng.normal(size=n)})
-    labels = np.where(g == 0, "HC", "PAT")
-    y_df = pd.DataFrame(Y, index=[f"s{i}" for i in range(n)],
-                        columns=[f"p{i}" for i in range(20)])
-    nsp = NiSpace(x=y_df.iloc[:2], y=y_df, parcellation=None, standardize=False, n_proc=1,
-                  verbose=False, return_self=False)
-    nsp.fit()
-    nsp.clean_y("between", covariates_between=cov_df, combat=True,
-                protect=pd.DataFrame({"groups": labels}),
-                combat_protect=pd.DataFrame({"groups": labels}))
-    assert nsp._clean_y_between_steps[0]["combat"] is True
-    nsp.transform_y("hedges(PAT,HC)", groups=labels)
-    with caplog.at_level(logging.WARNING, logger="nispace"):
-        nsp.compare_within_region(n_perm=20, verbose=False)
-    assert "ComBat harmonization is treated as fixed" in caplog.text
-
-
 def test_hash_arrays_distinguishes_values_shapes_and_none():
     a = np.arange(6.0)
     assert _hash_arrays(a) == _hash_arrays(a.copy())

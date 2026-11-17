@@ -210,17 +210,6 @@ _DEPR_RETURN_SELF = (
     "In the first non-dev release, all NiSpace object methods will return the "
     "object itself by default. Set NiSpace(return_self=True) to disable this warning."
 )
-_DEPR_COMBAT_KEEP = (
-    "'combat_keep' is deprecated and will be ignored. All regression covariates "
-    "are now automatically protected during ComBat harmonization."
-)
-_DEPR_COMBAT = (
-    "ComBat harmonization in clean_y() ('combat=True') is deprecated and will be removed in "
-    "the first non-dev release. Harmonize the data before NiSpace (e.g. with neuroHarmonize, "
-    "on voxels/vertices or parcels, with your own model), or pass the site as a categorical "
-    "covariate in 'covariates_between'. Site regression is accounted for exactly in group "
-    "permutation (Freedman-Lane); ComBat is not."
-)
 _DEPR_P_FROM_AVERAGE_Y_COLOC = (
     "'p_from_average_y_coloc' is deprecated and will be removed in the first "
     "non-dev release. Use 'pooled_p' instead."
@@ -1019,8 +1008,9 @@ class NiSpace:
             * ``"pca"`` -- principal component analysis (``sklearn.PCA``).
             * ``"ica"`` -- independent component analysis (``sklearn.FastICA``);
               has no explained-variance concept, so ``min_ev`` has no effect.
-            * ``"fa"`` -- factor analysis (requires the optional
-              ``factor_analyzer`` package).
+            * ``"fa"`` -- factor analysis on the correlation matrix of the X maps
+              (extraction via ``statsmodels.multivariate.factor.Factor``); component
+              scores are regression (Thurstone) factor scores.
 
             Any other value logs an error and returns ``None`` rather than
             raising.
@@ -1040,12 +1030,20 @@ class NiSpace:
             ``n_components`` for ``"pca"``/``"fa"`` by picking the smallest
             sufficient number of components/factors, which's cumulative EV exceeds 
             ``min_ev``. Ignored if not applicable.
-        fa_method : str, default "minres"
-            Factor-extraction method, forwarded to ``factor_analyzer.FactorAnalyzer``. 
-            Only used for ``"fa"``.
-        fa_rotation : str, default "promax"
-            Rotation method, forwarded to ``factor_analyzer.FactorAnalyzer``.
-            Only used for ``"fa"``.
+        fa_method : {"minres", "ml"}, default "minres"
+            Factor-extraction method: ``"minres"`` (minimum residual, via iterated
+            principal-axis factoring) or ``"ml"`` (maximum likelihood). Only used for
+            ``"fa"``.
+        fa_rotation : {"promax", "varimax", None}, default "promax"
+            Rotation: ``"promax"`` (oblique; factors may correlate), ``"varimax"``
+            (orthogonal) or ``None``; both with Kaiser normalization, as in R's
+            ``psych``. Factor signs are set so that each factor's loadings sum to
+            >= 0, and factors are sorted by explained variance. Only used for ``"fa"``.
+
+            .. versionchanged:: 0.1.0
+               Factor analysis no longer uses the ``factor_analyzer`` package; only
+               the extraction methods and rotations listed here are available.
+               Results agree with ``factor_analyzer`` 0.5.1 to about 1e-3.
         seed : int, optional
             Random seed. Only used by ``"ica"``. Defaults to the seed set at
             init (``NiSpace(seed=...)``) if not given here.
@@ -1174,14 +1172,11 @@ class NiSpace:
                 covariates_between=None,
                 protect=None,
                 within_y_specific=False,
-                combat=False, combat_protect=None, combat_keep=None,
-                combat_train=None, combat_model=None, combat_kwargs=None,
                 plot_design_between=False,
                 n_proc=None, replace=True, verbose=None):
         """
         Regress covariates out of Y, "within" (across parcels, per map) and/or
-        "between" (across maps/subjects, per parcel), with optional ComBat site
-        harmonization for the between-subject case (deprecated).
+        "between" (across maps/subjects, per parcel).
 
         "Within" regression removes a per-parcel confound from each Y map
         individually -- e.g. regressing a grey-matter probability map out of an
@@ -1213,6 +1208,12 @@ class NiSpace:
             column with a different value in every row (e.g. subject IDs) raises
             a ``ValueError``. Rows with a missing value in any column are excluded
             from the fit and are NaN in the cleaned data.
+
+            .. versionchanged:: 0.1.0
+               ComBat harmonization (``combat`` and the other ``combat_*``
+               parameters) was removed. Harmonize the data before NiSpace, or pass
+               the site as a categorical column here: site regression is accounted
+               for exactly in group permutation (Freedman-Lane).
         protect : array-like, Series, or DataFrame, optional
             Covariates to hold constant (partial out) while regressing
             ``covariates_between``, without themselves being removed from Y --
@@ -1224,35 +1225,6 @@ class NiSpace:
         within_y_specific : bool, default False
             If True, ``covariates_within`` supplies one covariate map per Y row
             instead of a single map broadcast to all rows.
-        combat : bool, default False
-            Deprecated; will be removed in the first non-dev release, together
-            with the other ``combat_*`` parameters. Harmonize the data before
-            NiSpace instead, or pass the site as a categorical covariate in
-            ``covariates_between`` (accounted for exactly in group permutation,
-            unlike ComBat). Applies ComBat harmonization during the
-            between-subject step. Requires a ``"site"`` column in
-            ``covariates_between`` (case-insensitive; other names such as
-            ``"scanner"`` are regressed, not harmonized); otherwise disabled with
-            a warning. Requires the optional ``neuroHarmonize`` package.
-        combat_protect : array-like, Series, or DataFrame, optional
-            Deprecated (see ``combat``). Additional covariates ComBat should
-            protect (preserve biological variance for) without using them as
-            regression covariates.
-        combat_keep : optional
-            Deprecated and ignored; all regression covariates are now
-            automatically protected during ComBat harmonization.
-        combat_train : array-like of bool, optional
-            Deprecated (see ``combat``). Boolean vector marking a training subset:
-            if valid, ComBat is fit only on this subset and applied to the rest.
-            Ignored (full-sample fit) if the length doesn't match or values
-            aren't boolean-like.
-        combat_model : optional
-            Deprecated (see ``combat``). A previously fitted ComBat model to apply
-            (rather than refit). If ``None``, a fresh model is fit and stored
-            (together with the covariates used) on the object for later reuse.
-        combat_kwargs : dict, optional
-            Deprecated (see ``combat``). Additional keyword arguments forwarded to
-            neuroHarmonize's ``harmonizationLearn``.
         plot_design_between : bool, default False
             Plot the between-subject design matrix (diagnostic only, no effect on
             the result).
@@ -1275,16 +1247,7 @@ class NiSpace:
         verbose = set_log(lgr, self._verbose if verbose is None else verbose)
         lgr.info("*** NiSpace.clean_y() - Y covariate regression. ***")
         self._check_fit()
-        # TODO (first non-dev release): remove combat_keep parameter entirely
-        if combat_keep is not None:
-            lgr.warning(_DEPR_COMBAT_KEEP)
-        # TODO (first non-dev release): remove combat, combat_protect, combat_train, combat_model,
-        # combat_kwargs (here, in core/clean_y.py and the workflows), the ComBat note in the group
-        # nulls, and neuroHarmonize from the optional dependencies
-        if combat:
-            lgr.warning(_DEPR_COMBAT)
         n_proc = self._n_proc if n_proc is None else n_proc
-        combat_kwargs = {} if combat_kwargs is None else combat_kwargs
 
         if isinstance(how, str):
             how = [how]
@@ -1322,19 +1285,14 @@ class NiSpace:
             if used_z:
                 self._clean_y_z = True
 
-        # between: ComBat harmonization and/or regression across subjects
+        # between: regression across subjects
         if "between" in how and covariates_between is not None:
             lgr.info("Performing covariate regression between maps/subjects (e.g., age, sex, site).")
-            Y_arr, combat_model, combat_covariates, between_design = _clean_y_between(
+            Y_arr, between_design = _clean_y_between(
                 Y_arr=Y_arr,
                 covariates_between=covariates_between,
                 n_subjects=Y.shape[0],
                 protect=protect,
-                combat=combat,
-                combat_protect=combat_protect,
-                combat_train=combat_train,
-                combat_model=combat_model,
-                combat_kwargs=combat_kwargs,
                 plot_design_between=plot_design_between,
                 n_proc=n_proc,
                 dtype=self._dtype,
@@ -1350,9 +1308,6 @@ class NiSpace:
                     between_design.pop("Y_pre")
                 steps.append(between_design)
                 self._clean_y_between_steps = steps
-            if combat_model is not None:
-                self._clean_y_combat_model = combat_model
-                self._clean_y_combat_cov = combat_covariates
 
         if not did_within and not did_between:
             lgr.warning("No covariate regression performed! Set 'how' to 'between' and/or 'within' "
@@ -2773,9 +2728,9 @@ class NiSpace:
         cleaned data instead gives too small p-values whenever the covariates are associated
         with group. In paired designs, covariates that are constant within subjects (e.g.
         sex, baseline age) drop out of the comparison; covariates that change between
-        sessions (e.g. head motion) are accounted for. ComBat harmonization is treated as
-        fixed preprocessing (a warning is logged): if site is associated with group, the
-        p-values can be too small.
+        sessions (e.g. head motion) are accounted for. Data harmonized before NiSpace (e.g.
+        with ComBat) is treated as given: if site is associated with group, pass the site as
+        a covariate too.
 
         Multiple-comparison correction across parcels is applied by
         :meth:`get_within_region_comparisons` (default ``"step_minP"``).
@@ -6794,11 +6749,6 @@ class NiSpace:
                 if const:
                     lgr.info(f"Covariates constant within subjects drop out of the paired "
                              f"comparison: {', '.join(const)}.")
-            if any(st.get("combat") for st in steps):
-                lgr.warning("ComBat harmonization is treated as fixed preprocessing in the group "
-                            "permutation (only the linear covariates are permuted with "
-                            "Freedman-Lane). If site is associated with group, the p-values can "
-                            "be too small.")
             if fl.perm_pos.size < keep.sum():
                 lgr.info(f"{keep.sum() - fl.perm_pos.size} map(s) with missing covariates are "
                          "left out of the permutation.")

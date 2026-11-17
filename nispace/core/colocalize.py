@@ -36,11 +36,11 @@ def _rank_regress(arr, rank, regress, z=None, zy_matched=False, n_proc=1, verbos
     def regress_z_fun(arr, z, zy_matched):
         z = z.astype(arr.dtype)
         if z.shape[0] == 1:
-            resid = np.row_stack([residuals_nan(x=z[0], y=arr[i]) for i in range(arr.shape[0])])
+            resid = np.vstack([residuals_nan(x=z[0], y=arr[i]) for i in range(arr.shape[0])])
         elif zy_matched:
-            resid = np.row_stack([residuals_nan(x=z[i], y=arr[i]) for i in range(arr.shape[0])])
+            resid = np.vstack([residuals_nan(x=z[i], y=arr[i]) for i in range(arr.shape[0])])
         else:
-            resid = np.row_stack([residuals_nan(x=z.T, y=arr[i]) for i in range(arr.shape[0])])
+            resid = np.vstack([residuals_nan(x=z.T, y=arr[i]) for i in range(arr.shape[0])])
         return _zero_explained_rows(resid, arr)
     
     # case 1: arr is array, e.g. X or Y arrays

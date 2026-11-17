@@ -25,7 +25,6 @@ There is currently no dedicated toolbox paper for ``NiSpace``. Please cite at le
   * EasyReg: :cite:`iglesias2023`
   * SynthMorph: :cite:`hoffmann2022`
   * SynthSeg: :cite:`billot2023`
-* If you use combat-harmonization functionality: :cite:`fortin2017`; :cite:`pomponio2019`
 * When fetching included reference datasets, ``NiSpace`` will automatically print information on references we ask you to cite
 
 Furthermore, the preceding tools, JuSpyce and ABAnnotate, were used in the following works:

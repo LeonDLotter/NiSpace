@@ -1,12 +1,9 @@
 """Tests for stats/autocorr.py (Moran's I, variogram-based SA, Mantel test).
 
 No established ground-truth library is added here: the standard PySAL
-Moran's I reference (esda/libpysal) currently requires Python>=3.12 and
-scikit-bio (Mantel) requires Python>=3.10, both of which would break this
-project's 3.9-3.12 CI matrix -- a strictly worse version-compatibility
-problem than pingouin's (see [[project_ground_truth_testing]]), and not
-worth it for a module noted elsewhere as lightly used (see
-[[project_autocorr]]). Instead:
+Moran's I reference (esda/libpysal) required Python>=3.12 when this was
+written (above the project's minimum, 3.11), and scikit-bio (Mantel) brings
+heavy dependencies -- not worth it for a lightly used module. Instead:
 - `mantel()` IS checked against a true established-library reference:
   scipy.stats.pearsonr/spearmanr computed directly on the squareform-
   flattened distance/difference vectors -- that comparison *is* what a

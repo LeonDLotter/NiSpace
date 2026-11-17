@@ -167,7 +167,6 @@ def colocalization(y,
                    pooled_p=False,
                    p_from_average_y=None,  # TODO (first non-dev release): remove
                    plot=True,
-                   combat=False,
                    binary_y=False,
                    n_perm="auto",
                    seed=None,
@@ -242,10 +241,6 @@ def colocalization(y,
         Deprecated. Use ``pooled_p`` instead.
     plot : bool, default=True
         Whether to generate visualization plots.
-    combat : bool, default=False
-        Whether to apply ComBat harmonization. Only relevant if ``y_covariates`` is given.
-        Deprecated: will be removed in the first non-dev release;
-        harmonize before NiSpace or pass the site as a covariate (see :meth:`NiSpace.clean_y`).
     binary_y : bool, default=False
         Set if Y is binary (e.g. binary lesion/cluster masks). Forces
         ``NiSpace(binary_y=True)``, which prevents Y from being z-scored regardless
@@ -357,7 +352,6 @@ def colocalization(y,
         clean_y_kwargs = dict(
             how="between",
             covariates_between=y_covariates,
-            combat=combat,
         ) | clean_y_kwargs
         nsp.clean_y(**clean_y_kwargs)
         status["clean_y"] = True
@@ -473,7 +467,6 @@ def group_colocalization(y, design,
                          p_from_average_y=None,  # TODO (first non-dev release): remove
                          paired=False,
                          plot_design_between=True,
-                         combat=False,
                          plot=True,
                          n_perm=10000,
                          seed=None,
@@ -588,11 +581,6 @@ def group_colocalization(y, design,
         Whether to plot the between-subject design matrix (diagnostic only). Only
         takes effect when ``design`` has covariate columns that trigger
         :meth:`NiSpace.clean_y`.
-    combat : bool, default=False
-        Whether to apply ComBat harmonization. Only relevant when ``design`` has
-        covariate columns that trigger :meth:`NiSpace.clean_y`.
-        Deprecated: will be removed in the first non-dev release;
-        harmonize before NiSpace or pass the site as a covariate (see :meth:`NiSpace.clean_y`).
     plot : bool, default=True
         Whether to generate visualization plots.
     n_perm : int, default=10000
@@ -752,17 +740,15 @@ def group_colocalization(y, design,
         ((not paired and design.shape[1] > 1) or (paired and design.shape[1] > 2)):
         if not paired:
             y_covariates = design.iloc[:, 1:]       # exclude groups
-            combat_protect = design[["groups"]]
+            protect = design[["groups"]]
         else:
             y_covariates = design.iloc[:, 2:]       # exclude groups and subjects
             # clean_y one-hot encodes "groups"/"subjects" columns (subject effects) whatever their dtype
-            combat_protect = design[["groups", "subjects"]]
+            protect = design[["groups", "subjects"]]
         clean_y_kwargs = dict(
             how="between",
             covariates_between=y_covariates,
-            protect=combat_protect,
-            combat=combat,
-            combat_protect=combat_protect if combat else None,
+            protect=protect,
             plot_design_between=plot_design_between
         ) | clean_y_kwargs
         nsp.clean_y(**clean_y_kwargs)
@@ -1250,7 +1236,6 @@ def xsea(y,
          pooled_p=False,
          p_from_average_y=None,  # TODO (first non-dev release): remove
          plot=True,
-         combat=False,
          binary_y=False,
          n_perm="auto",
          seed=None,
@@ -1370,10 +1355,6 @@ def xsea(y,
         Deprecated. Use ``pooled_p`` instead.
     plot : bool, default=True
         Whether to generate visualization plots.
-    combat : bool, default=False
-        Whether to apply ComBat harmonization. Only relevant if ``y_covariates`` is given.
-        Deprecated: will be removed in the first non-dev release;
-        harmonize before NiSpace or pass the site as a covariate (see :meth:`NiSpace.clean_y`).
     binary_y : bool, default=False
         Set if Y is binary. Forces ``NiSpace(binary_y=True)`` and drives the
         ``colocalization_method=None`` dynamic default toward ``"pearson"``. See
@@ -1475,7 +1456,6 @@ def xsea(y,
         normalize_colocalizations=normalize_colocalizations,
         pooled_p=pooled_p,
         plot=plot,
-        combat=combat,
         n_perm=n_perm,
         seed=seed,
         n_proc=n_proc,
@@ -1520,7 +1500,6 @@ def group_xsea(y, design,
                pooled_p=False,
                paired=False,
                plot_design_between=True,
-               combat=False,
                plot=True,
                n_perm=10000,
                seed=None,
@@ -1623,10 +1602,6 @@ def group_xsea(y, design,
         Whether groups are paired/matched by subject.
     plot_design_between : bool, default=True
         Whether to plot the between-subject design matrix (diagnostic only).
-    combat : bool, default=False
-        Whether to apply ComBat harmonization.
-        Deprecated: will be removed in the first non-dev release;
-        harmonize before NiSpace or pass the site as a covariate (see :meth:`NiSpace.clean_y`).
     plot : bool, default=True
         Whether to generate visualization plots.
     n_perm : int, default=10000
@@ -1702,7 +1677,6 @@ def group_xsea(y, design,
         pooled_p=pooled_p,
         paired=paired,
         plot_design_between=plot_design_between,
-        combat=combat,
         plot=plot,
         n_perm=n_perm,
         seed=seed,
@@ -2008,7 +1982,7 @@ def simple_colocalization(y, x="PET", z=None, x_collection=None, standardize="xz
                           parcellation_labels=None, parcellation_hemi=["L", "R"],
                           y_covariates=None, colocalization_method="spearman",
                           mc_method="fdr_bh", normalize_colocalizations=True,
-                          p_from_average_y=False, plot=True, combat=False,
+                          p_from_average_y=False, plot=True,
                           n_perm="auto", seed=None, n_proc=1, verbose=True,
                           nispace_object=None, fetch_x_kwargs=None, init_kwargs=None,
                           fit_kwargs=None, clean_y_kwargs=None, colocalize_kwargs=None,
@@ -2028,7 +2002,7 @@ def simple_colocalization(y, x="PET", z=None, x_collection=None, standardize="xz
         colocalization_method=colocalization_method, mc_method=mc_method,
         normalize_colocalizations=normalize_colocalizations,
         pooled_p=p_from_average_y,
-        plot=plot, combat=combat, n_perm=n_perm, seed=seed, n_proc=n_proc,
+        plot=plot, n_perm=n_perm, seed=seed, n_proc=n_proc,
         verbose=verbose, nispace_object=nispace_object, fetch_x_kwargs=fetch_x_kwargs,
         init_kwargs=init_kwargs, fit_kwargs=fit_kwargs, clean_y_kwargs=clean_y_kwargs,
         colocalize_kwargs=colocalize_kwargs, permute_kwargs=permute_kwargs,
@@ -2043,7 +2017,7 @@ def group_comparison(y, design, x="PET", z=None, x_collection=None, standardize=
                      parcellation_labels=None, parcellation_hemi=["L", "R"],
                      colocalization_method="spearman", comparison_method=None,
                      mc_method="fdr_bh", normalize_colocalizations=True, p_from_average_y=True,
-                     paired=False, plot_design_between=True, combat=False,
+                     paired=False, plot_design_between=True,
                      plot=True, n_perm=10000, seed=None, n_proc=1, verbose=True,
                      nispace_object=None, fetch_x_kwargs=None, init_kwargs=None,
                      fit_kwargs=None, clean_y_kwargs=None, transform_y_kwargs=None,
@@ -2063,7 +2037,7 @@ def group_comparison(y, design, x="PET", z=None, x_collection=None, standardize=
         parcellation_hemi=parcellation_hemi, colocalization_method=colocalization_method,
         comparison_method=comparison_method, mc_method=mc_method,
         normalize_colocalizations=normalize_colocalizations, pooled_p=p_from_average_y,
-        paired=paired, plot_design_between=plot_design_between, combat=combat,
+        paired=paired, plot_design_between=plot_design_between,
         plot=plot, n_perm=n_perm, seed=seed, n_proc=n_proc, verbose=verbose,
         nispace_object=nispace_object, fetch_x_kwargs=fetch_x_kwargs,
         init_kwargs=init_kwargs, fit_kwargs=fit_kwargs, clean_y_kwargs=clean_y_kwargs,
@@ -2080,7 +2054,7 @@ def simple_xsea(y, x="mRNA", z=None, x_collection=None, x_background=None,
                 y_covariates=None, colocalization_method="spearman",
                 mc_method="fdr_bh", normalize_colocalizations=True,
                 xsea_aggregation_method=None, permute_sets=False,
-                p_from_average_y=False, plot=True, combat=False,
+                p_from_average_y=False, plot=True,
                 n_perm="auto", seed=None, n_proc=1, verbose=True,
                 nispace_object=None, fetch_x_kwargs=None, init_kwargs=None,
                 fit_kwargs=None, clean_y_kwargs=None, colocalize_kwargs=None,
@@ -2101,7 +2075,7 @@ def simple_xsea(y, x="mRNA", z=None, x_collection=None, x_background=None,
         mc_method=mc_method, normalize_colocalizations=normalize_colocalizations,
         xsea_aggregation_method=xsea_aggregation_method, permute_sets=permute_sets,
         pooled_p=p_from_average_y,
-        plot=plot, combat=combat, n_perm=n_perm, seed=seed, n_proc=n_proc,
+        plot=plot, n_perm=n_perm, seed=seed, n_proc=n_proc,
         verbose=verbose, nispace_object=nispace_object, fetch_x_kwargs=fetch_x_kwargs,
         init_kwargs=init_kwargs, fit_kwargs=fit_kwargs, clean_y_kwargs=clean_y_kwargs,
         colocalize_kwargs=colocalize_kwargs, permute_kwargs=permute_kwargs,

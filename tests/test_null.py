@@ -376,6 +376,19 @@ def test_nulls_burt2020_reproducible(linear_dist_mat, smooth_map):
 
 
 @requires_brainsmash
+@pytest.mark.skipif(not hasattr(np, "row_stack"), reason="Base.__call__ needs np.row_stack (numpy < 2.5)")
+@pytest.mark.parametrize("n,batch_size", [(5, 100), (7, 3), (6, 3), (1, 100)])
+def test_brainsmash_base_call_matches_brainsmash(linear_dist_mat, smooth_map, n, batch_size):
+    # the np.vstack workaround reproduces brainsmash's own Base.__call__ exactly
+    from brainsmash.mapgen import Base
+    from nispace.nulls import _brainsmash_base_call
+    expected = Base(x=smooth_map, D=linear_dist_mat, seed=3, resample=True)(n, batch_size)
+    result = _brainsmash_base_call(Base(x=smooth_map, D=linear_dist_mat, seed=3, resample=True),
+                                   n, batch_size)
+    np.testing.assert_array_equal(result, expected)
+
+
+@requires_brainsmash
 def test_nulls_burt2020_different_seeds_differ(linear_dist_mat, smooth_map):
     a = nulls_burt2020(smooth_map, linear_dist_mat, n_nulls=5, seed=1)
     b = nulls_burt2020(smooth_map, linear_dist_mat, n_nulls=5, seed=2)

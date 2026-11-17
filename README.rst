@@ -44,13 +44,13 @@ The ``NiSpace`` (NeuroImaging Spatial Colocalization Environment) toolbox aims t
 Installation
 ------------
 
-You can install the latest release of ``NiSpace`` (`0.1.0b1 <https://github.com/LeonDLotter/NiSpace/releases>`__, a beta version) in a Python 3.9+ environment (recommended: Python 3.12; support for 3.9 will end) via command line using pip:
+You can install the latest release of ``NiSpace`` (`0.1.0b2 <https://github.com/LeonDLotter/NiSpace/releases>`__, a beta version) in a Python 3.9+ environment (recommended: Python 3.12; 0.1.0b2 is the last version for Python 3.9 and 3.10, the development version and later releases need Python 3.11+) via command line using pip:
 
 .. code-block:: bash
 
-   pip install git+https://github.com/LeonDLotter/NiSpace.git@v0.1.0b1
+   pip install git+https://github.com/LeonDLotter/NiSpace.git@v0.1.0b2
 
-The development version (``@dev`` instead of ``@v0.1.0b1``) has the newest changes, but its behaviour can change without a release.
+The development version (``@dev`` instead of ``@v0.1.0b2``) has the newest changes, but its behaviour can change without a release.
 For reproducibility, note the installed version (``nispace.__version__``), or install a specific commit:
 
 .. code-block:: bash
@@ -63,7 +63,7 @@ Install optional dependencies directly with:
 
 .. code-block:: bash
 
-   pip install "nispace[opt] @ git+https://github.com/LeonDLotter/NiSpace.git@v0.1.0b1"
+   pip install "nispace[opt] @ git+https://github.com/LeonDLotter/NiSpace.git@v0.1.0b2"
 
 
 Use & Attribution of third-party data

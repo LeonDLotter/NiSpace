@@ -347,14 +347,33 @@ def nulls_burt2020(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
     kwargs.setdefault("resample", True)                    # preserves full distribution, False de-means nulls
     batch_size = kwargs.pop("batch_size", 100)             # expose
     # null maps
-    null_data[:, mask] = Base(
-        x=data_1d,
-        D=dist_mat,
-        seed=seed,
-        **kwargs
-    )(n_nulls, batch_size)
+    null_data[:, mask] = _brainsmash_base_call(
+        Base(x=data_1d, D=dist_mat, seed=seed, **kwargs), n_nulls, batch_size
+    )
     # return
     return null_data.astype(data_1d.dtype)
+
+
+def _brainsmash_base_call(base, n, batch_size=100):
+    """``brainsmash.mapgen.Base.__call__(n, batch_size)`` with ``np.vstack``.
+
+    Workaround: brainsmash 0.11.0 (latest release, unmaintained) stacks the batches with
+    ``np.row_stack``, which numpy 2.5 removed. Same batches, same per-batch seeds, same
+    output as ``Base.__call__``.
+    """
+    from brainsmash.mapgen.base import MAX_ALLOWABLE_BATCH_SIZE
+    if batch_size == "max" or batch_size > MAX_ALLOWABLE_BATCH_SIZE:
+        batch_size = MAX_ALLOWABLE_BATCH_SIZE
+    batches = [batch_size] * (n // batch_size)
+    if n % batch_size != 0:
+        batches += [n % batch_size]
+    rs = base._rs.randint(np.iinfo(np.int32).max, size=len(batches))
+    surrs = np.vstack(
+        Parallel(base._n_jobs)(
+            delayed(base._call_method)(i=b, rs=r) for b, r in zip(batches, rs)
+        )
+    )
+    return np.asarray(surrs.squeeze())
 
 def nulls_burt2018(data_1d, dist_mat, n_nulls=1000, seed=None, **kwargs):
     """Spatial autoregressive surrogate maps (Burt et al. 2018).
@@ -1526,7 +1545,7 @@ def find_surf_parc_centroids(parc, parc_space="fsaverage", parc_hemi=None, parc_
                 parcel = mean_coord
             centroids.append(parcel)
 
-    return np.row_stack(centroids)
+    return np.vstack(centroids)
 
 
 

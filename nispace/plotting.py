@@ -1507,7 +1507,7 @@ def _drawn_top(fig, ax):
 
 def _render_surf_row(ax, fig, vert_lh, vert_rh, parc_arr_lh, parc_arr_rh,
                      surf_geom, bg_data, views, cmap, vmin, vmax,
-                     symmetric_cmap, bg_on_data, darkness, threshold, alpha,
+                     symmetric_cmap, bg_on_data, threshold, alpha,
                      plot_contours, zoom, black_bg=False, **kwargs):
     """Render one brain map onto surfaces inside *ax* via n inset 3-D subaxes."""
     surf_lh, surf_rh = surf_geom
@@ -1552,7 +1552,6 @@ def _render_surf_row(ax, fig, vert_lh, vert_rh, parc_arr_lh, parc_arr_rh,
             vmax=vmax,
             symmetric_cbar=symmetric_cmap,
             bg_on_data=_plot_bg_on_data,
-            darkness=darkness,
             threshold=threshold,
             colorbar=False,
             axes=ax_3d,
@@ -1760,7 +1759,6 @@ def brainplot(
     plot_contours=False,
     zoom=None,
     bg_on_data=True,
-    darkness=0.7,
     dim="auto",
     threshold="auto",
     alpha=0.8,
@@ -1845,8 +1843,6 @@ def brainplot(
         surface plots and ``1.0`` for glass/slice (no zoom).
     bg_on_data : bool
         Overlay sulcal shading on top of the statistical map.
-    darkness : float
-        Darkness of sulcal background shading (0 = bright, 1 = dark).
     dim : float or "auto"
         Dimming factor for the anatomical background in slice plots.
         Roughly −2 (more contrast) to +2 (dimmer). Default ``"auto"``.
@@ -2651,7 +2647,7 @@ def brainplot(
                 parc_arr_lh, parc_arr_rh,
                 surf_geom, bg_data, views,
                 cmap, v_min, v_max,
-                symmetric_cmap, bg_on_data, darkness, threshold, alpha,
+                symmetric_cmap, bg_on_data, threshold, alpha,
                 plot_contours, zoom, black_bg=black_bg,
                 **kwargs,
             )
@@ -2689,7 +2685,7 @@ def brainplot(
                     parc_arr_lh, parc_arr_rh,
                     surf_geom, bg_data, views,
                     cmap, v_min, v_max,
-                    symmetric_cmap, bg_on_data, darkness, threshold, alpha,
+                    symmetric_cmap, bg_on_data, threshold, alpha,
                     plot_contours, zoom, black_bg=black_bg,
                     **kwargs,
                 )
@@ -2722,7 +2718,7 @@ def brainplot(
                 parc_arr_lh, parc_arr_rh,
                 surf_geom, bg_data, views,
                 cmap, v_min, v_max,
-                symmetric_cmap, bg_on_data, darkness, threshold, alpha,
+                symmetric_cmap, bg_on_data, threshold, alpha,
                 plot_contours, zoom, black_bg=black_bg,
                 **kwargs,
             )
@@ -2793,7 +2789,7 @@ def brainplot(
                     parc_arr_lh, parc_arr_rh,
                     surf_geom, bg_data, views,
                     cmap, v_min, v_max,
-                    symmetric_cmap, bg_on_data, darkness, threshold, alpha,
+                    symmetric_cmap, bg_on_data, threshold, alpha,
                     plot_contours, zoom, black_bg=black_bg,
                     **kwargs,
                 )

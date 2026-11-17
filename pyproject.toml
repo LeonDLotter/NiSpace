@@ -13,16 +13,16 @@ maintainers = [
 ]
 description = "Neuroimaging Spatial Colocalization Environment"
 readme = "README.rst"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 license = {file = "LICENSE"}
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 
 dependencies = [
@@ -32,28 +32,25 @@ dependencies = [
     "colorlog>=6.8.2",
     "dill>=0.4.0",
     "blosc>=1.11.3",
-    "numba>=0.58.0",
-    "numpy>=1.23.0,<=2.3.0",
-    "pandas>=2.0.0",
-    "nibabel>=4.0.0",
-    "nilearn>=0.11.0,<=0.12.1",
-    "neuromaps @ git+https://github.com/netneurolab/neuromaps@f0ed67c44d633061b93c6d337a1b233f6895c408",
+    "numba>=0.60.0",
+    "numpy>=2.0.0",
+    "pandas>=2.2.0",
+    "nibabel>=5.2.0",
+    "nilearn>=0.13.0",
+    "neuromaps>=0.0.7",
     "templateflow>=24.0.0",
-    "scipy>=1.6.0",
-    "statsmodels>=0.14.0",
-    "scikit-learn>=1.5.0",
-    "matplotlib>=3.6.0,<=3.10.0",
+    "scipy>=1.13.0",
+    "statsmodels>=0.14.2",
+    "scikit-learn>=1.6.0",
+    "matplotlib>=3.9.0",
     "seaborn>=0.13.0",
 ]
 
 [project.optional-dependencies]
 opt = [
     "brainsmash>=0.10.0",
-    "factor-analyzer",
-    "scikit-learn<1.8.0",  # factor-analyzer 0.5.1 (latest) calls check_array(force_all_finite=...), removed in sklearn 1.8.0
     "nitransforms>=24.0.0",
     "nimare",
-    "neuroHarmonize>=2.4.5",  # deprecated clean_y(combat=True); remove at the first non-dev release
 ]
 data = [
     "abagen",
@@ -66,8 +63,7 @@ test = [
     "pytest",
     "pytest-cov",
     "pytest-xdist",
-    "pingouin",
-    "neuroHarmonize>=2.4.5",  # tests of the deprecated ComBat wiring; remove with it
+    "pingouin>=0.6",
 ]
 
 [project.urls]

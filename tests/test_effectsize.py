@@ -340,19 +340,12 @@ def test_cohen_paired_matches_pingouin_cohen_dz(rng):
     # other paired Y_transform options (prc/logfc/diff are all pure functions of
     # the paired observations alone; d_avg would break that by pulling in each
     # condition's *unpaired* variance instead).
-    #
-    # eftype="cohen_dz" itself needs pingouin>=0.6 (Python>=3.10), unavailable
-    # on the 3.9 test env -- so derive it version-independently instead, via
-    # pingouin's own documented identity d_z = t / sqrt(n) from the paired
-    # t-test (pg.ttest exists in every pingouin version).
     pg = pytest.importorskip("pingouin")
     a = rng.normal(size=(20, 2))
     b = a + rng.normal(scale=0.3, size=(20, 2))
-    n = a.shape[0]
     result = cohen_paired(a, b)
     for i in range(2):
-        t = pg.ttest(a[:, i], b[:, i], paired=True)["T"].iloc[0]
-        expected = t / np.sqrt(n)
+        expected = pg.compute_effsize(a[:, i], b[:, i], paired=True, eftype="cohen_dz")
         assert np.isclose(result[i], expected)
 
 

@@ -3,11 +3,7 @@
 Two parts:
 1. Below: general unit coverage of the covariate-normalization helpers and the
    within/between regression engines (_normalize_cov_df, _detect_categoricals,
-   _encode, _clean_y_between, _clean_y_within). Offline/network-free. ComBat
-   numerics are neuroHarmonize's; NiSpace's wiring around it (covariate
-   assembly, combat_protect, combat_train learn/apply split, model reuse, NaN
-   imputation/restoring, disabling without a site column) is checked against
-   direct neuroHarmonize calls.
+   _encode, _clean_y_between, _clean_y_within). Offline/network-free.
 2. Original content (kept as-is): regression tests for a bug where
    clean_y(how="between", covariates_between=...) without an explicit
    `protect` argument fully demeaned every parcel across subjects (removing
@@ -134,8 +130,7 @@ def between_setup(rng):
 
 def _default_between_kwargs(**overrides):
     kwargs = dict(
-        protect=None, combat=False, combat_protect=None, combat_train=None,
-        combat_model=None, combat_kwargs={}, plot_design_between=False,
+        protect=None, plot_design_between=False,
         n_proc=1, dtype=np.float32, verbose=False,
     )
     kwargs.update(overrides)
@@ -144,10 +139,9 @@ def _default_between_kwargs(**overrides):
 
 def test_clean_y_between_matches_manual_partial_residuals(between_setup):
     Y, cov, n_subjects, n_parcels = between_setup
-    Y_out, combat_model, combat_cov = _clean_y_between(
+    Y_out = _clean_y_between(
         Y.copy(), cov, n_subjects, **_default_between_kwargs()
     )
-    assert combat_model is None and combat_cov is None
 
     reg_arr = pd.concat(
         [cov[["age"]], pd.get_dummies(cov["sex"], prefix="sex", drop_first=True, dtype=np.float32)],
@@ -166,7 +160,7 @@ def test_clean_y_between_protect_preserves_protected_effect(between_setup):
     cov = pd.DataFrame({"age": np.random.default_rng(2).normal(size=n_subjects)})
     protect = pd.DataFrame({"group": ["a"] * (n_subjects // 2) + ["b"] * (n_subjects // 2)})
 
-    Y_out, _, _ = _clean_y_between(
+    Y_out = _clean_y_between(
         Y.copy(), cov, n_subjects, **_default_between_kwargs(protect=protect)
     )
     reg_arr = cov[["age"]].values.astype(np.float32)
@@ -190,7 +184,7 @@ def test_clean_y_between_numeric_subjects_protect_matches_string(rng):
     def clean(subjects, name="subjects"):
         protect = pd.DataFrame({"groups": session, name: subjects})
         return _clean_y_between(Y.copy(), cov, 2 * n_subj,
-                                **_default_between_kwargs(protect=protect))[0]
+                                **_default_between_kwargs(protect=protect))
 
     Y_int = clean(subj, name="Subjects")
     Y_str = clean(subj.astype(str))
@@ -215,27 +209,30 @@ def test_clean_y_between_repeated_subjects_covariate_allowed(between_setup):
     # paired design: two rows per subject -> subject effects can be regressed
     Y, _, n_subjects, _ = between_setup
     cov = pd.DataFrame({"subjects": np.tile(np.arange(n_subjects // 2), 2)})
-    Y_out, _, _ = _clean_y_between(Y.copy(), cov, n_subjects, **_default_between_kwargs())
+    Y_out = _clean_y_between(Y.copy(), cov, n_subjects, **_default_between_kwargs())
     assert np.isfinite(Y_out).all()
 
 
-def test_clean_y_between_combat_only_on_site_column(between_setup):
-    # "scanner" is forced categorical but not a ComBat batch -> ComBat disabled with a warning
-    Y, _, n_subjects, _ = between_setup
-    cov = pd.DataFrame({"scanner": [1, 2] * (n_subjects // 2)})
-    Y_out, combat_model, _ = _clean_y_between(Y.copy(), cov, n_subjects,
-                                              **_default_between_kwargs(combat=True))
-    assert combat_model is None
+def test_clean_y_between_numeric_site_is_regressed_as_categorical(between_setup):
+    # a numeric "site" column is one-hot encoded (site effects), not used as one slope
+    Y, _, n_subjects, n_parcels = between_setup
+    site = np.array([1, 2, 3, 1, 2, 3, 1, 2])
+    Y_out, design = _clean_y_between(Y.copy(), pd.DataFrame({"site": site}), n_subjects,
+                                     **_default_between_kwargs(), return_design=True)
+    assert design["nuisance_names"] == ["site_2", "site_3"]
+    # site differences removed; the intercept (reference site 1) is kept
+    for s_ in np.unique(site):
+        np.testing.assert_allclose(Y_out[site == s_].mean(0), Y[site == 1].mean(0), atol=1e-5)
 
 
 def test_clean_y_between_numeric_groups_three_levels_categorical(between_setup):
     Y, _, n_subjects, _ = between_setup
     cov = pd.DataFrame({"age": np.random.default_rng(3).normal(size=n_subjects)})
     groups = np.array([0, 0, 1, 1, 2, 2, 0, 1])
-    Y_num, _, _ = _clean_y_between(
+    Y_num = _clean_y_between(
         Y.copy(), cov, n_subjects,
         **_default_between_kwargs(protect=pd.DataFrame({"groups": groups})))
-    Y_str, _, _ = _clean_y_between(
+    Y_str = _clean_y_between(
         Y.copy(), cov, n_subjects,
         **_default_between_kwargs(protect=pd.DataFrame({"groups": groups.astype(str)})))
     assert np.allclose(Y_num, Y_str, atol=1e-5)
@@ -251,7 +248,7 @@ def test_clean_y_between_missing_group_row_excluded(between_setup):
     groups_num[3] = np.nan
     outs = [
         _clean_y_between(Y.copy(), cov, n_subjects,
-                         **_default_between_kwargs(protect=pd.DataFrame({"groups": g})))[0]
+                         **_default_between_kwargs(protect=pd.DataFrame({"groups": g})))
         for g in (groups_str, groups_num)
     ]
     keep = np.arange(n_subjects) != 3
@@ -261,25 +258,6 @@ def test_clean_y_between_missing_group_row_excluded(between_setup):
     for out in outs:
         assert np.isnan(out[3]).all()
         assert np.allclose(out[keep], expected, atol=1e-4)
-
-
-def test_clean_y_between_combat_disabled_without_site_column(between_setup):
-    Y, cov, n_subjects, n_parcels = between_setup
-    cov_no_site = cov[["age"]]  # no "site" column
-
-    Y_out, combat_model, combat_cov = _clean_y_between(
-        Y.copy(), cov_no_site, n_subjects, **_default_between_kwargs(combat=True)
-    )
-    # combat silently disabled -> falls back to plain regression, no model fitted
-    assert combat_model is None
-    assert combat_cov is None
-    reg_arr = cov_no_site.values.astype(np.float32)
-    protect_arr = np.zeros((n_subjects, 0), dtype=np.float32)
-    expected = np.array([
-        partial_residuals_nan(reg_arr, protect_arr, Y[:, i].astype(np.float32))
-        for i in range(n_parcels)
-    ]).T
-    assert np.allclose(Y_out, expected, atol=1e-5)
 
 
 def test_clean_y_between_handles_dtype_mismatch(between_setup):
@@ -292,117 +270,13 @@ def test_clean_y_between_handles_dtype_mismatch(between_setup):
     the helper level regardless of caller discipline."""
     Y, cov, n_subjects, n_parcels = between_setup
     Y_float64 = Y.astype(np.float64)
-    Y_out, _, _ = _clean_y_between(
+    Y_out = _clean_y_between(
         Y_float64.copy(), cov, n_subjects, **_default_between_kwargs()
     )
     assert Y_out.dtype == np.float32
 
 
 # ── _clean_y_within ───────────────────────────────────────────────────────────
-
-# TODO (first non-dev release): remove the ComBat tests together with clean_y(combat=...)
-@pytest.fixture
-def combat_setup(rng):
-    """24 subjects at 3 sites with additive site offsets and an age effect."""
-    pytest.importorskip("neuroHarmonize")   # optional dependency since the deprecation
-    n_subjects, n_parcels = 24, 20
-    site = np.repeat(["s1", "s2", "s3"], 8)
-    age = rng.normal(size=n_subjects)
-    Y = (rng.normal(size=(n_subjects, n_parcels))
-         + np.repeat([0.0, 2.0, -1.0], 8)[:, None] * rng.uniform(0.5, 1.5, n_parcels)
-         + 0.5 * age[:, None])
-    return Y, site, age, n_subjects
-
-
-def test_clean_y_combat_deprecation_warning(combat_setup, caplog):
-    Y, site, _, n = combat_setup
-    nsp = NiSpace(x=pd.DataFrame(Y[:1]), y=pd.DataFrame(Y), standardize="x", verbose=False)
-    nsp.fit()
-    with caplog.at_level(logging.WARNING, logger="nispace"):
-        nsp.clean_y(how="between", covariates_between=pd.DataFrame({"site": site}), combat=True)
-    assert "('combat=True') is deprecated" in caplog.text
-
-
-def _combat(Y, cov, n_subjects, **overrides):
-    return _clean_y_between(Y.copy(), cov, n_subjects, **_default_between_kwargs(
-        combat=True, dtype=np.float64, **overrides))
-
-
-def test_clean_y_between_combat_site_only_matches_neuroharmonize(combat_setup):
-    from neuroHarmonize import harmonizationLearn
-    Y, site, _, n = combat_setup
-    out, model, combat_cov = _combat(Y, pd.DataFrame({"site": site}), n)
-    _, expected = harmonizationLearn(Y.copy(), pd.DataFrame({"SITE": site}))
-    np.testing.assert_allclose(out, expected)
-    assert list(combat_cov.columns) == ["SITE"]
-    assert model is not None
-
-
-def test_clean_y_between_combat_then_regression(combat_setup):
-    """Continuous covariates are protected in ComBat, then regressed out by OLS."""
-    from neuroHarmonize import harmonizationLearn
-    Y, site, age, n = combat_setup
-    out, _, combat_cov = _combat(Y, pd.DataFrame({"site": site, "age": age}), n)
-    assert list(combat_cov.columns) == ["SITE", "age"]
-    _, harmonized = harmonizationLearn(Y.copy(), pd.DataFrame({"SITE": site, "age": age}))
-    expected = np.array([partial_residuals_nan(age[:, None], np.zeros((n, 0)), harmonized[:, i])
-                         for i in range(Y.shape[1])]).T
-    np.testing.assert_allclose(out, expected)
-
-
-def test_clean_y_between_combat_protect_columns_only_protected(combat_setup):
-    from neuroHarmonize import harmonizationLearn
-    Y, site, _, n = combat_setup
-    grp = np.tile(["a", "b"], n // 2)
-    out, _, combat_cov = _combat(Y, pd.DataFrame({"site": site}), n,
-                                 combat_protect=pd.DataFrame({"grp": grp}))
-    assert list(combat_cov.columns) == ["SITE", "grp_b"]
-    _, expected = harmonizationLearn(
-        Y.copy(), pd.DataFrame({"SITE": site, "grp_b": (grp == "b").astype(float)}))
-    np.testing.assert_allclose(out, expected)   # no OLS step: grp is protect-only
-
-
-def test_clean_y_between_combat_train_learns_on_subset_applies_to_rest(combat_setup):
-    from neuroHarmonize import harmonizationLearn, harmonizationApply
-    Y, site, _, n = combat_setup
-    train = np.tile([True, True, True, False], n // 4)
-    out, _, _ = _combat(Y, pd.DataFrame({"site": site}), n, combat_train=train)
-    model, expected_train = harmonizationLearn(Y[train], pd.DataFrame({"SITE": site[train]}))
-    expected_test = harmonizationApply(Y[~train], pd.DataFrame({"SITE": site[~train]}), model)
-    np.testing.assert_allclose(out[train], expected_train)
-    np.testing.assert_allclose(out[~train], expected_test)
-
-
-def test_clean_y_between_combat_invalid_train_is_ignored(combat_setup, caplog):
-    Y, site, _, n = combat_setup
-    cov = pd.DataFrame({"site": site})
-    with caplog.at_level(logging.WARNING):
-        out, _, _ = _combat(Y, cov, n, combat_train=[1, 2])
-    assert "combat_train" in caplog.text
-    np.testing.assert_allclose(out, _combat(Y, cov, n)[0])
-
-
-def test_clean_y_between_combat_reuses_given_model(combat_setup):
-    Y, site, _, n = combat_setup
-    cov = pd.DataFrame({"site": site})
-    out, model, _ = _combat(Y, cov, n)
-    out_reused, model_reused, _ = _combat(Y, cov, n, combat_model=model)
-    assert model_reused is model
-    np.testing.assert_allclose(out_reused, out)
-
-
-def test_clean_y_between_combat_nan_imputed_then_restored(combat_setup):
-    """NaNs are median-imputed per map for ComBat and put back afterwards."""
-    from neuroHarmonize import harmonizationLearn
-    Y, site, _, n = combat_setup
-    Y = Y.copy()
-    Y[3, 4] = Y[10, 0] = np.nan
-    out, _, _ = _combat(Y, pd.DataFrame({"site": site}), n)
-    imputed = np.apply_along_axis(lambda x: np.where(np.isnan(x), np.nanmedian(x), x), 1, Y)
-    _, expected = harmonizationLearn(imputed, pd.DataFrame({"SITE": site}))
-    expected[np.isnan(Y)] = np.nan
-    np.testing.assert_allclose(out, expected)
-
 
 def test_clean_y_within_z_without_z_data_raises(rng):
     Y = rng.normal(size=(4, 6))
@@ -537,14 +411,13 @@ def test_irrelevant_covariate_does_not_destroy_colocalization(rng):
 def test_clean_y_between_return_design(between_setup):
     Y, cov, n_subjects, _ = between_setup
     protect = pd.DataFrame({"group": ["a", "b"] * (n_subjects // 2)})
-    Y_out, _, _, design = _clean_y_between(
+    Y_out, design = _clean_y_between(
         Y.copy(), cov, n_subjects, **_default_between_kwargs(protect=protect),
         return_design=True,
     )
     np.testing.assert_allclose(design["Y_pre"], Y.astype(np.float32))
     assert design["nuisance_names"] == ["age", "sex_m"]
     assert design["nuisance"].shape == (n_subjects, 2) and design["protect"].shape == (n_subjects, 1)
-    assert design["combat"] is False
 
 
 def _nsp_for_steps(rng, n=8, n_parcels=5):
